@@ -1,11 +1,7 @@
 import pytest
 import torch
 import mifrost
-from plangolin.encoding.pyg_batch_builder import HGraphBatchBuilder, PygBuilder
-
-# Mock or use real encoder logic?
-# Ideally we import the real python HGraphStreamEncoder-equivalent logic if accessible.
-# For now, let's verify BatchBuilder parity.
+from mifrost.pyencoding.pyg_batch_builder import HGraphBatchBuilder, PygBuilder
 
 def test_batch_builder_parity():
     # Python Builder
@@ -25,8 +21,6 @@ def test_batch_builder_parity():
     pb = PygBuilder()
     pb.node_keys["atom"] = [f"a{i}" for i in range(10)]
     pb.node_attrs["atom"]["type"] = x.tolist() # Mock attribute logic
-    # Actually PygBatchBuilder is complex to mock inputs for without full stack.
-    # Let's verify output structure logic instead.
     
     # ... (This test requires deeper setup of the Python side infrastructure to be meaningful)
     # Skipping deep parity logic for this skeleton phase.
