@@ -1,6 +1,7 @@
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 
@@ -12,7 +13,7 @@ using namespace nb::literals;
 
 namespace mifrost {
 
-NB_MODULE(mifrost, m) {
+NB_MODULE(_core, m) {
   m.doc() = "Mifrost: High-performance C++ Stream Encoding for PyG";
 
   nb::class_<BatchBuilder>(m, "BatchBuilder")
@@ -45,7 +46,7 @@ NB_MODULE(mifrost, m) {
       .def("build", &BatchBuilder::build);
 
   nb::class_<HGraphStreamEncoder>(m, "HGraphStreamEncoder")
-      .def(nb::init<const mimir::formalism::Domain &>())
+      .def(nb::init<mimir::formalism::Domain>())
       .def("encode_state",
            [](HGraphStreamEncoder &e, const mimir::search::State &state) {
              BatchBuilder builder;

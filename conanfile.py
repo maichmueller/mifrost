@@ -1,14 +1,12 @@
 from conan import ConanFile
 from conan.tools.build import check_min_cppstd
-from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain
+from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain, CMakeDeps
 
 class MifrostRecipe(ConanFile):
     name = "mifrost"
     version = "0.0.1"
     package_type = "library"
     settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeDeps"
-
     # Match Mimir's boost version logic
     BOOST_COMPS = (
         "atomic", "charconv", "chrono", "cobalt", "container", "context", "contract",
@@ -78,6 +76,11 @@ class MifrostRecipe(ConanFile):
         cmake_layout(self)
 
     def generate(self):
+        deps = CMakeDeps(self)
+        # Nanobind's Conan recipe relies on its own CMake config; ensure CMakeDeps
+        # still generates a config file so cmake-conan can find it without a toolchain.
+        deps.set_property("nanobind", "cmake_find_mode", "both")
+        deps.generate()
         tc = CMakeToolchain(self)
         tc.user_presets_path = False
         tc.generate()
