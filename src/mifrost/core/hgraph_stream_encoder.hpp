@@ -1,6 +1,7 @@
 #pragma once
 
 #include "batch_builder.hpp"
+#include "common_types.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "stream_encoder_base.hpp"
@@ -14,8 +15,6 @@
 #include <span>
 #include <string>
 #include <tuple>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace mifrost
@@ -72,44 +71,47 @@ private:
     RelationDict relation_dict_;
     std::vector<std::tuple<std::string, std::string, std::string>> all_edge_types_;
 
+    // --- Initialization ---
+    void initialize_from_domain();
+
     // --- Encoding Helpers ---
     void encode_objects(const mimir::search::State& state,
                         BatchBuilder& builder,
-                        std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                        std::unordered_map<std::string, std::vector<std::string>>& node_names);
-    std::unordered_set<std::string> encode_facts(const mimir::search::State& state,
-                                                 BatchBuilder& builder,
-                                                 std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                                                 std::unordered_map<std::string, std::vector<std::string>>& node_names,
-                                                 std::unordered_map<std::string, std::unordered_set<std::string>>& relation_to_symbols,
-                                                 std::unordered_map<std::string, std::unordered_set<std::string>>& symbol_to_relations);
+                        hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                        hash_map<std::string, std::vector<std::string>>& node_names);
+    hash_set<std::string> encode_facts(const mimir::search::State& state,
+                                       BatchBuilder& builder,
+                                       hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                                       hash_map<std::string, std::vector<std::string>>& node_names,
+                                       hash_map<std::string, hash_set<std::string>>& relation_to_symbols,
+                                       hash_map<std::string, hash_set<std::string>>& symbol_to_relations);
     template<typename GoalTag>
     void encode_literals(std::span<const mimir::formalism::GroundLiteral<GoalTag>> goals,
-                         const ankerl::unordered_dense::map<mimir::formalism::GroundLiteral<GoalTag>, int>& goal_levels,
+                         const hash_map<mimir::formalism::GroundLiteral<GoalTag>, int>& goal_levels,
                          BatchBuilder& builder,
-                         std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                         std::unordered_map<std::string, std::vector<std::string>>& node_names,
-                         std::unordered_map<std::string, std::unordered_set<std::string>>& relation_to_symbols,
-                         std::unordered_map<std::string, std::unordered_set<std::string>>& symbol_to_relations);
+                         hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                         hash_map<std::string, std::vector<std::string>>& node_names,
+                         hash_map<std::string, hash_set<std::string>>& relation_to_symbols,
+                         hash_map<std::string, hash_set<std::string>>& symbol_to_relations);
     void encode_actions(std::span<const mimir::formalism::GroundAction> actions,
                         BatchBuilder& builder,
-                        std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                        std::unordered_map<std::string, std::vector<std::string>>& node_names,
-                        std::unordered_map<std::string, std::unordered_set<std::string>>& relation_to_symbols,
-                        std::unordered_map<std::string, std::unordered_set<std::string>>& symbol_to_relations);
+                        hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                        hash_map<std::string, std::vector<std::string>>& node_names,
+                        hash_map<std::string, hash_set<std::string>>& relation_to_symbols,
+                        hash_map<std::string, hash_set<std::string>>& symbol_to_relations);
     template<typename GoalTag>
     void encode_goal_satisfaction(std::span<const mimir::formalism::GroundLiteral<GoalTag>> goals,
-                                  const ankerl::unordered_dense::map<mimir::formalism::GroundLiteral<GoalTag>, int>& goal_levels,
-                                  const std::unordered_set<std::string>& fact_keys,
+                                  const hash_map<mimir::formalism::GroundLiteral<GoalTag>, int>& goal_levels,
+                                  const hash_set<std::string>& fact_keys,
                                   BatchBuilder& builder,
-                                  std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                                  std::unordered_map<std::string, std::vector<std::string>>& node_names,
-                                  std::unordered_map<std::string, std::unordered_set<std::string>>& relation_to_symbols,
-                                  std::unordered_map<std::string, std::unordered_set<std::string>>& symbol_to_relations);
+                                  hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                                  hash_map<std::string, std::vector<std::string>>& node_names,
+                                  hash_map<std::string, hash_set<std::string>>& relation_to_symbols,
+                                  hash_map<std::string, hash_set<std::string>>& symbol_to_relations);
     void add_lgan_nn_edges(BatchBuilder& builder,
-                           const std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                           const std::unordered_map<std::string, std::unordered_set<std::string>>& relation_to_symbols,
-                           const std::unordered_map<std::string, std::unordered_set<std::string>>& symbol_to_relations);
+                           const hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                           const hash_map<std::string, hash_set<std::string>>& relation_to_symbols,
+                           const hash_map<std::string, hash_set<std::string>>& symbol_to_relations);
     void ensure_empty_edge_types(BatchBuilder& builder) const;
     void ensure_node_feature_dims(BatchBuilder& builder) const;
     void
@@ -118,7 +120,7 @@ private:
     int64_t get_or_add_node(const std::string& node_type,
                             const std::string& node_key,
                             BatchBuilder& builder,
-                            std::unordered_map<std::string, std::unordered_map<std::string, int64_t>>& node_indices,
-                            std::unordered_map<std::string, std::vector<std::string>>& node_names);
+                            hash_map<std::string, hash_map<std::string, int64_t>>& node_indices,
+                            hash_map<std::string, std::vector<std::string>>& node_names);
 };
 }  // namespace mifrost
