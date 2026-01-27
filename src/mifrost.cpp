@@ -1,5 +1,6 @@
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
+#include "mifrost/core/nanobind_unordered_dense.hpp"
 
 #include <filesystem>
 #include <mimir/formalism/problem.hpp>
