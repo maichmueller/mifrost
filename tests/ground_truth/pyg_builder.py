@@ -54,7 +54,10 @@ class PygHeteroBuilder:
         for node_type, keys in self.node_keys.items():
             data[node_type].node_names = list(keys)
             for attr, values in self.node_attrs[node_type].items():
-                data[node_type][attr] = torch.as_tensor(values)
+                if any(value is None or isinstance(value, str) for value in values):
+                    data[node_type][attr] = list(values)
+                else:
+                    data[node_type][attr] = torch.as_tensor(values)
             if "x" not in data[node_type]:
                 data[node_type].x = torch.zeros((len(keys), 1))
 

@@ -1,4 +1,8 @@
 import mifrost as mif
+from torch_geometric.data import Batch
+
 
 def test_add():
-    assert m.add(1, 2) == 3
+    builder = mif.BatchBuilder()
+    out = builder.build()
+    assert isinstance(out, Batch)

@@ -145,7 +145,10 @@ target_link_libraries(mifrost_core PUBLIC
 conan_add_package_include_fallback(mifrost_core abseil)
 conan_add_package_include_fallback(mifrost_core onetbb)
 
-nanobind_add_module(mifrost_core_module "mifrost.cpp")
+nanobind_add_module(mifrost_core_module
+    NB_DOMAIN pymimir_abi_domain
+    "mifrost.cpp"
+)
 set_target_properties(mifrost_core_module PROPERTIES OUTPUT_NAME "_core")
 target_link_libraries(mifrost_core_module PRIVATE mifrost_core)
 
@@ -168,6 +171,16 @@ set_target_properties(mifrost_core_module PROPERTIES
     INSTALL_RPATH "${_mifrost_rpaths}"
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
+if(MIFROST_RPATH_MODE STREQUAL "dev")
+    set_target_properties(mifrost_core_module PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/mifrost"
+    )
+    if(TARGET nanobind)
+        set_target_properties(nanobind PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/mifrost"
+        )
+    endif()
+endif()
 
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "mifrost")
 if(TARGET nanobind)
