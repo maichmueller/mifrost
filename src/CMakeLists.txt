@@ -114,7 +114,9 @@ endfunction()
 add_library(mifrost_core STATIC
     "mifrost/core/batch_builder.cpp"
     "mifrost/core/hgraph_stream_encoder.cpp"
+    "mifrost/core/transition_dag.cpp"
 )
+
 
 target_include_directories(mifrost_core PUBLIC
     "${CMAKE_CURRENT_LIST_DIR}"
