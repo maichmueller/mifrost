@@ -15,50 +15,53 @@
 #include "common_types.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
+#include "relation_formatter.hpp"
 #include "stream_encoder_base.hpp"
 
 namespace mifrost {
-/**
- * @brief Engine that streams Mimir states into a BatchBuilder using HGraph semantics.
- *
- * Logic mirrors plangolin.encoding.hetero_encoder.HGraphEncoder.
- */
+
 class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
   public:
    struct Config {
-      std::string symbol_type_id = "_symbol_";
-      bool ignore_actions = true;
-      bool add_nullary_predicates = false;
-      bool include_lgan_edges = false;
-      bool include_static = true;
+      std::string symbol_type_id = "symbol";
+      std::string nullary_object_name = "null";
+      std::string lgan_nn_edge_pos = "lgan_nn";
       int max_goal_level = 0;
-      bool support_literals = false;
+      bool support_literals = true;
+      bool add_nullary_predicates = true;
+      bool ignore_actions = false;
+      bool include_lgan_edges = true;
+      bool include_static = true;
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {
          GoalSatisfaction::True,
-         GoalSatisfaction::None,
+         GoalSatisfaction::False
       };
-      std::string nullary_object_name = RelationFormatter::kDefaultNullarySymbolName;
-      std::string lgan_nn_edge_pos = "lgan_nn";
    };
 
-   HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);
+   // domain stays alive for the duration of the object
+   explicit HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);
    HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain, Config config);
-   HGraphEncoderEngine(mimir::formalism::Domain domain);
+
+   // domain enters domain holder
+   explicit HGraphEncoderEngine(mimir::formalism::Domain domain);
    HGraphEncoderEngine(mimir::formalism::Domain domain, Config config);
 
+   virtual ~HGraphEncoderEngine() = default;
+
+   void encode_state(const mimir::search::State& state, BatchBuilder& builder) override
+   {
+      encode_state_impl(state, builder);
+   }
+
    template < typename GoalTag >
-   void encode_step_impl(
+   void encode_step(
       const mimir::search::State& state,
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder
-   );
-
-   void encode_state_impl(const mimir::search::State& state, BatchBuilder& builder);
-
-   void encode(const mimir::search::State& state, BatchBuilder& builder)
+   )
    {
-      encode_state(state, builder);
+      encode_step_impl(state, goals, actions, builder);
    }
 
    void encode(
@@ -71,31 +74,53 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
       encode_impl(state, goals, actions, builder);
    }
 
-  private:
-   mimir::formalism::Domain domain_holder_;
-   const mimir::formalism::DomainImpl& domain_;
-   Config config_;
-   RelationDict relation_dict_;
-   std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
+   void encode(const mimir::search::State& state, BatchBuilder& builder)
+   {
+      encode_state(state, builder);
+   }
 
-   // --- Initialization ---
+   const Config& get_config() const { return config_; }
+
+  protected:
+   friend class StreamEncoderBase< HGraphEncoderEngine >;
+
    void initialize_from_domain();
 
-   // --- Encoding Helpers ---
-   void encode_objects(
+   template < typename GoalTag >
+   void encode_step_impl(
+      const mimir::search::State& state,
+      std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
+
+   void encode_state_impl(const mimir::search::State& state, BatchBuilder& builder);
+
+   virtual void encode_impl(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
+
+   virtual void encode_objects(
       const mimir::search::State& state,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-      hash_map< std::string, std::vector< std::string > >& node_names
+      hash_map< std::string, std::vector< std::string > >& node_names,
+      std::span< const std::string > extra_objects = {}
    );
-   hash_set< std::string > encode_facts(
+
+   virtual hash_set< std::string > encode_facts(
       const mimir::search::State& state,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
       hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      std::span< const std::string > extra_objects = {}
    );
+
    template < typename GoalTag >
    void encode_literals(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
@@ -104,16 +129,20 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
       hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      std::span< const std::string > extra_objects = {}
    );
-   void encode_actions(
+
+   virtual void encode_actions(
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
       hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      std::span< const std::string > extra_objects = {}
    );
+
    template < typename GoalTag >
    void encode_goal_satisfaction(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
@@ -123,29 +152,44 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
       hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      std::span< const std::string > extra_objects = {}
    );
+
    void add_lgan_nn_edges(
       BatchBuilder& builder,
       const hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       const hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
       const hash_map< std::string, hash_set< std::string > >& symbol_to_relations
    );
+
    void ensure_empty_edge_types(BatchBuilder& builder) const;
    void ensure_node_feature_dims(BatchBuilder& builder) const;
-   void encode_impl(
-      const mimir::search::State& state,
-      const GoalInputs& goals,
-      std::span< const mimir::formalism::GroundAction > actions,
-      BatchBuilder& builder
+
+   static void append_edges(
+      BatchBuilder& builder,
+      const std::string& src_type,
+      const std::string& rel_type,
+      const std::string& dst_type,
+      int64_t src,
+      int64_t dst
    );
+
    static std::string relation_key(const std::string& node_type, const std::string& node_key);
-   int64_t get_or_add_node(
+
+   static int64_t get_or_add_node(
       const std::string& node_type,
       const std::string& node_key,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names
    );
+
+   mimir::formalism::Domain domain_holder_;
+   const mimir::formalism::DomainImpl& domain_;
+   Config config_;
+   RelationDict relation_dict_;
+   std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
 };
+
 }  // namespace mifrost

@@ -3,12 +3,15 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <mimir/formalism/action.hpp>
+#include <mimir/formalism/problem.hpp>
 #include <numeric>
+#include <span>
+#include <string>
 #include <type_traits>
 
 namespace mifrost {
-namespace {
-void append_edges(
+void HGraphEncoderEngine::append_edges(
    BatchBuilder& builder,
    const std::string& src_type,
    const std::string& rel_type,
@@ -21,7 +24,6 @@ void append_edges(
    const std::array< int64_t, 1 > dst_arr{dst};
    builder.add_edges(src_type, rel_type, dst_type, src_arr, dst_arr);
 }
-}  // namespace
 
 HGraphEncoderEngine::HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
     : HGraphEncoderEngine(domain, Config{})
@@ -238,7 +240,8 @@ void HGraphEncoderEngine::encode_objects(
    const mimir::search::State& state,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-   hash_map< std::string, std::vector< std::string > >& node_names
+   hash_map< std::string, std::vector< std::string > >& node_names,
+   std::span< const std::string > extra_objects
 )
 {
    const auto& problem = state.get_problem();
@@ -253,10 +256,8 @@ void HGraphEncoderEngine::encode_objects(
       const std::string key = RelationFormatter::format_object(*obj);
       get_or_add_node(config_.symbol_type_id, key, builder, node_indices, node_names);
    }
-   if(config_.add_nullary_predicates) {
-      get_or_add_node(
-         config_.symbol_type_id, config_.nullary_object_name, builder, node_indices, node_names
-      );
+   for(const auto& key : extra_objects) {
+      get_or_add_node(config_.symbol_type_id, key, builder, node_indices, node_names);
    }
 }
 
@@ -266,7 +267,8 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 )
 {
    hash_set< std::string > fact_keys;
@@ -304,9 +306,23 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
       const std::string rel_key = relation_key(node_type, node_key);
       auto& symbols = relation_to_symbols[rel_key];
       for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
          symbols.insert(obj_key);
          symbol_to_relations[obj_key].insert(rel_key);
       }
@@ -344,13 +360,13 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
 template < typename GoalTag >
 void HGraphEncoderEngine::encode_literals(
    std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-   const ankerl::unordered_dense::map< mimir::formalism::GroundLiteral< GoalTag >, int >&
-      goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 )
 {
    for(const auto& literal : goals) {
@@ -392,9 +408,23 @@ void HGraphEncoderEngine::encode_literals(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
       const std::string rel_key = relation_key(node_type, node_key);
       auto& symbols = relation_to_symbols[rel_key];
       for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
          symbols.insert(obj_key);
          symbol_to_relations[obj_key].insert(rel_key);
       }
@@ -407,7 +437,8 @@ void HGraphEncoderEngine::encode_actions(
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 )
 {
    for(const auto& action : actions) {
@@ -436,9 +467,23 @@ void HGraphEncoderEngine::encode_actions(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
       const std::string rel_key = relation_key(node_type, node_key);
       auto& symbols = relation_to_symbols[rel_key];
       for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
          symbols.insert(obj_key);
          symbol_to_relations[obj_key].insert(rel_key);
       }
@@ -448,14 +493,14 @@ void HGraphEncoderEngine::encode_actions(
 template < typename GoalTag >
 void HGraphEncoderEngine::encode_goal_satisfaction(
    std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-   const ankerl::unordered_dense::map< mimir::formalism::GroundLiteral< GoalTag >, int >&
-      goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
    const hash_set< std::string >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 )
 {
    for(const auto& goal : goals) {
@@ -504,9 +549,23 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
       const std::string rel_key = relation_key(node_type, node_key);
       auto& symbols = relation_to_symbols[rel_key];
       for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
          symbols.insert(obj_key);
          symbol_to_relations[obj_key].insert(rel_key);
       }
@@ -654,70 +713,76 @@ template void HGraphEncoderEngine::encode_step_impl< mimir::formalism::DerivedTa
 
 template void HGraphEncoderEngine::encode_literals< mimir::formalism::StaticTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::StaticTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::StaticTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::StaticTag >, int >&
+      goal_levels,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 
 template void HGraphEncoderEngine::encode_literals< mimir::formalism::FluentTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::FluentTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >, int >&
+      goal_levels,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 
 template void HGraphEncoderEngine::encode_literals< mimir::formalism::DerivedTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >, int >&
+      goal_levels,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 
 template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::StaticTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::StaticTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::StaticTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::StaticTag >, int >&
+      goal_levels,
    const hash_set< std::string >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 
 template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::FluentTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::FluentTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >, int >&
+      goal_levels,
    const hash_set< std::string >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 
 template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::DerivedTag >(
    std::span< const mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag > > goals,
-   const ankerl::unordered_dense::
-      map< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >, int >&
+      goal_levels,
    const hash_set< std::string >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
 );
 }  // namespace mifrost
