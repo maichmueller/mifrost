@@ -9,4 +9,4 @@ using phmap::flat_hash_set;
 using phmap::parallel_flat_hash_map;
 using phmap::parallel_flat_hash_set;
 
-} // namespace gtl
+}  // namespace gtl
