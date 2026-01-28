@@ -3,7 +3,6 @@ from conan.tools.build import check_min_cppstd
 from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain
 from conan.tools.scm import Git
 
-
 # Boost components from its conanfile recipe
 # https://github.com/conan-io/conan-center-index/blob/master/recipes/boost/all/conanfile.py
 BOOST_COMPS = (
@@ -69,7 +68,7 @@ class LokiRecipe(ConanFile):
         default_options.update({f"boost/*:without_{comp}": False})
 
     exports_sources = "fix_includes.patch", "disable_exe.patch"
-    
+
     def requirements(self):
         self.requires("boost/1.86.0")
         self.requires("abseil/20230125.3")
@@ -78,16 +77,17 @@ class LokiRecipe(ConanFile):
     def source(self):
         git = Git(self)
         git.clone("https://github.com/drexlerd/Loki.git", target="loki_src")
-        
+
         # Use conan.tools.files.chdir instead of self.chdir
         from conan.tools.files import chdir, patch
+
         with chdir(self, "loki_src"):
             if len(str(self.version)) == 40:
                 # Checkout commit hash
                 git.checkout(self.version)
             else:
                 git.checkout(f"v{self.version}")
-        
+
         # Apply patches
         patch(self, base_path="loki_src", patch_file="fix_includes.patch")
         patch(self, base_path="loki_src", patch_file="disable_exe.patch")

@@ -6,10 +6,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def find_mimir_prefix():
     """Try to find mimir cmake directory via python import."""
     try:
         import mimir
+
         # Assuming typical wheel structure or exposed API
         # If mimir exposes get_cmake_dir():
         if hasattr(mimir, "get_cmake_dir"):
@@ -23,18 +25,23 @@ def find_mimir_prefix():
         pass
     return None
 
+
 def main():
     parser = argparse.ArgumentParser(description="Configure Mifrost Build")
     parser.add_argument("--noconan", action="store_true", help="Disable Conan")
-    parser.add_argument("--only_install", action="store_true", help="Only install dependencies")
+    parser.add_argument(
+        "--only_install", action="store_true", help="Only install dependencies"
+    )
     parser.add_argument("--deps_policy", default="missing", help="Conan build policy")
     parser.add_argument("--cmake_cmd", default="cmake", help="CMake executable")
     parser.add_argument("--conan_cmd", default="conan", help="Conan executable")
     parser.add_argument("--build_dir", default="build", help="Build directory")
     parser.add_argument("--source_dir", default=".", help="Source directory")
-    parser.add_argument("--config", default="Release", help="Build type (Debug, Release, etc.)")
+    parser.add_argument(
+        "--config", default="Release", help="Build type (Debug, Release, etc.)"
+    )
     parser.add_argument("--toolchain_file", help="CMake toolchain file")
-    
+
     args, extra_args = parser.parse_known_args()
 
     use_conan = not args.noconan
@@ -46,43 +53,64 @@ def main():
 
     # 1. Conan Install
     cmake_toolchain_file = args.toolchain_file
-    
+
     if use_conan:
         # Check custom deps (cista/loki/nauty) are exported?
         # conan_export.py logic
         conan_export_script = script_dir / "conan_export.py"
         if conan_export_script.exists():
             # Check if we need to export (naive check: just run it, it's fast)
-            cmd = [sys.executable, str(conan_export_script), f"--conan_cmd={args.conan_cmd}"]
+            cmd = [
+                sys.executable,
+                str(conan_export_script),
+                f"--conan_cmd={args.conan_cmd}",
+            ]
             subprocess.run(cmd, check=True)
 
         conan_install_dir = build_dir / "conan"
         conan_args = [
-            "-s", f"build_type={args.config}",
-            "-s:h", "compiler.cppstd=gnu23",
-            "-s:b", "compiler.cppstd=gnu23",
+            "-s",
+            f"build_type={args.config}",
+            "-s:h",
+            "compiler.cppstd=gnu23",
+            "-s:b",
+            "compiler.cppstd=gnu23",
             "--profile:host=default",
             "--profile:build=default",
             "--options=loki/*:fPIC=True",
             "--options=nauty/*:fPIC=True",
-            f"--build={args.deps_policy}"
+            f"--build={args.deps_policy}",
         ]
-        
-        install_cmd = [
-            args.conan_cmd, "install", str(source_dir),
-            f"-of={conan_install_dir}",
-            "-g", "CMakeDeps",
-            "-s", f"&:build_type={args.config}" # Sets build type for consumer
-        ] + conan_args + extra_args
+
+        install_cmd = (
+            [
+                args.conan_cmd,
+                "install",
+                str(source_dir),
+                f"-of={conan_install_dir}",
+                "-g",
+                "CMakeDeps",
+                "-s",
+                f"&:build_type={args.config}",  # Sets build type for consumer
+            ]
+            + conan_args
+            + extra_args
+        )
 
         print(f"Running Conan: {' '.join(install_cmd)}")
         subprocess.run(install_cmd, check=True)
 
         if not cmake_toolchain_file:
             # Check standard conan toolchain locations
-            possible_path = conan_install_dir / "build" / args.config / "generators" / "conan_toolchain.cmake"
+            possible_path = (
+                conan_install_dir
+                / "build"
+                / args.config
+                / "generators"
+                / "conan_toolchain.cmake"
+            )
             possible_path_flat = conan_install_dir / "conan_toolchain.cmake"
-            
+
             if possible_path.exists():
                 cmake_toolchain_file = str(possible_path)
             elif possible_path_flat.exists():
@@ -93,12 +121,15 @@ def main():
 
     # 2. CMake Configure
     cmake_args = [
-        "-S", str(source_dir),
-        "-B", str(build_dir),
-        "-G", "Ninja",
-        f"-DCMAKE_BUILD_TYPE={args.config}"
+        "-S",
+        str(source_dir),
+        "-B",
+        str(build_dir),
+        "-G",
+        "Ninja",
+        f"-DCMAKE_BUILD_TYPE={args.config}",
     ]
-    
+
     if cmake_toolchain_file:
         cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain_file}")
 
@@ -107,14 +138,17 @@ def main():
     if mimir_prefix:
         print(f"Found Mimir CMake at: {mimir_prefix}")
         # Add to CMAKE_PREFIX_PATH
-        # We pass it as a define or env var. 
+        # We pass it as a define or env var.
         # CMAKE_PREFIX_PATH can be passed as argument.
         cmake_args.append(f"-DCMAKE_PREFIX_PATH={mimir_prefix}")
     else:
-        print("Warning: Could not auto-detect specific Mimir CMake path. Relying on env CMAKE_PREFIX_PATH.")
+        print(
+            "Warning: Could not auto-detect specific Mimir CMake path. Relying on env CMAKE_PREFIX_PATH."
+        )
 
     print(f"Running CMake: {args.cmake_cmd} {' '.join(cmake_args)}")
     subprocess.run([args.cmake_cmd] + cmake_args, check=True)
+
 
 if __name__ == "__main__":
     main()

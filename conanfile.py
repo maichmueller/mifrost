@@ -2,6 +2,7 @@ from conan import ConanFile
 from conan.tools.build import check_min_cppstd
 from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain, CMakeDeps
 
+
 class MifrostRecipe(ConanFile):
     name = "mifrost"
     version = "0.0.1"
@@ -9,12 +10,41 @@ class MifrostRecipe(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     # Match Mimir's boost version logic
     BOOST_COMPS = (
-        "atomic", "charconv", "chrono", "cobalt", "container", "context", "contract",
-        "coroutine", "date_time", "exception", "fiber", "filesystem", "graph",
-        "graph_parallel", "iostreams", "json", "locale", "log", "math", "mpi",
-        "nowide", "process", "program_options", "python", "random", "regex",
-        "serialization", "stacktrace", "system", "test", "thread", "timer",
-        "type_erasure", "url", "wave"
+        "atomic",
+        "charconv",
+        "chrono",
+        "cobalt",
+        "container",
+        "context",
+        "contract",
+        "coroutine",
+        "date_time",
+        "exception",
+        "fiber",
+        "filesystem",
+        "graph",
+        "graph_parallel",
+        "iostreams",
+        "json",
+        "locale",
+        "log",
+        "math",
+        "mpi",
+        "nowide",
+        "process",
+        "program_options",
+        "python",
+        "random",
+        "regex",
+        "serialization",
+        "stacktrace",
+        "system",
+        "test",
+        "thread",
+        "timer",
+        "type_erasure",
+        "url",
+        "wave",
     )
 
     options = {
@@ -27,7 +57,7 @@ class MifrostRecipe(ConanFile):
         "cista/*:with_fmt": True,
         "hwloc/*:shared": True,
     }
-    
+
     # Configure Boost options to match Mimir
     default_options.update({f"boost/*:without_{comp}": True for comp in BOOST_COMPS})
     for comp in ("iostreams", "random", "regex", "system"):
@@ -46,17 +76,19 @@ class MifrostRecipe(ConanFile):
 
         # Custom dependencies from conandata.yml
         # conandata.yml format matches requirements list: ["pkg/version", ...]
-        # We need to parse "pkg/version" to get the package name and version if needed, 
+        # We need to parse "pkg/version" to get the package name and version if needed,
         # or just pass the full string if it matches conan syntax.
         # However, conandata.yml structure is `requirements: [ "pkg/v", ... ]`
         # self.conan_data might be None if not loaded properly or file missing.
-        
+
         if self.conan_data and "requirements" in self.conan_data:
             for req in self.conan_data["requirements"]:
                 self.requires(req)
         else:
             # Fallback if conandata not loaded (should not happen if exported correctly)
-            self.output.warning("conandata.yml not specified or empty, using defaults/failsafes")
+            self.output.warning(
+                "conandata.yml not specified or empty, using defaults/failsafes"
+            )
             self.requires("loki/f86e5e10f685a77897269742c84c9d780237084a")
             self.requires("nauty/2.8.8")
             self.requires("gtest/1.14.0")

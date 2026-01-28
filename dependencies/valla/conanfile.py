@@ -4,6 +4,7 @@ from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain
 from conan.tools.scm import Git
 from conan.tools.files import chdir
 
+
 class VallaRecipe(ConanFile):
     name = "valla"
     package_type = "library"
@@ -29,8 +30,10 @@ class VallaRecipe(ConanFile):
 
     def source(self):
         git = Git(self)
-        git.clone("https://github.com/drexlerd/tree-compression.git", target="valla_src")
-        
+        git.clone(
+            "https://github.com/drexlerd/tree-compression.git", target="valla_src"
+        )
+
         with chdir(self, "valla_src"):
             if len(str(self.version)) == 40:
                 git.checkout(self.version)

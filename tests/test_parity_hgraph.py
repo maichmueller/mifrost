@@ -11,9 +11,9 @@ import mifrost
 from tests.ground_truth.hgraph_encoder import HGraphEncoder
 
 
-def _load_blocks_problem() -> (
-    tuple[pymimir.Domain, pymimir.Problem, pymimir.State, Path, Path]
-):
+def _load_blocks_problem() -> tuple[
+    pymimir.Domain, pymimir.Problem, pymimir.State, Path, Path
+]:
     root = Path(__file__).resolve().parents[1]
     domain_path = root / "data" / "pddl" / "blocks" / "domain.pddl"
     problem_path = root / "data" / "pddl" / "blocks" / "probBLOCKS-4-0.pddl"

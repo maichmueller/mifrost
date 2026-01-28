@@ -34,15 +34,13 @@ def _get_build_type(config_settings: dict[str, Any] | None) -> str:
 
 
 def _get_conan_cmd() -> str:
-    return (
-        os.environ.get("CONAN_COMMAND")
-        or os.environ.get("CONAN_CMD")
-        or "conan"
-    )
+    return os.environ.get("CONAN_COMMAND") or os.environ.get("CONAN_CMD") or "conan"
 
 
 def _get_mimir_prefix() -> str | None:
-    env_value = os.environ.get("MIFROST_MIMIR_CMAKE_DIR") or os.environ.get("MIMIR_CMAKE_DIR")
+    env_value = os.environ.get("MIFROST_MIMIR_CMAKE_DIR") or os.environ.get(
+        "MIMIR_CMAKE_DIR"
+    )
     if env_value:
         return env_value
     try:
@@ -105,7 +103,15 @@ def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
                 _set_env_prefix_path(mimir_prefix)
             return
 
-    default_toolchain = repo_root / "build" / "conan" / "build" / build_type / "generators" / "conan_toolchain.cmake"
+    default_toolchain = (
+        repo_root
+        / "build"
+        / "conan"
+        / "build"
+        / build_type
+        / "generators"
+        / "conan_toolchain.cmake"
+    )
     if default_toolchain.exists():
         if "CMAKE_TOOLCHAIN_FILE" not in os.environ.get("CMAKE_ARGS", ""):
             _append_cmake_args(f"-DCMAKE_TOOLCHAIN_FILE={default_toolchain}")
@@ -115,7 +121,9 @@ def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
             _set_env_prefix_path(mimir_prefix)
         return
 
-    build_root = Path(os.environ.get("MIFROST_CONAN_BUILD_DIR", "build/conan_prep")).resolve()
+    build_root = Path(
+        os.environ.get("MIFROST_CONAN_BUILD_DIR", "build/conan_prep")
+    ).resolve()
     if "CONAN_HOME" not in os.environ:
         os.environ["CONAN_HOME"] = str(build_root / "conan_home")
     cache_key = (build_type, str(build_root))
@@ -147,7 +155,14 @@ def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
 
     subprocess.check_call(configure_cmd, cwd=str(repo_root))
 
-    toolchain = build_root / "conan" / "build" / build_type / "generators" / "conan_toolchain.cmake"
+    toolchain = (
+        build_root
+        / "conan"
+        / "build"
+        / build_type
+        / "generators"
+        / "conan_toolchain.cmake"
+    )
     if not toolchain.exists():
         fallback = build_root / "conan_toolchain.cmake"
         if fallback.exists():
@@ -173,19 +188,27 @@ def get_requires_for_build_editable(config_settings: dict[str, Any] | None = Non
     return _sbc.get_requires_for_build_editable(config_settings)
 
 
-def prepare_metadata_for_build_wheel(metadata_directory: str, config_settings: dict[str, Any] | None = None):
+def prepare_metadata_for_build_wheel(
+    metadata_directory: str, config_settings: dict[str, Any] | None = None
+):
     _set_default_rpath_mode("wheel")
     _prepare_conan(config_settings)
     return _sbc.prepare_metadata_for_build_wheel(metadata_directory, config_settings)
 
 
-def prepare_metadata_for_build_editable(metadata_directory: str, config_settings: dict[str, Any] | None = None):
+def prepare_metadata_for_build_editable(
+    metadata_directory: str, config_settings: dict[str, Any] | None = None
+):
     _set_default_rpath_mode("dev")
     _prepare_conan(config_settings)
     return _sbc.prepare_metadata_for_build_editable(metadata_directory, config_settings)
 
 
-def build_wheel(wheel_directory: str, config_settings: dict[str, Any] | None = None, metadata_directory: str | None = None):
+def build_wheel(
+    wheel_directory: str,
+    config_settings: dict[str, Any] | None = None,
+    metadata_directory: str | None = None,
+):
     _set_default_rpath_mode("wheel")
     _prepare_conan(config_settings)
     wheel_path = _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
@@ -200,7 +223,11 @@ def build_wheel(wheel_directory: str, config_settings: dict[str, Any] | None = N
     return wheel_path
 
 
-def build_editable(wheel_directory: str, config_settings: dict[str, Any] | None = None, metadata_directory: str | None = None):
+def build_editable(
+    wheel_directory: str,
+    config_settings: dict[str, Any] | None = None,
+    metadata_directory: str | None = None,
+):
     _set_default_rpath_mode("dev")
     _prepare_conan(config_settings)
     return _sbc.build_editable(wheel_directory, config_settings, metadata_directory)
