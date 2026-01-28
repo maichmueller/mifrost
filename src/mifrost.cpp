@@ -24,6 +24,7 @@
 #include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/horizon_hgraph_encoder.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
+#include "mifrost/core/successor_hgraph_encoder.hpp"
 #include "mifrost/core/transition_dag.hpp"
 
 namespace nb = nanobind;
@@ -131,6 +132,17 @@ NB_MODULE(_core, m)
          "exclude_root_candidate", &HorizonHGraphEncoderEngine::Config::exclude_root_candidate
       );
 
+   nb::enum_< SuccessorHGraphEncoderEngine::Mode >(m, "SuccessorEncoderMode")
+      .value("Full", SuccessorHGraphEncoderEngine::Mode::Full)
+      .value("Delta", SuccessorHGraphEncoderEngine::Mode::Delta);
+
+   nb::class_< SuccessorHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
+      m, "SuccessorEncoderConfig"
+   )
+      .def(nb::init<>())
+      .def_rw("successor_mode", &SuccessorHGraphEncoderEngine::Config::successor_mode)
+      .def_rw("successor_suffix", &SuccessorHGraphEncoderEngine::Config::successor_suffix);
+
    nb::class_< HorizonHGraphEncoderEngine, HGraphEncoderEngine >(m, "HorizonHGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
       .def(nb::init< const mimir::formalism::DomainImpl&, HorizonHGraphEncoderEngine::Config >())
@@ -151,7 +163,44 @@ NB_MODULE(_core, m)
          "goals"_a
       )
       .def(
-         "encode", &HorizonHGraphEncoderEngine::encode, "root"_a, "dag"_a, "goals"_a, "builder"_a
+         "encode",
+         &HorizonHGraphEncoderEngine::encode,
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         "builder"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      );
+
+   nb::class_< SuccessorHGraphEncoderEngine, HGraphEncoderEngine >(
+      m, "SuccessorHGraphEncoderEngine"
+   )
+      .def(nb::init< const mimir::formalism::DomainImpl& >())
+      .def(nb::init< const mimir::formalism::DomainImpl&, SuccessorHGraphEncoderEngine::Config >())
+      .def(nb::init< mimir::formalism::Domain >())
+      .def(nb::init< mimir::formalism::Domain, SuccessorHGraphEncoderEngine::Config >())
+      .def(
+         "encode",
+         [](SuccessorHGraphEncoderEngine& encoder,
+            const mimir::search::State& current,
+            const mimir::search::State& successor,
+            const GoalInputs& goals) {
+            BatchBuilder builder;
+            encoder.encode(current, successor, goals, builder);
+            return builder.build_parts();
+         },
+         "current"_a,
+         "successor"_a,
+         "goals"_a
+      )
+      .def(
+         "encode",
+         &SuccessorHGraphEncoderEngine::encode,
+         "current"_a,
+         "successor"_a,
+         "goals"_a,
+         "builder"_a,
+         nb::call_guard< nb::gil_scoped_release >()
       );
 
    nb::class_< TransitionDAG >(m, "TransitionDAG")

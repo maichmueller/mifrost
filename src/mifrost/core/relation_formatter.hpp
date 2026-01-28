@@ -63,10 +63,11 @@ struct RelationFormatter {
       const std::string& name,
       std::optional< int > goal_level = std::nullopt,
       std::optional< GoalSatisfaction > satisfaction = std::nullopt,
-      std::optional< bool > polarity = std::nullopt
+      std::optional< bool > polarity = std::nullopt,
+      const std::string& suffix = ""
    )
    {
-      return polarity_prefix(polarity) + name + goal_level_suffix(goal_level)
+      return polarity_prefix(polarity) + name + suffix + goal_level_suffix(goal_level)
              + goal_satisfaction_suffix(satisfaction);
    }
 
@@ -75,26 +76,32 @@ struct RelationFormatter {
       const mimir::formalism::PredicateImpl< P >& predicate,
       std::optional< int > goal_level = std::nullopt,
       std::optional< GoalSatisfaction > satisfaction = std::nullopt,
-      std::optional< bool > polarity = std::nullopt
+      std::optional< bool > polarity = std::nullopt,
+      const std::string& suffix = ""
    )
    {
-      return format_predicate(predicate.get_name(), goal_level, satisfaction, polarity);
+      return format_predicate(predicate.get_name(), goal_level, satisfaction, polarity, suffix);
    }
 
    template < typename P >
-   static std::string format_atom(mimir::formalism::GroundAtom< P > atom)
+   static std::string
+   format_atom(mimir::formalism::GroundAtom< P > atom, const std::string& suffix = "")
    {
-      return mimir::to_string(atom);
+      std::string out = mimir::to_string(atom);
+      out.append(suffix);
+      return out;
    }
 
    template < typename P >
    static std::string format_literal(
       mimir::formalism::GroundLiteral< P > literal,
       std::optional< int > goal_level = std::nullopt,
-      std::optional< GoalSatisfaction > satisfaction = std::nullopt
+      std::optional< GoalSatisfaction > satisfaction = std::nullopt,
+      const std::string& suffix = ""
    )
    {
       std::string out = mimir::to_string(literal);
+      out.append(suffix);
       out.append(goal_level_suffix(goal_level));
       out.append(goal_satisfaction_suffix(satisfaction));
       return out;
