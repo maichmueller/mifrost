@@ -31,7 +31,7 @@ using namespace nb::literals;
 
 namespace mifrost {
 
-NB_MODULE(_mifrost, m)
+NB_MODULE(_core, m)
 {
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
@@ -50,7 +50,10 @@ NB_MODULE(_mifrost, m)
       .def(nb::init<>())
       .def_rw("symbol_type_id", &HGraphEncoderEngine::Config::symbol_type_id)
       .def_rw("nullary_object_name", &HGraphEncoderEngine::Config::nullary_object_name)
+      .def_rw("max_goal_level", &HGraphEncoderEngine::Config::max_goal_level)
+      .def_rw("support_literals", &HGraphEncoderEngine::Config::support_literals)
       .def_rw("add_nullary_predicates", &HGraphEncoderEngine::Config::add_nullary_predicates)
+      .def_rw("ignore_actions", &HGraphEncoderEngine::Config::ignore_actions)
       .def_rw("include_static", &HGraphEncoderEngine::Config::include_static)
       .def_rw("include_lgan_edges", &HGraphEncoderEngine::Config::include_lgan_edges)
       .def_rw(

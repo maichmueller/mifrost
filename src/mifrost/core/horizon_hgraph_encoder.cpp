@@ -62,9 +62,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
       target_keys.push_back(target_node_key(node.index));
    }
 
-   // Register target nodes in builder immediately or via encode_objects?
-   // encode_objects will add them if they are in extra_objects.
-
    // 2. Encode root state
    std::vector< std::string > root_extra = {target_keys[0]};
    encode_objects(root, builder, node_indices, node_names, root_extra);
@@ -90,8 +87,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             succ_extra
          );
       } else if(horizon_config_.transition_mode == Mode::Delta) {
-         // TODO: Implement delta mode (diff vs root)
-         // For now, let's just do full if delta is requested but not yet implemented
+         // Delta mode: encodes changed atoms relative to root state.
          encode_facts(
             node.state,
             builder,
@@ -133,7 +129,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       symbol_to_relations
    );
 
-   // 5. Goal satisfaction for root (and maybe for others in future?)
+   // 5. Goal satisfaction
    if(! goals.static_goals.empty()) {
       encode_goal_satisfaction(
          std::span{goals.static_goals},

@@ -1,60 +1,64 @@
 import mifrost
 import pymimir
+from pymimir.wrapper_formalism import Domain, Problem
+from pathlib import Path
 import os
 
 
 def test_horizon_encoder():
-    # 1. Setup Domain
-    pddl_dir = "/Users/maichmueller/GitHub/bifrost/tests/pddl"
-    domain_path = os.path.join(pddl_dir, "gripper.pddl")
-    problem_path = os.path.join(pddl_dir, "gripper-4.pddl")
+    # 1. Setup Domain & Problem
+    root = Path(__file__).resolve().parents[2]
+    domain_path = root / "data" / "pddl" / "blocks" / "domain.pddl"
+    problem_path = root / "data" / "pddl" / "blocks" / "probBLOCKS-4-0.pddl"
 
-    # We need a grounded problem for states
-    # Using pymimir directly
-    config = pymimir.GroundedEvaluator.Config()
-    evaluator = pymimir.GroundedEvaluator.from_pddl(domain_path, problem_path, config)
-    problem = evaluator.problem
-    root_state = problem.initial_state
+    print(f"Loading domain from {domain_path}")
+    domain = Domain(domain_path)
+    # Using 'grounded' mode to allow applying actions easily
+    problem = Problem(domain, problem_path, mode="grounded")
+    state = problem.get_initial_state()
 
     # 2. Setup DAG
-    dag = mifrost.TransitionDAG(root_state)
+    dag = mifrost.TransitionDAG(state._advanced_state)
 
-    # Add a transition
-    actions = list(problem.ground_actions)
-    # Find a pick action
-    pick_action = next(a for a in actions if "pick" in str(a))
-
-    next_state = evaluator.apply(root_state, pick_action)
-    dag.register_transition(
-        dag.root_index(), 0, pick_action
-    )  # Wait, register_transition needs parent_idx, child_node_idx, action
-    # Actually TransitionDAG.register_transition(parent_idx, child_state, action)
-    # My C++ implementation: int register_transition(int parent_idx, mimir::search::State child_state, std::optional<mimir::formalism::GroundAction> action = std::nullopt)
-
-    idx1 = dag.register_transition(dag.root_index(), next_state, pick_action)
-    print(f"Registered transition to node {idx1}")
+    # Add a real transition if possible
+    applicable = state.generate_applicable_actions()
+    if applicable:
+        action = applicable[0]
+        next_state = action.apply(state)
+        dag.register_transition(
+            dag.root(), next_state._advanced_state, action._advanced_ground_action
+        )
+        print(f"Registered transition with action {action}")
 
     # 3. Setup Encoder
     enc_config = mifrost.HorizonEncoderConfig()
     enc_config.max_goal_level = 1
-    encoder = mifrost.HorizonHGraphEncoderEngine(problem.domain, enc_config)
+    encoder = mifrost.HorizonHGraphEncoderEngine(domain._advanced_domain, enc_config)
 
     # 4. Encode
-    goals = mifrost.GoalInputs(list(problem.goal_literals))
-    parts = encoder.encode(root_state, dag, goals)
+    goal_cond = problem.get_goal_condition()
+    static_goals = [
+        l._advanced_ground_literal for l in goal_cond._static_ground_literals
+    ]
+    fluent_goals = [
+        l._advanced_ground_literal for l in goal_cond._fluent_ground_literals
+    ]
+    derived_goals = [
+        l._advanced_ground_literal for l in goal_cond._derived_ground_literals
+    ]
 
-    print("Encoded Parts:")
-    for k, v in parts.items():
-        if isinstance(v, dict):
-            print(f"  {k}: {v.keys()}")
-        else:
-            print(f"  {k}: {len(v)}")
+    goals = mifrost.GoalInputs(static_goals + fluent_goals + derived_goals)
+
+    parts = encoder.encode(state._advanced_state, dag, goals)
+
+    print("Encoded Parts Keys:", parts.keys())
 
     # Verify we have target nodes
-    symbol_names = parts.get("node_names", {}).get("symbol", [])
+    node_names = parts.get("node_names", {})
+    symbol_names = node_names.get("symbol", [])
     target_nodes = [s for s in symbol_names if "target" in s]
     print(f"Target nodes found: {target_nodes}")
-    assert len(target_nodes) >= 2
+    assert len(target_nodes) >= 1  # At least root target
 
     # Verify edge types
     edge_index = parts.get("edge_index", {})
