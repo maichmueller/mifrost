@@ -115,6 +115,7 @@ add_library(mifrost_core STATIC
     "mifrost/core/batch_builder.cpp"
     "mifrost/core/hgraph_stream_encoder.cpp"
     "mifrost/core/transition_dag.cpp"
+    "mifrost/core/horizon_hgraph_encoder.cpp"
 )
 
 
