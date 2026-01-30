@@ -13,8 +13,7 @@
 #include <mimir/formalism/predicate.hpp>
 #include <optional>
 #include <string>
-#include <strong_type/regular.hpp>  // optional, for copy/move/== etc.
-#include <strong_type/type.hpp>
+#include <strong_type/strong_type.hpp>
 #include <type_traits>
 
 #include "utils/type_traits.hpp"

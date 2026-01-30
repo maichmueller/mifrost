@@ -73,7 +73,7 @@ class MifrostRecipe(ConanFile):
         self.requires("range-v3/0.12.0")
         self.requires("nanobind/2.9.2")
         self.requires("argparse/3.2")
-        self.requires("strong_type/v9")
+        self.requires("strong_type/v10")
 
         # Custom dependencies from conandata.yml
         # conandata.yml format matches requirements list: ["pkg/version", ...]
