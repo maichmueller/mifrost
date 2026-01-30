@@ -11,37 +11,6 @@ import mifrost
 from tests.ground_truth.hgraph_encoder import HGraphEncoder
 
 
-def _load_blocks_problem() -> tuple[
-    pymimir.Domain, pymimir.Problem, pymimir.State, Path, Path
-]:
-    root = Path(__file__).resolve().parents[1]
-    domain_path = root / "data" / "pddl" / "blocks" / "domain.pddl"
-    problem_path = root / "data" / "pddl" / "blocks" / "probBLOCKS-4-0.pddl"
-
-    domain = pymimir.Domain(domain_path)
-    problem = pymimir.Problem(domain, problem_path, mode="grounded")
-    state = problem.get_initial_state()
-    return domain, problem, state, domain_path, problem_path
-
-
-def _make_test_actions(problem: pymimir.Problem) -> list[pymimir.GroundAction]:
-    domain = problem.get_domain()
-    objects = list(problem.get_objects())
-    objects = sorted(objects, key=lambda obj: obj.get_index())
-    if not objects:
-        return []
-
-    actions = []
-    for action in domain.get_actions():
-        arity = action.get_arity()
-        if arity == 0:
-            actions.append(problem.new_ground_action(action, []))
-            continue
-        chosen = [objects[i % len(objects)] for i in range(arity)]
-        actions.append(problem.new_ground_action(action, chosen))
-    return actions
-
-
 def _maybe_subgoal_layers(
     goals: list[pymimir.GroundLiteral],
     include_subgoals: bool,
@@ -71,13 +40,28 @@ def _compare_hetero(py_data, cpp_data) -> None:
 @pytest.mark.parametrize("include_goals", [False, True])
 @pytest.mark.parametrize("include_actions", [False, True])
 @pytest.mark.parametrize("include_subgoals", [False, True])
+@pytest.mark.parametrize(
+    ("domain", "problem"),
+    [
+        ["blocks", "probBLOCKS-4-0"],
+        ["blocks_eq", "medium"],
+        ["delivery", "instance_4x4_p-2_0"],
+        ["gripper", "gripper_b-5"],
+        ["reward", "instance_5x5_0"],
+        ["spanner", "medium"],
+    ],
+)
 def test_hgraph_parity_blocks_inputs(
-    include_goals: bool, include_actions: bool, include_subgoals: bool
+    include_goals: bool,
+    include_actions: bool,
+    include_subgoals: bool,
+    domain: str,
+    problem: str,
 ):
-    domain, problem, state, _domain_path, _problem_path = _load_blocks_problem()
+    domain, problem, state, _domain_path, _problem_path = _load_problem()
 
     goals = list(problem.get_goal_condition().get_literals())
-    actions = _make_test_actions(problem) if include_actions else []
+    actions = state.generate_applicable_actions()
     subgoal_layers = _maybe_subgoal_layers(goals, include_subgoals)
 
     py_encoder = HGraphEncoder(
