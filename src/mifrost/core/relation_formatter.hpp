@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <concepts>
+#include <cstdint>
 #include <mimir/common/formatter.hpp>
 #include <mimir/formalism/action.hpp>
 #include <mimir/formalism/formatter.hpp>
@@ -10,77 +13,110 @@
 #include <mimir/formalism/predicate.hpp>
 #include <optional>
 #include <string>
+#include <strong_type/regular.hpp>  // optional, for copy/move/== etc.
+#include <strong_type/strong_type.hpp>
+#include <type_traits>
+
+#include "utils/type_traits.hpp"
 
 namespace mifrost {
 
 enum class GoalSatisfaction {
-   None,
-   True,
-   False,
-   Added,
-   Removed,
+   none,
+   satisfied,
+   unsatisfied,
+   added_satisfied,
+   added_unsatisfied,
+};
+
+enum class LiteralPrefix {
+   positive,
+   negative,
+};
+
+struct GoalLevel: strong::type< std::size_t, GoalLevel, strong::regular > {
+   using base = strong::type< std::size_t, GoalLevel, strong::regular >;
+   using base::base;  // keep the normal constructors
+
+   template < std::integral I >
+      requires(! std::same_as< detail::raw_t< I >, bool >)
+   explicit constexpr GoalLevel(I v) : base(static_cast< std::size_t >(v))
+   {
+   }
 };
 
 struct RelationFormatter {
    static constexpr auto kPositivePrefix = "[+]";
    static constexpr auto kNegativePrefix = "[-]";
-   static constexpr auto goal_suffixes = std::array{"[g]", "[sg]", "[ssg]", "[sssg]"};
+   static constexpr auto kGoalSuffixes = std::array{"[g]", "[sg]", "[ssg]", "[sssg]"};
    static constexpr auto kGoalSatisfiedSuffix = "[sat]";
    static constexpr auto kGoalUnsatisfiedSuffix = "[unsat]";
    static constexpr auto kGoalSatisfiedAddedSuffix = "[sat+]";
    static constexpr auto kGoalSatisfiedRemovedSuffix = "[sat-]";
    static constexpr auto kDefaultNullarySymbolName = "![nullary_symbol]!";
 
-   static std::string goal_level_suffix(std::optional< int > level)
+   static std::string_view goal_level_suffix(std::nullopt_t) { return ""; }
+
+   static std::string_view goal_level_suffix(const GoalLevel& level)
    {
-      if(! level.has_value())
-         return "";
-      return goal_suffixes.at(*level);
+      return kGoalSuffixes.at(level.value_of());
    }
 
-   static std::string goal_satisfaction_suffix(std::optional< GoalSatisfaction > satisfaction)
+   static std::string_view goal_satisfaction_suffix(std::nullopt_t) { return ""; }
+
+   static std::string_view goal_satisfaction_suffix(GoalSatisfaction satisfaction)
    {
-      if(! satisfaction.has_value())
-         return "";
-      switch(*satisfaction) {
-         case GoalSatisfaction::None: return "";
-         case GoalSatisfaction::True: return kGoalSatisfiedSuffix;
-         case GoalSatisfaction::False: return kGoalUnsatisfiedSuffix;
-         case GoalSatisfaction::Added: return kGoalSatisfiedAddedSuffix;
-         case GoalSatisfaction::Removed: return kGoalSatisfiedRemovedSuffix;
+      switch(satisfaction) {
+         case GoalSatisfaction::none: return "";
+         case GoalSatisfaction::satisfied: return kGoalSatisfiedSuffix;
+         case GoalSatisfaction::unsatisfied: return kGoalUnsatisfiedSuffix;
+         case GoalSatisfaction::added_satisfied: return kGoalSatisfiedAddedSuffix;
+         case GoalSatisfaction::added_unsatisfied: return kGoalSatisfiedRemovedSuffix;
       }
       return "";
    }
 
-   static std::string polarity_prefix(std::optional< bool > polarity)
+   static std::string_view polarity_prefix(std::nullopt_t) { return ""; }
+
+   static std::string_view polarity_prefix(bool polarity)
    {
-      if(! polarity.has_value())
-         return "";
-      return *polarity ? kPositivePrefix : kNegativePrefix;
+      return polarity ? kPositivePrefix : kNegativePrefix;
+   }
+
+   static std::string format_predicate(const std::string& name, const std::string& suffix = "")
+   {
+      return name + suffix;
    }
 
    static std::string format_predicate(
       const std::string& name,
-      std::optional< int > goal_level = std::nullopt,
-      std::optional< GoalSatisfaction > satisfaction = std::nullopt,
-      std::optional< bool > polarity = std::nullopt,
+      const GoalLevel goal_level,
       const std::string& suffix = ""
    )
    {
-      return polarity_prefix(polarity) + name + suffix + goal_level_suffix(goal_level)
-             + goal_satisfaction_suffix(satisfaction);
+      return fmt::format("{}{}{}", name, suffix, goal_level_suffix(goal_level));
    }
 
-   template < typename P >
+   template <
+      typename GoalLevelArg = std::nullopt_t,
+      typename SatisfactionArg = std::nullopt_t,
+      typename PolarityArg = std::nullopt_t >
+      requires detail::is_any_v< GoalLevelArg, GoalLevel, std::nullopt_t >
+               and detail::is_any_v< SatisfactionArg, GoalSatisfaction, std::nullopt_t >
+               and detail::is_any_v< PolarityArg, bool, std::nullopt_t >
    static std::string format_predicate(
-      const mimir::formalism::PredicateImpl< P >& predicate,
-      std::optional< int > goal_level = std::nullopt,
-      std::optional< GoalSatisfaction > satisfaction = std::nullopt,
-      std::optional< bool > polarity = std::nullopt,
+      const std::string& name,
+      GoalLevelArg goal_level = std::nullopt,
+      SatisfactionArg satisfaction = std::nullopt,
+      PolarityArg polarity = std::nullopt,
       const std::string& suffix = ""
    )
    {
-      return format_predicate(predicate.get_name(), goal_level, satisfaction, polarity, suffix);
+      // If the caller passes `std::nullopt` (or omits the argument), overload resolution picks
+      // the `std::nullopt_t` overloads above. This removes any optional-related logic at
+      // compile-time, avoids indirections.
+      return polarity_prefix(polarity) + name + suffix + goal_level_suffix(goal_level)
+             + goal_satisfaction_suffix(satisfaction);
    }
 
    template < typename P >
@@ -95,8 +131,9 @@ struct RelationFormatter {
    template < typename P >
    static std::string format_literal(
       mimir::formalism::GroundLiteral< P > literal,
-      std::optional< int > goal_level = std::nullopt,
+      std::optional< GoalLevel > goal_level = std::nullopt,
       std::optional< GoalSatisfaction > satisfaction = std::nullopt,
+      std::optional< bool > polarity = std::nullopt,
       const std::string& suffix = ""
    )
    {

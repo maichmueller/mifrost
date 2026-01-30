@@ -48,6 +48,7 @@ find_package(TBB REQUIRED)
 find_package(phmap CONFIG REQUIRED)
 find_package(unordered_dense CONFIG REQUIRED)
 find_package(GTest REQUIRED)
+find_package(strong_type REQUIRED)
 
 # Conan include fallbacks (some recipes omit include dirs).
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
@@ -144,6 +145,8 @@ target_link_libraries(mifrost_core PUBLIC
     unordered_dense::unordered_dense
     # Nanobind runtime for core symbols used by tests and module
     nanobind
+        # strong type definitions
+        rollbear::strong_type
 )
 
 conan_add_package_include_fallback(mifrost_core abseil)
@@ -204,6 +207,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(mifrost_tests
         "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/transition_dag_test.cpp"
     )
     target_include_directories(mifrost_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
     target_link_libraries(mifrost_tests PRIVATE GTest::gtest_main mifrost_core ${_python_embed_target})

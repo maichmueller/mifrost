@@ -10,7 +10,7 @@ from pathlib import Path
 def find_mimir_prefix():
     """Try to find mimir cmake directory via python import."""
     try:
-        import mimir
+        import pymimir as mimir
 
         # Assuming typical wheel structure or exposed API
         # If mimir exposes get_cmake_dir():
@@ -82,20 +82,14 @@ def main():
             f"--build={args.deps_policy}",
         ]
 
-        install_cmd = (
-            [
-                args.conan_cmd,
-                "install",
-                str(source_dir),
-                f"-of={conan_install_dir}",
-                "-g",
-                "CMakeDeps",
-                "-s",
-                f"&:build_type={args.config}",  # Sets build type for consumer
-            ]
-            + conan_args
-            + extra_args
-        )
+        install_cmd = [
+            args.conan_cmd,
+            "install",
+            str(source_dir),
+            f"-of={conan_install_dir}",
+            "-s",
+            f"&:build_type={args.config}",  # Sets build type for consumer
+        ] + conan_args
 
         print(f"Running Conan: {' '.join(install_cmd)}")
         subprocess.run(install_cmd, check=True)
@@ -146,8 +140,10 @@ def main():
             "Warning: Could not auto-detect specific Mimir CMake path. Relying on env CMAKE_PREFIX_PATH."
         )
 
-    print(f"Running CMake: {args.cmake_cmd} {' '.join(cmake_args)}")
-    subprocess.run([args.cmake_cmd] + cmake_args, check=True)
+    print(
+        f"Running CMake: {args.cmake_cmd} {' '.join(cmake_args)} {' '.join(extra_args)}"
+    )
+    subprocess.run([args.cmake_cmd] + cmake_args + extra_args, check=True)
 
 
 if __name__ == "__main__":
