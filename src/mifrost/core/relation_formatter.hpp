@@ -14,7 +14,7 @@
 #include <optional>
 #include <string>
 #include <strong_type/regular.hpp>  // optional, for copy/move/== etc.
-#include <strong_type/strong_type.hpp>
+#include <strong_type/type.hpp>
 #include <type_traits>
 
 #include "utils/type_traits.hpp"
@@ -83,13 +83,14 @@ struct RelationFormatter {
       return polarity ? kPositivePrefix : kNegativePrefix;
    }
 
-   static std::string format_predicate(const std::string& name, const std::string& suffix = "")
+   static std::string
+   format_predicate(const std::string_view name, const std::string_view suffix = "")
    {
-      return name + suffix;
+      return fmt::format("{}{}", name, suffix);
    }
 
    static std::string format_predicate(
-      const std::string& name,
+      const std::string_view name,
       const GoalLevel goal_level,
       const std::string& suffix = ""
    )
@@ -105,43 +106,57 @@ struct RelationFormatter {
                and detail::is_any_v< SatisfactionArg, GoalSatisfaction, std::nullopt_t >
                and detail::is_any_v< PolarityArg, bool, std::nullopt_t >
    static std::string format_predicate(
-      const std::string& name,
+      const std::string_view name,
       GoalLevelArg goal_level = std::nullopt,
       SatisfactionArg satisfaction = std::nullopt,
       PolarityArg polarity = std::nullopt,
-      const std::string& suffix = ""
+      const std::string_view suffix = ""
    )
    {
       // If the caller passes `std::nullopt` (or omits the argument), overload resolution picks
       // the `std::nullopt_t` overloads above. This removes any optional-related logic at
       // compile-time, avoids indirections.
-      return polarity_prefix(polarity) + name + suffix + goal_level_suffix(goal_level)
-             + goal_satisfaction_suffix(satisfaction);
+      return fmt::format(
+         "{}{}{}{}{}",
+         polarity_prefix(polarity),
+         name,
+         suffix,
+         goal_level_suffix(goal_level),
+         goal_satisfaction_suffix(satisfaction)
+      );
    }
 
    template < typename P >
    static std::string
    format_atom(mimir::formalism::GroundAtom< P > atom, const std::string& suffix = "")
    {
-      std::string out = mimir::to_string(atom);
-      out.append(suffix);
-      return out;
+      return fmt::format("{}{}", mimir::to_string(atom), suffix);
    }
 
-   template < typename P >
+   template <
+      typename P,
+      typename GoalLevelArg = std::nullopt_t,
+      typename SatisfactionArg = std::nullopt_t,
+      typename PolarityArg = std::nullopt_t >
+      requires detail::is_any_v< GoalLevelArg, GoalLevel, std::nullopt_t >
+               and detail::is_any_v< SatisfactionArg, GoalSatisfaction, std::nullopt_t >
+               and detail::is_any_v< PolarityArg, bool, std::nullopt_t >
    static std::string format_literal(
       mimir::formalism::GroundLiteral< P > literal,
-      std::optional< GoalLevel > goal_level = std::nullopt,
-      std::optional< GoalSatisfaction > satisfaction = std::nullopt,
-      std::optional< bool > polarity = std::nullopt,
+      GoalLevelArg goal_level = std::nullopt,
+      SatisfactionArg satisfaction = std::nullopt,
+      [[maybe_unused]] PolarityArg polarity = std::nullopt,
       const std::string& suffix = ""
    )
    {
-      std::string out = mimir::to_string(literal);
-      out.append(suffix);
-      out.append(goal_level_suffix(goal_level));
-      out.append(goal_satisfaction_suffix(satisfaction));
-      return out;
+      // Optional arguments are resolved at compile time via overloads on std::nullopt_t.
+      return fmt::format(
+         "{}{}{}{}",
+         mimir::to_string(literal),
+         suffix,
+         goal_level_suffix(goal_level),
+         goal_satisfaction_suffix(satisfaction)
+      );
    }
 
    static std::string format_action_schema(const mimir::formalism::ActionImpl& action)
@@ -151,13 +166,17 @@ struct RelationFormatter {
 
    static std::string format_action(mimir::formalism::GroundAction action)
    {
-      std::string out = "(" + action->get_action()->get_name();
-      for(const auto& obj : action->get_objects()) {
-         out.append(" ");
-         out.append(obj->get_name());
-      }
-      out.append(")");
-      return out;
+      return fmt::format(
+         "({} {})",
+         action->get_action()->get_name(),
+         fmt::join(
+            std::views::transform(
+               action->get_objects(),
+               [](const mimir::formalism::Object& obj) { return obj->get_name(); }
+            ),
+            " "
+         )
+      );
    }
 
    static std::string format_object(const mimir::formalism::ObjectImpl& object)

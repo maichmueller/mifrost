@@ -251,7 +251,8 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          const auto predicate = atom->get_predicate();
          const auto key = RelationFormatter::format_atom(atom);
          const bool satisfied = suc_fact_keys.contains(key) == goal->get_polarity();
-         const GoalSatisfaction sat = satisfied ? GoalSatisfaction::True : GoalSatisfaction::False;
+         const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
+                                                : GoalSatisfaction::unsatisfied;
 
          if(! relation_dict_.goal_satisfaction_derivations.contains(sat)) {
             continue;
@@ -261,16 +262,32 @@ void SuccessorHGraphEncoderEngine::encode_impl(
                                               ? std::optional< int >(levels.at(goal))
                                               : std::nullopt;
 
-         const std::string node_type = RelationFormatter::format_predicate(
-            predicate->get_name(),
-            goal_level,
-            sat,
-            goal->get_polarity(),
-            successor_config_.successor_suffix
-         );
-         const std::string node_key = RelationFormatter::format_literal(
-            goal, goal_level, sat, successor_config_.successor_suffix
-         );
+         std::string node_type;
+         std::string node_key;
+         if(goal_level.has_value()) {
+            const GoalLevel level(*goal_level);
+            node_type = RelationFormatter::format_predicate(
+               predicate->get_name(),
+               level,
+               sat,
+               goal->get_polarity(),
+               successor_config_.successor_suffix
+            );
+            node_key = RelationFormatter::format_literal(
+               goal, level, sat, goal->get_polarity(), successor_config_.successor_suffix
+            );
+         } else {
+            node_type = RelationFormatter::format_predicate(
+               predicate->get_name(),
+               std::nullopt,
+               sat,
+               goal->get_polarity(),
+               successor_config_.successor_suffix
+            );
+            node_key = RelationFormatter::format_literal(
+               goal, std::nullopt, sat, goal->get_polarity(), successor_config_.successor_suffix
+            );
+         }
 
          const auto relation_idx = get_or_add_node(
             node_type, node_key, builder, node_indices, node_names

@@ -22,8 +22,8 @@ struct RelationDictConfig {
       "_action_",
    };
    std::set< GoalSatisfaction > goal_satisfaction_derivations = {
-      GoalSatisfaction::True,
-      GoalSatisfaction::None,
+      GoalSatisfaction::satisfied,
+      GoalSatisfaction::unsatisfied,
    };
 };
 
@@ -43,7 +43,7 @@ struct RelationDict {
       out.max_goal_level = std::max(0, config.max_goal_level);
       out.support_literals = config.support_literals;
       out.goal_satisfaction_derivations = config.goal_satisfaction_derivations;
-      out.goal_satisfaction_derivations.insert(GoalSatisfaction::None);
+      out.goal_satisfaction_derivations.insert(GoalSatisfaction::none);
 
       std::vector< std::pair< std::string, int > > regular_predicates;
       auto collect_predicates = [&]([[maybe_unused]] auto tag) {
@@ -62,19 +62,20 @@ struct RelationDict {
       collect_predicates(mimir::formalism::FluentTag{});
       collect_predicates(mimir::formalism::DerivedTag{});
 
-      std::vector< std::optional< int > > levels;
-      for(int level = 0; level <= out.max_goal_level; ++level) {
-         levels.emplace_back(level);
-      }
-      if(out.support_literals) {
-         levels.emplace_back(std::nullopt);
-      }
-
       for(const auto& [name, arity] : regular_predicates) {
-         for(const auto& level : levels) {
+         for(int level = 0; level <= out.max_goal_level; ++level) {
+            const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
                const std::string rel = RelationFormatter::format_predicate(
-                  name, level, std::nullopt, polarity
+                  name, goal_level, std::nullopt, polarity
+               );
+               out.arity[rel] = arity;
+            }
+         }
+         if(out.support_literals) {
+            for(bool polarity : {true, false}) {
+               const std::string rel = RelationFormatter::format_predicate(
+                  name, std::nullopt, std::nullopt, polarity
                );
                out.arity[rel] = arity;
             }
@@ -83,10 +84,19 @@ struct RelationDict {
 
       for(const auto& goal_sat : out.goal_satisfaction_derivations) {
          for(const auto& [name, arity] : regular_predicates) {
-            for(const auto& level : levels) {
+            for(int level = 0; level <= out.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
                   const std::string rel = RelationFormatter::format_predicate(
-                     name, level, goal_sat, polarity
+                     name, goal_level, goal_sat, polarity
+                  );
+                  out.arity[rel] = arity;
+               }
+            }
+            if(out.support_literals) {
+               for(bool polarity : {true, false}) {
+                  const std::string rel = RelationFormatter::format_predicate(
+                     name, std::nullopt, goal_sat, polarity
                   );
                   out.arity[rel] = arity;
                }

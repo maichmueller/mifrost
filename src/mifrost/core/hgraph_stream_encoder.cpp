@@ -281,7 +281,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
       if(predicate->get_arity() == 0 && ! config_.add_nullary_predicates) {
          return;
       }
-      const std::string node_type = RelationFormatter::format_predicate(*predicate);
+      const std::string node_type = RelationFormatter::format_predicate(predicate->get_name());
       const std::string node_key = RelationFormatter::format_atom< Tag >(atom);
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names
@@ -376,12 +376,20 @@ void HGraphEncoderEngine::encode_literals(
                                                  ? std::optional< int >(goal_levels.at(literal))
                                                  : std::nullopt;
 
-      const std::string node_type = RelationFormatter::format_predicate(
-         predicate->get_name(), goal_level, std::nullopt, literal->get_polarity()
-      );
-      const std::string node_key = RelationFormatter::format_literal< GoalTag >(
-         literal, goal_level
-      );
+      std::string node_type;
+      std::string node_key;
+      if(goal_level.has_value()) {
+         const GoalLevel level(*goal_level);
+         node_type = RelationFormatter::format_predicate(
+            predicate->get_name(), level, std::nullopt, literal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(literal, level);
+      } else {
+         node_type = RelationFormatter::format_predicate(
+            predicate->get_name(), std::nullopt, std::nullopt, literal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
+      }
 
       std::vector< std::string > object_keys;
       if(predicate->get_arity() == 0) {
@@ -508,7 +516,8 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       const auto predicate = atom->get_predicate();
       const auto key = RelationFormatter::format_atom< GoalTag >(atom);
       const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
-      const GoalSatisfaction sat = satisfied ? GoalSatisfaction::True : GoalSatisfaction::False;
+      const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
+                                             : GoalSatisfaction::unsatisfied;
       if(! relation_dict_.goal_satisfaction_derivations.contains(sat)) {
          continue;
       }
@@ -517,12 +526,20 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
                                            ? std::optional< int >(goal_levels.at(goal))
                                            : std::nullopt;
 
-      const std::string node_type = RelationFormatter::format_predicate(
-         predicate->get_name(), goal_level, sat, goal->get_polarity()
-      );
-      const std::string node_key = RelationFormatter::format_literal< GoalTag >(
-         goal, goal_level, sat
-      );
+      std::string node_type;
+      std::string node_key;
+      if(goal_level.has_value()) {
+         const GoalLevel level(*goal_level);
+         node_type = RelationFormatter::format_predicate(
+            predicate->get_name(), level, sat, goal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(goal, level, sat);
+      } else {
+         node_type = RelationFormatter::format_predicate(
+            predicate->get_name(), std::nullopt, sat, goal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(goal, std::nullopt, sat);
+      }
 
       std::vector< std::string > object_keys;
       if(predicate->get_arity() == 0) {
