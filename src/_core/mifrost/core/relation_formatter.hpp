@@ -13,8 +13,10 @@
 #include <mimir/formalism/predicate.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <strong_type/strong_type.hpp>
 #include <type_traits>
+#include <utility>
 
 #include "utils/type_traits.hpp"
 
@@ -88,10 +90,17 @@ struct RelationFormatter {
       return fmt::format("{}{}", name, suffix);
    }
 
+   template < typename Tag, typename... Args >
+   static std::string
+   format_predicate(const mimir::formalism::Predicate< Tag > predicate, Args&&... args)
+   {
+      return format_predicate(predicate->get_name(), std::forward< Args >(args)...);
+   }
+
    static std::string format_predicate(
       const std::string_view name,
       const GoalLevel goal_level,
-      const std::string& suffix = ""
+      const std::string_view suffix = ""
    )
    {
       return fmt::format("{}{}{}", name, suffix, goal_level_suffix(goal_level));
@@ -127,7 +136,7 @@ struct RelationFormatter {
 
    template < typename P >
    static std::string
-   format_atom(mimir::formalism::GroundAtom< P > atom, const std::string& suffix = "")
+   format_atom(mimir::formalism::GroundAtom< P > atom, const std::string_view suffix = "")
    {
       return fmt::format("{}{}", mimir::to_string(atom), suffix);
    }
@@ -145,7 +154,7 @@ struct RelationFormatter {
       GoalLevelArg goal_level = std::nullopt,
       SatisfactionArg satisfaction = std::nullopt,
       [[maybe_unused]] PolarityArg polarity = std::nullopt,
-      const std::string& suffix = ""
+      const std::string_view suffix = ""
    )
    {
       // Optional arguments are resolved at compile time via overloads on std::nullopt_t.

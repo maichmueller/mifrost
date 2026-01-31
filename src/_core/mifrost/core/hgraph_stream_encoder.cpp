@@ -779,6 +779,7 @@ template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::S
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
    hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::string_view suffix,
    std::span< const std::string > extra_objects
 );
 
@@ -792,6 +793,7 @@ template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::F
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
    hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::string_view suffix,
    std::span< const std::string > extra_objects
 );
 
@@ -805,6 +807,7 @@ template void HGraphEncoderEngine::encode_goal_satisfaction< mimir::formalism::D
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
    hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::string_view suffix,
    std::span< const std::string > extra_objects
 );
 }  // namespace mifrost
