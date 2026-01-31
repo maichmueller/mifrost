@@ -27,8 +27,8 @@ minimum-version = "build-system.requires"
 
 # Setuptools-style build caching in a local directory
 build-dir = "build/{wheel_tag}"
-# Include the Python package directory in the wheel
-wheel.packages = ["mifrost"]
+# Include the Python package directory in the wheel (src layout)
+wheel.packages = ["src/mifrost"]
 
 [tool.cibuildwheel]
 # Necessary to see build output from the actual compilation

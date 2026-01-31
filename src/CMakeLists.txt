@@ -115,17 +115,16 @@ endfunction()
 add_library(
         mifrost_core
         STATIC
-        "mifrost/core/batch_builder.cpp"
-        "mifrost/core/hgraph_stream_encoder.cpp"
-        "mifrost/core/transition_dag.cpp"
-        "mifrost/core/horizon_hgraph_encoder.cpp"
-        "mifrost/core/successor_hgraph_encoder.cpp"
+        "_core/mifrost/core/batch_builder.cpp"
+        "_core/mifrost/core/hgraph_stream_encoder.cpp"
+        "_core/mifrost/core/transition_dag.cpp"
+        "_core/mifrost/core/horizon_hgraph_encoder.cpp"
+        "_core/mifrost/core/successor_hgraph_encoder.cpp"
 )
 
 
 target_include_directories(mifrost_core PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}"
-        "${CMAKE_CURRENT_LIST_DIR}/mifrost"
+        "${CMAKE_CURRENT_LIST_DIR}/_core"
 )
 
 target_link_libraries(
@@ -158,10 +157,10 @@ conan_add_package_include_fallback(mifrost_core onetbb)
 
 nanobind_add_module(mifrost_core_module
         NB_DOMAIN pymimir_abi_domain
-        "mifrost.cpp"
-        "mifrost/init_relation_formatter.cpp"
-        "mifrost/init_hgraph_encoders.cpp"
-        "mifrost/init_transition_dag.cpp"
+        "_core/mifrost/mifrost.cpp"
+        "_core/mifrost/init_relation_formatter.cpp"
+        "_core/mifrost/init_hgraph_encoders.cpp"
+        "_core/mifrost/init_transition_dag.cpp"
 )
 set_target_properties(
         mifrost_core_module
@@ -197,11 +196,11 @@ set_target_properties(
 )
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_core_module PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/mifrost"
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
     if (TARGET nanobind)
         set_target_properties(nanobind PROPERTIES
-                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/mifrost"
+                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
         )
     endif ()
 endif ()
@@ -227,7 +226,7 @@ if (BUILD_TESTING)
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/transition_dag_test.cpp"
     )
-    target_include_directories(mifrost_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
+    target_include_directories(mifrost_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/_core")
     target_link_libraries(mifrost_tests PRIVATE GTest::gtest_main mifrost_core ${_python_embed_target})
     add_test(NAME mifrost_tests COMMAND mifrost_tests)
 endif ()
