@@ -74,7 +74,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    auto handle_suc_atom = [&](auto atom, bool polarity = true) {
       using Tag = typename std::remove_pointer_t< decltype(atom) >::Type;
       const auto predicate = atom->get_predicate();
-      if(predicate->get_arity() == 0 && ! config_.add_nullary_predicates) {
+      if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
       const std::string node_type = RelationFormatter::format_predicate(

@@ -14,36 +14,50 @@ using namespace nb::literals;
 namespace mifrost {
 namespace {
 
-template < typename FormatFn >
 std::string format_predicate_optional(
    const std::string& name,
    const std::optional< int >& goal_level,
    const std::optional< GoalSatisfaction >& satisfaction,
    const std::optional< bool >& polarity,
-   const std::string_view suffix,
-   FormatFn&& fn
+   const std::string& suffix
 )
 {
-   auto call_with_level = [&](auto level_arg) {
-      auto call_with_satisfaction = [&](auto satisfaction_arg) {
-         auto call_with_polarity = [&](auto polarity_arg) {
-            return fn(name, level_arg, satisfaction_arg, polarity_arg, suffix);
-         };
-         if(polarity.has_value()) {
-            return call_with_polarity(*polarity);
-         }
-         return call_with_polarity(std::nullopt);
-      };
-      if(satisfaction.has_value()) {
-         return call_with_satisfaction(*satisfaction);
-      }
-      return call_with_satisfaction(std::nullopt);
-   };
-
    if(goal_level.has_value()) {
-      return call_with_level(GoalLevel(*goal_level));
+      const GoalLevel level(*goal_level);
+      if(satisfaction.has_value()) {
+         if(polarity.has_value()) {
+            return RelationFormatter::format_predicate(
+               name, level, *satisfaction, *polarity, suffix
+            );
+         }
+         return RelationFormatter::format_predicate(
+            name, level, *satisfaction, std::nullopt, suffix
+         );
+      }
+      if(polarity.has_value()) {
+         return RelationFormatter::format_predicate(name, level, std::nullopt, *polarity, suffix);
+      }
+      return RelationFormatter::format_predicate(name, level, std::nullopt, std::nullopt, suffix);
    }
-   return call_with_level(std::nullopt);
+
+   if(satisfaction.has_value()) {
+      if(polarity.has_value()) {
+         return RelationFormatter::format_predicate(
+            name, std::nullopt, *satisfaction, *polarity, suffix
+         );
+      }
+      return RelationFormatter::format_predicate(
+         name, std::nullopt, *satisfaction, std::nullopt, suffix
+      );
+   }
+   if(polarity.has_value()) {
+      return RelationFormatter::format_predicate(
+         name, std::nullopt, std::nullopt, *polarity, suffix
+      );
+   }
+   return RelationFormatter::format_predicate(
+      name, std::nullopt, std::nullopt, std::nullopt, suffix
+   );
 }
 
 template < typename Literal >
@@ -55,23 +69,41 @@ std::string format_literal_optional(
    const std::string& suffix
 )
 {
-   return format_predicate_optional(
-      std::string(),
-      goal_level,
-      satisfaction,
-      polarity,
-      suffix,
-      [&](
-         const std::string&,
-         auto level_arg,
-         auto satisfaction_arg,
-         auto polarity_arg,
-         const std::string_view suffix_arg
-      ) {
+   if(goal_level.has_value()) {
+      const GoalLevel level(*goal_level);
+      if(satisfaction.has_value()) {
+         if(polarity.has_value()) {
+            return RelationFormatter::format_literal(
+               literal, level, *satisfaction, *polarity, suffix
+            );
+         }
          return RelationFormatter::format_literal(
-            literal, level_arg, satisfaction_arg, polarity_arg, suffix_arg
+            literal, level, *satisfaction, std::nullopt, suffix
          );
       }
+      if(polarity.has_value()) {
+         return RelationFormatter::format_literal(literal, level, std::nullopt, *polarity, suffix);
+      }
+      return RelationFormatter::format_literal(literal, level, std::nullopt, std::nullopt, suffix);
+   }
+
+   if(satisfaction.has_value()) {
+      if(polarity.has_value()) {
+         return RelationFormatter::format_literal(
+            literal, std::nullopt, *satisfaction, *polarity, suffix
+         );
+      }
+      return RelationFormatter::format_literal(
+         literal, std::nullopt, *satisfaction, std::nullopt, suffix
+      );
+   }
+   if(polarity.has_value()) {
+      return RelationFormatter::format_literal(
+         literal, std::nullopt, std::nullopt, *polarity, suffix
+      );
+   }
+   return RelationFormatter::format_literal(
+      literal, std::nullopt, std::nullopt, std::nullopt, suffix
    );
 }
 
@@ -93,23 +125,8 @@ void init_relation_formatter(nb::module_& m)
             const std::optional< int >& goal_level,
             const std::optional< GoalSatisfaction >& satisfaction,
             const std::optional< bool >& polarity,
-            const std::string_view suffix = "") {
-            return format_predicate_optional(
-               name,
-               goal_level,
-               satisfaction,
-               polarity,
-               suffix,
-               [](const std::string& name_arg,
-                  auto level_arg,
-                  auto satisfaction_arg,
-                  auto polarity_arg,
-                  const std::string_view suffix_arg) {
-                  return RelationFormatter::format_predicate(
-                     name_arg, level_arg, satisfaction_arg, polarity_arg, suffix_arg
-                  );
-               }
-            );
+            const std::string& suffix = "") {
+            return format_predicate_optional(name, goal_level, satisfaction, polarity, suffix);
          },
          "name"_a,
          "goal_level"_a = std::nullopt,

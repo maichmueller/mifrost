@@ -62,7 +62,7 @@ void HGraphEncoderEngine::initialize_from_domain()
    relation_dict_ = RelationDict::build(domain_, actions, rel_config);
 
    for(const auto& [node_type, arity] : relation_dict_.arity) {
-      const int effective_arity = (config_.add_nullary_predicates && arity == 0) ? 1 : arity;
+      const int effective_arity = (config_.add_nullary_predicates and arity == 0) ? 1 : arity;
       for(int pos = 0; pos < effective_arity; ++pos) {
          const std::string pos_str = std::to_string(pos);
          all_edge_types_.emplace_back(config_.symbol_type_id, pos_str, node_type);
@@ -278,7 +278,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
    auto handle_atom = [&](auto atom) {
       using Tag = typename std::remove_pointer_t< decltype(atom) >::Type;
       const auto predicate = atom->get_predicate();
-      if(predicate->get_arity() == 0 && ! config_.add_nullary_predicates) {
+      if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
       const std::string node_type = RelationFormatter::format_predicate(predicate->get_name());

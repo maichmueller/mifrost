@@ -163,7 +163,7 @@ struct RelationFormatter {
       return action.get_name();
    }
 
-   static std::string format_action(mimir::formalism::GroundAction action)
+   static std::string format_action(const mimir::formalism::GroundAction action)
    {
       return fmt::format(
          "({} {})",

@@ -33,16 +33,21 @@ void init_hgraph_encoders(nb::module_& m)
 {
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
-      .def("build_parts", &BatchBuilder::build_parts);
+      .def("build_parts", &BatchBuilder::build_parts)
+      .def("next_graph", &BatchBuilder::next_graph);
 
    nb::class_< GoalInputs >(m, "GoalInputs")
+      .def(nb::init<>())
       .def(nb::init< const std::vector< GoalInputs::AnyGoalLiteral >& >(), "goals"_a)
       .def(
          nb::init< const std::vector< GoalInputs::AnyGoalLiteral >&, int >(), "goals"_a, "level"_a
       )
       .def_rw("static_goals", &GoalInputs::static_goals)
       .def_rw("fluent_goals", &GoalInputs::fluent_goals)
-      .def_rw("derived_goals", &GoalInputs::derived_goals);
+      .def_rw("derived_goals", &GoalInputs::derived_goals)
+      .def_rw("static_goal_levels", &GoalInputs::static_goal_levels)
+      .def_rw("fluent_goal_levels", &GoalInputs::fluent_goal_levels)
+      .def_rw("derived_goal_levels", &GoalInputs::derived_goal_levels);
 
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())
@@ -121,10 +126,13 @@ void init_hgraph_encoders(nb::module_& m)
       .def_rw("transition_mode", &HorizonHGraphEncoderEngine::Config::transition_mode)
       .def_rw("target_symbol_prefix", &HorizonHGraphEncoderEngine::Config::target_symbol_prefix)
       .def_rw("parent_relation", &HorizonHGraphEncoderEngine::Config::parent_relation)
+      .def_rw("sibling_relation", &HorizonHGraphEncoderEngine::Config::sibling_relation)
+      .def_rw("cousin_relation", &HorizonHGraphEncoderEngine::Config::cousin_relation)
       .def_rw("enable_parent_relation", &HorizonHGraphEncoderEngine::Config::enable_parent_relation)
       .def_rw(
          "enable_sibling_relation", &HorizonHGraphEncoderEngine::Config::enable_sibling_relation
       )
+      .def_rw("enable_cousin_relation", &HorizonHGraphEncoderEngine::Config::enable_cousin_relation)
       .def_rw(
          "exclude_root_candidate", &HorizonHGraphEncoderEngine::Config::exclude_root_candidate
       );

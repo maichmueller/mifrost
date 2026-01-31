@@ -69,12 +69,27 @@ void BatchBuilder::ensure_edge_type(
 
 void BatchBuilder::set_node_names(const std::string& node_type, std::vector< std::string > names)
 {
-   node_names[node_type] = std::move(names);
+   const auto graph_count = static_cast< int64_t >(names.size());
+   auto& existing = node_names[node_type];
+   if(existing.empty()) {
+      existing = std::move(names);
+   } else {
+      existing.reserve(existing.size() + names.size());
+      existing.insert(existing.end(), names.begin(), names.end());
+   }
+   if(current_node_counts[node_type] < graph_count) {
+      current_node_counts[node_type] = graph_count;
+   }
 }
 
 void BatchBuilder::set_object_names(std::vector< std::string > names)
 {
-   object_names = std::move(names);
+   if(object_names.empty()) {
+      object_names = std::move(names);
+      return;
+   }
+   object_names.reserve(object_names.size() + names.size());
+   object_names.insert(object_names.end(), names.begin(), names.end());
 }
 
 void BatchBuilder::add_edges(

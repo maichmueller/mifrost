@@ -22,8 +22,11 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       Mode transition_mode = Mode::Full;
       std::string target_symbol_prefix = "target:";
       std::string parent_relation = "parent";
+      std::string sibling_relation = "sibling";
+      std::string cousin_relation = "cousin";
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
+      bool enable_cousin_relation = false;
       bool exclude_root_candidate = true;
    };
 
@@ -52,7 +55,10 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
-   std::string target_node_key(int idx) const;
+   void configure_relations();
+   void register_relation_type(const std::string& relation);
+
+   [[nodiscard]] std::string target_node_key(int idx) const;
 };
 
 }  // namespace mifrost
