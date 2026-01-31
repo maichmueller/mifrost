@@ -2,6 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/set.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
@@ -96,6 +97,10 @@ void init_hgraph_encoders(nb::module_& m)
       .def_rw("nullary_object_name", &HGraphEncoderEngine::Config::nullary_object_name)
       .def_rw("max_goal_level", &HGraphEncoderEngine::Config::max_goal_level)
       .def_rw("support_literals", &HGraphEncoderEngine::Config::support_literals)
+      .def_rw(
+         "goal_satisfaction_derivations",
+         &HGraphEncoderEngine::Config::goal_satisfaction_derivations
+      )
       .def_rw("add_nullary_predicates", &HGraphEncoderEngine::Config::add_nullary_predicates)
       .def_rw("ignore_actions", &HGraphEncoderEngine::Config::ignore_actions)
       .def_rw("include_static", &HGraphEncoderEngine::Config::include_static)
