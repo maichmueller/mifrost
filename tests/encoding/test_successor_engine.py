@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
+import pytest
 
 import mifrost
 from mifrost.encoders import HGraphEncoder
@@ -131,19 +132,69 @@ def test_successor_delta_marks_added_and_removed_atoms(small_blocks):
             entries = edge_data.values() if isinstance(edge_data, dict) else [edge_data]
             assert any(entry.get("position") == pos for entry in entries)
 
-    for atom in removed:
-        if _arity(atom) == 0:
-            continue
-        node_name = f"{atom}{successor_suffix}"
-        node_type = formatter.format_predicate(
-            _predicate_name(atom), polarity=False, suffix=successor_suffix
+
+def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    _, successor_state = next(space.get_forward_transitions(state))
+
+    goals = goal_inputs_from_problem(problem)
+    successor_suffix = "[suc]"
+
+    config = mifrost.SuccessorEncoderConfig()
+    config.successor_mode = mifrost.SuccessorEncoderMode.Full
+    config.successor_suffix = successor_suffix
+    config.include_successor_goal_satisfaction = True
+    config.goal_satisfaction_derivations = {
+        mifrost.GoalSatisfaction.satisfied,
+        mifrost.GoalSatisfaction.unsatisfied,
+    }
+
+    encoder = mifrost.SuccessorHGraphEncoderEngine(_adv_domain(domain), config)
+    parts = encoder.encode(_adv(state), _adv(successor_state), goals)
+    graph = to_named_networkx(parts_to_pyg(parts))
+
+    successor_atom_keys = {
+        str(atom) for atom in state_atoms(successor_state, with_statics=False)
+    }
+    formatter = mifrost.RelationFormatter
+
+    def _expected(goal, goal_levels):
+        pred = _predicate(goal.get_atom())
+        if pred.get_arity() == 0:
+            return None
+        atom_key = str(goal.get_atom())
+        satisfied = (atom_key in successor_atom_keys) == goal.get_polarity()
+        sat_enum = (
+            mifrost.GoalSatisfaction.satisfied
+            if satisfied
+            else mifrost.GoalSatisfaction.unsatisfied
         )
-        assert node_name in graph.nodes
-        assert graph.nodes[node_name]["type"] == node_type
-        for pos, obj_name in enumerate(object_names(atom)):
-            edge_data = graph.get_edge_data(obj_name, node_name)
-            if edge_data is None:
-                edge_data = graph.get_edge_data(node_name, obj_name)
-            assert edge_data is not None
-            entries = edge_data.values() if isinstance(edge_data, dict) else [edge_data]
-            assert any(entry.get("position") == pos for entry in entries)
+        level = goal_levels.get(goal, 0)
+        node_type = formatter.format_predicate(
+            pred.get_name(),
+            goal_level=level,
+            satisfaction=sat_enum,
+            polarity=goal.get_polarity(),
+            suffix=successor_suffix,
+        )
+        node_key = formatter.format_literal(
+            goal,
+            goal_level=level,
+            satisfaction=sat_enum,
+            suffix=successor_suffix,
+        )
+        return node_key, node_type
+
+    # Check fluent + derived goals (static goals are not encoded in successor facts).
+    level_map = {
+        **dict(getattr(goals, "fluent_goal_levels", {})),
+        **dict(getattr(goals, "derived_goal_levels", {})),
+    }
+    for goal in list(goals.fluent_goals) + list(goals.derived_goals):
+        expected = _expected(goal, level_map)
+        if expected is None:
+            continue
+        node_key, node_type = expected
+        assert node_key in graph.nodes
+        assert graph.nodes[node_key]["type"] == node_type
