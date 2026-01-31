@@ -263,7 +263,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
     assert placeholder in data.object_names
     placeholder_idx = data.object_names.index(placeholder)
 
-    symbol_type_id = "symbol"
+    symbol_type_id = config.symbol_type_id
     for atom in successor_nullary_atoms:
         predicate_type = mifrost.RelationFormatter.format_predicate(
             predicate_name(atom), polarity=True, suffix="[suc]"

@@ -1,5 +1,6 @@
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -33,6 +34,46 @@ void init_hgraph_encoders(nb::module_& m)
 {
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
+      .def(
+         "add_node_features",
+         [](BatchBuilder& builder,
+            const std::string& node_type,
+            const std::string& attr_name,
+            nb::ndarray< nb::numpy, float > data) {
+            if(data.ndim() != 1 && data.ndim() != 2) {
+               throw std::invalid_argument("add_node_features expects a 1D/2D array");
+            }
+            const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+            const auto count = static_cast< size_t >(data.size());
+            builder.add_node_features(
+               node_type, attr_name, std::span< const float >(data.data(), count), feature_dim
+            );
+         }
+      )
+      .def(
+         "add_edges",
+         [](BatchBuilder& builder,
+            const std::string& src_type,
+            const std::string& rel_type,
+            const std::string& dst_type,
+            nb::ndarray< nb::numpy, int64_t > src,
+            nb::ndarray< nb::numpy, int64_t > dst) {
+            if(src.ndim() != 1 || dst.ndim() != 1) {
+               throw std::invalid_argument("add_edges expects 1D arrays for src/dst indices");
+            }
+            if(src.size() != dst.size()) {
+               throw std::invalid_argument("add_edges expects src/dst arrays of equal length");
+            }
+            builder.add_edges(
+               src_type,
+               rel_type,
+               dst_type,
+               std::span< const int64_t >(src.data(), src.size()),
+               std::span< const int64_t >(dst.data(), dst.size())
+            );
+         }
+      )
+      .def("build", &BatchBuilder::build)
       .def("build_parts", &BatchBuilder::build_parts)
       .def("next_graph", &BatchBuilder::next_graph);
 
@@ -146,7 +187,11 @@ void init_hgraph_encoders(nb::module_& m)
    )
       .def(nb::init<>())
       .def_rw("successor_mode", &SuccessorHGraphEncoderEngine::Config::successor_mode)
-      .def_rw("successor_suffix", &SuccessorHGraphEncoderEngine::Config::successor_suffix);
+      .def_rw("successor_suffix", &SuccessorHGraphEncoderEngine::Config::successor_suffix)
+      .def_rw(
+         "include_successor_goal_satisfaction",
+         &SuccessorHGraphEncoderEngine::Config::include_successor_goal_satisfaction
+      );
 
    nb::class_< HorizonHGraphEncoderEngine, HGraphEncoderEngine >(m, "HorizonHGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())

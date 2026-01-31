@@ -23,7 +23,6 @@ struct RelationDictConfig {
    };
    std::set< GoalSatisfaction > goal_satisfaction_derivations = {
       GoalSatisfaction::satisfied,
-      GoalSatisfaction::unsatisfied,
    };
 };
 

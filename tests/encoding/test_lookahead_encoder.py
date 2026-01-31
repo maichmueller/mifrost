@@ -217,6 +217,7 @@ def test_horizon_encoder_connects_actions_from_transitions_to_target_node(small_
         dag,
         mode=mifrost.HorizonEncoderMode.Full,
         goals=goals,
+        config_override={"ignore_actions": False},
     )
 
     target_nodes = _target_nodes(graph, config)
@@ -286,6 +287,12 @@ def test_horizon_encoder_encodes_cousin_relations(medium_blocks):
         pytest.skip("Fixture does not provide grandchildren for cousin test.")
     u = level2a[0][1]
     v = level2b[0][1]
+    if adv_state(u) == adv_state(root) or adv_state(v) == adv_state(root):
+        pytest.skip(
+            "Fixture returned root again for grandchildren; no cousin relation."
+        )
+    if adv_state(u) == adv_state(v):
+        pytest.skip("Fixture returned identical grandchildren; no cousin relation.")
 
     dag = mifrost.TransitionDAG(adv_state(root))
     dag.register_transition(adv_state(root), adv_state(p1))

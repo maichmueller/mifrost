@@ -28,6 +28,7 @@ def test_horizon_encoder_target_mapping_and_order(small_blocks):
 
     config = mifrost.HorizonEncoderConfig()
     config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.ignore_actions = False
     encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
     goals = goal_inputs_from_problem(problem)
     parts = encoder.encode(adv_state(root), dag, goals)

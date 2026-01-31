@@ -508,6 +508,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
    hash_map< std::string, std::vector< std::string > >& node_names,
    hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
    hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::string_view suffix,
    std::span< const std::string > extra_objects
 )
 {
@@ -531,14 +532,18 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), level, sat, goal->get_polarity()
+            predicate->get_name(), level, sat, goal->get_polarity(), suffix
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(goal, level, sat);
+         node_key = RelationFormatter::format_literal< GoalTag >(
+            goal, level, sat, std::nullopt, suffix
+         );
       } else {
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), std::nullopt, sat, goal->get_polarity()
+            predicate->get_name(), std::nullopt, sat, goal->get_polarity(), suffix
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(goal, std::nullopt, sat);
+         node_key = RelationFormatter::format_literal< GoalTag >(
+            goal, std::nullopt, sat, std::nullopt, suffix
+         );
       }
 
       std::vector< std::string > object_keys;

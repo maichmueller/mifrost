@@ -18,7 +18,16 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, config), horizon_config_(std::move(config))
+    : HGraphEncoderEngine(
+         domain,
+         [&]() {
+            if(config.transition_mode == Mode::Delta && ! config.support_literals) {
+               config.support_literals = true;
+            }
+            return config;
+         }()
+      ),
+      horizon_config_(std::move(config))
 {
    configure_relations();
 }
@@ -33,7 +42,16 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    mimir::formalism::Domain domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, config), horizon_config_(std::move(config))
+    : HGraphEncoderEngine(
+         domain,
+         [&]() {
+            if(config.transition_mode == Mode::Delta && ! config.support_literals) {
+               config.support_literals = true;
+            }
+            return config;
+         }()
+      ),
+      horizon_config_(std::move(config))
 {
    configure_relations();
 }

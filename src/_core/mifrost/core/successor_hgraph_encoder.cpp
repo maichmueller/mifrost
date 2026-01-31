@@ -17,7 +17,16 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, config), successor_config_(std::move(config))
+    : HGraphEncoderEngine(
+         domain,
+         [&]() {
+            if(config.successor_mode == Mode::Delta && ! config.support_literals) {
+               config.support_literals = true;
+            }
+            return config;
+         }()
+      ),
+      successor_config_(std::move(config))
 {
 }
 
@@ -30,7 +39,16 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
    mimir::formalism::Domain domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, config), successor_config_(std::move(config))
+    : HGraphEncoderEngine(
+         domain,
+         [&]() {
+            if(config.successor_mode == Mode::Delta && ! config.support_literals) {
+               config.support_literals = true;
+            }
+            return config;
+         }()
+      ),
+      successor_config_(std::move(config))
 {
 }
 
@@ -177,150 +195,116 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       );
    }
 
-   // 4. Encode goals for current
-   encode_literals(
-      std::span{goals.static_goals},
-      goals.static_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.fluent_goals},
-      goals.fluent_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.derived_goals},
-      goals.derived_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-
-   // 5. Encode goal satisfaction for current
-   if(! goals.static_goals.empty()) {
-      encode_goal_satisfaction(
+   if(successor_config_.successor_mode == Mode::Full) {
+      // 4. Encode goals for current
+      encode_literals(
          std::span{goals.static_goals},
          goals.static_goal_levels,
-         cur_fact_keys,
          builder,
          node_indices,
          node_names,
          relation_to_symbols,
          symbol_to_relations
       );
-   }
-   if(! goals.fluent_goals.empty()) {
-      encode_goal_satisfaction(
+      encode_literals(
          std::span{goals.fluent_goals},
          goals.fluent_goal_levels,
-         cur_fact_keys,
          builder,
          node_indices,
          node_names,
          relation_to_symbols,
          symbol_to_relations
       );
-   }
-   if(! goals.derived_goals.empty()) {
-      encode_goal_satisfaction(
+      encode_literals(
          std::span{goals.derived_goals},
          goals.derived_goal_levels,
-         cur_fact_keys,
          builder,
          node_indices,
          node_names,
          relation_to_symbols,
          symbol_to_relations
       );
-   }
 
-   // 6. Encode goal satisfaction for successor
-   auto encode_suc_goal_satisfaction = [&](auto goals_span, const auto& levels) {
-      for(const auto& goal : goals_span) {
-         const auto atom = goal->get_atom();
-         const auto predicate = atom->get_predicate();
-         const auto key = RelationFormatter::format_atom(atom);
-         const bool satisfied = suc_fact_keys.contains(key) == goal->get_polarity();
-         const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
-                                                : GoalSatisfaction::unsatisfied;
-
-         if(! relation_dict_.goal_satisfaction_derivations.contains(sat)) {
-            continue;
-         }
-
-         std::optional< int > goal_level = levels.contains(goal)
-                                              ? std::optional< int >(levels.at(goal))
-                                              : std::nullopt;
-
-         std::string node_type;
-         std::string node_key;
-         if(goal_level.has_value()) {
-            const GoalLevel level(*goal_level);
-            node_type = RelationFormatter::format_predicate(
-               predicate->get_name(),
-               level,
-               sat,
-               goal->get_polarity(),
-               successor_config_.successor_suffix
-            );
-            node_key = RelationFormatter::format_literal(
-               goal, level, sat, goal->get_polarity(), successor_config_.successor_suffix
-            );
-         } else {
-            node_type = RelationFormatter::format_predicate(
-               predicate->get_name(),
-               std::nullopt,
-               sat,
-               goal->get_polarity(),
-               successor_config_.successor_suffix
-            );
-            node_key = RelationFormatter::format_literal(
-               goal, std::nullopt, sat, goal->get_polarity(), successor_config_.successor_suffix
-            );
-         }
-
-         const auto relation_idx = get_or_add_node(
-            node_type, node_key, builder, node_indices, node_names
+      // 5. Encode goal satisfaction for current
+      if(! goals.static_goals.empty()) {
+         encode_goal_satisfaction(
+            std::span{goals.static_goals},
+            goals.static_goal_levels,
+            cur_fact_keys,
+            builder,
+            node_indices,
+            node_names,
+            relation_to_symbols,
+            symbol_to_relations
          );
+      }
+      if(! goals.fluent_goals.empty()) {
+         encode_goal_satisfaction(
+            std::span{goals.fluent_goals},
+            goals.fluent_goal_levels,
+            cur_fact_keys,
+            builder,
+            node_indices,
+            node_names,
+            relation_to_symbols,
+            symbol_to_relations
+         );
+      }
+      if(! goals.derived_goals.empty()) {
+         encode_goal_satisfaction(
+            std::span{goals.derived_goals},
+            goals.derived_goal_levels,
+            cur_fact_keys,
+            builder,
+            node_indices,
+            node_names,
+            relation_to_symbols,
+            symbol_to_relations
+         );
+      }
 
-         std::vector< std::string > object_keys;
-         if(predicate->get_arity() == 0) {
-            object_keys.emplace_back(config_.nullary_object_name);
-         } else {
-            for(const auto& obj : atom->get_objects()) {
-               object_keys.emplace_back(RelationFormatter::format_object(*obj));
-            }
+      if(successor_config_.include_successor_goal_satisfaction) {
+         if(! goals.static_goals.empty()) {
+            encode_goal_satisfaction(
+               std::span{goals.static_goals},
+               goals.static_goal_levels,
+               suc_fact_keys,
+               builder,
+               node_indices,
+               node_names,
+               relation_to_symbols,
+               symbol_to_relations,
+               successor_config_.successor_suffix
+            );
          }
-
-         for(size_t pos = 0; pos < object_keys.size(); ++pos) {
-            const auto& obj_key = object_keys[pos];
-            const auto obj_idx = get_or_add_node(
-               config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         if(! goals.fluent_goals.empty()) {
+            encode_goal_satisfaction(
+               std::span{goals.fluent_goals},
+               goals.fluent_goal_levels,
+               suc_fact_keys,
+               builder,
+               node_indices,
+               node_names,
+               relation_to_symbols,
+               symbol_to_relations,
+               successor_config_.successor_suffix
             );
-            const std::string pos_str = std::to_string(pos);
-            append_edges(
-               builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-            );
-            append_edges(
-               builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
+         }
+         if(! goals.derived_goals.empty()) {
+            encode_goal_satisfaction(
+               std::span{goals.derived_goals},
+               goals.derived_goal_levels,
+               suc_fact_keys,
+               builder,
+               node_indices,
+               node_names,
+               relation_to_symbols,
+               symbol_to_relations,
+               successor_config_.successor_suffix
             );
          }
       }
-   };
-
-   encode_suc_goal_satisfaction(std::span{goals.static_goals}, goals.static_goal_levels);
-   encode_suc_goal_satisfaction(std::span{goals.fluent_goals}, goals.fluent_goal_levels);
-   encode_suc_goal_satisfaction(std::span{goals.derived_goals}, goals.derived_goal_levels);
+   }
 
    // 7. LGAN edges
    if(config_.include_lgan_edges) {

@@ -55,7 +55,7 @@ def test_horizon_encoder():
 
     # Verify we have target nodes
     node_names = parts.get("node_names", {})
-    symbol_names = node_names.get("symbol", [])
+    symbol_names = node_names.get(enc_config.symbol_type_id, [])
     target_nodes = [s for s in symbol_names if "target" in s]
     print(f"Target nodes found: {target_nodes}")
     assert len(target_nodes) >= 1  # At least root target

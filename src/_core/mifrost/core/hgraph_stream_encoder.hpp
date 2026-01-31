@@ -23,19 +23,16 @@ namespace mifrost {
 class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
   public:
    struct Config {
-      std::string symbol_type_id = "symbol";
-      std::string nullary_object_name = "null";
+      std::string symbol_type_id = "_symbol_";
+      std::string nullary_object_name = "![nullary_symbol]!";
       std::string lgan_nn_edge_pos = "lgan_nn";
       int max_goal_level = 0;
-      bool support_literals = true;
-      bool add_nullary_predicates = true;
-      bool ignore_actions = false;
-      bool include_lgan_edges = true;
+      bool support_literals = false;
+      bool add_nullary_predicates = false;
+      bool ignore_actions = true;
+      bool include_lgan_edges = false;
       bool include_static = true;
-      std::set< GoalSatisfaction > goal_satisfaction_derivations = {
-         GoalSatisfaction::satisfied,
-         GoalSatisfaction::unsatisfied
-      };
+      std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 
    // domain stays alive for the duration of the object
@@ -153,6 +150,7 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
       hash_map< std::string, std::vector< std::string > >& node_names,
       hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
       hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      std::string_view suffix = "",
       std::span< const std::string > extra_objects = {}
    );
 

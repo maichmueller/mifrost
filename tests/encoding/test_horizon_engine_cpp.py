@@ -48,7 +48,11 @@ def test_horizon_encoder_parent_relations(small_blocks):
     graph = to_named_networkx(parts_to_pyg(parts))
 
     prefix = config.target_symbol_prefix
-    target_nodes = {n for n in graph.nodes if str(n).startswith(prefix)}
+    target_nodes = {
+        n
+        for n, data in graph.nodes(data=True)
+        if data.get("type") == config.symbol_type_id and str(n).startswith(prefix)
+    }
     expected_targets = {f"{prefix}{node.index}" for node in dag.nodes()}
     assert target_nodes == expected_targets
 

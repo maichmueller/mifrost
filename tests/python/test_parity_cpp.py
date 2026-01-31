@@ -1,7 +1,10 @@
 import pytest
 import torch
 import mifrost
-from mifrost.pyencoding.pyg_batch_builder import HGraphBatchBuilder, PygBuilder
+from tests.ground_truth.pyencoding_ref.pyg_batch_builder import (
+    HGraphBatchBuilder,
+    PygBuilder,
+)
 
 
 def test_batch_builder_parity():

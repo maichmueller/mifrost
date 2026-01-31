@@ -1,11 +1,7 @@
-from .base_encoder import EncoderFactory, GraphEncoderBase, PygData
-from .color_encoder import ColorGraphEncoder
-from .hetero_encoder import HGraphEncoder
-from .horizon_hetero_encoder import HorizonHGraphEncoder
-from .ilg_hetero_encoder import ILGHGraphEncoder
-from .relation_dict import RelationDict
-from .relation_formatter import Node, RelationFormatter
-from .transition_hetero_encoder import (
-    TransitionEffectsHGraphEncoder,
-    TransitionHGraphEncoder,
-)
+"""Ground-truth reference encoders (xmimir-based).
+
+Intentionally avoid eager imports here to keep test collection light.
+Import the specific module you need directly from this package.
+"""
+
+__all__ = []

@@ -19,6 +19,7 @@ class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
    struct Config: HGraphEncoderEngine::Config {
       Mode successor_mode = Mode::Full;
       std::string successor_suffix = "[suc]";
+      bool include_successor_goal_satisfaction = false;
    };
 
    SuccessorHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);
