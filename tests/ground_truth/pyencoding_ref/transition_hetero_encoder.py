@@ -13,7 +13,7 @@ from typing import (
 import torch_geometric as pyg
 from torch_geometric.data import HeteroData
 
-from plangolin.utils.misc import monkeypatch
+from mifrost.utils.misc import monkeypatch
 from xmimir import (
     XAction,
     XAtom,

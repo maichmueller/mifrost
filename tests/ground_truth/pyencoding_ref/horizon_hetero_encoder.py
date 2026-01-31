@@ -10,7 +10,7 @@ import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import NodeType
 
-from plangolin.utils.misc import forward_kwargs, tolist
+from mifrost.utils.misc import forward_kwargs, tolist
 from xmimir import (
     XAction,
     XAtom,

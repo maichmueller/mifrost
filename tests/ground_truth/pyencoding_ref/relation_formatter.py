@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import cache, singledispatchmethod
 from typing import Protocol, runtime_checkable
 
-from plangolin.utils.singleton import PickleSafeSingleton
+from mifrost.utils.singleton import PickleSafeSingleton
 from xmimir import (
     XAction,
     XActionSchema,

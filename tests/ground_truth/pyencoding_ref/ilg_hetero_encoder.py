@@ -12,7 +12,7 @@ from matplotlib.patches import Patch
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import NodeType
 
-from plangolin.logging_setup import get_logger
+from mifrost.logging_setup import get_logger
 from xmimir import XAction, XAtom, XDomain, XLiteral, XPredicate, atom_str_template
 
 from .base_encoder import (

@@ -14,7 +14,7 @@ from torch import Tensor
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import EdgeType, NodeType
 
-from plangolin.logging_setup import get_logger
+from mifrost.logging_setup import get_logger
 from xmimir import (
     XAction,
     XActionSchema,
