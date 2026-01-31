@@ -7,6 +7,7 @@ import pytest
 import torch
 
 import mifrost
+from tests.conftest import load_problem
 
 from tests.ground_truth.hgraph_encoder import HGraphEncoder
 
@@ -58,7 +59,7 @@ def test_hgraph_parity_blocks_inputs(
     domain: str,
     problem: str,
 ):
-    domain, problem, state, _domain_path, _problem_path = _load_problem()
+    domain, problem, state, _domain_path, _problem_path = load_problem()
 
     goals = list(problem.get_goal_condition().get_literals())
     actions = state.generate_applicable_actions()

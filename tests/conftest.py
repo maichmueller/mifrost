@@ -6,20 +6,28 @@ from pathlib import Path
 from typing import Any
 
 import pymimir
+from pymimir import Domain, Problem
+
+
+class Transition:
+    def __init__(self, action, target):
+        self.action = action
+        self.target = target
 
 
 def problem_setup(
     domain_name, problem_name
-) -> tuple[
-    pymimir.wrapper_datasets.StateSpaceSampler,
-    pymimir.wrapper_formalism.Domain,
-    pymimir.wrapper_formalism.Problem,
-]:
+) -> tuple[pymimir.wrapper_datasets.StateSpaceSampler, Domain, Problem]:
     domain, problem, state, domain_path, problem_path = load_problem(
         domain_name, problem_name
     )
-
-    space = pymimir.wrapper_datasets.AdvancedStateSpace.create(problem._search_context)
+    context = problem._search_context
+    space, _ = pymimir.advanced.datasets.StateSpace.create(
+        context, pymimir.advanced.datasets.StateSpaceOptions()
+    )
+    space = pymimir.wrapper_datasets.StateSpaceSampler(
+        pymimir.advanced.datasets.StateSpaceSampler(space), problem
+    )
     return space, domain, problem
 
 
