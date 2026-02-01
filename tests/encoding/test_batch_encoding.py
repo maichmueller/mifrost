@@ -51,6 +51,21 @@ def test_encode_batch_matches_from_data_list_hetero(small_blocks):
     data_list = [encoder.encode(state) for state in states]
     expected_batch = Batch.from_data_list(data_list)
 
+    actual_batch = encoder.encode_batch(states)
+
+    _assert_hetero_batch_equal(actual_batch, expected_batch)
+
+
+def test_stream_matches_encode_batch(small_blocks):
+    space, domain, problem = small_blocks
+    encoder = HGraphEncoder(domain)
+
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+    expected_batch = encoder.encode_batch(states)
+
     stream = encoder.stream()
     for state in states:
         stream.append(state)

@@ -45,6 +45,21 @@ def _compare_hetero(py_data, cpp_data) -> None:
         )
 
 
+def _collect_states(space, root, count: int) -> list:
+    states = [root]
+    queue = [root]
+    while queue and len(states) < count:
+        current = queue.pop(0)
+        for _action, successor in space.get_forward_transitions(current):
+            states.append(successor)
+            queue.append(successor)
+            if len(states) >= count:
+                break
+    if len(states) < count:
+        pytest.skip("Fixture does not provide enough successor states for parity.")
+    return states
+
+
 @pytest.mark.parametrize("include_goals", [False, True])
 @pytest.mark.parametrize("include_actions", [False, True])
 @pytest.mark.parametrize("include_subgoals", [False, True])
@@ -174,11 +189,7 @@ def test_hgraph_streaming_parity(
     space, domain, problem = problem_setup(domain, problem)
 
     root = problem.get_initial_state()
-    transitions = list(space.get_forward_transitions(root))
-    if not transitions:
-        pytest.skip("Fixture does not provide a successor state for streaming parity.")
-    _, successor = transitions[0]
-    states = [root, successor]
+    states = _collect_states(space, root, 3)
     goals = list(problem.get_goal_condition().get_literals())
     subgoal_layers = _maybe_subgoal_layers(goals, include_subgoals)
     actions_per_state = [

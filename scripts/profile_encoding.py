@@ -10,6 +10,21 @@ from pathlib import Path
 import pymimir
 from torch_geometric.data import Batch
 
+
+def _strip_scikit_build_editable() -> None:
+    sys.meta_path = [
+        finder
+        for finder in sys.meta_path
+        if finder.__class__.__module__ != "_mifrost_editable"
+    ]
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+_strip_scikit_build_editable()
+
 import mifrost
 
 
@@ -66,17 +81,12 @@ def bench_encode_single(encoder, states, goals, subgoal_layers, actions, iterati
 
 
 def bench_encode_batch(encoder, states, goals, subgoal_layers, actions):
-    data_list = []
-    for idx, state in enumerate(states):
-        data_list.append(
-            encoder.encode(
-                state,
-                goals=goals,
-                actions=actions[idx] if actions is not None else None,
-                subgoal_layers=subgoal_layers,
-            )
-        )
-    Batch.from_data_list(data_list)
+    encoder.encode_batch(
+        states,
+        goals=goals,
+        actions=actions,
+        subgoal_layers=subgoal_layers,
+    )
 
 
 def bench_encode_stream(encoder, states, goals, subgoal_layers, actions):

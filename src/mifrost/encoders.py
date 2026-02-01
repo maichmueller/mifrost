@@ -322,18 +322,80 @@ class HGraphEncoder:
 
     def encode_batch(
         self,
-        state: Any,
+        states: Iterable[Any] | Any,
         *,
         goals: Iterable[Any] | None = None,
         actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
     ) -> HeteroData:
-        parts = self.encode_parts(
-            state,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
+        """
+        Encode multiple states into a single PyG Batch using the C++ BatchBuilder.
+
+        If a single state object is provided, it is treated as a batch of size 1.
+        """
+        is_state_like = hasattr(states, "get_problem") or hasattr(
+            states, "_advanced_state"
         )
+        if is_state_like:
+            state_list = [states]
+        else:
+            if isinstance(states, (str, bytes)):
+                raise TypeError("encode_batch expects a state or an iterable of states")
+            state_list = list(states)
+
+        shared_actions: list[Any] | None = None
+        per_state_actions: list[Any] | None = None
+        if actions is not None:
+            try:
+                shared_actions = _prepare_actions(actions)
+            except TypeError:
+                if isinstance(actions, Sequence):
+                    if len(actions) != len(state_list):
+                        raise ValueError(
+                            "actions length must match states when providing per-state actions"
+                        ) from None
+                    per_state_actions = list(actions)
+                else:
+                    raise
+
+        shared_inputs: GoalInputs | None = None
+        if goals is not None:
+            shared_inputs, _ = _split_goals(goals, subgoal_layers)
+
+        builder = BatchBuilder()
+        for idx, state in enumerate(state_list):
+            adv_state = _advanced_state(state)
+            if per_state_actions is not None:
+                actions_for_state = per_state_actions[idx]
+                action_list = (
+                    _prepare_actions(actions_for_state)
+                    if actions_for_state is not None
+                    else []
+                )
+            else:
+                action_list = shared_actions or []
+
+            if goals is None and subgoal_layers is None and not action_list:
+                # Fast path: let the engine derive goals from the state/problem.
+                self._engine.encode(adv_state, builder)
+            else:
+                if goals is None:
+                    if hasattr(state, "get_problem"):
+                        goals_for_state = list(
+                            state.get_problem().get_goal_condition().get_literals()
+                        )
+                        inputs, _ = _split_goals(goals_for_state, subgoal_layers)
+                    else:
+                        raise ValueError(
+                            "goals must be provided when passing an advanced state"
+                        )
+                else:
+                    inputs = shared_inputs
+                self._engine.encode(adv_state, inputs, action_list, builder)
+            if hasattr(builder, "next_graph"):
+                builder.next_graph()
+
+        parts = builder.build_parts()
         return _parts_to_pyg(parts, as_batch=True)
 
     def stream(self) -> HGraphEncoderStream:

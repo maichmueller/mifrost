@@ -70,7 +70,7 @@ class BatchBuilder {
    int64_t current_graph_idx = 0;
 
   public:
-   BatchBuilder() = default;
+   BatchBuilder();
 
    // --- Data Ingestion ---
 
@@ -150,14 +150,16 @@ std::vector< T >& BatchBuilder::get_column(const std::string& key, int dim)
    auto it = columns.find(key);
    if(it == columns.end()) {
       if constexpr(std::is_same_v< T, float >) {
-         it = columns.emplace(key, Column{FloatCol{}, dim}).first;
+         it = columns.try_emplace(key, Column{FloatCol{}, dim}).first;
       } else if constexpr(std::is_same_v< T, int64_t >) {
-         it = columns.emplace(key, Column{LongCol{}, dim}).first;
+         it = columns.try_emplace(key, Column{LongCol{}, dim}).first;
       } else {
          static_assert(
             std::is_same_v< T, float > || std::is_same_v< T, int64_t >, "Unsupported column type"
          );
       }
+   } else if(it->second.dim != dim) {
+      throw std::invalid_argument("Column dim mismatch for key: " + key);
    }
 
    if constexpr(std::is_same_v< T, float >) {

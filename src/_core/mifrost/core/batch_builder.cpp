@@ -11,6 +11,18 @@
 
 namespace mifrost {
 
+BatchBuilder::BatchBuilder()
+{
+   constexpr size_t kSmallReserve = 32;
+   constexpr size_t kColumnReserve = 64;
+   current_node_counts.reserve(kSmallReserve);
+   node_offsets.reserve(kSmallReserve);
+   node_feature_dims.reserve(kSmallReserve);
+   node_names.reserve(kSmallReserve);
+   ptrs.reserve(kSmallReserve);
+   columns.reserve(kColumnReserve);
+}
+
 void BatchBuilder::add_node_features(
    const std::string& node_type,
    const std::string& attr_name,
@@ -20,25 +32,28 @@ void BatchBuilder::add_node_features(
 {
    set_node_feature_dim(node_type, feature_dim);
 
-   std::string key = node_type + "/" + attr_name;
+   std::string key;
+   key.reserve(node_type.size() + 1 + attr_name.size());
+   key.append(node_type);
+   key.push_back('/');
+   key.append(attr_name);
    auto& col = get_column< float >(key, feature_dim);
    col.insert(col.end(), data.begin(), data.end());
 
    int64_t num_nodes = data.size() / feature_dim;
-   if(current_node_counts[node_type] < num_nodes) {
-      current_node_counts[node_type] = num_nodes;
+   auto [it, inserted] = current_node_counts.try_emplace(node_type, num_nodes);
+   if(! inserted && it->second < num_nodes) {
+      it->second = num_nodes;
    }
 }
 
 void BatchBuilder::set_node_feature_dim(const std::string& node_type, int dim)
 {
-   auto it = node_feature_dims.find(node_type);
-   if(it == node_feature_dims.end()) {
-      node_feature_dims[node_type] = dim;
-      return;
-   }
-   if(it->second != dim) {
-      throw std::invalid_argument("Node feature dim mismatch for node_type '" + node_type + "'");
+   auto [it, inserted] = node_feature_dims.try_emplace(node_type, dim);
+   if(! inserted && it->second != dim) {
+      throw std::invalid_argument(
+         fmt::format("Node feature dim mismatch for node_type '{}'", node_type)
+      );
    }
 }
 
@@ -47,8 +62,9 @@ void BatchBuilder::add_nodes(const std::string& node_type, int64_t count)
    if(count < 0) {
       throw std::invalid_argument("Node count must be non-negative");
    }
-   if(current_node_counts[node_type] < count) {
-      current_node_counts[node_type] = count;
+   auto [it, inserted] = current_node_counts.try_emplace(node_type, count);
+   if(! inserted && it->second < count) {
+      it->second = count;
    }
 }
 
@@ -58,9 +74,22 @@ void BatchBuilder::ensure_edge_type(
    const std::string& dst_type
 )
 {
-   const std::string edge_key_base = src_type + "|" + rel_type + "|" + dst_type;
-   const std::string src_key = edge_key_base + "/edge_index_0";
-   const std::string dst_key = edge_key_base + "/edge_index_1";
+   std::string edge_key_base;
+   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
+   edge_key_base.append(src_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(rel_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(dst_type);
+
+   std::string src_key;
+   src_key.reserve(edge_key_base.size() + 13);
+   src_key.append(edge_key_base);
+   src_key.append("/edge_index_0");
+   std::string dst_key;
+   dst_key.reserve(edge_key_base.size() + 13);
+   dst_key.append(edge_key_base);
+   dst_key.append("/edge_index_1");
    get_column< int64_t >(src_key, 1);
    get_column< int64_t >(dst_key, 1);
 }
@@ -68,15 +97,17 @@ void BatchBuilder::ensure_edge_type(
 void BatchBuilder::set_node_names(const std::string& node_type, std::vector< std::string > names)
 {
    const auto graph_count = static_cast< int64_t >(names.size());
-   auto& existing = node_names[node_type];
+   auto [it, inserted] = node_names.try_emplace(node_type, std::vector< std::string >{});
+   auto& existing = it->second;
    if(existing.empty()) {
       existing = std::move(names);
    } else {
       existing.reserve(existing.size() + names.size());
       existing.insert(existing.end(), names.begin(), names.end());
    }
-   if(current_node_counts[node_type] < graph_count) {
-      current_node_counts[node_type] = graph_count;
+   auto [count_it, count_inserted] = current_node_counts.try_emplace(node_type, graph_count);
+   if(! count_inserted && count_it->second < graph_count) {
+      count_it->second = graph_count;
    }
 }
 
@@ -103,23 +134,31 @@ void BatchBuilder::add_edges(
    }
 
    // Key Convention: Store source/dest columns separately for simplified concats
-   // later? Or store as single flattened vector? Let's stick to storing separate
-   // src and dst index columns for now as they are easier to build. Construct
-   // keys: "src_type|rel_type|dst_type/edge_index_0"
-   std::string edge_key_base = src_type + "|" + rel_type + "|" + dst_type;
+   // later? Or store as single flattened vector?
+   // We stick to storing separate src and dst index columns for now as they are easier to build.
+   // Construct keys: "src_type|rel_type|dst_type/edge_index_0"
+   std::string edge_key_base;
+   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
+   edge_key_base.append(src_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(rel_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(dst_type);
 
-   std::string src_key = edge_key_base + "/edge_index_0";
-   std::string dst_key = edge_key_base + "/edge_index_1";
+   std::string src_key;
+   src_key.reserve(edge_key_base.size() + 13);
+   src_key.append(edge_key_base);
+   src_key.append("/edge_index_0");
+   std::string dst_key;
+   dst_key.reserve(edge_key_base.size() + 13);
+   dst_key.append(edge_key_base);
+   dst_key.append("/edge_index_1");
 
-   // Ensure both columns exist before taking references to avoid rehash issues.
-   get_column< int64_t >(src_key, 1);
-   get_column< int64_t >(dst_key, 1);
+   auto& col_src = get_column< int64_t >(src_key, 1);
+   auto& col_dst = get_column< int64_t >(dst_key, 1);
 
-   auto& col_src = std::get< LongCol >(columns.at(src_key).data);
-   auto& col_dst = std::get< LongCol >(columns.at(dst_key).data);
-
-   int64_t src_offset = node_offsets[src_type];
-   int64_t dst_offset = node_offsets[dst_type];
+   int64_t src_offset = node_offsets.try_emplace(src_type, 0).first->second;
+   int64_t dst_offset = node_offsets.try_emplace(dst_type, 0).first->second;
 
    col_src.reserve(col_src.size() + src_indices.size());
    col_dst.reserve(col_dst.size() + dst_indices.size());
@@ -134,12 +173,14 @@ void BatchBuilder::add_edges(
 void BatchBuilder::next_graph()
 {
    for(auto& [ntype, count] : current_node_counts) {
-      node_offsets[ntype] += count;
+      auto& offset = node_offsets.try_emplace(ntype, 0).first->second;
+      offset += count;
 
-      auto& p = ptrs[ntype];
-      if(p.empty())
+      auto& p = ptrs.try_emplace(ntype, std::vector< int64_t >{}).first->second;
+      if(p.empty()) {
          p.emplace_back(0);
-      p.emplace_back(node_offsets[ntype]);
+      }
+      p.emplace_back(offset);
 
       count = 0;
    }
