@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
+
 # --- Dependencies ---
 # Ensure Conan's CMakeDeps generator folder is on the prefix path (helps CLion).
 #if(NOT DEFINED CMAKE_PREFIX_PATH)
@@ -49,6 +51,10 @@ find_package(phmap CONFIG REQUIRED)
 find_package(unordered_dense CONFIG REQUIRED)
 find_package(GTest REQUIRED)
 find_package(strong_type REQUIRED)
+if (MIFROST_BUILD_BENCHMARKS)
+    find_package(benchmark REQUIRED)
+    find_package(argparse REQUIRED)
+endif ()
 
 # Conan include fallbacks (some recipes omit include dirs).
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
@@ -217,6 +223,27 @@ target_compile_definitions(mifrost_core PUBLIC
         BOOST_VARIANT_LIMIT_TYPES=30
         BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS
 )
+
+if (MIFROST_BUILD_BENCHMARKS)
+    add_executable(
+            mifrost_bench_hgraph
+            "${CMAKE_SOURCE_DIR}/bench/bench_hgraph_encoder.cpp"
+    )
+    target_link_libraries(
+            mifrost_bench_hgraph
+            PRIVATE
+            mifrost_core
+            benchmark::benchmark
+            argparse::argparse
+    )
+    target_compile_definitions(
+            mifrost_bench_hgraph
+            PRIVATE
+            MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+    )
+    target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
+    target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="probBLOCKS-4-0")
+endif ()
 
 # --- Tests ---
 include(CTest)

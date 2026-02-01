@@ -50,10 +50,12 @@ class MifrostRecipe(ConanFile):
     options = {
         "shared": [True, False],
         "fPIC": [True, False],
+        "with_benchmarks": [True, False],
     }
     default_options = {
         "shared": False,
         "fPIC": True,
+        "with_benchmarks": False,
         "cista/*:with_fmt": True,
         "hwloc/*:shared": True,
     }
@@ -72,8 +74,10 @@ class MifrostRecipe(ConanFile):
         self.requires("fmt/11.2.0")
         self.requires("range-v3/0.12.0")
         self.requires("nanobind/2.9.2")
-        self.requires("argparse/3.2")
         self.requires("strong_type/v10")
+        if self.options.with_benchmarks:
+            self.requires("argparse/3.2")
+            self.requires("benchmark/1.8.3")
 
         # Custom dependencies from conandata.yml
         # conandata.yml format matches requirements list: ["pkg/version", ...]

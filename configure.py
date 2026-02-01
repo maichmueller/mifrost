@@ -41,6 +41,11 @@ def main():
         "--config", default="Release", help="Build type (Debug, Release, etc.)"
     )
     parser.add_argument("--toolchain_file", help="CMake toolchain file")
+    parser.add_argument(
+        "--with_benchmarks",
+        action="store_true",
+        help="Enable benchmark dependencies and CMake targets",
+    )
 
     args, extra_args = parser.parse_known_args()
 
@@ -81,6 +86,8 @@ def main():
             "--options=nauty/*:fPIC=True",
             f"--build={args.deps_policy}",
         ]
+        if args.with_benchmarks:
+            conan_args.append("--options=mifrost/*:with_benchmarks=True")
 
         install_cmd = [
             args.conan_cmd,
@@ -123,6 +130,8 @@ def main():
         "Ninja",
         f"-DCMAKE_BUILD_TYPE={args.config}",
     ]
+    if args.with_benchmarks:
+        cmake_args.append("-DMIFROST_BUILD_BENCHMARKS=ON")
 
     if cmake_toolchain_file:
         cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain_file}")

@@ -70,7 +70,7 @@ class BatchBuilder {
    int64_t current_graph_idx = 0;
 
   public:
-   BatchBuilder();
+   BatchBuilder() = default;
 
    // --- Data Ingestion ---
 

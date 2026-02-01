@@ -11,8 +11,6 @@
 
 namespace mifrost {
 
-BatchBuilder::BatchBuilder() {}
-
 void BatchBuilder::add_node_features(
    const std::string& node_type,
    const std::string& attr_name,
