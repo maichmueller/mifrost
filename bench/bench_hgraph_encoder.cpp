@@ -3,6 +3,7 @@
 #include <argparse/argparse.hpp>
 #include <filesystem>
 #include <mimir/formalism/problem.hpp>
+#include <mimir/search/axiom_evaluators/grounded/grounded.hpp>
 #include <mimir/search/grounders/lifted.hpp>
 #include <mimir/search/state_repository.hpp>
 #include <string>
@@ -22,6 +23,7 @@ struct BenchConfig {
 };
 
 BenchConfig g_config;
+std::vector< std::string > g_unparsed_args;
 
 std::string default_data_dir()
 {
@@ -74,16 +76,18 @@ void parse_args(int& argc, char** argv)
    g_config.batch_size = parser.get< int >("--batch_size");
    g_config.stream_size = parser.get< int >("--stream_size");
 
+   g_unparsed_args = std::move(unparsed);
    std::vector< char* > keep;
    keep.reserve(unparsed.size() + 1);
    keep.push_back(argv[0]);
-   for(auto& arg : unparsed) {
-      keep.push_back(arg.data());
+   for(auto& arg : g_unparsed_args) {
+      keep.push_back(const_cast< char* >(arg.c_str()));
    }
    for(size_t i = 0; i < keep.size(); ++i) {
       argv[i] = keep[i];
    }
    argc = static_cast< int >(keep.size());
+   argv[argc] = nullptr;
 }
 
 struct BenchContext {
@@ -93,6 +97,17 @@ struct BenchContext {
    std::vector< mimir::search::State > batch_states;
    std::vector< mimir::search::State > stream_states;
 
+   static mimir::search::State make_root(const mimir::formalism::Problem& problem)
+   {
+      mimir::search::LiftedGrounder grounder(problem);
+      auto grounded = grounder.create_grounded_axiom_evaluator();
+      auto axiom_eval = std::static_pointer_cast< mimir::search::IAxiomEvaluator >(
+         std::move(grounded)
+      );
+      auto repo = mimir::search::StateRepositoryImpl::create(axiom_eval);
+      return repo->get_or_create_initial_state().first;
+   }
+
    explicit BenchContext(const BenchConfig& cfg)
        : problem(
             mimir::formalism::ProblemImpl::create(
@@ -100,13 +115,9 @@ struct BenchContext {
                std::filesystem::path(cfg.data_dir) / "pddl" / cfg.domain / (cfg.problem + ".pddl")
             )
          ),
-         engine(problem.get_domain())
+         root(make_root(problem)),
+         engine(problem->get_domain())
    {
-      mimir::search::LiftedGrounder grounder(problem);
-      auto axiom_eval = grounder.create_grounded_axiom_evaluator();
-      auto repo = mimir::search::StateRepository::create(axiom_eval);
-      root = repo->get_or_create_initial_state().first;
-
       batch_states.assign(static_cast< size_t >(std::max(cfg.batch_size, 1)), root);
       stream_states.assign(static_cast< size_t >(std::max(cfg.stream_size, 1)), root);
    }

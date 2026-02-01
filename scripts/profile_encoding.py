@@ -101,6 +101,25 @@ def bench_encode_stream(encoder, states, goals, subgoal_layers, actions):
     stream.flush(as_batch=True)
 
 
+def bench_encode_batch_no_metadata(encoder, states, goals, subgoal_layers, actions):
+    encoder.encode_batch(
+        states,
+        goals=goals,
+        actions=actions,
+        subgoal_layers=subgoal_layers,
+        include_metadata=False,
+    )
+
+
+def bench_encode_batch_parts(encoder, states, goals, subgoal_layers, actions):
+    encoder.encode_batch_parts(
+        states,
+        goals=goals,
+        actions=actions,
+        subgoal_layers=subgoal_layers,
+    )
+
+
 def timed(label, fn):
     start = time.perf_counter()
     fn()
@@ -210,6 +229,28 @@ def main(argv: list[str]) -> int:
             goals,
             subgoal_layers,
             actions_stream,
+        ),
+    )
+    run_profile(
+        args.profile,
+        "encode_batch_parts",
+        lambda: bench_encode_batch_parts(
+            encoder,
+            states_batch,
+            goals,
+            subgoal_layers,
+            actions_batch,
+        ),
+    )
+    run_profile(
+        args.profile,
+        "encode_batch_no_metadata",
+        lambda: bench_encode_batch_no_metadata(
+            encoder,
+            states_batch,
+            goals,
+            subgoal_layers,
+            actions_batch,
         ),
     )
     return 0
