@@ -32,6 +32,7 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
       bool ignore_actions = true;
       bool include_lgan_edges = false;
       bool include_static = true;
+      bool include_empty_edge_types = true;
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 

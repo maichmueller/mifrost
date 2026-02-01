@@ -96,12 +96,18 @@ def _parts_to_pyg(
     parts: Mapping[str, Any],
     *,
     as_batch: bool | None = None,
+    include_metadata: bool = True,
 ) -> HeteroData:
     # Assemble engine "parts" into PyG objects on the Python side only.
-    tensors: Mapping[str, Any] = parts.get("tensors", {})
+    raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
     node_names: Mapping[str, list[str]] = parts.get("node_names", {})
     node_feature_dims: Mapping[str, int] = parts.get("node_feature_dims", {})
-    object_names: list[str] = list(parts.get("object_names", []))
+    object_names_raw = parts.get("object_names", [])
+    object_names: list[str] = (
+        object_names_raw
+        if isinstance(object_names_raw, list)
+        else list(object_names_raw)
+    )
     num_graphs = int(parts.get("num_graphs", 0))
 
     if as_batch is None:
@@ -114,22 +120,37 @@ def _parts_to_pyg(
         data = HeteroData()
 
     edge_parts: MutableMapping[tuple[str, str, str], dict[str, torch.Tensor]] = {}
+    tensors: dict[str, Any] = {}
+    tensors_torch: dict[str, torch.Tensor] = {}
 
-    for key_obj, value in tensors.items():
-        key = str(key_obj)
+    for key_obj, value in raw_tensors.items():
+        key = key_obj if isinstance(key_obj, str) else str(key_obj)
+        tensors[key] = value
+
+    def get_tensor(key: str, value: Any | None = None) -> torch.Tensor:
+        cached = tensors_torch.get(key)
+        if cached is not None:
+            return cached
+        if value is None:
+            value = tensors[key]
+        tensor = _to_tensor(value)
+        tensors_torch[key] = tensor
+        return tensor
+
+    for key, value in tensors.items():
         edge_pos = key.rfind("/edge_index_")
         if edge_pos != -1:
             base = key[:edge_pos]
             suffix = key[edge_pos + len("/edge_index_") :]
             src, rel, dst = base.split("|", 2)
             entry = edge_parts.setdefault((src, rel, dst), {})
-            entry[suffix] = _to_tensor(value)
+            entry[suffix] = get_tensor(key, value)
             continue
 
         if "/" not in key:
             continue
         node_type, attr = key.split("/", 1)
-        data[node_type][attr] = _to_tensor(value)
+        data[node_type][attr] = get_tensor(key, value)
 
     for (src, rel, dst), parts_map in edge_parts.items():
         if "0" not in parts_map or "1" not in parts_map:
@@ -137,43 +158,46 @@ def _parts_to_pyg(
         edge_index = torch.stack((parts_map["0"], parts_map["1"]), dim=0)
         data[(src, rel, dst)].edge_index = edge_index
 
-    for node_type, names in node_names.items():
-        store = data[node_type]
-        names_list = list(names)
-        if as_batch:
-            ptr_key = f"{node_type}/ptr"
-            if ptr_key in tensors:
-                ptr_tensor = _to_tensor(tensors[ptr_key]).tolist()
-                store.node_names = [
-                    names_list[ptr_tensor[i] : ptr_tensor[i + 1]]
-                    for i in range(len(ptr_tensor) - 1)
-                ]
-            else:
-                store.node_names = [names_list]
-        else:
-            store.node_names = names_list
-        store.num_nodes = len(names_list)
-    if object_names:
-        if as_batch:
-            symbol_type = None
-            for node_type, names in node_names.items():
-                if list(names) == object_names:
-                    symbol_type = node_type
-                    break
-            if symbol_type is not None:
-                ptr_key = f"{symbol_type}/ptr"
+    node_names_lists: dict[str, list[str]] = {}
+    if include_metadata:
+        for node_type, names in node_names.items():
+            store = data[node_type]
+            names_list = names if isinstance(names, list) else list(names)
+            node_names_lists[node_type] = names_list
+            if as_batch:
+                ptr_key = f"{node_type}/ptr"
                 if ptr_key in tensors:
-                    ptr_tensor = _to_tensor(tensors[ptr_key]).tolist()
-                    data.object_names = [
-                        object_names[ptr_tensor[i] : ptr_tensor[i + 1]]
+                    ptr_tensor = get_tensor(ptr_key).tolist()
+                    store.node_names = [
+                        names_list[ptr_tensor[i] : ptr_tensor[i + 1]]
                         for i in range(len(ptr_tensor) - 1)
                     ]
                 else:
+                    store.node_names = [names_list]
+            else:
+                store.node_names = names_list
+            store.num_nodes = len(names_list)
+        if object_names:
+            if as_batch:
+                symbol_type = None
+                for node_type, names in node_names_lists.items():
+                    if names == object_names:
+                        symbol_type = node_type
+                        break
+                if symbol_type is not None:
+                    ptr_key = f"{symbol_type}/ptr"
+                    if ptr_key in tensors:
+                        ptr_tensor = get_tensor(ptr_key).tolist()
+                        data.object_names = [
+                            object_names[ptr_tensor[i] : ptr_tensor[i + 1]]
+                            for i in range(len(ptr_tensor) - 1)
+                        ]
+                    else:
+                        data.object_names = [object_names]
+                else:
                     data.object_names = [object_names]
             else:
-                data.object_names = [object_names]
-        else:
-            data.object_names = object_names
+                data.object_names = object_names
     if as_batch and num_graphs > 0:
         data._num_graphs = num_graphs
 
@@ -183,10 +207,10 @@ def _parts_to_pyg(
             continue
         ptr_key = f"{node_type}/ptr"
         if ptr_key in tensors:
-            ptr_tensor = _to_tensor(tensors[ptr_key])
+            ptr_tensor = get_tensor(ptr_key)
             count = int(ptr_tensor[-1].item()) if ptr_tensor.numel() > 0 else 0
-        elif node_type in node_names:
-            count = len(node_names[node_type])
+        elif include_metadata and node_type in node_names_lists:
+            count = len(node_names_lists[node_type])
         else:
             count = 0
         store.x = torch.zeros((count, int(dim)), dtype=torch.float32)
@@ -201,6 +225,11 @@ def _parts_to_pyg(
                 del store["batch"]
 
     return data
+
+
+def parts_to_tensors(parts: Mapping[str, Any]) -> Mapping[str, torch.Tensor]:
+    tensors: Mapping[str, Any] = parts.get("tensors", {})
+    return {str(key): _to_tensor(value) for key, value in tensors.items()}
 
 
 @dataclass
@@ -243,10 +272,18 @@ class HGraphEncoderStream:
         if hasattr(self._builder, "next_graph"):
             self._builder.next_graph()
 
-    def flush(self, *, as_batch: bool = True) -> HeteroData:
+    def flush(
+        self, *, as_batch: bool = True, include_metadata: bool = True
+    ) -> HeteroData:
+        parts = self.flush_parts()
+        return _parts_to_pyg(
+            parts, as_batch=as_batch, include_metadata=include_metadata
+        )
+
+    def flush_parts(self) -> Mapping[str, Any]:
         parts = self._builder.build_parts()
         self._builder = BatchBuilder()
-        return _parts_to_pyg(parts, as_batch=as_batch)
+        return parts
 
 
 class HGraphEncoder:
@@ -259,6 +296,7 @@ class HGraphEncoder:
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
         include_static: bool = True,
+        include_empty_edge_types: bool = True,
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
@@ -270,6 +308,7 @@ class HGraphEncoder:
         config.add_nullary_predicates = add_nullary_predicates
         config.include_lgan_edges = include_lgan_edges
         config.include_static = include_static
+        config.include_empty_edge_types = include_empty_edge_types
         config.max_goal_level = max_goal_level
         config.support_literals = support_literals
         config.nullary_object_name = nullary_object_name
@@ -311,6 +350,7 @@ class HGraphEncoder:
         goals: Iterable[Any] | None = None,
         actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        include_metadata: bool = True,
     ) -> HeteroData:
         parts = self.encode_parts(
             state,
@@ -318,21 +358,16 @@ class HGraphEncoder:
             actions=actions,
             subgoal_layers=subgoal_layers,
         )
-        return _parts_to_pyg(parts, as_batch=False)
+        return _parts_to_pyg(parts, as_batch=False, include_metadata=include_metadata)
 
-    def encode_batch(
+    def _encode_batch_parts(
         self,
         states: Iterable[Any] | Any,
         *,
         goals: Iterable[Any] | None = None,
         actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> HeteroData:
-        """
-        Encode multiple states into a single PyG Batch using the C++ BatchBuilder.
-
-        If a single state object is provided, it is treated as a batch of size 1.
-        """
+    ) -> Mapping[str, Any]:
         is_state_like = hasattr(states, "get_problem") or hasattr(
             states, "_advanced_state"
         )
@@ -395,8 +430,47 @@ class HGraphEncoder:
             if hasattr(builder, "next_graph"):
                 builder.next_graph()
 
-        parts = builder.build_parts()
-        return _parts_to_pyg(parts, as_batch=True)
+        return builder.build_parts()
+
+    def encode_batch(
+        self,
+        states: Iterable[Any] | Any,
+        *,
+        goals: Iterable[Any] | None = None,
+        actions: Iterable[Any] | None = None,
+        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        include_metadata: bool = True,
+    ) -> HeteroData:
+        """
+        Encode multiple states into a single PyG Batch using the C++ BatchBuilder.
+
+        If a single state object is provided, it is treated as a batch of size 1.
+        """
+        parts = self._encode_batch_parts(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+        )
+        return _parts_to_pyg(parts, as_batch=True, include_metadata=include_metadata)
+
+    def encode_batch_parts(
+        self,
+        states: Iterable[Any] | Any,
+        *,
+        goals: Iterable[Any] | None = None,
+        actions: Iterable[Any] | None = None,
+        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+    ) -> Mapping[str, Any]:
+        """
+        Encode multiple states and return engine parts without PyG assembly.
+        """
+        return self._encode_batch_parts(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+        )
 
     def stream(self) -> HGraphEncoderStream:
         return HGraphEncoderStream(self._engine)

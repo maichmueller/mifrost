@@ -680,6 +680,9 @@ void HGraphEncoderEngine::add_lgan_nn_edges(
 
 void HGraphEncoderEngine::ensure_empty_edge_types(BatchBuilder& builder) const
 {
+   if(! config_.include_empty_edge_types) {
+      return;
+   }
    for(const auto& [src, rel, dst] : all_edge_types_) {
       builder.ensure_edge_type(src, rel, dst);
    }

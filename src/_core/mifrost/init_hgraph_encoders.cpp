@@ -105,6 +105,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def_rw("ignore_actions", &HGraphEncoderEngine::Config::ignore_actions)
       .def_rw("include_static", &HGraphEncoderEngine::Config::include_static)
       .def_rw("include_lgan_edges", &HGraphEncoderEngine::Config::include_lgan_edges)
+      .def_rw("include_empty_edge_types", &HGraphEncoderEngine::Config::include_empty_edge_types)
       .def_rw(
          "lgan_nn_edge_pos",
          &HGraphEncoderEngine::Config::lgan_nn_edge_pos,

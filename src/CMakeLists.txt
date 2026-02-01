@@ -235,6 +235,7 @@ if (MIFROST_BUILD_BENCHMARKS)
             mifrost_core
             benchmark::benchmark
             argparse::argparse
+            ${_python_embed_target}
     )
     target_compile_definitions(
             mifrost_bench_hgraph

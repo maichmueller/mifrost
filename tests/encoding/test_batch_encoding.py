@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch_geometric.data import Batch, HeteroData
 
-from mifrost.encoders import HGraphEncoder
+from mifrost.encoders import HGraphEncoder, _parts_to_pyg
 
 
 def _assert_tensor_or_list_equal(actual, expected):
@@ -72,3 +72,57 @@ def test_stream_matches_encode_batch(small_blocks):
     actual_batch = stream.flush(as_batch=True)
 
     _assert_hetero_batch_equal(actual_batch, expected_batch)
+
+
+def test_encode_batch_parts_roundtrip(small_blocks):
+    space, domain, problem = small_blocks
+    encoder = HGraphEncoder(domain)
+
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+    parts = encoder.encode_batch_parts(states)
+    actual_batch = _parts_to_pyg(parts, as_batch=True)
+    expected_batch = encoder.encode_batch(states)
+
+    _assert_hetero_batch_equal(actual_batch, expected_batch)
+
+
+def test_encode_batch_without_metadata(small_blocks):
+    space, domain, problem = small_blocks
+    encoder = HGraphEncoder(domain)
+
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+    batch = encoder.encode_batch(states, include_metadata=False)
+
+    for node_type in batch.node_types:
+        assert "node_names" not in batch[node_type]
+    assert "object_names" not in batch._global_store
+
+
+def test_include_empty_edge_types_flag_drops_empty_edges(small_blocks):
+    space, domain, problem = small_blocks
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+
+    dense_encoder = HGraphEncoder(domain, include_empty_edge_types=True)
+    sparse_encoder = HGraphEncoder(domain, include_empty_edge_types=False)
+
+    dense_batch = dense_encoder.encode_batch(states)
+    sparse_batch = sparse_encoder.encode_batch(states)
+
+    assert set(sparse_batch.edge_types).issubset(set(dense_batch.edge_types))
+
+    for edge_type in sparse_batch.edge_types:
+        edge_index = sparse_batch[edge_type].edge_index
+        assert edge_index.numel() > 0
+
+    for edge_type in set(dense_batch.edge_types) - set(sparse_batch.edge_types):
+        edge_index = dense_batch[edge_type].edge_index
+        assert edge_index.numel() == 0
