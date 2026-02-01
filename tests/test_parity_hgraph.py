@@ -12,6 +12,12 @@ from tests.conftest import load_problem, problem_setup
 
 from tests.ground_truth.hgraph_encoder import HGraphEncoder
 
+SMALL_PARITY_CASES = [
+    ("blocks", "probBLOCKS-4-0"),
+    ("gripper", "gripper_b-5"),
+    ("delivery", "instance_2x2_p-2_0"),
+]
+
 
 def _maybe_subgoal_layers(
     goals: list[pymimir.GroundLiteral],
@@ -97,15 +103,20 @@ def test_hgraph_parity_blocks_inputs(
 @pytest.mark.parametrize("include_lgan_edges", [False, True])
 @pytest.mark.parametrize("add_nullary_predicates", [False, True])
 @pytest.mark.parametrize("support_literals", [False, True])
+@pytest.mark.parametrize(
+    ("domain", "problem"),
+    SMALL_PARITY_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in SMALL_PARITY_CASES],
+)
 def test_hgraph_parity_flag_variants(
     include_static: bool,
     include_lgan_edges: bool,
     add_nullary_predicates: bool,
     support_literals: bool,
+    domain: str,
+    problem: str,
 ):
-    domain, problem, state, _domain_path, _problem_path = load_problem(
-        "blocks", "probBLOCKS-4-0"
-    )
+    domain, problem, state, _domain_path, _problem_path = load_problem(domain, problem)
 
     goals = list(problem.get_goal_condition().get_literals())
     subgoal_layers = _maybe_subgoal_layers(goals, include_subgoals=True)
@@ -147,11 +158,18 @@ def test_hgraph_parity_flag_variants(
 
 @pytest.mark.parametrize("include_goals", [False, True])
 @pytest.mark.parametrize("include_actions", [False, True])
+@pytest.mark.parametrize(
+    ("domain", "problem"),
+    SMALL_PARITY_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in SMALL_PARITY_CASES],
+)
 def test_hgraph_streaming_parity(
     include_goals: bool,
     include_actions: bool,
+    domain: str,
+    problem: str,
 ):
-    space, domain, problem = problem_setup("blocks", "probBLOCKS-4-0")
+    space, domain, problem = problem_setup(domain, problem)
 
     root = problem.get_initial_state()
     transitions = list(space.get_forward_transitions(root))

@@ -1,15 +1,31 @@
 import os
-import pymimir
+
 import mifrost
+import pymimir
+import pytest
 import torch
 from torch_geometric.data import HeteroData
 
 
-def test_successor_encoder():
+DOMAIN_CASES = [
+    ("blocks", "probBLOCKS-4-0"),
+    ("gripper", "gripper_b-5"),
+    ("delivery", "instance_2x2_p-2_0"),
+]
+
+
+@pytest.mark.parametrize(
+    ("domain_name", "problem_name"),
+    DOMAIN_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in DOMAIN_CASES],
+)
+def test_successor_encoder(domain_name: str, problem_name: str):
     # 1. Load PDDL
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    domain_path = os.path.join(root, "data", "pddl", "blocks", "domain.pddl")
-    problem_path = os.path.join(root, "data", "pddl", "blocks", "probBLOCKS-4-0.pddl")
+    domain_path = os.path.join(root, "data", "pddl", domain_name, "domain.pddl")
+    problem_path = os.path.join(
+        root, "data", "pddl", domain_name, f"{problem_name}.pddl"
+    )
 
     print(f"Loading domain from {domain_path}")
     domain = pymimir.Domain(domain_path)
@@ -94,4 +110,5 @@ def test_successor_encoder():
 
 
 if __name__ == "__main__":
-    test_successor_encoder()
+    for domain_name, problem_name in DOMAIN_CASES:
+        test_successor_encoder(domain_name, problem_name)

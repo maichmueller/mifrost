@@ -259,6 +259,11 @@ void HGraphEncoderEngine::encode_objects(
    for(const auto& key : extra_objects) {
       get_or_add_node(config_.symbol_type_id, key, builder, node_indices, node_names);
    }
+   if(config_.add_nullary_predicates) {
+      get_or_add_node(
+         config_.symbol_type_id, config_.nullary_object_name, builder, node_indices, node_names
+      );
+   }
 }
 
 hash_set< std::string > HGraphEncoderEngine::encode_facts(

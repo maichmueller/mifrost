@@ -3,14 +3,37 @@ from tests.conftest import problem_setup
 from mifrost.encoders import HGraphEncoder
 
 
-@pytest.fixture(scope="session")
-def small_blocks():
-    return problem_setup("blocks", "probBLOCKS-4-0")
+SMALL_DOMAIN_CASES = [
+    ("blocks", "probBLOCKS-4-0"),
+    ("gripper", "gripper_b-5"),
+    ("delivery", "instance_2x2_p-2_0"),
+]
+
+MEDIUM_DOMAIN_CASES = [
+    ("blocks", "probBLOCKS-8-1"),
+    ("spanner", "medium"),
+    ("reward", "instance_3x3_0"),
+]
 
 
-@pytest.fixture(scope="session")
-def medium_blocks():
-    return problem_setup("blocks", "probBLOCKS-8-1")
+@pytest.fixture(
+    scope="session",
+    params=SMALL_DOMAIN_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in SMALL_DOMAIN_CASES],
+)
+def small_blocks(request):
+    domain, problem = request.param
+    return problem_setup(domain, problem)
+
+
+@pytest.fixture(
+    scope="session",
+    params=MEDIUM_DOMAIN_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in MEDIUM_DOMAIN_CASES],
+)
+def medium_blocks(request):
+    domain, problem = request.param
+    return problem_setup(domain, problem)
 
 
 @pytest.fixture(scope="session")

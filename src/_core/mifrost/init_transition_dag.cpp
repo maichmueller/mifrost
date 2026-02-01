@@ -26,7 +26,7 @@ void init_transition_dag(nb::module_& m)
                            const mimir::search::State& parent,
                            const mimir::search::State& child,
                            const std::optional< mimir::formalism::GroundAction >& action) {
-                           dag.register_transition(parent, child, action);
+                           return dag.register_transition(parent, child, action);
                         },
                         "parent"_a,
                         "child"_a,

@@ -1,15 +1,28 @@
+from pathlib import Path
+
 import mifrost
 import pymimir
+import pytest
 from pymimir.wrapper_formalism import Domain, Problem
-from pathlib import Path
-import os
 
 
-def test_horizon_encoder():
+DOMAIN_CASES = [
+    ("blocks", "probBLOCKS-4-0"),
+    ("gripper", "gripper_b-5"),
+    ("delivery", "instance_2x2_p-2_0"),
+]
+
+
+@pytest.mark.parametrize(
+    ("domain_name", "problem_name"),
+    DOMAIN_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in DOMAIN_CASES],
+)
+def test_horizon_encoder(domain_name: str, problem_name: str):
     # 1. Setup Domain & Problem
     root = Path(__file__).resolve().parents[2]
-    domain_path = root / "data" / "pddl" / "blocks" / "domain.pddl"
-    problem_path = root / "data" / "pddl" / "blocks" / "probBLOCKS-4-0.pddl"
+    domain_path = root / "data" / "pddl" / domain_name / "domain.pddl"
+    problem_path = root / "data" / "pddl" / domain_name / f"{problem_name}.pddl"
 
     print(f"Loading domain from {domain_path}")
     domain = Domain(domain_path)
@@ -69,4 +82,5 @@ def test_horizon_encoder():
 
 
 if __name__ == "__main__":
-    test_horizon_encoder()
+    for domain_name, problem_name in DOMAIN_CASES:
+        test_horizon_encoder(domain_name, problem_name)
