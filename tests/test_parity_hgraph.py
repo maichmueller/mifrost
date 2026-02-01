@@ -158,6 +158,7 @@ def test_hgraph_parity_flag_variants(
 
 @pytest.mark.parametrize("include_goals", [False, True])
 @pytest.mark.parametrize("include_actions", [False, True])
+@pytest.mark.parametrize("include_subgoals", [False, True])
 @pytest.mark.parametrize(
     ("domain", "problem"),
     SMALL_PARITY_CASES,
@@ -166,6 +167,7 @@ def test_hgraph_parity_flag_variants(
 def test_hgraph_streaming_parity(
     include_goals: bool,
     include_actions: bool,
+    include_subgoals: bool,
     domain: str,
     problem: str,
 ):
@@ -178,6 +180,7 @@ def test_hgraph_streaming_parity(
     _, successor = transitions[0]
     states = [root, successor]
     goals = list(problem.get_goal_condition().get_literals())
+    subgoal_layers = _maybe_subgoal_layers(goals, include_subgoals)
     actions_per_state = [
         state.generate_applicable_actions() if include_actions else None
         for state in states
@@ -193,7 +196,7 @@ def test_hgraph_streaming_parity(
             state,
             goals=goals if include_goals else None,
             actions=actions if include_actions else None,
-            subgoal_layers=None,
+            subgoal_layers=subgoal_layers,
         )
         for state, actions in zip(states, actions_per_state)
     ]
@@ -210,7 +213,7 @@ def test_hgraph_streaming_parity(
             state,
             goals=goals if include_goals else None,
             actions=actions if include_actions else None,
-            subgoal_layers=None,
+            subgoal_layers=subgoal_layers,
         )
     actual_batch = stream.flush(as_batch=True)
 

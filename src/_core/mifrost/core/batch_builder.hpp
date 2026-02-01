@@ -57,10 +57,8 @@ class BatchBuilder {
    // Optional graph-level object names.
    std::vector< std::string > object_names;
 
-   // Graph pointer (ptr) tracking
-   // For homogeneous: simple vector. For hetero: map<node_type, vector>
-   // Following PyG HeteroData convention: ptr per store?
-   // Actually PyG BatchedHeteroData usually has ptr per node type.
+   // Graph pointer (ptr) tracking.
+   // For homogeneous: simple vector. For hetero: ptr per node type (PyG convention).
    ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
    std::vector< int64_t > batch_indices;  // For homogeneous case if needed
 
