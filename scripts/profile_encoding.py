@@ -80,6 +80,20 @@ def bench_encode_single(encoder, states, goals, subgoal_layers, actions, iterati
         )
 
 
+def bench_encode_single_parts(
+    encoder, states, goals, subgoal_layers, actions, iterations
+):
+    n = len(states)
+    for i in range(iterations):
+        idx = i % n
+        encoder.encode_parts(
+            states[idx],
+            goals=goals,
+            actions=actions[idx] if actions is not None else None,
+            subgoal_layers=subgoal_layers,
+        )
+
+
 def bench_encode_batch(encoder, states, goals, subgoal_layers, actions):
     encoder.encode_batch(
         states,
@@ -120,16 +134,20 @@ def bench_encode_batch_parts(encoder, states, goals, subgoal_layers, actions):
     )
 
 
-def timed(label, fn):
+def timed(label, fn, count=None):
     start = time.perf_counter()
     fn()
     elapsed = time.perf_counter() - start
-    print(f"{label}: {elapsed:.4f}s")
+    if count:
+        per = elapsed / count
+        print(f"{label}: {elapsed:.4f}s total ({per:.6f}s per item)")
+    else:
+        print(f"{label}: {elapsed:.4f}s")
 
 
-def run_profile(profile_kind, label, fn):
+def run_profile(profile_kind, label, fn, count=None):
     if profile_kind == "none":
-        timed(label, fn)
+        timed(label, fn, count=count)
         return
     if profile_kind == "pyinstrument":
         try:
@@ -208,6 +226,20 @@ def main(argv: list[str]) -> int:
             actions_single,
             args.iterations,
         ),
+        count=args.iterations,
+    )
+    run_profile(
+        args.profile,
+        "encode_single_parts",
+        lambda: bench_encode_single_parts(
+            encoder,
+            states_single,
+            goals,
+            subgoal_layers,
+            actions_single,
+            args.iterations,
+        ),
+        count=args.iterations,
     )
     run_profile(
         args.profile,
@@ -219,6 +251,7 @@ def main(argv: list[str]) -> int:
             subgoal_layers,
             actions_batch,
         ),
+        count=len(states_batch),
     )
     run_profile(
         args.profile,
@@ -230,6 +263,7 @@ def main(argv: list[str]) -> int:
             subgoal_layers,
             actions_stream,
         ),
+        count=len(states_stream),
     )
     run_profile(
         args.profile,
@@ -241,6 +275,7 @@ def main(argv: list[str]) -> int:
             subgoal_layers,
             actions_batch,
         ),
+        count=len(states_batch),
     )
     run_profile(
         args.profile,
@@ -252,6 +287,7 @@ def main(argv: list[str]) -> int:
             subgoal_layers,
             actions_batch,
         ),
+        count=len(states_batch),
     )
     return 0
 
