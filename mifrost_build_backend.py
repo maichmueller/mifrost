@@ -81,6 +81,8 @@ def _ensure_cmake_arg(key: str, value: str) -> None:
 
 def _set_default_rpath_mode(mode: str) -> None:
     os.environ.setdefault("MIFROST_RPATH_MODE", mode)
+    if sys.platform == "darwin" and mode == "wheel":
+        os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", "11.0")
 
 
 def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
