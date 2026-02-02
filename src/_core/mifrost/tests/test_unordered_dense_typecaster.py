@@ -307,6 +307,7 @@ class TestBatchBuilderMaps:
 
         # Build should succeed without crashes
         # (internal maps like node_offsets, current_node_counts, etc. should work)
+        builder.set_graph_kind("hetero")
         result = builder.build_parts()
 
         assert isinstance(result, dict)

@@ -6,8 +6,11 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <tuple>
+
+#include "schema.hpp"
 
 namespace mifrost {
 
@@ -21,6 +24,7 @@ BatchBuilder::BatchBuilder()
    node_names.reserve(kSmallReserve);
    ptrs.reserve(kSmallReserve);
    columns.reserve(kColumnReserve);
+   schema_extensions = nb::dict();
 }
 
 void BatchBuilder::add_node_features(
@@ -75,21 +79,26 @@ void BatchBuilder::ensure_edge_type(
 )
 {
    std::string edge_key_base;
-   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
+   constexpr std::string_view sep = "|";
+   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2 * sep.size() + 1);
    edge_key_base.append(src_type);
-   edge_key_base.push_back('|');
+   edge_key_base.append(sep);
    edge_key_base.append(rel_type);
-   edge_key_base.push_back('|');
+   edge_key_base.append(sep);
    edge_key_base.append(dst_type);
 
    std::string src_key;
-   src_key.reserve(edge_key_base.size() + 13);
-   src_key.append(edge_key_base);
-   src_key.append("/edge_index_0");
    std::string dst_key;
-   dst_key.reserve(edge_key_base.size() + 13);
+   constexpr std::string_view suffix_0 = "/edge_index_0";
+   constexpr std::string_view suffix_1 = "/edge_index_1";
+   // src
+   src_key.reserve(edge_key_base.size() + suffix_0.size() + 1);
+   src_key.append(edge_key_base);
+   src_key.append(suffix_0);
+   // dst
+   dst_key.reserve(edge_key_base.size() + suffix_1.size() + 1);
    dst_key.append(edge_key_base);
-   dst_key.append("/edge_index_1");
+   dst_key.append(suffix_1);
    get_column< int64_t >(src_key, 1);
    get_column< int64_t >(dst_key, 1);
 }
@@ -119,6 +128,21 @@ void BatchBuilder::set_object_names(std::vector< std::string > names)
    }
    object_names.reserve(object_names.size() + names.size());
    object_names.insert(object_names.end(), names.begin(), names.end());
+}
+
+void BatchBuilder::set_graph_kind(std::string kind)
+{
+   graph_kind = std::move(kind);
+}
+
+void BatchBuilder::set_schema_flag(const std::string& key, bool value)
+{
+   schema_flags[key] = value;
+}
+
+void BatchBuilder::set_schema_extension(const std::string& key, nb::object value)
+{
+   schema_extensions[key.c_str()] = std::move(value);
 }
 
 void BatchBuilder::add_edges(
@@ -168,6 +192,28 @@ void BatchBuilder::add_edges(
       col_src.emplace_back(idx + src_offset);
    for(auto idx : dst_indices)
       col_dst.emplace_back(idx + dst_offset);
+}
+
+void BatchBuilder::add_edge_features(
+   const std::string& src_type,
+   const std::string& rel_type,
+   const std::string& dst_type,
+   const std::string& attr_name,
+   std::span< const float > data,
+   int feature_dim
+)
+{
+   std::string key;
+   key.reserve(src_type.size() + rel_type.size() + dst_type.size() + attr_name.size() + 4);
+   key.append(src_type);
+   key.push_back('|');
+   key.append(rel_type);
+   key.push_back('|');
+   key.append(dst_type);
+   key.push_back('/');
+   key.append(attr_name);
+   auto& col = get_column< float >(key, feature_dim);
+   col.insert(col.end(), data.begin(), data.end());
 }
 
 void BatchBuilder::next_graph()
@@ -587,6 +633,90 @@ nb::dict BatchBuilder::build_parts()
       payload[(node_type + "/batch").c_str()] = batch_array;
    }
 
+   std::vector< NodeTensorSpec > node_specs;
+   struct EdgeTensorKeySpec {
+      EdgeType edge_type;
+      std::string attr;
+      std::string part;
+      std::string key;
+   };
+   std::vector< EdgeTensorKeySpec > edge_specs;
+   std::set< EdgeType > edge_types_set;
+
+   for(const auto& [key, col] : columns) {
+      (void) col;  // silence unused variable warning
+      const auto slash = key.find('/');
+      if(slash == std::string::npos) {
+         continue;
+      }
+      const bool is_edge = key.find('|') != std::string::npos;
+      if(! is_edge) {
+         node_specs.push_back(
+            NodeTensorSpec{
+               key.substr(0, slash),
+               key.substr(slash + 1),
+               key,
+            }
+         );
+         continue;
+      }
+      const std::string base = key.substr(0, slash);
+      const std::string attr = key.substr(slash + 1);
+      const auto first = base.find('|');
+      if(first == std::string::npos) {
+         continue;
+      }
+      const auto second = base.find('|', first + 1);
+      if(second == std::string::npos) {
+         continue;
+      }
+      EdgeType edge_key{
+         base.substr(0, first),
+         base.substr(first + 1, second - first - 1),
+         base.substr(second + 1),
+      };
+      edge_types_set.insert(edge_key);
+
+      std::string part;
+      std::string attr_name = attr;
+      constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
+      if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+         attr_name = "edge_index";
+         part = attr.substr(kEdgeIndexPrefix.size());
+      }
+      edge_specs.push_back(
+         EdgeTensorKeySpec{
+            edge_key,
+            attr_name,
+            part,
+            key,
+         }
+      );
+   }
+
+   for(const auto& [node_type, ptr] : ptr_vectors) {
+      (void) ptr;
+      node_specs.push_back(NodeTensorSpec{node_type, "ptr", node_type + "/ptr"});
+      node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
+   }
+
+   std::sort(node_specs.begin(), node_specs.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.key < rhs.key;
+   });
+   std::sort(edge_specs.begin(), edge_specs.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.key < rhs.key;
+   });
+
+   std::vector< EdgeType > edge_types;
+   edge_types.reserve(edge_types_set.size());
+   for(const auto& entry : edge_types_set) {
+      edge_types.push_back(entry);
+   }
+   std::map< EdgeType, int > edge_type_ids;
+   for(size_t idx = 0; idx < edge_types.size(); ++idx) {
+      edge_type_ids[edge_types[idx]] = static_cast< int >(idx);
+   }
+
    nb::dict out;
    out["tensors"] = payload;
    nb::dict names_dict;
@@ -601,6 +731,41 @@ nb::dict BatchBuilder::build_parts()
    out["node_feature_dims"] = dims_dict;
    out["object_names"] = nb::cast(object_names);
    out["num_graphs"] = graph_count;
+
+   std::vector< std::string > node_types;
+   node_types.reserve(node_counts.size());
+   for(const auto& [node_type, count] : node_counts) {
+      (void) count;
+      node_types.push_back(node_type);
+   }
+
+   std::vector< EdgeTensorSpec > edge_tensor_specs;
+   edge_tensor_specs.reserve(edge_specs.size());
+   for(const auto& spec : edge_specs) {
+      const auto it = edge_type_ids.find(spec.edge_type);
+      if(it == edge_type_ids.end()) {
+         throw std::invalid_argument("Edge tensor spec references unknown edge type");
+      }
+      EdgeTensorSpec out_spec;
+      out_spec.edge_type = it->second;
+      out_spec.attr = spec.attr;
+      out_spec.key = spec.key;
+      out_spec.part = spec.part;
+      edge_tensor_specs.push_back(std::move(out_spec));
+   }
+
+   Schema schema;
+   schema.version = 1;
+   schema.graph_kind = graph_kind;
+   schema.node_types = std::move(node_types);
+   schema.edge_types = std::move(edge_types);
+   schema.node_tensors = std::move(node_specs);
+   schema.edge_tensors = std::move(edge_tensor_specs);
+   schema.flags = schema_flags;
+   schema.extensions = schema_extensions;
+   schema.validate();
+
+   out["schema"] = schema.to_dict();
    return out;
 }
 

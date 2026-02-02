@@ -5,6 +5,7 @@
 #include <nanobind/ndarray.h>
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -57,6 +58,13 @@ class BatchBuilder {
    // Optional graph-level object names.
    std::vector< std::string > object_names;
 
+   // Schema graph kind (e.g. "hetero" or "homo").
+   std::string graph_kind;
+
+   // Schema metadata (flags + extensions).
+   std::map< std::string, bool > schema_flags;
+   nb::dict schema_extensions;
+
    // Graph pointer (ptr) tracking.
    // For homogeneous: simple vector. For hetero: ptr per node type (PyG convention).
    ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
@@ -106,6 +114,14 @@ class BatchBuilder {
       std::span< const int64_t > src_indices,
       std::span< const int64_t > dst_indices
    );
+   void add_edge_features(
+      const std::string& src_type,
+      const std::string& rel_type,
+      const std::string& dst_type,
+      const std::string& attr_name,
+      std::span< const float > data,
+      int feature_dim
+   );
 
    /**
     * @brief Commit the current graph to the batch.
@@ -135,6 +151,9 @@ class BatchBuilder {
    );
    void set_node_names(const std::string& node_type, std::vector< std::string > names);
    void set_object_names(std::vector< std::string > names);
+   void set_graph_kind(std::string kind);
+   void set_schema_flag(const std::string& key, bool value);
+   void set_schema_extension(const std::string& key, nb::object value);
 
   private:
    // Helper to get or create a column

@@ -56,15 +56,15 @@ def _split_goals(
     for depth, layer in enumerate(layers):
         for literal in layer:
             adv = _advanced_literal(literal)
-            if isinstance(adv, af.StaticGroundLiteral):
-                static_goals.append(adv)
-                static_levels[adv] = depth
-            elif isinstance(adv, af.FluentGroundLiteral):
+            if isinstance(adv, af.FluentGroundLiteral):
                 fluent_goals.append(adv)
                 fluent_levels[adv] = depth
             elif isinstance(adv, af.DerivedGroundLiteral):
                 derived_goals.append(adv)
                 derived_levels[adv] = depth
+            elif isinstance(adv, af.StaticGroundLiteral):
+                static_goals.append(adv)
+                static_levels[adv] = depth
             else:
                 raise TypeError(f"Unsupported goal literal type: {type(literal)}")
 
@@ -100,6 +100,14 @@ def _parts_to_pyg(
 ) -> HeteroData:
     # Assemble engine "parts" into PyG objects on the Python side only.
     raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
+    schema_obj = parts.get("schema")
+    if schema_obj is None:
+        raise ValueError("parts schema missing; rebuild the extension to emit schema")
+    if hasattr(schema_obj, "to_dict"):
+        schema_obj = schema_obj.to_dict()
+    if not isinstance(schema_obj, Mapping):
+        raise TypeError(f"parts schema must be a mapping, got {type(schema_obj)}")
+    schema: Mapping[str, Any] = schema_obj
     node_names: Mapping[str, list[str]] = parts.get("node_names", {})
     node_feature_dims: Mapping[str, int] = parts.get("node_feature_dims", {})
     object_names_raw = parts.get("object_names", [])
@@ -122,6 +130,7 @@ def _parts_to_pyg(
     edge_parts: MutableMapping[tuple[str, str, str], dict[str, torch.Tensor]] = {}
     tensors: dict[str, Any] = {}
     tensors_torch: dict[str, torch.Tensor] = {}
+    consumed_keys: set[str] = set()
 
     for key_obj, value in raw_tensors.items():
         key = key_obj if isinstance(key_obj, str) else str(key_obj)
@@ -137,20 +146,45 @@ def _parts_to_pyg(
         tensors_torch[key] = tensor
         return tensor
 
-    for key, value in tensors.items():
-        edge_pos = key.rfind("/edge_index_")
-        if edge_pos != -1:
-            base = key[:edge_pos]
-            suffix = key[edge_pos + len("/edge_index_") :]
-            src, rel, dst = base.split("|", 2)
-            entry = edge_parts.setdefault((src, rel, dst), {})
-            entry[suffix] = get_tensor(key, value)
-            continue
+    graph_kind = schema.get("graph_kind")
+    if graph_kind not in ("hetero", "homo"):
+        raise ValueError(f"Unsupported graph_kind in schema: {graph_kind!r}")
+    if "flags" not in schema:
+        raise ValueError("Schema missing required 'flags' entry")
+    if "extensions" not in schema:
+        raise ValueError("Schema missing required 'extensions' entry")
 
-        if "/" not in key:
-            continue
-        node_type, attr = key.split("/", 1)
-        data[node_type][attr] = get_tensor(key, value)
+    edge_type_list: list[tuple[str, str, str]] = []
+    for entry in schema.get("edge_types", []):
+        edge_type_list.append((entry["src"], entry["rel"], entry["dst"]))
+
+    for entry in schema.get("node_tensors", []):
+        key = entry["key"]
+        if key not in tensors:
+            raise KeyError(f"Schema references missing tensor key: {key}")
+        node_type = entry["node_type"]
+        attr = entry["attr"]
+        data[node_type][attr] = get_tensor(key, tensors[key])
+        consumed_keys.add(key)
+
+    for entry in schema.get("edge_tensors", []):
+        key = entry["key"]
+        if key not in tensors:
+            raise KeyError(f"Schema references missing tensor key: {key}")
+        edge_type_idx = entry["edge_type"]
+        if edge_type_idx >= len(edge_type_list):
+            raise IndexError(f"Schema edge_type index {edge_type_idx} out of range")
+        edge_type = edge_type_list[edge_type_idx]
+        attr = entry["attr"]
+        if attr == "edge_index":
+            part = str(entry.get("part", ""))
+            if part == "":
+                raise ValueError(f"Missing edge_index part for key: {key}")
+            edge_entry = edge_parts.setdefault(edge_type, {})
+            edge_entry[part] = get_tensor(key, tensors[key])
+        else:
+            data[edge_type][attr] = get_tensor(key, tensors[key])
+        consumed_keys.add(key)
 
     for (src, rel, dst), parts_map in edge_parts.items():
         if "0" not in parts_map or "1" not in parts_map:
@@ -238,6 +272,7 @@ class HGraphEncoderStream:
 
     def __post_init__(self) -> None:
         self._builder = BatchBuilder()
+        self._builder.set_graph_kind("hetero")
 
     def append(
         self,
@@ -283,6 +318,7 @@ class HGraphEncoderStream:
     def flush_parts(self) -> Mapping[str, Any]:
         parts = self._builder.build_parts()
         self._builder = BatchBuilder()
+        self._builder.set_graph_kind("hetero")
         return parts
 
 
@@ -398,6 +434,7 @@ class HGraphEncoder:
             shared_inputs, _ = _split_goals(goals, subgoal_layers)
 
         builder = BatchBuilder()
+        builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
             adv_state = _advanced_state(state)
             if per_state_actions is not None:

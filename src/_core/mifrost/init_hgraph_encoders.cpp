@@ -74,9 +74,38 @@ void init_hgraph_encoders(nb::module_& m)
             );
          }
       )
+      .def(
+         "add_edge_features",
+         [](BatchBuilder& builder,
+            const std::string& src_type,
+            const std::string& rel_type,
+            const std::string& dst_type,
+            const std::string& attr_name,
+            nb::ndarray< nb::numpy, float > data) {
+            if(data.ndim() != 1 && data.ndim() != 2) {
+               throw std::invalid_argument("add_edge_features expects a 1D/2D array");
+            }
+            const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+            const auto count = static_cast< size_t >(data.size());
+            builder.add_edge_features(
+               src_type,
+               rel_type,
+               dst_type,
+               attr_name,
+               std::span< const float >(data.data(), count),
+               feature_dim
+            );
+         }
+      )
+      .def("add_nodes", &BatchBuilder::add_nodes)
+      .def("set_node_names", &BatchBuilder::set_node_names)
+      .def("set_object_names", &BatchBuilder::set_object_names)
       .def("build", &BatchBuilder::build)
       .def("build_parts", &BatchBuilder::build_parts)
-      .def("next_graph", &BatchBuilder::next_graph);
+      .def("next_graph", &BatchBuilder::next_graph)
+      .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
+      .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
+      .def("set_schema_extension", &BatchBuilder::set_schema_extension, "key"_a, "value"_a);
 
    nb::class_< GoalInputs >(m, "GoalInputs")
       .def(nb::init<>())
@@ -121,6 +150,7 @@ void init_hgraph_encoders(nb::module_& m)
          "encode",
          [](HGraphEncoderEngine& encoder, const mimir::search::State& state) {
             BatchBuilder builder;
+            builder.set_graph_kind("hetero");
             encoder.encode(state, builder);
             return builder.build_parts();
          },
@@ -133,6 +163,7 @@ void init_hgraph_encoders(nb::module_& m)
             const GoalInputs& goals,
             const std::vector< mimir::formalism::GroundAction >& actions) {
             BatchBuilder builder;
+            builder.set_graph_kind("hetero");
             encoder.encode(state, goals, actions, builder);
             return builder.build_parts();
          },
@@ -211,6 +242,7 @@ void init_hgraph_encoders(nb::module_& m)
             const TransitionDAG& dag,
             const GoalInputs& goals) {
             BatchBuilder builder;
+            builder.set_graph_kind("hetero");
             encoder.encode(root, dag, goals, builder);
             return builder.build_parts();
          },
@@ -242,6 +274,7 @@ void init_hgraph_encoders(nb::module_& m)
             const mimir::search::State& successor,
             const GoalInputs& goals) {
             BatchBuilder builder;
+            builder.set_graph_kind("hetero");
             encoder.encode(current, successor, goals, builder);
             return builder.build_parts();
          },
