@@ -73,8 +73,8 @@ def _target_nodes(graph, config):
     return nodes
 
 
-def test_transition_tree_encoder_full_semantics(small_blocks):
-    space, domain, problem = small_blocks
+def test_transition_tree_encoder_full_semantics(horizon_cases):
+    space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
     goals = goal_inputs_from_problem(problem)
@@ -111,8 +111,8 @@ def test_transition_tree_encoder_full_semantics(small_blocks):
         assert graph.has_edge(child_node, transition_node)
 
 
-def test_transition_tree_encoder_delta_changes(small_blocks):
-    space, domain, problem = small_blocks
+def test_transition_tree_encoder_delta_changes(horizon_cases):
+    space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
     goals = goal_inputs_from_problem(problem)
@@ -136,8 +136,8 @@ def test_transition_tree_encoder_delta_changes(small_blocks):
     assert neighbors
 
 
-def test_transition_tree_encoder_custom_prefix(small_blocks):
-    space, domain, problem = small_blocks
+def test_transition_tree_encoder_custom_prefix(horizon_cases):
+    space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
     goals = goal_inputs_from_problem(problem)
@@ -177,8 +177,8 @@ def test_transition_tree_encoder_custom_prefix(small_blocks):
         assert positions == {0, 1}
 
 
-def test_transition_tree_encoder_roundtrip(small_blocks):
-    space, domain, problem = small_blocks
+def test_transition_tree_encoder_roundtrip(horizon_cases):
+    space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
     goals = goal_inputs_from_problem(problem)

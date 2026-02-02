@@ -33,8 +33,8 @@ def _build_dag(space, root, *, max_depth: int = 2, branch_factor: int = 2):
     return dag
 
 
-def test_horizon_encoder_parent_relations(small_blocks):
-    space, domain, problem = small_blocks
+def test_horizon_encoder_parent_relations(horizon_cases):
+    space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
 

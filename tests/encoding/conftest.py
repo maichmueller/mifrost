@@ -15,6 +15,8 @@ MEDIUM_DOMAIN_CASES = [
     ("reward", "instance_3x3_0"),
 ]
 
+HORIZON_DOMAIN_CASES = SMALL_DOMAIN_CASES + MEDIUM_DOMAIN_CASES
+
 
 @pytest.fixture(
     scope="session",
@@ -32,6 +34,16 @@ def small_blocks(request):
     ids=[f"{domain}:{problem}" for domain, problem in MEDIUM_DOMAIN_CASES],
 )
 def medium_blocks(request):
+    domain, problem = request.param
+    return problem_setup(domain, problem)
+
+
+@pytest.fixture(
+    scope="session",
+    params=HORIZON_DOMAIN_CASES,
+    ids=[f"{domain}:{problem}" for domain, problem in HORIZON_DOMAIN_CASES],
+)
+def horizon_cases(request):
     domain, problem = request.param
     return problem_setup(domain, problem)
 
