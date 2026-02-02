@@ -180,6 +180,73 @@ def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
     _CONAN_PREPARED.add(cache_key)
 
 
+def _get_conan_generators_dir(build_type: str) -> Path | None:
+    repo_root = Path(__file__).resolve().parent
+    toolchain_override = os.environ.get("MIFROST_CONAN_TOOLCHAIN")
+    if toolchain_override:
+        toolchain_path = Path(toolchain_override)
+        if toolchain_path.exists():
+            return toolchain_path.parent
+
+    default_toolchain = (
+        repo_root
+        / "build"
+        / "conan"
+        / "build"
+        / build_type
+        / "generators"
+        / "conan_toolchain.cmake"
+    )
+    if default_toolchain.exists():
+        return default_toolchain.parent
+
+    build_root = Path(
+        os.environ.get("MIFROST_CONAN_BUILD_DIR", "build/conan_prep")
+    ).resolve()
+    candidate = build_root / "conan" / "build" / build_type / "generators"
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def _load_conan_runenv(build_type: str) -> dict[str, str]:
+    generators_dir = _get_conan_generators_dir(build_type)
+    if generators_dir is None:
+        return {}
+
+    runenv = None
+    pattern = f"conanrunenv-{build_type.lower()}-*.sh"
+    matches = sorted(generators_dir.glob(pattern))
+    if matches:
+        runenv = matches[0]
+    else:
+        fallback = sorted(generators_dir.glob("conanrunenv-*.sh"))
+        if fallback:
+            runenv = fallback[0]
+    if runenv is None or not runenv.exists():
+        return {}
+
+    env_updates: dict[str, str] = {}
+    current = os.environ.copy()
+    for line in runenv.read_text().splitlines():
+        line = line.strip()
+        if not line.startswith("export "):
+            continue
+        _, rest = line.split("export ", 1)
+        if "=" not in rest:
+            continue
+        key, value = rest.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        value = value.replace(f"${key}", current.get(key, ""))
+        value = value.replace(
+            "$DYLD_LIBRARY_PATH", current.get("DYLD_LIBRARY_PATH", "")
+        )
+        value = value.replace("$LD_LIBRARY_PATH", current.get("LD_LIBRARY_PATH", ""))
+        env_updates[key] = value
+    return env_updates
+
+
 def get_requires_for_build_wheel(config_settings: dict[str, Any] | None = None):
     return _sbc.get_requires_for_build_wheel(config_settings)
 
@@ -211,7 +278,11 @@ def build_wheel(
 ):
     _set_default_rpath_mode("wheel")
     _prepare_conan(config_settings)
-    wheel_path = _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
+    wheel_name = _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
+    wheel_dir = Path(wheel_directory)
+    wheel_path = wheel_name
+    if not os.path.isabs(wheel_name):
+        wheel_path = str(wheel_dir / wheel_name)
     if sys.platform == "darwin" and os.environ.get("MIFROST_SKIP_DELOCATE") != "1":
         delocate = shutil.which("delocate-wheel")
         if not delocate:
@@ -219,8 +290,14 @@ def build_wheel(
                 "delocate-wheel not found. Install it with: pip install delocate "
                 "or set MIFROST_SKIP_DELOCATE=1 to skip."
             )
-        subprocess.check_call([delocate, "-w", wheel_directory, wheel_path])
-    return wheel_path
+        env = os.environ.copy()
+        env.update(_load_conan_runenv(_get_build_type(config_settings)))
+        subprocess.check_call([delocate, "-w", wheel_directory, wheel_path], env=env)
+        if not Path(wheel_path).exists():
+            candidates = sorted(wheel_dir.glob("mifrost-*.whl"))
+            if candidates:
+                wheel_name = candidates[0].name
+    return wheel_name
 
 
 def build_editable(
