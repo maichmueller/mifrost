@@ -3,6 +3,8 @@
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
+#include <mimir/search/applicable_action_generators/interface.hpp>
+#include <mimir/search/search_context.hpp>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -217,6 +219,283 @@ TEST_P(HorizonHGraphEncoderTest, DeltaModeEncodesOnlyChangedLiteralsForSuccessor
          ASSERT_NE(it, expected.end()) << "Unexpected delta node type for prefix: " << node_type;
          EXPECT_TRUE(it->second.contains(node_key)) << "Unexpected delta node key: " << node_key;
       }
+   }
+}
+
+TEST_P(HorizonHGraphEncoderTest, ParentRelationsMatchDagTransitions)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   std::vector< mimir::search::State > successors;
+   for(const auto& action : ctx.actions) {
+      auto [succ_state, _metric] = ctx.repo->get_or_create_successor_state(
+         ctx.root, action, ctx.root_metric
+      );
+      if(succ_state.get_index() != ctx.root.get_index()) {
+         successors.push_back(succ_state);
+      }
+      if(successors.size() >= 2) {
+         break;
+      }
+   }
+   if(successors.empty()) {
+      GTEST_SKIP() << "No successor states found for parent relation test.";
+   }
+
+   TransitionDAG dag(ctx.root);
+   for(const auto& succ_state : successors) {
+      dag.register_transition(ctx.root, succ_state, std::nullopt);
+   }
+
+   HorizonHGraphEncoderEngine::Config config;
+   config.enable_parent_relation = true;
+   config.enable_sibling_relation = false;
+   config.enable_cousin_relation = false;
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   engine.encode(ctx.root, dag, goals, builder);
+
+   const auto index_map = mifrost_test::build_index_map(builder);
+   const auto symbol_it = index_map.find(config.symbol_type_id);
+   ASSERT_NE(symbol_it, index_map.end());
+   const auto& symbol_index = symbol_it->second;
+
+   const auto rel_it = index_map.find(config.parent_relation);
+   ASSERT_NE(rel_it, index_map.end()) << "Missing parent relation node type";
+
+   const auto edges_sym_to_rel0 = mifrost_test::edge_pairs_for(
+      builder, config.symbol_type_id + "|0|" + config.parent_relation
+   );
+   const auto edges_sym_to_rel1 = mifrost_test::edge_pairs_for(
+      builder, config.symbol_type_id + "|1|" + config.parent_relation
+   );
+   const auto edges_rel_to_sym0 = mifrost_test::edge_pairs_for(
+      builder, config.parent_relation + "|0|" + config.symbol_type_id
+   );
+   const auto edges_rel_to_sym1 = mifrost_test::edge_pairs_for(
+      builder, config.parent_relation + "|1|" + config.symbol_type_id
+   );
+
+   auto has_pair = [](const mifrost_test::EdgePairs& pairs, int64_t a, int64_t b) {
+      for(const auto& entry : pairs) {
+         if(entry.first == a && entry.second == b) {
+            return true;
+         }
+      }
+      return false;
+   };
+
+   for(const auto& pair : dag.transitions()) {
+      const int parent_idx = pair.first;
+      const int child_idx = pair.second;
+      const std::string rel_key = fmt::format(
+         "{}({}->{})", config.parent_relation, parent_idx, child_idx
+      );
+      const auto rel_node_it = rel_it->second.find(rel_key);
+      ASSERT_NE(rel_node_it, rel_it->second.end()) << "Missing parent relation node: " << rel_key;
+
+      const auto parent_symbol = config.target_symbol_prefix + std::to_string(parent_idx);
+      const auto child_symbol = config.target_symbol_prefix + std::to_string(child_idx);
+      const auto parent_it = symbol_index.find(parent_symbol);
+      const auto child_it = symbol_index.find(child_symbol);
+      ASSERT_NE(parent_it, symbol_index.end()) << "Missing parent target symbol: " << parent_symbol;
+      ASSERT_NE(child_it, symbol_index.end()) << "Missing child target symbol: " << child_symbol;
+
+      const int64_t rel_idx = rel_node_it->second;
+      const int64_t parent_node = parent_it->second;
+      const int64_t child_node = child_it->second;
+
+      EXPECT_TRUE(has_pair(edges_sym_to_rel0, parent_node, rel_idx));
+      EXPECT_TRUE(has_pair(edges_rel_to_sym0, rel_idx, parent_node));
+      EXPECT_TRUE(has_pair(edges_sym_to_rel1, child_node, rel_idx));
+      EXPECT_TRUE(has_pair(edges_rel_to_sym1, rel_idx, child_node));
+   }
+}
+
+TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDagStructure)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto search_ctx = mimir::search::SearchContextImpl::create(ctx.problem);
+   auto repo = search_ctx->get_state_repository();
+   auto applicable_actions = search_ctx->get_applicable_action_generator();
+   auto [root_state, root_metric] = repo->get_or_create_initial_state();
+
+   constexpr int kMaxDepth = 5;
+   struct QueueEntry {
+      mimir::search::State state;
+      mimir::ContinuousCost metric;
+   };
+
+   TransitionDAG dag(root_state);
+   std::unordered_map< int, int > depths;
+   std::unordered_map< int, mimir::ContinuousCost > metrics;
+   std::vector< QueueEntry > queue;
+   queue.push_back({root_state, root_metric});
+   depths.emplace(root_state.get_index(), 0);
+   metrics.emplace(root_state.get_index(), root_metric);
+
+   for(size_t qi = 0; qi < queue.size(); ++qi) {
+      const auto entry = queue[qi];
+      const int depth = depths.at(entry.state.get_index());
+      if(depth >= kMaxDepth) {
+         continue;
+      }
+      for(const auto& action :
+          applicable_actions->create_applicable_action_generator(entry.state)) {
+         auto [succ_state, succ_metric] = repo->get_or_create_successor_state(
+            entry.state, action, entry.metric
+         );
+         if(succ_state.get_index() == entry.state.get_index()) {
+            continue;
+         }
+         const int succ_idx = succ_state.get_index();
+         if(dag.contains(succ_state)) {
+            continue;
+         }
+         dag.register_transition(entry.state, succ_state, std::nullopt);
+         depths.emplace(succ_idx, depth + 1);
+         metrics.emplace(succ_idx, succ_metric);
+         queue.push_back({succ_state, succ_metric});
+      }
+   }
+
+   if(dag.transitions().size() < 2) {
+      GTEST_SKIP() << "Not enough transitions to form sibling/cousin relations.";
+   }
+
+   HorizonHGraphEncoderEngine::Config config;
+   config.enable_parent_relation = false;
+   config.enable_sibling_relation = true;
+   config.enable_cousin_relation = true;
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   engine.encode(root_state, dag, goals, builder);
+
+   const auto index_map = mifrost_test::build_index_map(builder);
+   const auto symbol_it = index_map.find(config.symbol_type_id);
+   ASSERT_NE(symbol_it, index_map.end());
+   const auto& symbol_index = symbol_it->second;
+
+   auto has_pair = [](const mifrost_test::EdgePairs& pairs, int64_t a, int64_t b) {
+      for(const auto& entry : pairs) {
+         if(entry.first == a && entry.second == b) {
+            return true;
+         }
+      }
+      return false;
+   };
+
+   auto assert_relation = [&](const std::string& relation, int a, int b) {
+      const auto rel_it = index_map.find(relation);
+      ASSERT_NE(rel_it, index_map.end()) << "Missing relation type: " << relation;
+
+      const std::string rel_key = fmt::format("{}({}->{})", relation, a, b);
+      const auto rel_node_it = rel_it->second.find(rel_key);
+      ASSERT_NE(rel_node_it, rel_it->second.end()) << "Missing relation node: " << rel_key;
+
+      const auto a_symbol = config.target_symbol_prefix + std::to_string(a);
+      const auto b_symbol = config.target_symbol_prefix + std::to_string(b);
+      const auto a_it = symbol_index.find(a_symbol);
+      const auto b_it = symbol_index.find(b_symbol);
+      ASSERT_NE(a_it, symbol_index.end()) << "Missing target symbol: " << a_symbol;
+      ASSERT_NE(b_it, symbol_index.end()) << "Missing target symbol: " << b_symbol;
+
+      const int64_t rel_idx = rel_node_it->second;
+      const int64_t a_idx = a_it->second;
+      const int64_t b_idx = b_it->second;
+
+      const auto edges_sym_to_rel0 = mifrost_test::edge_pairs_for(
+         builder, config.symbol_type_id + "|0|" + relation
+      );
+      const auto edges_sym_to_rel1 = mifrost_test::edge_pairs_for(
+         builder, config.symbol_type_id + "|1|" + relation
+      );
+      const auto edges_rel_to_sym0 = mifrost_test::edge_pairs_for(
+         builder, relation + "|0|" + config.symbol_type_id
+      );
+      const auto edges_rel_to_sym1 = mifrost_test::edge_pairs_for(
+         builder, relation + "|1|" + config.symbol_type_id
+      );
+
+      EXPECT_TRUE(has_pair(edges_sym_to_rel0, a_idx, rel_idx));
+      EXPECT_TRUE(has_pair(edges_rel_to_sym0, rel_idx, a_idx));
+      EXPECT_TRUE(has_pair(edges_sym_to_rel1, b_idx, rel_idx));
+      EXPECT_TRUE(has_pair(edges_rel_to_sym1, rel_idx, b_idx));
+   };
+
+   std::unordered_map< int, std::vector< int > > parent_to_children;
+   for(const auto& pair : dag.transitions()) {
+      parent_to_children[pair.first].push_back(pair.second);
+   }
+   for(auto& [_, children] : parent_to_children) {
+      std::sort(children.begin(), children.end());
+      children.erase(std::unique(children.begin(), children.end()), children.end());
+   }
+
+   std::set< std::pair< int, int > > sibling_pairs;
+   for(const auto& [_, children] : parent_to_children) {
+      for(size_t i = 0; i + 1 < children.size(); ++i) {
+         for(size_t j = i + 1; j < children.size(); ++j) {
+            const int a = std::min(children[i], children[j]);
+            const int b = std::max(children[i], children[j]);
+            sibling_pairs.insert({a, b});
+         }
+      }
+   }
+
+   std::set< std::pair< int, int > > cousin_pairs;
+   for(const auto& [g, parents] : parent_to_children) {
+      if(parents.size() < 2) {
+         continue;
+      }
+      for(size_t i = 0; i + 1 < parents.size(); ++i) {
+         for(size_t j = i + 1; j < parents.size(); ++j) {
+            const int pu = parents[i];
+            const int pv = parents[j];
+            const auto cu_it = parent_to_children.find(pu);
+            const auto cv_it = parent_to_children.find(pv);
+            if(cu_it == parent_to_children.end() || cv_it == parent_to_children.end()) {
+               continue;
+            }
+            const auto& cu = cu_it->second;
+            const auto& cv = cv_it->second;
+            for(int u : cu) {
+               for(int v : cv) {
+                  if(u == v) {
+                     continue;
+                  }
+                  const int a = std::min(u, v);
+                  const int b = std::max(u, v);
+                  if(sibling_pairs.contains({a, b})) {
+                     continue;
+                  }
+                  cousin_pairs.insert({a, b});
+               }
+            }
+         }
+      }
+   }
+
+   if(sibling_pairs.empty() && cousin_pairs.empty()) {
+      GTEST_SKIP() << "No sibling or cousin pairs found in depth-5 DAG.";
+   }
+
+   for(const auto& [a, b] : sibling_pairs) {
+      assert_relation(config.sibling_relation, a, b);
+      assert_relation(config.sibling_relation, b, a);
+   }
+
+   for(const auto& [a, b] : cousin_pairs) {
+      assert_relation(config.cousin_relation, a, b);
+      assert_relation(config.cousin_relation, b, a);
    }
 }
 

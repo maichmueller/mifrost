@@ -9,7 +9,11 @@ from typing import Dict, Iterable, List, NamedTuple, Sequence
 import networkx as nx
 import pymimir
 import torch
-from matplotlib.patches import Patch
+
+try:
+    from matplotlib.patches import Patch
+except ModuleNotFoundError:  # pragma: no cover - optional plotting dependency
+    Patch = None
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import NodeType
 
@@ -803,8 +807,10 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
                     val = data[ntype][k]
                     if torch.is_tensor(val):
                         node_attrs[k] = val[i].item()
-                    else:
+                    elif isinstance(val, (list, tuple)):
                         node_attrs[k] = val[i]
+                    else:
+                        continue
 
                 # Special handling for AtomStatus in ILG
                 if ntype != self.symbol_type_id and ntype != self.action_type_id:

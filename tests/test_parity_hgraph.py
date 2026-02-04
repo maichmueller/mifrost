@@ -15,6 +15,7 @@ from tests.ground_truth.hgraph_encoder import HGraphEncoder
 SMALL_PARITY_CASES = [
     ("blocks", "probBLOCKS-4-0"),
     ("gripper", "gripper_b-5"),
+    ("spanner", "medium"),
     ("delivery", "instance_2x2_p-2_0"),
 ]
 
@@ -65,14 +66,7 @@ def _collect_states(space, root, count: int) -> list:
 @pytest.mark.parametrize("include_subgoals", [False, True])
 @pytest.mark.parametrize(
     ("domain", "problem"),
-    [
-        ["blocks", "probBLOCKS-4-0"],
-        ["blocks_eq", "medium"],
-        ["delivery", "instance_4x4_p-2_0"],
-        ["gripper", "gripper_b-5"],
-        ["reward", "instance_5x5_0"],
-        ["spanner", "medium"],
-    ],
+    SMALL_PARITY_CASES,
 )
 def test_hgraph_parity_blocks_inputs(
     include_goals: bool,

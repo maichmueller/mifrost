@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Collection, Iterable, Mapping, Sequence
 
+import numpy as np
 import torch
 from torch_geometric.data import HeteroData
 
@@ -222,12 +223,8 @@ class ILGEncoder(EncoderBase[HeteroData]):
         if self.add_nullary_predicates and self.nullary_object_name not in symbol_names:
             symbol_names.append(self.nullary_object_name)
 
-        builder.add_node_features(
-            self.symbol_type_id,
-            "x",
-            [0.0] * (len(symbol_names) * 2),
-            2,
-        )
+        symbol_x = np.zeros((len(symbol_names), 2), dtype=np.float32)
+        builder.add_node_features(self.symbol_type_id, "x", symbol_x)
         builder.set_node_names(self.symbol_type_id, symbol_names)
         builder.set_object_names(symbol_names)
 
@@ -239,26 +236,23 @@ class ILGEncoder(EncoderBase[HeteroData]):
         for pred_name, atoms in pred_atoms.items():
             arity = self._relation_arity.get(pred_name, 0)
             feature_dim = arity + 1
-            data: list[float] = []
+            rows: list[list[float]] = []
             names: list[str] = []
             for atom in atoms:
                 status = statuses.get(atom, AtomStatus())
                 value = float(status.encode())
-                data.extend([value] * feature_dim)
+                rows.append([value] * feature_dim)
                 names.append(str(atom))
-            builder.add_node_features(pred_name, "x", data, feature_dim)
+            pred_x = np.asarray(rows, dtype=np.float32)
+            builder.add_node_features(pred_name, "x", pred_x)
             builder.set_node_names(pred_name, names)
 
         if actions_list:
             max_action_arity = max(action_arity(action) for action in actions_list)
             action_dim = max_action_arity + 1
             action_names = [str(action) for action in actions_list]
-            builder.add_node_features(
-                self.action_type_id,
-                "x",
-                [0.0] * (len(action_names) * action_dim),
-                action_dim,
-            )
+            action_x = np.zeros((len(action_names), action_dim), dtype=np.float32)
+            builder.add_node_features(self.action_type_id, "x", action_x)
             builder.set_node_names(self.action_type_id, action_names)
 
         object_index = {name: idx for idx, name in enumerate(symbol_names)}
@@ -360,7 +354,9 @@ class ILGEncoder(EncoderBase[HeteroData]):
         for (src_type, rel, dst_type), (src_list, dst_list) in edge_map.items():
             if not src_list:
                 continue
-            builder.add_edges(src_type, rel, dst_type, src_list, dst_list)
+            src_arr = np.asarray(src_list, dtype=np.int64)
+            dst_arr = np.asarray(dst_list, dtype=np.int64)
+            builder.add_edges(src_type, rel, dst_type, src_arr, dst_arr)
 
     def encode_parts(
         self,

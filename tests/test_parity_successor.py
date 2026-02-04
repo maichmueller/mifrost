@@ -16,6 +16,7 @@ from tests.parity_utils import canonical_graph
 SMALL_CASES = [
     ("blocks", "probBLOCKS-4-0"),
     ("gripper", "gripper_b-5"),
+    ("spanner", "medium"),
     ("delivery", "instance_2x2_p-2_0"),
 ]
 

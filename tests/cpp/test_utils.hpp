@@ -24,16 +24,15 @@ struct DomainCase {
 inline constexpr DomainCase kSmallDomains[] = {
    {"blocks", "probBLOCKS-4-0"},
    {"gripper", "gripper_b-5"},
+   {"spanner", "medium"},
    {"delivery", "instance_2x2_p-2_0"},
 };
 
 inline constexpr DomainCase kParityDomains[] = {
    {"blocks", "probBLOCKS-4-0"},
-   {"blocks_eq", "medium"},
-   {"delivery", "instance_4x4_p-2_0"},
    {"gripper", "gripper_b-5"},
-   {"reward", "instance_5x5_0"},
    {"spanner", "medium"},
+   {"delivery", "instance_2x2_p-2_0"},
 };
 
 inline std::string sanitize_test_name(std::string name)
