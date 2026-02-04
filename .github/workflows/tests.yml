@@ -1,0 +1,49 @@
+name: Tests (disabled)
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    name: pytest + C++ (macOS)
+    if: ${{ false }} # disabled until pymimir ABI/wheel compatibility is resolved
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install build/test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install conan pytest pymimir
+
+      - name: Build and install
+        env:
+          CONAN_COMMAND: conan
+        run: |
+          export MIFROST_MIMIR_CMAKE_DIR="$(python -c "import pymimir; print(pymimir.get_cmake_dir())")"
+          python -m pip install --no-build-isolation --verbose .
+
+      - name: Run Python tests
+        run: python -m pytest -q
+
+      - name: Build C++ tests
+        run: |
+          python configure.py --build_dir build_ci --config Release
+          cmake --build build_ci --target mifrost_tests
+
+      - name: Run C++ tests
+        run: ctest --test-dir build_ci -R mifrost_tests --output-on-failure
