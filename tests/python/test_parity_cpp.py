@@ -1,34 +1,71 @@
-import pytest
 import torch
 import mifrost
-from tests.ground_truth.pyencoding_ref.pyg_batch_builder import (
-    HGraphBatchBuilder,
-    PygBuilder,
-)
+from tests.ground_truth.pyencoding_ref.pyg_batch_builder import HGraphBatchBuilder
+from tests.ground_truth.pyencoding_ref.pyg_builder import PygHeteroBuilder
+
+
+def _compare_batches(py_batch, cpp_batch) -> None:
+    assert set(py_batch.node_types) == set(cpp_batch.node_types)
+    for node_type in py_batch.node_types:
+        assert torch.equal(py_batch[node_type].x, cpp_batch[node_type].x)
+        if hasattr(py_batch[node_type], "node_names"):
+            assert list(py_batch[node_type].node_names) == list(
+                cpp_batch[node_type].node_names
+            )
+
+    assert list(py_batch.object_names) == list(cpp_batch.object_names)
+
+    assert set(py_batch.edge_types) == set(cpp_batch.edge_types)
+    for edge_type in py_batch.edge_types:
+        assert torch.equal(
+            py_batch[edge_type].edge_index, cpp_batch[edge_type].edge_index
+        )
 
 
 def test_batch_builder_parity():
-    # Python Builder
-    py_builder = HGraphBatchBuilder(
-        relation_dict={"atom": 1},
-        symbol_type_id="_symbol_",
-        edge_types=[("atom", "rel", "atom")],
+    relation_dict = {"atom": 2}
+    symbol_type_id = "_symbol_"
+    edge_types = [
+        (symbol_type_id, "0", "atom"),
+    ]
+
+    # Python builder + batch builder
+    py_builder = PygHeteroBuilder()
+    py_builder.add_node("o0", symbol_type_id, name="o0")
+    py_builder.add_node("o1", symbol_type_id, name="o1")
+    py_builder.add_node("a0", "atom")
+    py_builder.add_node("a1", "atom")
+    py_builder.add_edge("o0", "a0", symbol_type_id, "atom", "0")
+    py_builder.add_edge("o1", "a1", symbol_type_id, "atom", "0")
+
+    py_batch_builder = HGraphBatchBuilder(
+        relation_dict=relation_dict,
+        symbol_type_id=symbol_type_id,
+        edge_types=edge_types,
     )
+    py_batch_builder.append(py_builder)
+    py_batch = py_batch_builder.build()
 
-    # C++ Builder
+    # C++ builder
     cpp_builder = mifrost.BatchBuilder()
+    cpp_builder.set_graph_kind("hetero")
+    cpp_builder.add_node_features(
+        symbol_type_id, "x", torch.zeros(2, 1, dtype=torch.float32)
+    )
+    cpp_builder.add_node_features("atom", "x", torch.zeros(2, 2, dtype=torch.float32))
+    cpp_builder.set_node_names(symbol_type_id, ["o0", "o1"])
+    cpp_builder.set_node_names("atom", ["a0", "a1"])
+    cpp_builder.set_object_names(["o0", "o1"])
+    cpp_builder.add_edges(
+        symbol_type_id,
+        "0",
+        "atom",
+        torch.tensor([0, 1], dtype=torch.int64),
+        torch.tensor([0, 1], dtype=torch.int64),
+    )
+    cpp_batch = cpp_builder.build()
 
-    # --- Step 1 ---
-    x = torch.randn(10, 1)
-
-    # Python: intermediate PygBuilder
-    pb = PygBuilder()
-    pb.node_keys["atom"] = [f"a{i}" for i in range(10)]
-    pb.node_attrs["atom"]["type"] = x.tolist()  # Mock attribute logic
-
-    # ... (This test requires deeper setup of the Python side infrastructure to be meaningful)
-    # Skipping deep parity logic for this skeleton phase.
-    pass
+    _compare_batches(py_batch, cpp_batch)
 
 
 def test_offset_logic_explicit():

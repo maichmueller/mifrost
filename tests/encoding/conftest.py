@@ -1,6 +1,7 @@
 import pytest
 from tests.conftest import problem_setup
 from mifrost.encoders import HGraphEncoder
+from mifrost.color_encoder import ColorEncoder
 
 
 SMALL_DOMAIN_CASES = [
@@ -65,7 +66,12 @@ def encoded_state(
     if which_state == "initial":
         state = problem.get_initial_state()
     elif which_state == "goal":
-        state = next(iter(space.goal_states_iter()))
+        if hasattr(space, "goal_states_iter"):
+            state = next(iter(space.goal_states_iter()))
+        elif hasattr(space, "sample_state_n_steps_from_goal"):
+            state = space.sample_state_n_steps_from_goal(0)
+        else:
+            raise AttributeError("StateSpaceSampler does not expose goal state access")
     else:
         raise ValueError(
             "Unknown state wanted. Choose 'initial' or 'goal' state. Given: "
@@ -92,3 +98,31 @@ def hetero_encoded_state(request):
         HGraphEncoder,
         **kwargs,
     )
+
+
+@pytest.fixture
+def color_encoded_state(request):
+    if len(request.param) == 4:
+        domain_param, prob_param, which_state_param, kwargs = request.param
+    else:
+        domain_param, prob_param, which_state_param = request.param
+        kwargs = {}
+    space, domain, problem = problem_setup(domain_param, prob_param)
+
+    if which_state_param == "initial":
+        state = problem.get_initial_state()
+    elif which_state_param == "goal":
+        if hasattr(space, "goal_states_iter"):
+            state = next(iter(space.goal_states_iter()))
+        elif hasattr(space, "sample_state_n_steps_from_goal"):
+            state = space.sample_state_n_steps_from_goal(0)
+        else:
+            raise AttributeError("StateSpaceSampler does not expose goal state access")
+    else:
+        raise ValueError(
+            "Unknown state wanted. Choose 'initial' or 'goal' state. Given: "
+            + which_state_param
+        )
+
+    encoder = ColorEncoder(domain, **kwargs)
+    return encoder.encode(state), encoder, state

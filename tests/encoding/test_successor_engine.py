@@ -8,11 +8,12 @@ import mifrost
 from mifrost.encoders import HGraphEncoder
 
 from .test_utils import (
+    format_atom_with_suffix,
     goal_inputs_from_problem,
+    object_names,
     parts_to_pyg,
     state_atoms,
     to_named_networkx,
-    object_names,
 )
 
 
@@ -25,12 +26,12 @@ def _adv_domain(obj):
 
 
 def _predicate(atom):
-    return atom.get_predicate() if hasattr(atom, "get_predicate") else atom.predicate
-
-
-def _predicate_name(atom) -> str:
-    pred = _predicate(atom)
-    return pred.get_name() if hasattr(pred, "get_name") else pred.name
+    if hasattr(atom, "get_predicate"):
+        pred = atom.get_predicate()
+        return getattr(pred, "_advanced_predicate", pred)
+    adv = getattr(atom, "_advanced_ground_atom", atom)
+    pred = adv.get_predicate()
+    return getattr(pred, "_advanced_predicate", pred)
 
 
 def _arity(atom) -> int:
@@ -124,9 +125,9 @@ def test_successor_delta_marks_added_and_removed_atoms(small_blocks):
     for atom in added:
         if _arity(atom) == 0:
             continue
-        node_name = f"{atom}{successor_suffix}"
+        node_name = format_atom_with_suffix(atom, successor_suffix)
         node_type = formatter.format_predicate(
-            _predicate_name(atom), polarity=True, suffix=successor_suffix
+            _predicate(atom), polarity=True, suffix=successor_suffix
         )
         assert node_name in graph.nodes
         assert graph.nodes[node_name]["type"] == node_type
@@ -181,7 +182,7 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
         )
         level = goal_levels.get(goal, 0)
         node_type = formatter.format_predicate(
-            pred.get_name(),
+            pred,
             goal_level=level,
             satisfaction=sat_enum,
             polarity=goal.get_polarity(),

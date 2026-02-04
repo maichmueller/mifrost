@@ -3,43 +3,51 @@ from __future__ import annotations
 import itertools
 from collections import defaultdict, deque
 from itertools import chain
-from typing import Dict, Iterable, Iterator, List, Literal, Sequence
+from typing import (
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Literal,
+    Protocol,
+    Sequence,
+    runtime_checkable,
+)
 
 import networkx as nx
+import pymimir
 import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import NodeType
 
 from mifrost.utils.misc import forward_kwargs, tolist
-from xmimir import (
-    XAction,
-    XAtom,
-    XDomain,
-    XLiteral,
-    XObject,
-    XProblem,
-    XState,
-    XSuccessorGenerator,
-    XTransition,
-)
 
 from .base_encoder import check_encoded_by_this
 from .hetero_encoder import AdHocRelation, HGraphEncoder, PredicateEdgeType
 from .pyg_batch_builder import HorizonBatchBuilder
 from .pyg_builder import PygBuilderBase
 from .relation_dict import RelationDict
+from .accessors import action_arity, action_name, predicate_arity, predicate_name
 from .transition_hetero_encoder import (
     _compute_change_literals,
     _compute_change_satisfaction,
 )
 
-TargetT = XState | str
+
+@runtime_checkable
+class TransitionLike(Protocol):
+    source: pymimir.State
+    target: pymimir.State
+    action: object
+
+
+TargetT = pymimir.State | str
 
 
 class TransitionDAG:
     """
     Thin DAG wrapper around a networkx.DiGraph.
-    Nodes are targets (XState or synthetic labels in actions-only mode) with attrs:
+    Nodes are targets (pymimir.State or synthetic labels in actions-only mode) with attrs:
       - dag_index: insertion order index (stable iteration)
       - depth: shortest path length from root (computed)
       - action: final action leading to this target (or None if not provided)
@@ -48,10 +56,10 @@ class TransitionDAG:
 
     def __init__(
         self,
-        root: XState,
-        transitions: Sequence[Sequence[XState]]
-        | Sequence[XTransition | Sequence[XTransition]]
-        | Sequence[XAction | Sequence[XAction]]
+        root: pymimir.State,
+        transitions: Sequence[Sequence[pymimir.State]]
+        | Sequence[TransitionLike | Sequence[TransitionLike]]
+        | Sequence[pymimir.GroundAction | Sequence[pymimir.GroundAction]]
         | nx.DiGraph
         | nx.MultiDiGraph
         | None,
@@ -81,7 +89,9 @@ class TransitionDAG:
         self._process_transitions(transitions)
         self._finalize_depths()
 
-    def _add_node(self, target: TargetT, action: XAction | None = None) -> None:
+    def _add_node(
+        self, target: TargetT, action: pymimir.GroundAction | None = None
+    ) -> None:
         if target in self.G:
             # set action only once if not set
             if action is not None and self.G.nodes[target].get("action") is None:
@@ -97,7 +107,9 @@ class TransitionDAG:
     def __iter__(self) -> Iterator[tuple[TargetT, int]]:
         return iter(sorted(self.G.nodes(data="dag_index"), key=lambda pair: pair[1]))
 
-    def successor_iter(self) -> Iterator[tuple[TargetT, XAction | None, int]]:
+    def successor_iter(
+        self,
+    ) -> Iterator[tuple[TargetT, pymimir.GroundAction | None, int]]:
         for target, idx in sorted(self.G.nodes(data="dag_index"), key=lambda p: p[1]):
             if target == self.root:
                 continue
@@ -111,11 +123,11 @@ class TransitionDAG:
         self,
         parent: TargetT,
         child: TargetT,
-        action: XAction | Sequence[XAction] | None = None,
+        action: pymimir.GroundAction | Sequence[pymimir.GroundAction] | None = None,
     ) -> tuple[int, int]:
         # ensure nodes exist
         self._add_node(parent)
-        # final action (store only XAction)
+        # final action (store only GroundAction)
         act = None
         if not self.ignore_actions and action is not None:
             act = (
@@ -123,7 +135,7 @@ class TransitionDAG:
                 if isinstance(action, Sequence) and not isinstance(action, (str, bytes))
                 else action
             )
-            if not isinstance(act, XAction):
+            if not isinstance(act, pymimir.GroundAction):
                 act = None
         self._add_node(child, action=act)
         self.G.add_edge(parent, child)
@@ -136,7 +148,7 @@ class TransitionDAG:
         node = key if not isinstance(key, int) else self._idx_to_target[key]
         return int(self.G.nodes[node]["depth"])
 
-    def action(self, target: TargetT | int) -> XAction | None:
+    def action(self, target: TargetT | int) -> pymimir.GroundAction | None:
         node = target if not isinstance(target, int) else self._idx_to_target[target]
         return self.G.nodes[node].get("action")
 
@@ -147,9 +159,9 @@ class TransitionDAG:
 
     def _process_transitions(
         self,
-        transitions: Sequence[Sequence[XState]]
-        | Sequence[XTransition | Sequence[XTransition]]
-        | Sequence[XAction | Sequence[XAction]]
+        transitions: Sequence[Sequence[pymimir.State]]
+        | Sequence[TransitionLike | Sequence[TransitionLike]]
+        | Sequence[pymimir.GroundAction | Sequence[pymimir.GroundAction]]
         | nx.DiGraph
         | nx.MultiDiGraph
         | None,
@@ -174,7 +186,7 @@ class TransitionDAG:
         for path in transitions:
             if not path:
                 continue
-            if isinstance(path, XTransition):
+            if isinstance(path, TransitionLike):
                 expanded_path = self._expand_transition(path)
             else:
                 assert isinstance(path, Sequence)
@@ -187,11 +199,11 @@ class TransitionDAG:
     def _process_action_sequences(
         self,
         transitions: Sequence[
-            XAction
-            | XTransition
-            | Sequence[XAction]
-            | Sequence[Sequence[XAction]]
-            | Sequence[XTransition]
+            pymimir.GroundAction
+            | TransitionLike
+            | Sequence[pymimir.GroundAction]
+            | Sequence[Sequence[pymimir.GroundAction]]
+            | Sequence[TransitionLike]
         ],
     ) -> None:
         for path in transitions:
@@ -209,12 +221,15 @@ class TransitionDAG:
 
     def _iter_actions(
         self,
-        candidate: XAction | XTransition | Sequence[XAction] | Sequence,
-    ) -> Iterator[XAction]:
-        if isinstance(candidate, XAction):
+        candidate: pymimir.GroundAction
+        | TransitionLike
+        | Sequence[pymimir.GroundAction]
+        | Sequence,
+    ) -> Iterator[pymimir.GroundAction]:
+        if isinstance(candidate, pymimir.GroundAction):
             yield candidate
             return
-        if isinstance(candidate, XTransition):
+        if isinstance(candidate, TransitionLike):
             action = candidate.action
             if action is None:
                 return
@@ -234,7 +249,7 @@ class TransitionDAG:
         )
 
     def _action_signature(
-        self, action: XAction | Sequence[XAction] | None
+        self, action: pymimir.GroundAction | Sequence[pymimir.GroundAction] | None
     ) -> str | tuple[str, ...] | None:
         if action is None:
             return None
@@ -243,7 +258,7 @@ class TransitionDAG:
                 self._action_signature(act) for act in action if act is not None
             ]
             return tuple(sig for sig in signatures if sig is not None)
-        return getattr(action, "name", str(action))
+        return action_name(action)
 
     def _ensure_action_node(
         self, signature: tuple[str | tuple[str, ...] | None, ...]
@@ -271,7 +286,7 @@ class TransitionDAG:
                 return None
             if "action" in data:
                 return data["action"]
-            if "transition" in data and isinstance(data["transition"], XTransition):
+            if "transition" in data and isinstance(data["transition"], TransitionLike):
                 return data["transition"].action
             if "actions" in data:
                 return data["actions"]
@@ -300,19 +315,19 @@ class TransitionDAG:
 
     def _expand_transition(
         self,
-        transition: XTransition,
-    ) -> list[tuple[XState, XAction | Sequence[XAction] | None]]:
+        transition: TransitionLike,
+    ) -> list[
+        tuple[
+            pymimir.State, pymimir.GroundAction | Sequence[pymimir.GroundAction] | None
+        ]
+    ]:
         action = transition.action
         if isinstance(action, Sequence):
-            successor_gen = XSuccessorGenerator(transition.source.problem)
-            target = transition.source
-            steps: list[tuple[XState, XAction | Sequence[XAction] | None]] = []
-            for act in action:
-                target, _ = successor_gen.successor(target, act)
-                steps.append((target, None if self.ignore_actions else act))
-            return steps
+            raise NotImplementedError(
+                "Action-sequence transitions require explicit intermediate states."
+            )
         target_state = transition.target
-        stored_action: XAction | Sequence[XAction] | None
+        stored_action: pymimir.GroundAction | Sequence[pymimir.GroundAction] | None
         if self.ignore_actions:
             stored_action = None
         else:
@@ -321,11 +336,20 @@ class TransitionDAG:
 
     def _expand_path(
         self,
-        path: Sequence[XState] | Sequence[XTransition],
-    ) -> list[tuple[XState, XAction | Sequence[XAction] | None]]:
-        expanded: list[tuple[XState, XAction | Sequence[XAction] | None]] = []
+        path: Sequence[pymimir.State] | Sequence[TransitionLike],
+    ) -> list[
+        tuple[
+            pymimir.State, pymimir.GroundAction | Sequence[pymimir.GroundAction] | None
+        ]
+    ]:
+        expanded: list[
+            tuple[
+                pymimir.State,
+                pymimir.GroundAction | Sequence[pymimir.GroundAction] | None,
+            ]
+        ] = []
         for item in path:
-            if isinstance(item, XTransition):
+            if isinstance(item, TransitionLike):
                 expanded.extend(self._expand_transition(item))
             else:
                 expanded.append((item, None))
@@ -361,7 +385,7 @@ class HorizonHGraphEncoder(HGraphEncoder):
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         *,
         relation_dict: RelationDict | None = None,
         successor_mode: str
@@ -412,8 +436,14 @@ class HorizonHGraphEncoder(HGraphEncoder):
         self.enable_cousin_relation = enable_cousin_relation
         self.exclude_root_candidate = bool(exclude_root_candidate)
         relation_dict = relation_dict or RelationDict(
-            tuple(AdHocRelation(p.name, p.arity + 1) for p in domain.predicates()),
-            tuple(AdHocRelation(p.name, p.arity + 1) for p in domain.actions)
+            tuple(
+                AdHocRelation(predicate_name(p), predicate_arity(p) + 1)
+                for p in domain.get_predicates()
+            ),
+            tuple(
+                AdHocRelation(action_name(p), action_arity(p) + 1)
+                for p in domain.get_actions()
+            )
             if not ignore_actions
             else (),
             **relation_dict_kwargs,
@@ -459,20 +489,20 @@ class HorizonHGraphEncoder(HGraphEncoder):
 
     def encode(
         self,
-        state: XState | Iterable[XAtom],
-        goals: Iterable[XLiteral] | None = None,
-        actions: Iterable[XAction] | None = None,
+        state: pymimir.State | Iterable[pymimir.GroundAtom],
+        goals: Iterable[pymimir.GroundLiteral] | None = None,
+        actions: Iterable[pymimir.GroundAction] | None = None,
         *,
-        transitions: Sequence[XTransition]
-        | Sequence[Sequence[XState]]
+        transitions: Sequence[TransitionLike]
+        | Sequence[Sequence[pymimir.State]]
         | nx.Graph
         | None = None,
-        problem: XProblem | None = None,
+        problem: pymimir.Problem | None = None,
         **kwargs,
     ) -> HeteroData:
-        if not isinstance(state, XState):
+        if not isinstance(state, pymimir.State):
             raise TypeError(
-                f"{self.__class__.__name__} expects the current state to be an XState."
+                f"{self.__class__.__name__} expects the current state to be a pymimir.State."
             )
         assert transitions is not None, "Transitions are required."
         dag = TransitionDAG(
@@ -486,10 +516,10 @@ class HorizonHGraphEncoder(HGraphEncoder):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
-        objects: Sequence[XObject] | None = None,
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
+        objects: Sequence[pymimir.Object] | None = None,
         dag: TransitionDAG | None = None,
         **kwargs,
     ) -> None:
@@ -570,7 +600,7 @@ class HorizonHGraphEncoder(HGraphEncoder):
                             extra_objects=[successor_node],
                         )
             case "delta":
-                problem = dag.root.problem
+                problem = dag.root.get_problem()
                 assert problem is not None, (
                     f"{problem!r} cannot be `None` in `delta` mode."
                 )
@@ -991,8 +1021,8 @@ class HorizonHGraphEncoder(HGraphEncoder):
         return graph
 
     @staticmethod
-    def _collect_target_atoms(state: XState) -> set[XAtom]:
-        return set(state.atoms(with_statics=False))
+    def _collect_target_atoms(state: pymimir.State) -> set[pymimir.GroundAtom]:
+        return set(state.get_atoms(ignore_static=True))
 
     def _target_node_label(self, idx: int) -> str:
         return f"{self.target_symbol_node_prefix}{idx}"

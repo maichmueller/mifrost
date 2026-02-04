@@ -23,13 +23,28 @@ import networkx as nx
 import torch_geometric as pyg
 from torch_geometric.data import Batch
 
-from xmimir import XAction, XAtom, XDomain, XLiteral, XObject, XState, gather_objects
+import pymimir
 
 from .pyg_batch_builder import BatchBuilderBase
 from .pyg_builder import PygBuilderBase
+from .accessors import action_objects, atom_objects, literal_atom, object_name
 
 PygDataT = TypeVar("PygDataT", pyg.data.Data, pyg.data.HeteroData)
 PygData = Union[pyg.data.Data, pyg.data.HeteroData]
+
+
+def _gather_objects(
+    items: Iterable[pymimir.GroundAtom | pymimir.GroundLiteral | pymimir.GroundAction],
+) -> set[pymimir.Object]:
+    objs: set[pymimir.Object] = set()
+    for item in items:
+        if isinstance(item, pymimir.GroundLiteral):
+            objs.update(atom_objects(literal_atom(item)))
+        elif isinstance(item, pymimir.GroundAction):
+            objs.update(action_objects(item))
+        else:
+            objs.update(atom_objects(item))
+    return objs
 
 
 class GraphEncoderBase(Generic[PygDataT], ABC):
@@ -53,13 +68,13 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
             ) from e
 
     @property
-    def domain(self) -> XDomain:
+    def domain(self) -> pymimir.Domain:
         """Return the domain associated with this encoder."""
         return self._domain
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         builder: PygBuilderBase,
         graph_t: Type[nx.Graph] = nx.MultiGraph,
         *args,
@@ -72,11 +87,11 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
 
     def encode(
         self,
-        state: XState | Iterable[XAtom],
-        goals: Iterable[XLiteral] | None = None,
-        actions: Iterable[XAction] | None = None,
+        state: pymimir.State | Iterable[pymimir.GroundAtom],
+        goals: Iterable[pymimir.GroundLiteral] | None = None,
+        actions: Iterable[pymimir.GroundAction] | None = None,
         *,
-        subgoal_layers: Sequence[Iterable[XLiteral]] | None = None,
+        subgoal_layers: Sequence[Iterable[pymimir.GroundLiteral]] | None = None,
         **kwargs,
     ) -> PygDataT:
         """
@@ -84,14 +99,14 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
 
         Parameters
         ----------
-        state : XState | Iterable[XAtom]
-            Either an `XState` or an iterable of atoms.
-        goals : Iterable[XLiteral] | None, optional
+        state : pymimir.State | Iterable[pymimir.GroundAtom]
+            Either a `pymimir.State` or an iterable of atoms.
+        goals : Iterable[pymimir.GroundLiteral] | None, optional
             If provided, these goal literals will be used as the goal to encode for a given complete state, defaulting
             to the problem-defined goal, otherwise.
-        actions : Iterable[XAction] | None, optional
+        actions : Iterable[pymimir.GroundAction] | None, optional
             Grounded actions to consider for the encoding. If None, no actions will be encoded.
-        subgoal_layers : Sequence[Iterable[XLiteral]] | None, optional
+        subgoal_layers : Sequence[Iterable[pymimir.GroundLiteral]] | None, optional
             Hierarchical subgoals as a sequence of layers [depth1, depth2, ...].
             Each inner iterable is a set of literals for that depth. These are **always added**
             on top of the main goals, regardless of `goal_mode`.
@@ -122,11 +137,11 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
     def _encode_to_builder(
         self,
         builder: PygBuilderBase,
-        state: XState | Iterable[XAtom],
-        goals: Iterable[XLiteral] | None = None,
-        actions: Iterable[XAction] | None = None,
+        state: pymimir.State | Iterable[pymimir.GroundAtom],
+        goals: Iterable[pymimir.GroundLiteral] | None = None,
+        actions: Iterable[pymimir.GroundAction] | None = None,
         *,
-        subgoal_layers: Sequence[Iterable[XLiteral]] | None = None,
+        subgoal_layers: Sequence[Iterable[pymimir.GroundLiteral]] | None = None,
         **kwargs,
     ) -> None:
         self._ensure_config_hash()
@@ -134,18 +149,23 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
         builder.encoder_hash = self._watermark
 
         objects = None
-        if isinstance(state, XState):
-            facts = list(state.atoms(with_statics=True))
-            objects = state.problem.objects + state.problem.domain.constants
+        if isinstance(state, pymimir.State):
+            problem = state.get_problem()
+            facts = list(state.get_atoms())
+            objects = list(problem.get_objects()) + list(
+                problem.get_domain().get_constants()
+            )
             if goals is None:
-                top_goals = state.problem.goal()
+                top_goals = list(problem.get_goal_condition().get_literals())
             else:
                 top_goals = list(goals)
         else:
             facts = list(state)
             top_goals = list(goals) if goals is not None else []
 
-        subgoal_layers_dict: dict[XLiteral, int] = {}  # maps literal -> depth
+        subgoal_layers_dict: dict[
+            pymimir.GroundLiteral, int
+        ] = {}  # maps literal -> depth
         goals_list = []
         for depth, subgoals in enumerate(chain([top_goals], subgoal_layers or ())):
             goals_list.extend(subgoals)
@@ -174,9 +194,9 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
         **kwargs,
     ): ...
 
@@ -270,16 +290,16 @@ class GraphEncoderBase(Generic[PygDataT], ABC):
 
     @staticmethod
     def _contained_objects(
-        items: Iterable[XAtom | XLiteral | XAction],
-    ) -> list[XObject]:
+        items: Iterable[
+            pymimir.GroundAtom | pymimir.GroundLiteral | pymimir.GroundAction
+        ],
+    ) -> list[pymimir.Object]:
         """
         Collect and lexicographically sort all objects appearing in the given atoms/literals.
         """
         objs = sorted(
-            gather_objects(
-                [item.atom if isinstance(item, XLiteral) else item for item in items]
-            ),
-            key=lambda obj: obj.name,
+            _gather_objects(items),
+            key=object_name,
         )
         if len(objs) == 0:
             warnings.warn(
@@ -370,7 +390,7 @@ class EncoderFactory:
             return NotImplemented
         return self.encoder_class == other.encoder_class and self.kwargs == other.kwargs
 
-    def __call__(self, domain: XDomain) -> GraphEncoderBase:
+    def __call__(self, domain: pymimir.Domain) -> GraphEncoderBase:
         return self.encoder_class(domain, **self.kwargs)
 
     def __str__(self):

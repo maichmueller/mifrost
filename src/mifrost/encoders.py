@@ -116,6 +116,7 @@ def _parts_to_pyg(
         if isinstance(object_names_raw, list)
         else list(object_names_raw)
     )
+    graph_attrs = parts.get("graph_attrs", {})
     num_graphs = int(parts.get("num_graphs", 0))
 
     if as_batch is None:
@@ -234,6 +235,10 @@ def _parts_to_pyg(
                 data.object_names = object_names
     if as_batch and num_graphs > 0:
         data._num_graphs = num_graphs
+
+    if graph_attrs:
+        for key, value in graph_attrs.items():
+            setattr(data, str(key), value)
 
     for node_type, dim in node_feature_dims.items():
         store = data[node_type]

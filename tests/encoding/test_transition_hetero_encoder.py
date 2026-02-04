@@ -12,11 +12,12 @@ from mifrost.encoders import HGraphEncoder
 from .test_utils import (
     adv_domain,
     adv_state,
+    format_atom_with_suffix,
     goal_inputs_from_problem,
     object_names,
     parts_to_pyg,
+    predicate,
     predicate_arity,
-    predicate_name,
     state_atoms,
     to_named_networkx,
 )
@@ -111,10 +112,8 @@ def test_transition_encoder_successor_predicates_single_successor(small_blocks):
     for atom in state_atoms(successor_state, with_statics=False):
         if predicate_arity(atom) == 0:
             continue
-        node_name = f"{atom}{successor_suffix}"
-        node_type = formatter.format_predicate(
-            predicate_name(atom), polarity=True, suffix=successor_suffix
-        )
+        node_name = format_atom_with_suffix(atom, successor_suffix)
+        node_type = formatter.format_predicate(predicate(atom), suffix=successor_suffix)
         assert node_name in successor_nodes
         assert successor_nodes[node_name]["type"] == node_type, (
             f"Node {node_name} missing successor type"
@@ -173,7 +172,7 @@ def test_transition_encoder_multiple_states_and_successors(medium_blocks):
             )
 
             for atom in successor_facts:
-                node_name = f"{atom}{successor_suffix}"
+                node_name = format_atom_with_suffix(atom, successor_suffix)
                 if predicate_arity(atom) == 0:
                     continue
                 assert node_name in encoded_successors
@@ -258,7 +257,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
         pytest.skip("Fixture does not include nullary predicates.")
 
     for atom in successor_nullary_atoms:
-        atom_node = f"{atom}[suc]"
+        atom_node = format_atom_with_suffix(atom, "[suc]")
         assert graph.has_node(atom_node)
         edge_data = graph.get_edge_data(placeholder, atom_node)
         if edge_data is None:
@@ -273,7 +272,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
     symbol_type_id = config.symbol_type_id
     for atom in successor_nullary_atoms:
         predicate_type = mifrost.RelationFormatter.format_predicate(
-            predicate_name(atom), polarity=True, suffix="[suc]"
+            predicate(atom), suffix="[suc]"
         )
         edge_type = (symbol_type_id, "0", predicate_type)
         assert edge_type in data.edge_types

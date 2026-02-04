@@ -3,6 +3,7 @@ import operator
 from typing import Collection, Container, Mapping
 
 from .relation_formatter import Node, RelationProto, relation_formatter
+from .accessors import action_arity, predicate_arity, predicate_name
 
 
 class RelationDict(Mapping[Node, int]):
@@ -31,9 +32,9 @@ class RelationDict(Mapping[Node, int]):
             f"max_goal_level exceeded the supported limit ("
             f"{max_goal_level=}, limit={len(relation_formatter.goal_level_suffixes) - 1}."
         )
-        regular_predicates = list(
-            filter(lambda p: p.name not in top_type_predicates, predicates)
-        )
+        regular_predicates = [
+            p for p in predicates if predicate_name(p) not in top_type_predicates
+        ]
         # all variations of predicates for goal levels and polarities
         all_variations = lambda: itertools.product(
             regular_predicates,
@@ -44,14 +45,14 @@ class RelationDict(Mapping[Node, int]):
         relations = {
             relation_formatter(
                 predicate, goal_level=goal_level, polarity=polarity
-            ): predicate.arity
+            ): predicate_arity(predicate)
             for predicate, goal_level, polarity in all_variations()
         }
         # add regular predicates for atoms and actions
         for predicate in predicates:
-            relations[relation_formatter(predicate)] = predicate.arity
+            relations[relation_formatter(predicate)] = predicate_arity(predicate)
         for action in actions:
-            relations[relation_formatter(action)] = action.arity
+            relations[relation_formatter(action)] = action_arity(action)
         goal_satisfaction_derivations = self._parse_satisfaction_derivations(
             goal_satisfaction_derivations
         )
@@ -65,7 +66,7 @@ class RelationDict(Mapping[Node, int]):
                         polarity=polarity,
                         goal_satisfaction=goal_sat_deriv,
                     )
-                ] = predicate.arity
+                ] = predicate_arity(predicate)
         self._dict = dict(sorted(relations.items(), key=operator.itemgetter(0)))
         self.max_goal_level = max_goal_level
         self.goal_satisfaction_derivations: set[str] = goal_satisfaction_derivations

@@ -49,13 +49,39 @@ def object_names(atom):
 
 
 def predicate_name(atom) -> str:
-    pred = atom.get_predicate() if hasattr(atom, "get_predicate") else atom.predicate
-    return pred.get_name() if hasattr(pred, "get_name") else pred.name
+    pred = predicate(atom)
+    if not hasattr(pred, "get_name"):
+        raise AttributeError("Predicate object does not expose get_name()")
+    return pred.get_name()
+
+
+def predicate(atom):
+    if hasattr(atom, "get_predicate"):
+        pred = atom.get_predicate()
+        return getattr(pred, "_advanced_predicate", pred)
+    adv = getattr(atom, "_advanced_ground_atom", atom)
+    pred = adv.get_predicate()
+    return getattr(pred, "_advanced_predicate", pred)
 
 
 def predicate_arity(atom) -> int:
-    pred = atom.get_predicate() if hasattr(atom, "get_predicate") else atom.predicate
-    return pred.get_arity() if hasattr(pred, "get_arity") else pred.arity
+    pred = predicate(atom)
+    if not hasattr(pred, "get_arity"):
+        raise AttributeError("Predicate object does not expose get_arity()")
+    return pred.get_arity()
+
+
+def format_atom_with_suffix(atom, suffix: str = "") -> str:
+    name = predicate_name(atom) + suffix
+    objs = object_names(atom)
+    if objs:
+        return f"({name} {' '.join(objs)})"
+    return f"({name})"
+
+
+def format_literal_with_suffix(atom, polarity: bool, suffix: str = "") -> str:
+    atom_str = format_atom_with_suffix(atom, suffix)
+    return atom_str if polarity else f"(not {atom_str})"
 
 
 def hetero_data_equal(data: HeteroData, expected: HeteroData):

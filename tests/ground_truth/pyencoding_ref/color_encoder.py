@@ -6,10 +6,9 @@ from collections import defaultdict
 from typing import Iterable, Sequence
 
 import networkx as nx
+import pymimir
 import torch
 from torch_geometric.data import Data
-
-from xmimir import XAction, XAtom, XDomain, XLiteral, XObject, XPredicate
 
 from .base_encoder import (
     EncoderFactory,
@@ -19,6 +18,13 @@ from .base_encoder import (
 from .pyg_batch_builder import PygDataBatchBuilder
 from .pyg_builder import PygBuilder, PygBuilderBase
 from .relation_formatter import relation_formatter
+from .accessors import (
+    atom_objects,
+    literal_atom,
+    literal_polarity,
+    predicate,
+    predicate_arity,
+)
 
 
 class ColorGraphEncoder(GraphEncoderBase[Data]):
@@ -31,7 +37,7 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         edge_features: bool = False,
         enable_global_predicate_nodes: bool = False,
     ):
@@ -40,7 +46,7 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
 
         Parameters
         ----------
-        domain: xmimir.XProblem, the problem over which instance-states will be encoded
+        domain: pymimir.Domain, the domain over which instance-states will be encoded
         enable_global_predicate_nodes: bool, whether to add summarising predicate nodes to the graph.
             Predicate nodes will connect with respective pos-0-atom nodes, if applicable.
         edge_features: bool, whether to add features to edges or to encode them in positional atom nodes
@@ -80,9 +86,9 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
         **kwargs,
     ):
         goal_level_map = builder.get_graph_attr("goal_level_map")
@@ -93,18 +99,18 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
         for atom in facts:
             self._encode_facts_and_goals(
                 atom,
-                atom.predicate,
-                atom.objects,
+                predicate(atom),
+                atom_objects(atom),
                 builder,
                 goal_level=None,
                 colormap=colormap,
             )
         for literal in goals:
-            atom = literal.atom
+            atom = literal_atom(literal)
             self._encode_facts_and_goals(
                 literal,
-                atom.predicate,
-                atom.objects,
+                predicate(atom),
+                atom_objects(atom),
                 builder,
                 goal_level=goal_level_map[literal],
                 colormap=colormap,
@@ -116,22 +122,21 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
 
     def _encode_facts_and_goals(
         self,
-        item: XLiteral | XAtom,
-        predicate: XPredicate,
-        objects: Sequence[XObject],
+        item: pymimir.GroundLiteral | pymimir.GroundAtom,
+        predicate: pymimir.Predicate,
+        objects: Sequence[pymimir.Object],
         builder: PygBuilderBase,
         goal_level: int | None,
         colormap: dict[str | None, int],
     ):
-        polarity = getattr(item, "polarity", None)
+        polarity = (
+            literal_polarity(item) if isinstance(item, pymimir.GroundLiteral) else None
+        )
         if self.predicate_nodes_enabled:
-            predicate_node = (
-                relation_formatter(
-                    predicate,
-                    goal_level=goal_level,
-                    is_negated=False,
-                    polarity=polarity,
-                ),
+            predicate_node = relation_formatter(
+                predicate,
+                goal_level=goal_level,
+                polarity=polarity,
             )
             if self.edge_features:
                 builder.add_node(predicate_node)
@@ -152,7 +157,7 @@ class ColorGraphEncoder(GraphEncoderBase[Data]):
             else:
                 builder.add_node(predicate_node, type=colormap[None])
 
-        if predicate.arity == 0:
+        if predicate_arity(predicate) == 0:
             item_node = relation_formatter(
                 item,
                 goal_level=goal_level,

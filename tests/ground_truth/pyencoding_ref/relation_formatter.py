@@ -3,25 +3,20 @@ from __future__ import annotations
 from functools import cache, singledispatchmethod
 from typing import Protocol, runtime_checkable
 
+import pymimir
+
 from mifrost.utils.singleton import PickleSafeSingleton
-from xmimir import (
-    XAction,
-    XActionSchema,
-    XAtom,
-    XLiteral,
-    XObject,
-    atom_str_template,
-)
+
+from .accessors import action_name, action_objects, object_name, predicate_name
 
 Node = str
 
 
 @runtime_checkable
 class RelationProto(Protocol):
-    @property
-    def name(self) -> str: ...
-    @property
-    def arity(self) -> int: ...
+    def get_name(self) -> str: ...
+
+    def get_arity(self) -> int: ...
 
 
 class RelationFormatter(metaclass=PickleSafeSingleton):
@@ -67,7 +62,7 @@ class RelationFormatter(metaclass=PickleSafeSingleton):
     @__call__.register
     def atom(
         self,
-        atom: XAtom,
+        atom: pymimir.GroundAtom,
         pos: int | None = None,
         *args,
         **kwargs,
@@ -76,19 +71,27 @@ class RelationFormatter(metaclass=PickleSafeSingleton):
             return str(atom)
         return f"{atom}:{pos}"
 
-    @__call__.register
+    @__call__.register(object)
     def predicate(
         self,
-        predicate: RelationProto,
+        predicate: object,
         *,
         goal_level: int | None = None,
         goal_satisfaction: bool | str | None = None,
         polarity: bool = None,
         **kwargs,
     ) -> Node | None:
+        if hasattr(predicate, "get_predicate") and hasattr(predicate, "get_terms"):
+            return str(predicate)
+        if hasattr(predicate, "get_atom"):
+            return str(predicate)
+        if not hasattr(predicate, "get_name") and not hasattr(predicate, "name"):
+            raise NotImplementedError(
+                "__call__ is not implemented for type {}".format(type(predicate))
+            )
         return (
             f"{self.polarity_prefixes[polarity]}"
-            f"{predicate.name}"
+            f"{predicate_name(predicate)}"
             f"{self.goal_level_suffixes[goal_level]}"
             f"{self.goal_satisfaction_suffixes[goal_satisfaction]}"
         )
@@ -97,7 +100,7 @@ class RelationFormatter(metaclass=PickleSafeSingleton):
     @__call__.register
     def literal(
         self,
-        literal: XLiteral,
+        literal: pymimir.GroundLiteral,
         pos: int | None = None,
         *args,
         goal_level: int | None = None,
@@ -114,24 +117,25 @@ class RelationFormatter(metaclass=PickleSafeSingleton):
     @__call__.register
     def action_schema(
         self,
-        action: XActionSchema,
+        action: pymimir.Action,
         **kwargs,
     ) -> Node | None:
-        return action.name
+        return action_name(action)
 
     @cache
     @__call__.register
     def action(
         self,
-        action: XAction,
+        action: pymimir.GroundAction,
         **kwargs,
     ) -> Node | None:
-        # use the same formatting as for atoms
-        return atom_str_template.render(predicate=action.name, objects=action.objects)
+        parts = [action_name(action)]
+        parts.extend(object_name(obj) for obj in action_objects(action))
+        return "(" + " ".join(parts) + ")"
 
     @__call__.register
-    def object(self, obj: XObject, *args, **kwargs) -> Node | None:
-        return obj.name
+    def object(self, obj: pymimir.Object, *args, **kwargs) -> Node | None:
+        return object_name(obj)
 
     @__call__.register
     def str_(self, s: str, *args, **kwargs) -> Node | None:

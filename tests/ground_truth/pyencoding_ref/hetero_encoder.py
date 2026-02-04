@@ -8,23 +8,13 @@ from typing import Collection, Dict, Iterable, List, NamedTuple, Sequence
 
 import networkx as nx
 import numpy as np
+import pymimir
 import torch
-from matplotlib.patches import Patch
 from torch import Tensor
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import EdgeType, NodeType
 
 from mifrost.logging_setup import get_logger
-from xmimir import (
-    XAction,
-    XActionSchema,
-    XAtom,
-    XDomain,
-    XLiteral,
-    XObject,
-    XPredicate,
-    atom_str_template,
-)
 
 from .base_encoder import (
     EncoderFactory,
@@ -34,6 +24,18 @@ from .base_encoder import (
 from .pyg_batch_builder import HGraphBatchBuilder
 from .pyg_builder import PygBuilderBase, PygHeteroBuilder
 from .relation_dict import RelationDict
+from .accessors import (
+    action_arity,
+    action_name,
+    action_objects,
+    atom_objects,
+    atoms_equal,
+    literal_atom,
+    literal_polarity,
+    object_name,
+    predicate,
+    predicate_arity,
+)
 from .relation_formatter import Node, relation_formatter
 
 
@@ -64,7 +66,7 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     Parameters
     -----------
-    domain : XDomain
+    domain : pymimir.Domain
         The symbolic domain that provides predicates, action schemas, and canonical
         formatting utilities.
     relation_dict : RelationDict, optional
@@ -89,7 +91,7 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         *,
         relation_dict: RelationDict | None = None,
         symbol_type_id: str = "_symbol_",
@@ -108,15 +110,16 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
         self.include_lgan_edges = include_lgan_edges
         self.lgan_nn_edge_pos = lgan_nn_edge_pos
         self.nullary_object_name = nullary_object_name
-        self.predicates: tuple[XPredicate, ...] = self.domain.predicates()
-        self.actions: tuple[XActionSchema, ...] = (
-            self.domain.actions if not ignore_actions else ()
+        self.predicates: tuple[pymimir.Predicate, ...] = self.domain.get_predicates()
+        self.actions: tuple[pymimir.Action, ...] = (
+            self.domain.get_actions() if not ignore_actions else ()
         )
         self.relation_dict: RelationDict = relation_dict or RelationDict(
             self.predicates,
             # +1 to account for the action node connecting to its aux symbol node
             tuple(
-                AdHocRelation(action.name, action.arity + 1) for action in self.actions
+                AdHocRelation(action_name(action), action_arity(action) + 1)
+                for action in self.actions
             ),
             goal_satisfaction_derivations=relation_dict_kwargs.pop(
                 "goal_satisfaction_derivations", (True,)
@@ -169,7 +172,7 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.predicates = self.domain.predicates()
+        self.predicates = self.domain.get_predicates()
 
     def as_factory(self) -> EncoderFactory:
         return EncoderFactory(
@@ -188,10 +191,10 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
-        objects: Sequence[XObject] | None = None,
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
+        objects: Sequence[pymimir.Object] | None = None,
         **kwargs,
     ) -> None:
         # Build hetero graph from state
@@ -219,10 +222,10 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
         builder.set_graph_attr("object_names", builder.node_keys[self.symbol_type_id])
 
-    def _encode_objects(self, objects: list[XObject], builder: PygBuilderBase):
+    def _encode_objects(self, objects: list[pymimir.Object], builder: PygBuilderBase):
         for obj in objects:
             builder.add_node(
-                relation_formatter(obj), self.symbol_type_id, name=obj.name
+                relation_formatter(obj), self.symbol_type_id, name=object_name(obj)
             )
         if self.add_nullary_predicates:
             builder.add_node(
@@ -233,11 +236,11 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def _encode_goal_satisfaction(
         self,
-        satisfied_goals: dict[XLiteral, bool | str | None],
+        satisfied_goals: dict[pymimir.GroundLiteral, bool | str | None],
         builder: PygBuilderBase,
         node_prefix: str = "",
-        extra_objects: Iterable[XObject | str] = (),
-        goal_level_map: dict[XLiteral, int] | None = None,
+        extra_objects: Iterable[pymimir.Object | str] = (),
+        goal_level_map: dict[pymimir.GroundLiteral, int] | None = None,
     ):
         goal_level_map = (
             goal_level_map
@@ -248,14 +251,14 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
         for goal, satisfaction_level in satisfied_goals.items():
             if satisfaction_level not in supported_satisfaction_derivs:
                 continue
-            polarity = goal.polarity
-            atom = goal.atom
-            if atom.predicate.arity == 0:
+            polarity = literal_polarity(goal)
+            atom = literal_atom(goal)
+            if predicate_arity(predicate(atom)) == 0:
                 if not self.add_nullary_predicates:
                     continue
                 objects = [self.nullary_object_name]
             else:
-                objects = list(atom.objects)
+                objects = list(atom_objects(atom))
             try:
                 goal_level = goal_level_map[goal]
             except KeyError:
@@ -271,7 +274,7 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
             )
             literal_node = node_prefix + literal_node
             ntype = relation_formatter(
-                goal.atom.predicate,
+                predicate(literal_atom(goal)),
                 goal_level=goal_level,
                 goal_satisfaction=satisfaction_level,
                 polarity=polarity,
@@ -297,22 +300,24 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def _encode_action(
         self,
-        action: XAction,
+        action: pymimir.GroundAction,
         builder: PygBuilderBase,
         node_prefix: str = "",
-        extra_objects: Iterable[XObject | str] | None = None,
+        extra_objects: Iterable[pymimir.Object | str] | None = None,
     ):
         node = node_prefix + relation_formatter(action)
         ntype = relation_formatter(action.action_schema)
-        builder.add_node(node, ntype, name=action.name)
+        builder.add_node(node, ntype, name=action_name(action))
         if extra_objects is None:
             # action symbol node is an auxiliary for embedding the action in latent space
             # (typically reserved for objects).
             action_symbol_node = f"target:{action.index}|" + node
-            builder.add_node(action_symbol_node, self.symbol_type_id, name=action.name)
+            builder.add_node(
+                action_symbol_node, self.symbol_type_id, name=action_name(action)
+            )
             # ensure the action node connects both to its dedicated symbol and the provided context nodes
             extra_objects = [action_symbol_node]
-        for pos, obj in enumerate(chain(extra_objects, action.objects)):
+        for pos, obj in enumerate(chain(extra_objects, action_objects(action))):
             # Forward: object -> action node
             builder.add_edge(
                 relation_formatter(obj),
@@ -332,11 +337,11 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def _encode_literals(
         self,
-        literals: Iterable[XLiteral],
+        literals: Iterable[pymimir.GroundLiteral],
         builder: PygBuilderBase,
         node_prefix: str = "",
-        extra_objects: Iterable[XObject | str] = (),
-        goal_level_map: dict[XLiteral, int] | None = None,
+        extra_objects: Iterable[pymimir.Object | str] = (),
+        goal_level_map: dict[pymimir.GroundLiteral, int] | None = None,
     ):
         goal_level_map = (
             goal_level_map
@@ -344,22 +349,22 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
             else builder.graph_attrs["goal_level_map"]
         )
         for literal in literals:
-            atom = literal.atom
-            predicate = atom.predicate
-            arity = predicate.arity
+            atom = literal_atom(literal)
+            pred = predicate(atom)
+            arity = predicate_arity(pred)
             if arity == 0:
                 if not self.add_nullary_predicates:
                     continue
                 objects = [self.nullary_object_name]
             else:
-                objects = list(atom.objects)
+                objects = list(atom_objects(atom))
 
             goal_level = goal_level_map.get(literal, None)
             node = node_prefix + relation_formatter(
-                literal, goal_level=goal_level, polarity=literal.polarity
+                literal, goal_level=goal_level, polarity=literal_polarity(literal)
             )
             ntype = relation_formatter(
-                predicate, goal_level=goal_level, polarity=literal.polarity
+                pred, goal_level=goal_level, polarity=literal_polarity(literal)
             )
             builder.add_node(node, ntype)
             for pos, obj in enumerate(chain(extra_objects, objects)):
@@ -381,23 +386,23 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def _encode_facts(
         self,
-        facts: Iterable[XAtom],
+        facts: Iterable[pymimir.GroundAtom],
         builder: PygBuilderBase,
         node_prefix: str = "",
-        extra_objects: Iterable[XObject | str] = (),
+        extra_objects: Iterable[pymimir.Object | str] = (),
     ):
         for atom in facts:
-            predicate = atom.predicate
-            arity = predicate.arity
+            pred = predicate(atom)
+            arity = predicate_arity(pred)
             if arity == 0:
                 if not self.add_nullary_predicates:
                     continue
                 objects = [self.nullary_object_name]
             else:
-                objects = list(atom.objects)
+                objects = list(atom_objects(atom))
 
             node = node_prefix + relation_formatter(atom)
-            ntype = relation_formatter(predicate)
+            ntype = relation_formatter(pred)
             builder.add_node(node, ntype)
             for pos, obj in enumerate(chain(extra_objects, objects)):
                 # Connect atom node to object node
@@ -484,9 +489,12 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
                     )
 
     @staticmethod
-    def _goal_satisfaction_map(facts: Collection[XAtom], goals: Iterable[XLiteral]):
+    def _goal_satisfaction_map(
+        facts: Collection[pymimir.GroundAtom], goals: Iterable[pymimir.GroundLiteral]
+    ):
         return {
-            goal: any(goal.atom.semantic_eq(fact) for fact in facts) == goal.polarity
+            goal: any(atoms_equal(literal_atom(goal), fact) for fact in facts)
+            == literal_polarity(goal)
             for goal in goals
         }
 
@@ -870,11 +878,21 @@ class HGraphEncoder(GraphEncoderBase[HeteroData]):
 
             # Collect other attributes and add them to the already created nodes
             for attr_name, attr_value in data[ntype].items():
-                if attr_name in ("x", "node_names", "edge_index", "edge_attr"):
+                if attr_name in (
+                    "x",
+                    "node_names",
+                    "edge_index",
+                    "edge_attr",
+                    "num_nodes",
+                ):
                     continue
                 # attr_value is a tensor or list [num_nodes, ...]
+                try:
+                    attr_len = len(attr_value)
+                except TypeError:
+                    continue
                 for i in range(len(node_names)):
-                    if i >= len(attr_value):
+                    if i >= attr_len:
                         continue
                     val = attr_value[i]
                     if torch.is_tensor(val):

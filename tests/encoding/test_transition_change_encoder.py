@@ -9,11 +9,13 @@ import mifrost
 from .test_utils import (
     adv_domain,
     adv_state,
+    format_atom_with_suffix,
+    format_literal_with_suffix,
     goal_inputs_from_problem,
     object_names,
     parts_to_pyg,
+    predicate,
     predicate_arity,
-    predicate_name,
     state_atoms,
     to_named_networkx,
 )
@@ -71,9 +73,9 @@ def test_transition_change_encoder_marks_added_and_removed_atoms(small_blocks):
     for atom in added:
         if predicate_arity(atom) == 0:
             continue
-        node_name = f"{atom}[suc]"
+        node_name = format_literal_with_suffix(atom, True, "[suc]")
         node_type = formatter.format_predicate(
-            predicate_name(atom), polarity=True, suffix="[suc]"
+            predicate(atom), polarity=True, suffix="[suc]"
         )
         assert node_name in graph.nodes, f"Added atom node {node_name} missing"
         assert graph.nodes[node_name]["type"] == node_type, (
@@ -85,9 +87,9 @@ def test_transition_change_encoder_marks_added_and_removed_atoms(small_blocks):
     for atom in removed:
         if predicate_arity(atom) == 0:
             continue
-        node_name = f"{atom}[suc]"
+        node_name = format_literal_with_suffix(atom, False, "[suc]")
         node_type = formatter.format_predicate(
-            predicate_name(atom), polarity=False, suffix="[suc]"
+            predicate(atom), polarity=False, suffix="[suc]"
         )
         assert node_name in graph.nodes, f"Removed atom node {node_name} missing"
         assert graph.nodes[node_name]["type"] == node_type, (
@@ -117,8 +119,10 @@ def test_transition_change_encoder_no_diff_for_identical_states(small_blocks):
 
     for node, data in graph.nodes(data=True):
         ntype = data["type"]
+        if not str(ntype).endswith("[suc]"):
+            continue
         assert not (ntype.startswith("[+]") or ntype.startswith("[-]")), (
-            f"Encountered unexpected literal node {node} while encoding identical states"
+            f"Encountered unexpected successor literal node {node} while encoding identical states"
         )
 
 
@@ -148,8 +152,17 @@ def test_transition_change_encoder_nullary_placeholder(small_blocks):
     placeholder = config.nullary_object_name
     assert graph.has_node(placeholder), "Placeholder object node missing"
 
-    for atom in nullary_added + nullary_removed:
-        node_name = f"{atom}[suc]"
+    for atom in nullary_added:
+        node_name = format_literal_with_suffix(atom, True, "[suc]")
+        edge_data = graph.get_edge_data(placeholder, node_name)
+        if edge_data is None:
+            edge_data = graph.get_edge_data(node_name, placeholder)
+        assert edge_data is not None, f"No placeholder edge for nullary atom {atom}"
+        entries = edge_data.values() if isinstance(edge_data, dict) else [edge_data]
+        assert all(entry.get("position") == 0 for entry in entries)
+
+    for atom in nullary_removed:
+        node_name = format_literal_with_suffix(atom, False, "[suc]")
         edge_data = graph.get_edge_data(placeholder, node_name)
         if edge_data is None:
             edge_data = graph.get_edge_data(node_name, placeholder)

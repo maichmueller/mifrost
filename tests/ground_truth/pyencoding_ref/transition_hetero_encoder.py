@@ -14,16 +14,7 @@ import torch_geometric as pyg
 from torch_geometric.data import HeteroData
 
 from mifrost.utils.misc import monkeypatch
-from xmimir import (
-    XAction,
-    XAtom,
-    XDomain,
-    XLiteral,
-    XPredicate,
-    XProblem,
-    XState,
-    atom_str_template,
-)
+import pymimir
 
 from .base_encoder import (
     EncoderFactory,
@@ -31,6 +22,15 @@ from .base_encoder import (
 from .hetero_encoder import HGraphEncoder
 from .pyg_builder import PygBuilderBase
 from .relation_dict import RelationDict
+from .accessors import (
+    atom_objects,
+    atom_signature,
+    atoms_equal,
+    literal_atom,
+    literal_polarity,
+    predicate,
+    predicate_name,
+)
 
 
 class PredicateEdgeType(NamedTuple):
@@ -39,13 +39,12 @@ class PredicateEdgeType(NamedTuple):
     dst_type: str
 
 
-class XPredicatePatched(XPredicate):  # fake inheritance to mimic interface
-    def __init__(self, predicate: XPredicate, new_name: str):
+class SuccessorPredicate:  # lightweight wrapper to mimic predicate interface
+    def __init__(self, predicate: pymimir.Predicate, new_name: str):
         self._predicate = predicate
         self._name = new_name
 
-    @property
-    def name(self):
+    def get_name(self):
         return self._name
 
     def __getattr__(self, item):
@@ -54,25 +53,28 @@ class XPredicatePatched(XPredicate):  # fake inheritance to mimic interface
     # Forward common special methods explicitly
     def __eq__(self, other):
         # Prefer to compare underlying predicate semantics if needed:
-        if not isinstance(other, (XPredicatePatched, XPredicate)):
+        try:
+            return predicate_name(self) == predicate_name(other)
+        except AttributeError:
             return NotImplemented
-        return self.semantic_eq(other)
 
     def __hash__(self):
-        return self.semantic_hash()
+        return hash(predicate_name(self))
 
     def __str__(self):
         return self._name
 
 
-class XAtomPatched(XAtom):  # fake inheritance to mimic interface
-    def __init__(self, atom: XAtom, new_predicate: XPredicate):
+class SuccessorAtom:  # lightweight wrapper to mimic atom interface
+    def __init__(self, atom: pymimir.GroundAtom, new_predicate: pymimir.Predicate):
         self._atom = atom
         self._predicate = new_predicate
 
-    @property
-    def predicate(self):
+    def get_predicate(self):
         return self._predicate
+
+    def get_terms(self):
+        return self._atom.get_terms()
 
     def __getattr__(self, item):
         return getattr(self._atom, item)
@@ -80,24 +82,26 @@ class XAtomPatched(XAtom):  # fake inheritance to mimic interface
     # Forward common special methods explicitly
     def __eq__(self, other):
         # Prefer to compare underlying atom semantics if needed:
-        if not isinstance(other, (XAtomPatched, XAtom)):
+        try:
+            return atoms_equal(self, other)
+        except AttributeError:
             return NotImplemented
-        return self.predicate == other.predicate and self.objects == other.objects
 
     def __hash__(self):
-        return self.semantic_hash()
+        return hash(atom_signature(self))
 
     def __str__(self):
-        return atom_str_template.render(predicate=self._predicate, objects=self.objects)
+        parts = [predicate_name(self._predicate)]
+        parts.extend(object.get_name() for object in atom_objects(self))
+        return "(" + " ".join(parts) + ")"
 
 
-class XLiteralPatched(XLiteral):  # fake inheritance to mimic interface
-    def __init__(self, literal: XLiteral, new_atom: XAtom):
+class SuccessorLiteral:  # lightweight wrapper to mimic literal interface
+    def __init__(self, literal: pymimir.GroundLiteral, new_atom: pymimir.GroundAtom):
         self._literal = literal
         self._atom = new_atom
 
-    @property
-    def atom(self):
+    def get_atom(self):
         return self._atom
 
     def __getattr__(self, item):
@@ -106,12 +110,15 @@ class XLiteralPatched(XLiteral):  # fake inheritance to mimic interface
     # Forward common special methods explicitly
     def __eq__(self, other):
         # Prefer to compare underlying literal semantics if needed:
-        if not isinstance(other, (XLiteralPatched, XLiteral)):
+        try:
+            return literal_polarity(self) == literal_polarity(other) and atoms_equal(
+                literal_atom(self), literal_atom(other)
+            )
+        except AttributeError:
             return NotImplemented
-        return self.is_negated == other.is_negated and self.atom == other.atom
 
     def __hash__(self):
-        return hash((self.is_negated, self.atom))
+        return hash((literal_polarity(self), atom_signature(literal_atom(self))))
 
 
 class TransitionHGraphEncoder(HGraphEncoder):
@@ -119,20 +126,22 @@ class TransitionHGraphEncoder(HGraphEncoder):
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         *args,
         include_lgan_edges: bool = False,
         lgan_nn_edge_pos: str = "lgan_nn",
         **kwargs,
     ) -> None:
-        self.pred_to_succ_pred: Dict[XPredicate, XPredicatePatched] = {
-            p: XPredicatePatched(p, p.name + self.successor_predicate_suffix)
-            for p in domain.predicates()
+        self.pred_to_succ_pred: Dict[pymimir.Predicate, SuccessorPredicate] = {
+            p: SuccessorPredicate(
+                p, predicate_name(p) + self.successor_predicate_suffix
+            )
+            for p in domain.get_predicates()
         }
-        # monkeypatch domain's predicates function for super().__init__ to include successor predicates
+        # monkeypatch domain's get_predicates for super().__init__ to include successor predicates
         with monkeypatch(
             domain,
-            "predicates",
+            "get_predicates",
             lambda: tuple(
                 chain(
                     self.pred_to_succ_pred.keys(),
@@ -151,10 +160,10 @@ class TransitionHGraphEncoder(HGraphEncoder):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
-        successor: XState | Iterable[XAtom] = None,
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
+        successor: pymimir.State | Iterable[pymimir.GroundAtom] = None,
         **kwargs,
     ) -> None:
         assert successor is not None, "Successor state must be provided."
@@ -162,8 +171,8 @@ class TransitionHGraphEncoder(HGraphEncoder):
         patched_successor_facts = [
             self._patch_atom(atom)
             for atom in (
-                successor.atoms(with_statics=False)
-                if isinstance(successor, XState)
+                successor.get_atoms(ignore_static=True)
+                if isinstance(successor, pymimir.State)
                 else successor
             )
         ]
@@ -196,26 +205,26 @@ class TransitionHGraphEncoder(HGraphEncoder):
         # Call base encode which will call our _encode
         return super().encode(*args, **kwargs)
 
-    def _patch_atom(self, atom: XAtom):
-        return XAtomPatched(
+    def _patch_atom(self, atom: pymimir.GroundAtom):
+        return SuccessorAtom(
             atom,
-            self.pred_to_succ_pred[atom.predicate],
+            self.pred_to_succ_pred[predicate(atom)],
         )
 
-    def _patch_literal(self, literal: XLiteral):
-        patched_atom = self._patch_atom(literal.atom)
-        return XLiteralPatched(
+    def _patch_literal(self, literal: pymimir.GroundLiteral):
+        patched_atom = self._patch_atom(literal_atom(literal))
+        return SuccessorLiteral(
             literal,
             patched_atom,
         )
 
 
 def get_facts(
-    state: XState | Iterable[XAtom], problem: XProblem | None
-) -> tuple[set[XAtom], XProblem | None]:
-    if isinstance(state, XState):
-        problem = problem or state.problem
-        successor_facts = set(state.atoms(with_statics=False))
+    state: pymimir.State | Iterable[pymimir.GroundAtom], problem: pymimir.Problem | None
+) -> tuple[set[pymimir.GroundAtom], pymimir.Problem | None]:
+    if isinstance(state, pymimir.State):
+        problem = problem or state.get_problem()
+        successor_facts = set(state.get_atoms(ignore_static=True))
     else:
         successor_facts = set(state)
     return successor_facts, problem
@@ -258,12 +267,12 @@ class TransitionEffectsHGraphEncoder(HGraphEncoder):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
-        successor: XState | Iterable[XAtom] = None,
-        problem: XProblem | None = None,
-        _state: XState | Iterable[XAtom] | None = None,
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
+        successor: pymimir.State | Iterable[pymimir.GroundAtom] = None,
+        problem: pymimir.Problem | None = None,
+        _state: pymimir.State | Iterable[pymimir.GroundAtom] | None = None,
         **kwargs,
     ) -> None:
         assert successor is not None, "Successor state must be provided."
@@ -295,38 +304,44 @@ class TransitionEffectsHGraphEncoder(HGraphEncoder):
 
 
 def _compute_change_satisfaction(
-    added_facts: Collection[XAtom],
-    removed_facts: Collection[XAtom],
-    goals: Sequence[XLiteral],
-) -> dict[XLiteral, str]:
+    added_facts: Collection[pymimir.GroundAtom],
+    removed_facts: Collection[pymimir.GroundAtom],
+    goals: Sequence[pymimir.GroundLiteral],
+) -> dict[pymimir.GroundLiteral, str]:
     sat_goals = {
         goal: "+"
         for goal in goals
-        if any(goal.atom.semantic_eq(fact) for fact in added_facts) == goal.polarity
+        if any(atoms_equal(literal_atom(goal), fact) for fact in added_facts)
+        == literal_polarity(goal)
     } | {
         goal: "-"
         for goal in goals
-        if any(goal.atom.semantic_eq(fact) for fact in removed_facts) != goal.polarity
+        if any(atoms_equal(literal_atom(goal), fact) for fact in removed_facts)
+        != literal_polarity(goal)
     }
     return sat_goals
 
 
 def _compute_change_literals(
-    facts: set[XAtom], successor_facts: set[XAtom], problem: XProblem
-) -> tuple[list[XLiteral], set[XAtom], set[XAtom]]:
+    facts: set[pymimir.GroundAtom],
+    successor_facts: set[pymimir.GroundAtom],
+    problem: pymimir.Problem,
+) -> tuple[
+    list[pymimir.GroundLiteral], set[pymimir.GroundAtom], set[pymimir.GroundAtom]
+]:
     added = {
         atom
         for atom in successor_facts
-        if not any(atom.semantic_eq(base_atom) for base_atom in facts)
+        if not any(atoms_equal(atom, base_atom) for base_atom in facts)
     }
     removed = {
         atom
         for atom in facts
-        if not any(atom.semantic_eq(succ_atom) for succ_atom in successor_facts)
+        if not any(atoms_equal(atom, succ_atom) for succ_atom in successor_facts)
     }
-    literals: List[XLiteral] = []
+    literals: List[pymimir.GroundLiteral] = []
     for atom in added:
-        literals.append(XLiteral.register(problem, atom, polarity=True))
+        literals.append(pymimir.GroundLiteral.new(atom, True, problem))
     for atom in removed:
-        literals.append(XLiteral.register(problem, atom, polarity=False))
+        literals.append(pymimir.GroundLiteral.new(atom, False, problem))
     return literals, added, removed

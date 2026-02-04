@@ -7,13 +7,13 @@ from itertools import chain
 from typing import Dict, Iterable, List, NamedTuple, Sequence
 
 import networkx as nx
+import pymimir
 import torch
 from matplotlib.patches import Patch
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import NodeType
 
 from mifrost.logging_setup import get_logger
-from xmimir import XAction, XAtom, XDomain, XLiteral, XPredicate, atom_str_template
 
 from .base_encoder import (
     EncoderFactory,
@@ -25,6 +25,17 @@ from .pyg_batch_builder import ILGBatchBuilder
 from .pyg_builder import PygBuilderBase, PygHeteroBuilder
 from .relation_dict import RelationDict
 from .relation_formatter import Node, relation_formatter
+from .accessors import (
+    action_arity,
+    action_objects,
+    atom_objects,
+    atoms_equal,
+    literal_atom,
+    literal_polarity,
+    object_name,
+    predicate,
+    predicate_arity,
+)
 
 
 class PredicateEdgeType(NamedTuple):
@@ -129,7 +140,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
 
     def __init__(
         self,
-        domain: XDomain,
+        domain: pymimir.Domain,
         *,
         relation_dict: RelationDict = None,
         symbol_type_id: str = RelationDict.default_symbol_ntype,
@@ -149,7 +160,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
         self.include_lgan_edges: bool = include_lgan_edges
         self.lgan_nn_edge_pos: str = lgan_nn_edge_pos
         self.nullary_object_name: str = nullary_object_name
-        self.predicates: tuple[XPredicate, ...] = self.domain.predicates()
+        self.predicates: tuple[pymimir.Predicate, ...] = self.domain.get_predicates()
         self.relation_dict: RelationDict = relation_dict or RelationDict(
             self.predicates, **relation_dict_kwargs
         )
@@ -167,8 +178,9 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
                 )
             }
         )
-        if self.domain.actions:
-            max_action_arity = max(action.arity for action in self.domain.actions)
+        actions = self.domain.get_actions()
+        if actions:
+            max_action_arity = max(action_arity(action) for action in actions)
             self.relation_dict.update({self.action_type_id: max_action_arity})
         self.all_edge_types = []
         for predicate, arity in self.relation_dict.items():
@@ -229,9 +241,9 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
     def _encode(
         self,
         builder: PygBuilderBase,
-        facts: Sequence[XAtom],
-        goals: Sequence[XLiteral],
-        actions: Sequence[XAction],
+        facts: Sequence[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        actions: Sequence[pymimir.GroundAction],
         **kwargs,
     ):
         # Build hetero graph from state
@@ -248,7 +260,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
 
         for obj in self._contained_objects(chain(facts, goals, actions)):
             builder.add_node(
-                relation_formatter(obj), self.symbol_type_id, name=obj.name
+                relation_formatter(obj), self.symbol_type_id, name=object_name(obj)
             )
 
         if self.add_nullary_predicates:
@@ -259,15 +271,15 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
             )
 
         for atom in chain(facts, missing_goal_facts):
-            predicate = atom.predicate
+            pred = predicate(atom)
             atom_node = relation_formatter(atom)
             builder.add_node(
                 atom_node,
-                relation_formatter(predicate),
+                relation_formatter(pred),
                 status=statuses[atom],
             )
-            objects = list(atom.objects)
-            if not objects and predicate.arity == 0:
+            objects = list(atom_objects(atom))
+            if not objects and predicate_arity(pred) == 0:
                 if self.add_nullary_predicates:
                     objects = [self.nullary_object_name]
                 else:
@@ -278,14 +290,14 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
                     relation_formatter(obj),
                     atom_node,
                     self.symbol_type_id,
-                    relation_formatter(predicate),
+                    relation_formatter(pred),
                     str(pos),
                 )
                 # reverse: atom node to object node
                 builder.add_edge(
                     atom_node,
                     relation_formatter(obj),
-                    relation_formatter(predicate),
+                    relation_formatter(pred),
                     self.symbol_type_id,
                     str(pos),
                 )
@@ -297,7 +309,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
                 self.action_type_id,
                 name=action_node,
             )
-            for pos, obj in enumerate(action.objects):
+            for pos, obj in enumerate(action_objects(action)):
                 builder.add_edge(
                     relation_formatter(obj),
                     action_node,
@@ -324,7 +336,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
         object_neighbors = defaultdict(set)
         obj_to_atoms = defaultdict(list)
         for atom in chain(facts, missing_goal_facts):
-            objs = list(atom.objects)
+            objs = list(atom_objects(atom))
             for o1 in objs:
                 obj_to_atoms[o1].append(atom)
                 for o2 in objs:
@@ -335,7 +347,7 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
             target_obj_node = relation_formatter(target_obj)
             neighbors = object_neighbors[target_obj]
             for atom in chain(facts, missing_goal_facts):
-                atom_objs = list(atom.objects)
+                atom_objs = list(atom_objects(atom))
                 if not atom_objs:
                     continue
                 if target_obj in atom_objs:
@@ -346,36 +358,42 @@ class ILGHGraphEncoder(GraphEncoderBase[HeteroData]):
                         target_obj_node,
                         atom_node,
                         self.symbol_type_id,
-                        relation_formatter(atom.predicate),
+                        relation_formatter(predicate(atom)),
                         self.lgan_nn_edge_pos,
                     )
                     builder.add_edge(
                         atom_node,
                         target_obj_node,
-                        relation_formatter(atom.predicate),
+                        relation_formatter(predicate(atom)),
                         self.symbol_type_id,
                         self.lgan_nn_edge_pos,
                     )
 
     def _compute_statuses(
-        self, facts: Collection[XAtom], goals: Sequence[XLiteral], goal_level_map: dict
-    ) -> tuple[list[XAtom], dict[XAtom, AtomStatus]]:
+        self,
+        facts: Collection[pymimir.GroundAtom],
+        goals: Sequence[pymimir.GroundLiteral],
+        goal_level_map: dict,
+    ) -> tuple[list[pymimir.GroundAtom], dict[pymimir.GroundAtom, AtomStatus]]:
         goal_matches = {
-            goal.atom
+            literal_atom(goal)
             for goal in goals
-            if any(goal.atom.semantic_eq(f) for f in facts) == goal.polarity
+            if any(atoms_equal(literal_atom(goal), f) for f in facts)
+            == literal_polarity(goal)
         }
 
-        statuses: dict[XAtom, AtomStatus] = defaultdict(lambda: AtomStatus())
-        missing_goal_facts: list[XAtom] = []
+        statuses: dict[pymimir.GroundAtom, AtomStatus] = defaultdict(
+            lambda: AtomStatus()
+        )
+        missing_goal_facts: list[pymimir.GroundAtom] = []
         for goal in goals:
-            atom = goal.atom
+            atom = literal_atom(goal)
             is_satisfied = atom in goal_matches
             prev = statuses[atom]
             new_levels = tuple(sorted(set(prev.goal_levels) | {goal_level_map[goal]}))
             statuses[atom] = AtomStatus(
                 is_regular=False,
-                is_negated=goal.is_negated,
+                is_negated=not literal_polarity(goal),
                 is_satisfied=is_satisfied,
                 goal_levels=new_levels,
             )

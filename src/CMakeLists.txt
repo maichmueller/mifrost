@@ -51,6 +51,7 @@ find_package(phmap CONFIG REQUIRED)
 find_package(unordered_dense CONFIG REQUIRED)
 find_package(GTest REQUIRED)
 find_package(strong_type REQUIRED)
+find_package(range-v3 REQUIRED)
 if (MIFROST_BUILD_BENCHMARKS)
     find_package(benchmark REQUIRED)
     find_package(argparse REQUIRED)
@@ -122,6 +123,8 @@ add_library(
         mifrost_core
         STATIC
         "_core/mifrost/core/batch_builder.cpp"
+        "_core/mifrost/core/schema.cpp"
+        "_core/mifrost/core/color_encoder.cpp"
         "_core/mifrost/core/hgraph_stream_encoder.cpp"
         "_core/mifrost/core/transition_dag.cpp"
         "_core/mifrost/core/horizon_hgraph_encoder.cpp"
@@ -156,6 +159,8 @@ target_link_libraries(
         nanobind
         # strong type definitions
         rollbear::strong_type
+        # ranges fallback
+        range-v3::range-v3
 )
 
 conan_add_package_include_fallback(mifrost_core abseil)
@@ -165,6 +170,8 @@ nanobind_add_module(mifrost_core_module
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/init_relation_formatter.cpp"
+        "_core/mifrost/init_color_encoder.cpp"
+        "_core/mifrost/init_schema.cpp"
         "_core/mifrost/init_hgraph_encoders.cpp"
         "_core/mifrost/init_transition_dag.cpp"
 )

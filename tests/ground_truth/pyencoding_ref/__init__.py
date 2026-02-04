@@ -1,4 +1,4 @@
-"""Ground-truth reference encoders (xmimir-based).
+"""Ground-truth reference encoders (pymimir-based).
 
 Intentionally avoid eager imports here to keep test collection light.
 Import the specific module you need directly from this package.

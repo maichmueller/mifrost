@@ -109,8 +109,9 @@ def test_nullary_predicates_connect_to_placeholder(small_blocks):
     placeholder_idx = pyg_data.object_names.index(placeholder)
 
     for atom in nullary_atoms:
+        pred = atom.get_predicate()
         predicate_type = mifrost.RelationFormatter.format_predicate(
-            atom.get_predicate().get_name()
+            getattr(pred, "_advanced_predicate", pred)
         )
         edge_type = (symbol_type_id, "0", predicate_type)
         assert edge_type in pyg_data.edge_types, (
