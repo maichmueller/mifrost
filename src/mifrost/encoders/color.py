@@ -8,6 +8,7 @@ import torch
 from torch_geometric.data import Batch, Data
 
 from .._core import BatchBuilder, ColorEncoderConfig, ColorEncoderEngine, GoalInputs
+from .base import EncoderBase, StreamEncoderBase
 from .common import _advanced_domain, _advanced_state, _split_goals
 
 
@@ -118,12 +119,11 @@ def _parts_to_pyg_homo(
 
 
 @dataclass
-class ColorEncoderStream:
+class ColorEncoderStream(StreamEncoderBase[Data]):
     _encoder: "ColorEncoder"
 
     def __post_init__(self) -> None:
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("homo")
+        self._reset_builder()
 
     def append(
         self,
@@ -149,20 +149,23 @@ class ColorEncoderStream:
             self._encoder.engine.encode(adv_state, inputs, self._builder)
         self._builder.next_graph()
 
-    def flush(self, *, as_batch: bool = True, include_metadata: bool = True) -> Data:
-        parts = self.flush_parts()
+    def _reset_builder(self) -> None:
+        self._builder = BatchBuilder()
+        self._builder.set_graph_kind("homo")
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, Any],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> Data:
         return _parts_to_pyg_homo(
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def flush_parts(self) -> Mapping[str, Any]:
-        parts = self._builder.build_parts()
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("homo")
-        return parts
 
-
-class ColorEncoder:
+class ColorEncoder(EncoderBase[Data]):
     def __init__(
         self,
         domain: Any,
@@ -186,6 +189,7 @@ class ColorEncoder:
         state: Any,
         *,
         goals: Iterable[Any] | None = None,
+        actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
     ) -> Mapping[str, Any]:
         adv_state = _advanced_state(state)
@@ -208,10 +212,14 @@ class ColorEncoder:
         goals: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> Data:
-        parts = self.encode_parts(state, goals=goals, subgoal_layers=subgoal_layers)
-        return _parts_to_pyg_homo(
-            parts, as_batch=False, include_metadata=include_metadata
+        return super().encode(
+            state,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
         )
 
     def encode_batch_parts(
@@ -219,6 +227,7 @@ class ColorEncoder:
         states: Iterable[Any] | Any,
         *,
         goals: Iterable[Any] | None = None,
+        actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
     ) -> Mapping[str, Any]:
         is_state_like = hasattr(states, "get_problem") or hasattr(
@@ -265,12 +274,25 @@ class ColorEncoder:
         goals: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> Data:
-        parts = self.encode_batch_parts(
-            states, goals=goals, subgoal_layers=subgoal_layers
+        return super().encode_batch(
+            states,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
         )
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, Any],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> Data:
         return _parts_to_pyg_homo(
-            parts, as_batch=True, include_metadata=include_metadata
+            parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> ColorEncoderStream:

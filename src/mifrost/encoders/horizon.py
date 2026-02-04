@@ -12,6 +12,7 @@ from .._core import (
     HorizonHGraphEncoderEngine,
     TransitionDAG,
 )
+from .base import EncoderBase, StreamEncoderBase
 from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
 
 
@@ -51,12 +52,11 @@ def _is_literal(value: Any) -> bool:
 
 
 @dataclass
-class HorizonEncoderStream:
+class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     _engine: HorizonHGraphEncoderEngine
 
     def __post_init__(self) -> None:
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
+        self._reset_builder()
 
     def append(
         self,
@@ -73,22 +73,23 @@ class HorizonEncoderStream:
         if hasattr(self._builder, "next_graph"):
             self._builder.next_graph()
 
-    def flush(
-        self, *, as_batch: bool = True, include_metadata: bool = True
+    def _reset_builder(self) -> None:
+        self._builder = BatchBuilder()
+        self._builder.set_graph_kind("hetero")
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, Any],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
     ) -> HeteroData:
-        parts = self.flush_parts()
         return _parts_to_pyg(
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def flush_parts(self) -> Mapping[str, Any]:
-        parts = self._builder.build_parts()
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
-        return parts
 
-
-class HorizonEncoder:
+class HorizonEncoder(EncoderBase[HeteroData]):
     def __init__(
         self,
         domain: Any,
@@ -152,9 +153,16 @@ class HorizonEncoder:
         goals: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> HeteroData:
-        parts = self.encode_parts(root, dag, goals=goals, subgoal_layers=subgoal_layers)
-        return _parts_to_pyg(parts, as_batch=False, include_metadata=include_metadata)
+        return super().encode(
+            root,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            dag=dag,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
 
     def _encode_batch_parts(
         self,
@@ -223,11 +231,30 @@ class HorizonEncoder:
         goals: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> HeteroData:
-        parts = self._encode_batch_parts(
-            roots, dags, goals=goals, subgoal_layers=subgoal_layers
+        return super().encode_batch(
+            roots,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            dags=dags,
+            include_metadata=include_metadata,
+            **kwargs,
         )
-        return _parts_to_pyg(parts, as_batch=True, include_metadata=include_metadata)
+
+    def _accepted_kwargs(self) -> set[str]:
+        return {"dag", "dags"}
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, Any],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> HeteroData:
+        return _parts_to_pyg(
+            parts, as_batch=as_batch, include_metadata=include_metadata
+        )
 
     def encode_batch_parts(
         self,

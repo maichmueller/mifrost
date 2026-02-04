@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from torch_geometric.data import HeteroData
 
 from .._core import BatchBuilder, GoalInputs, HGraphEncoderConfig, HGraphEncoderEngine
+from .base import EncoderBase, StreamEncoderBase
 from .common import (
     _advanced_domain,
     _advanced_state,
@@ -16,12 +17,11 @@ from .common import (
 
 
 @dataclass
-class HGraphEncoderStream:
+class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
     _engine: HGraphEncoderEngine
 
     def __post_init__(self) -> None:
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
+        self._reset_builder()
 
     def append(
         self,
@@ -56,22 +56,23 @@ class HGraphEncoderStream:
         if hasattr(self._builder, "next_graph"):
             self._builder.next_graph()
 
-    def flush(
-        self, *, as_batch: bool = True, include_metadata: bool = True
+    def _reset_builder(self) -> None:
+        self._builder = BatchBuilder()
+        self._builder.set_graph_kind("hetero")
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, Any],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
     ) -> HeteroData:
-        parts = self.flush_parts()
         return _parts_to_pyg(
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def flush_parts(self) -> Mapping[str, Any]:
-        parts = self._builder.build_parts()
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
-        return parts
 
-
-class HGraphEncoder:
+class HGraphEncoder(EncoderBase[HeteroData]):
     def __init__(
         self,
         domain: Any,
@@ -135,16 +136,18 @@ class HGraphEncoder:
         actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> HeteroData:
-        parts = self.encode_parts(
+        return super().encode(
             state,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
         )
-        return _parts_to_pyg(parts, as_batch=False, include_metadata=include_metadata)
 
-    def _encode_batch_parts(
+    def encode_batch_parts(
         self,
         states: Iterable[Any] | Any,
         *,
@@ -225,36 +228,26 @@ class HGraphEncoder:
         actions: Iterable[Any] | None = None,
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         include_metadata: bool = True,
+        **kwargs: Any,
     ) -> HeteroData:
-        """
-        Encode multiple states into a single PyG Batch using the C++ BatchBuilder.
-
-        If a single state object is provided, it is treated as a batch of size 1.
-        """
-        parts = self._encode_batch_parts(
+        return super().encode_batch(
             states,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
         )
-        return _parts_to_pyg(parts, as_batch=True, include_metadata=include_metadata)
 
-    def encode_batch_parts(
+    def _parts_to_pyg(
         self,
-        states: Iterable[Any] | Any,
+        parts: Mapping[str, Any],
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
-        """
-        Encode multiple states and return engine parts without PyG assembly.
-        """
-        return self._encode_batch_parts(
-            states,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> HeteroData:
+        return _parts_to_pyg(
+            parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> HGraphEncoderStream:
