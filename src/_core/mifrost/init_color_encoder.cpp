@@ -19,7 +19,7 @@ namespace mifrost {
 void init_color_encoder(nb::module_& m)
 {
    auto add_color_extension = [](nb::dict& parts) {
-      if(! parts.contains("schema")) {
+      if(not parts.contains("schema")) {
          return;
       }
       auto schema = nb::cast< nb::dict >(parts["schema"]);

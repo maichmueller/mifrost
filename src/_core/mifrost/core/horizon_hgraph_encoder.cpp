@@ -23,7 +23,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(
          domain,
          [&]() {
-            if(config.transition_mode == Mode::Delta && ! config.support_literals) {
+            if(config.transition_mode == Mode::Delta and not config.support_literals) {
                config.support_literals = true;
             }
             return config;
@@ -47,7 +47,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(
          domain,
          [&]() {
-            if(config.transition_mode == Mode::Delta && ! config.support_literals) {
+            if(config.transition_mode == Mode::Delta and not config.support_literals) {
                config.support_literals = true;
             }
             return config;
@@ -77,10 +77,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
 {
    ensure_node_feature_dims(builder);
 
-   if(horizon_config_.transition_mode == Mode::Delta && ! config_.support_literals) {
+   if(horizon_config_.transition_mode == Mode::Delta and not config_.support_literals) {
       throw std::invalid_argument("Delta horizon encoding requires support_literals=true.");
    }
-   if(horizon_config_.transition_mode == Mode::Action && config_.ignore_actions) {
+   if(horizon_config_.transition_mode == Mode::Action and config_.ignore_actions) {
       throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
    }
 
@@ -97,7 +97,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          hash_set< std::string > fact_keys;
          for(const auto& atom : atoms) {
             const auto predicate = atom->get_predicate();
-            if(predicate->get_arity() == 0 && ! config_.add_nullary_predicates) {
+            if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
                continue;
             }
             const std::string node_type = RelationFormatter::format_predicate(predicate);
@@ -170,7 +170,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       if(include_static) {
          const auto& literals = problem.get_initial_literals< mimir::formalism::StaticTag >();
          for(const auto& literal : literals) {
-            if(! literal->get_polarity()) {
+            if(not literal->get_polarity()) {
                continue;
             }
             auto atom = literal->get_atom();
@@ -256,7 +256,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
             std::vector< std::string > object_keys;
             if(predicate->get_arity() == 0) {
-               if(! config_.add_nullary_predicates) {
+               if(not config_.add_nullary_predicates) {
                   continue;
                }
                object_keys.emplace_back(config_.nullary_object_name);
@@ -305,6 +305,69 @@ void HorizonHGraphEncoderEngine::encode_impl(
          }
       };
 
+   auto encode_literal_atom_with_prefix = [&](
+                                             auto atom,
+                                             bool polarity,
+                                             const std::string& prefix,
+                                             std::span< const std::string > extra_objects
+                                          ) {
+      const auto predicate = atom->get_predicate();
+      if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
+         return;
+      }
+
+      const std::string node_type = RelationFormatter::format_predicate(
+         predicate, std::nullopt, std::nullopt, polarity
+      );
+      const std::string atom_str = RelationFormatter::format_atom(atom);
+      const std::string literal_str = fmt::format(
+         "{}{}", RelationFormatter::polarity_prefix(polarity), atom_str
+      );
+      const std::string node_key = prefix + literal_str;
+
+      const auto relation_idx = get_or_add_node(
+         node_type, node_key, builder, node_indices, node_names
+      );
+
+      std::vector< std::string > object_keys;
+      if(predicate->get_arity() == 0) {
+         object_keys.emplace_back(config_.nullary_object_name);
+      } else {
+         for(const auto& obj : atom->get_objects()) {
+            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+         }
+      }
+
+      size_t pos = 0;
+      for(const auto& obj_key : extra_objects) {
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(pos++);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+      for(const auto& obj_key : object_keys) {
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(pos++);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
+      const std::string rel_key = relation_key(node_type, node_key);
+      auto& symbols = relation_to_symbols[rel_key];
+      for(const auto& obj_key : extra_objects) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+   };
+
    auto encode_goal_satisfaction_with_prefix =
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
@@ -320,7 +383,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
             const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                                    : GoalSatisfaction::unsatisfied;
-            if(! relation_dict_.goal_satisfaction_derivations.contains(sat)) {
+            if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
                continue;
             }
 
@@ -350,7 +413,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
             std::vector< std::string > object_keys;
             if(predicate->get_arity() == 0) {
-               if(! config_.add_nullary_predicates) {
+               if(not config_.add_nullary_predicates) {
                   continue;
                }
                object_keys.emplace_back(config_.nullary_object_name);
@@ -467,7 +530,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       std::span{goals.derived_goals}, goals.derived_goal_levels, root_prefix, root_extra
    );
 
-   if(! goals.static_goals.empty()) {
+   if(not goals.static_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
          std::span{goals.static_goals},
          goals.static_goal_levels,
@@ -476,7 +539,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          root_extra
       );
    }
-   if(! goals.fluent_goals.empty()) {
+   if(not goals.fluent_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
          std::span{goals.fluent_goals},
          goals.fluent_goal_levels,
@@ -485,7 +548,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          root_extra
       );
    }
-   if(! goals.derived_goals.empty()) {
+   if(not goals.derived_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::DerivedTag >(
          std::span{goals.derived_goals},
          goals.derived_goal_levels,
@@ -495,7 +558,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       );
    }
 
-   const bool encode_actions = (! config_.ignore_actions)
+   const bool encode_actions = (not config_.ignore_actions)
                                || (horizon_config_.transition_mode == Mode::Action);
 
    // Precompute root atoms (no statics) for delta mode.
@@ -529,10 +592,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
          const auto succ_fact_keys = encode_state_facts_with_prefix(
             node.state, prefix, succ_extra, false
          );
-         if(encode_actions && node.action.has_value()) {
+         if(encode_actions and node.action.has_value()) {
             encode_action_with_prefix(*node.action, prefix, succ_extra);
          }
-         if(! goals.static_goals.empty()) {
+         if(not goals.static_goals.empty()) {
             encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
                std::span{goals.static_goals},
                goals.static_goal_levels,
@@ -541,7 +604,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                succ_extra
             );
          }
-         if(! goals.fluent_goals.empty()) {
+         if(not goals.fluent_goals.empty()) {
             encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
                std::span{goals.fluent_goals},
                goals.fluent_goal_levels,
@@ -550,7 +613,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                succ_extra
             );
          }
-         if(! goals.derived_goals.empty()) {
+         if(not goals.derived_goals.empty()) {
             encode_goal_satisfaction_with_prefix
                .template operator()< mimir::formalism::DerivedTag >(
                   std::span{goals.derived_goals},
@@ -561,10 +624,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                );
          }
       } else if(horizon_config_.transition_mode == Mode::Delta) {
-         // Repositories are cached internally; we need mutable access to create delta literals.
-         auto& repos = const_cast< mimir::formalism::Repositories& >(
-            node.state.get_problem().get_repositories()
-         );
+         const auto& repos = node.state.get_problem().get_repositories();
          const auto succ_fluents = repos
                                       .get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
                                          node.state.get_atoms< mimir::formalism::FluentTag >()
@@ -573,11 +633,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
             succ_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
                node.state.get_atoms< mimir::formalism::DerivedTag >()
             );
-
-         std::vector< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag > >
-            fluent_literals;
-         std::vector< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag > >
-            derived_literals;
          hash_set< int > added_fluents;
          hash_set< int > removed_fluents;
          hash_set< int > added_derived;
@@ -585,60 +640,49 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
          hash_set< int > succ_fluent_indices;
          for(const auto& atom : succ_fluents) {
-            if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+            if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                continue;
             }
             succ_fluent_indices.insert(atom->get_index());
-            if(! root_fluent_indices.contains(atom->get_index())) {
+            if(not root_fluent_indices.contains(atom->get_index())) {
                added_fluents.insert(atom->get_index());
-               fluent_literals.push_back(repos.get_or_create_ground_literal(true, atom));
+               encode_literal_atom_with_prefix(atom, true, prefix, succ_extra);
             }
          }
          for(const auto& idx : root_fluent_indices) {
-            if(! succ_fluent_indices.contains(idx)) {
+            if(not succ_fluent_indices.contains(idx)) {
                removed_fluents.insert(idx);
                auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
-               if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               fluent_literals.push_back(repos.get_or_create_ground_literal(false, atom));
+               encode_literal_atom_with_prefix(atom, false, prefix, succ_extra);
             }
          }
 
          hash_set< int > succ_derived_indices;
          for(const auto& atom : succ_derived) {
-            if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+            if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                continue;
             }
             succ_derived_indices.insert(atom->get_index());
-            if(! root_derived_indices.contains(atom->get_index())) {
+            if(not root_derived_indices.contains(atom->get_index())) {
                added_derived.insert(atom->get_index());
-               derived_literals.push_back(repos.get_or_create_ground_literal(true, atom));
+               encode_literal_atom_with_prefix(atom, true, prefix, succ_extra);
             }
          }
          for(const auto& idx : root_derived_indices) {
-            if(! succ_derived_indices.contains(idx)) {
+            if(not succ_derived_indices.contains(idx)) {
                removed_derived.insert(idx);
                auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
-               if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               derived_literals.push_back(repos.get_or_create_ground_literal(false, atom));
+               encode_literal_atom_with_prefix(atom, false, prefix, succ_extra);
             }
          }
 
-         hash_map< mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >, int >
-            empty_fluent_levels;
-         hash_map< mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >, int >
-            empty_derived_levels;
-         encode_literals_with_prefix.template operator()< mimir::formalism::FluentTag >(
-            std::span{fluent_literals}, empty_fluent_levels, prefix, succ_extra
-         );
-         encode_literals_with_prefix.template operator()< mimir::formalism::DerivedTag >(
-            std::span{derived_literals}, empty_derived_levels, prefix, succ_extra
-         );
-
-         if(encode_actions && node.action.has_value()) {
+         if(encode_actions and node.action.has_value()) {
             encode_action_with_prefix(*node.action, prefix, succ_extra);
          }
 
@@ -661,10 +705,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
                      } else if(removed_match != goal->get_polarity()) {
                         sat = GoalSatisfaction::added_unsatisfied;
                      }
-                     if(! sat.has_value()) {
+                     if(not sat.has_value()) {
                         continue;
                      }
-                     if(! relation_dict_.goal_satisfaction_derivations.contains(*sat)) {
+                     if(not relation_dict_.goal_satisfaction_derivations.contains(*sat)) {
                         continue;
                      }
                      encode_literals_with_prefix.template operator()< GoalTag >(
@@ -693,7 +737,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             );
          }
       } else if(horizon_config_.transition_mode == Mode::Action) {
-         if(encode_actions && node.action.has_value()) {
+         if(encode_actions and node.action.has_value()) {
             encode_action_with_prefix(*node.action, prefix, succ_extra);
          }
       }
@@ -817,12 +861,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    // 7. Finalize node names
    for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(! node_names.contains(node_type)) {
+      if(not node_names.contains(node_type)) {
          builder.set_node_names(node_type, {});
       }
    }
 
-   if(! nodes.empty()) {
+   if(not nodes.empty()) {
       std::vector< int64_t > target_positions;
       std::vector< int64_t > target_depths;
       std::vector< std::string > target_names;
@@ -851,7 +895,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       builder.set_graph_attr("target_symbol_prefix", horizon_config_.target_symbol_prefix);
       builder.set_graph_attr("parent_relation", horizon_config_.parent_relation);
    }
-   if(! node_names.contains(config_.symbol_type_id)) {
+   if(not node_names.contains(config_.symbol_type_id)) {
       builder.set_node_names(config_.symbol_type_id, {});
       builder.set_object_names({});
    } else {
@@ -864,14 +908,14 @@ void HorizonHGraphEncoderEngine::encode_impl(
          hash_set< std::string > target_set;
          target_set.reserve(target_keys.size());
          for(const auto& key : target_keys) {
-            if(! key.empty()) {
+            if(not key.empty()) {
                target_set.insert(key);
             }
          }
          std::vector< std::string > object_names;
          object_names.reserve(symbol_names.size());
          for(const auto& name : symbol_names) {
-            if(! target_set.contains(name)) {
+            if(not target_set.contains(name)) {
                object_names.push_back(name);
             }
          }

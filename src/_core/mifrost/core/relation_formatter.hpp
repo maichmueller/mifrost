@@ -40,7 +40,7 @@ struct GoalLevel: strong::type< std::size_t, GoalLevel, strong::regular > {
    using base::base;  // keep the normal constructors
 
    template < std::integral I >
-      requires(! std::same_as< detail::raw_t< I >, bool >)
+      requires(not std::same_as< detail::raw_t< I >, bool >)
    explicit constexpr GoalLevel(I v) : base(static_cast< std::size_t >(v))
    {
    }
@@ -168,14 +168,22 @@ struct RelationFormatter {
       mimir::formalism::GroundLiteral< P > literal,
       GoalLevelArg goal_level = std::nullopt,
       SatisfactionArg satisfaction = std::nullopt,
-      [[maybe_unused]] PolarityArg polarity = std::nullopt,
+      PolarityArg polarity = std::nullopt,
       const std::string_view suffix = ""
    )
    {
       // Optional arguments are resolved at compile time via overloads on std::nullopt_t.
+      const bool literal_polarity = [&]() {
+         if constexpr(std::is_same_v< PolarityArg, std::nullopt_t >) {
+            return literal->get_polarity();
+         } else {
+            return polarity;
+         }
+      }();
       const std::string atom_str = format_atom(literal->get_atom(), suffix);
-      const std::string literal_str = literal->get_polarity() ? atom_str
-                                                              : fmt::format("(not {})", atom_str);
+      const std::string literal_str = fmt::format(
+         "{}{}", polarity_prefix(literal_polarity), atom_str
+      );
       return fmt::format(
          "{}{}{}",
          literal_str,

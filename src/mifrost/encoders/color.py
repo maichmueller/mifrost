@@ -7,8 +7,8 @@ import networkx as nx
 import torch
 from torch_geometric.data import Batch, Data
 
-from ._core import BatchBuilder, ColorEncoderConfig, ColorEncoderEngine, GoalInputs
-from .encoders import _advanced_domain, _advanced_state, _split_goals
+from .._core import BatchBuilder, ColorEncoderConfig, ColorEncoderEngine, GoalInputs
+from .common import _advanced_domain, _advanced_state, _split_goals
 
 
 def _parts_to_pyg_homo(
@@ -227,6 +227,8 @@ class ColorEncoder:
         if is_state_like:
             state_list = [states]
         else:
+            if isinstance(states, (str, bytes)):
+                raise TypeError("encode_batch expects a state or an iterable of states")
             state_list = list(states)
 
         builder = BatchBuilder()
@@ -234,6 +236,7 @@ class ColorEncoder:
         shared_inputs: GoalInputs | None = None
         if goals is not None:
             shared_inputs, _ = _split_goals(goals, subgoal_layers)
+
         for state in state_list:
             adv_state = _advanced_state(state)
             if goals is None and subgoal_layers is None:
@@ -277,44 +280,36 @@ class ColorEncoder:
         graph = nx.Graph()
         node_names = getattr(data, "node_names", None)
         if not node_names:
-            count = int(getattr(data, "num_nodes", 0) or 0)
+            if hasattr(data, "x") and data.x is not None:
+                count = data.x.shape[0]
+            else:
+                count = getattr(data, "num_nodes", 0) or 0
             node_names = [str(i) for i in range(count)]
 
         for i, name in enumerate(node_names):
-            attrs: dict[str, Any] = {}
-            if hasattr(data, "x") and data.x is not None and data.x.numel() > i:
-                attrs["type"] = float(data.x.view(-1)[i].item())
-            else:
-                attrs["type"] = 0
+            val = data.x[i] if hasattr(data, "x") and data.x is not None else 0
+            attrs = {"type": val.item() if torch.is_tensor(val) else val}
             if hasattr(data, "goal_level") and data.goal_level is not None:
                 gval = data.goal_level[i]
                 attrs["goal_level"] = gval.item() if torch.is_tensor(gval) else gval
             graph.add_node(name, **attrs)
 
-        if hasattr(data, "edge_index") and data.edge_index is not None:
-            edge_index = data.edge_index
-            edge_attr = data.edge_attr if hasattr(data, "edge_attr") else None
-            for e in range(edge_index.size(1)):
-                u_idx = int(edge_index[0, e].item())
-                v_idx = int(edge_index[1, e].item())
-                u = node_names[u_idx] if u_idx < len(node_names) else u_idx
-                v = node_names[v_idx] if v_idx < len(node_names) else v_idx
+        if hasattr(data, "edge_index"):
+            for i in range(data.edge_index.shape[1]):
+                u_idx = data.edge_index[0, i].item()
+                v_idx = data.edge_index[1, i].item()
+                u_name = node_names[u_idx]
+                v_name = node_names[v_idx]
                 attrs = {}
-                if edge_attr is not None and edge_attr.numel() > e:
-                    attrs["type"] = int(edge_attr.view(-1)[e].item())
-                graph.add_edge(u, v, **attrs)
+                if hasattr(data, "edge_attr") and data.edge_attr is not None:
+                    val = data.edge_attr[i]
+                    attrs["type"] = (
+                        int(val.item()) if torch.is_tensor(val) else int(val)
+                    )
+                graph.add_edge(u_name, v_name, **attrs)
 
+        graph.graph["encoder_hash"] = getattr(data, "encoder_hash", None)
         return graph
-
-    def draw(self, data: Data, **kwargs):
-        import matplotlib.pyplot as plt
-
-        graph = self.to_networkx(data)
-        ax = kwargs.pop("ax", None)
-        if ax is None:
-            _, ax = plt.subplots()
-        nx.draw(graph, ax=ax, **kwargs)
-        return ax
 
 
 __all__ = ["ColorEncoder", "ColorEncoderStream"]

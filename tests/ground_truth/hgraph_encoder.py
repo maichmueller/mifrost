@@ -71,8 +71,11 @@ class RelationFormatter:
         goal_level: int | None = None,
         goal_satisfaction: bool | str | None = None,
     ) -> str:
+        polarity = literal.get_polarity()
+        atom_str = cls.format_atom(literal.get_atom())
+        literal_str = f"{cls.polarity_prefixes[polarity]}{atom_str}"
         return (
-            f"{literal}"
+            f"{literal_str}"
             f"{cls.goal_level_suffixes[goal_level]}"
             f"{cls.goal_satisfaction_suffixes[goal_satisfaction]}"
         )

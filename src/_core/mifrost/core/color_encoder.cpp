@@ -79,7 +79,7 @@ void ColorEncoderEngine::encode_impl(
    BatchBuilder& builder
 )
 {
-   if(! actions.empty()) {
+   if(not actions.empty()) {
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
 
@@ -103,10 +103,10 @@ void ColorEncoderEngine::encode_impl(
       );
       if(inserted) {
          buffers.node_names.push_back(name);
-         if(! config_.edge_features) {
+         if(not config_.edge_features) {
             buffers.node_colors.push_back(color.value_or(0.0f));
          }
-      } else if(! config_.edge_features && color.has_value()) {
+      } else if(not config_.edge_features and color.has_value()) {
          buffers.node_colors[it->second] = *color;
       }
       return it->second;
@@ -121,7 +121,7 @@ void ColorEncoderEngine::encode_impl(
    };
 
    auto add_predicate_self_edge = [&](const std::string& predicate_node, int64_t idx) {
-      if(! config_.edge_features) {
+      if(not config_.edge_features) {
          return;
       }
       if(buffers.predicate_self_edges.contains(predicate_node)) {
@@ -176,7 +176,7 @@ void ColorEncoderEngine::encode_impl(
             const auto obj_idx = ensure_node(object_node, std::nullopt);
             const auto item_idx = ensure_node(base_name, std::nullopt);
             add_edge(obj_idx, item_idx, color);
-            if(predicate_idx.has_value() && pos == 0) {
+            if(predicate_idx.has_value() and pos == 0) {
                add_edge(*predicate_idx, item_idx, static_cast< float >(color_for(base_name)));
             }
          } else {
@@ -249,7 +249,7 @@ void ColorEncoderEngine::encode_impl(
             const auto obj_idx = ensure_node(object_node, std::nullopt);
             const auto item_idx = ensure_node(base_name, std::nullopt);
             add_edge(obj_idx, item_idx, color);
-            if(predicate_idx.has_value() && pos == 0) {
+            if(predicate_idx.has_value() and pos == 0) {
                add_edge(*predicate_idx, item_idx, static_cast< float >(color_for(base_name)));
             }
          } else {
@@ -270,7 +270,7 @@ void ColorEncoderEngine::encode_impl(
    const auto& problem = state.get_problem();
    if(problem.get_initial_literals< mimir::formalism::StaticTag >().size() > 0) {
       for(const auto& literal : problem.get_initial_literals< mimir::formalism::StaticTag >()) {
-         if(! literal->get_polarity()) {
+         if(not literal->get_polarity()) {
             continue;
          }
          encode_atom(literal->get_atom(), std::nullopt);
@@ -309,7 +309,7 @@ void ColorEncoderEngine::encode_impl(
    builder.add_nodes(node_type, static_cast< int64_t >(buffers.node_names.size()));
    builder.set_node_names(node_type, buffers.node_names);
 
-   if(! config_.edge_features) {
+   if(not config_.edge_features) {
       builder.add_node_features(
          node_type,
          "x",
@@ -318,7 +318,7 @@ void ColorEncoderEngine::encode_impl(
       );
    }
 
-   if(! buffers.edge_src.empty()) {
+   if(not buffers.edge_src.empty()) {
       builder.add_edges(
          node_type,
          "edge",

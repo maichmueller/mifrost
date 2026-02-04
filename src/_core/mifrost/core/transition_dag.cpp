@@ -22,7 +22,7 @@ std::pair< int, int > TransitionDAG::register_transition(
 )
 {
    // Ensure parent exists
-   if(! contains(parent)) {
+   if(not contains(parent)) {
       throw std::invalid_argument("Parent state not in DAG");
    }
 
@@ -30,7 +30,7 @@ std::pair< int, int > TransitionDAG::register_transition(
 
    // Add child if it doesn't exist
    int child_idx;
-   if(! contains(child)) {
+   if(not contains(child)) {
       child_idx = next_index_++;
       Node child_node{
          .state = child,
@@ -44,7 +44,7 @@ std::pair< int, int > TransitionDAG::register_transition(
    } else {
       child_idx = state_to_index_.at(child);
       // Update action if not already set
-      if(action.has_value() && ! nodes_ordered_[child_idx].action.has_value()) {
+      if(action.has_value() and not nodes_ordered_[child_idx].action.has_value()) {
          nodes_ordered_[child_idx].action = action;
       }
    }
@@ -137,7 +137,7 @@ void TransitionDAG::finalize_depths()
    visited.insert(0);
    nodes_ordered_[0].depth = 0;
 
-   while(! queue.empty()) {
+   while(not queue.empty()) {
       int current_idx = queue.front();
       queue.pop();
 

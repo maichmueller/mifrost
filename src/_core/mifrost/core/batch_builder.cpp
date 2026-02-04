@@ -12,6 +12,7 @@
 #include <tuple>
 
 #include "schema.hpp"
+#include "utils/macro.hpp"
 
 namespace mifrost {
 
@@ -46,7 +47,7 @@ void BatchBuilder::add_node_features(
 
    int64_t num_nodes = data.size() / feature_dim;
    auto [it, inserted] = current_node_counts.try_emplace(node_type, num_nodes);
-   if(! inserted && it->second < num_nodes) {
+   if(not inserted and it->second < num_nodes) {
       it->second = num_nodes;
    }
 }
@@ -54,7 +55,7 @@ void BatchBuilder::add_node_features(
 void BatchBuilder::set_node_feature_dim(const std::string& node_type, int dim)
 {
    auto [it, inserted] = node_feature_dims.try_emplace(node_type, dim);
-   if(! inserted && it->second != dim) {
+   if(not inserted and it->second != dim) {
       throw std::invalid_argument(
          fmt::format("Node feature dim mismatch for node_type '{}'", node_type)
       );
@@ -67,7 +68,7 @@ void BatchBuilder::add_nodes(const std::string& node_type, int64_t count)
       throw std::invalid_argument("Node count must be non-negative");
    }
    auto [it, inserted] = current_node_counts.try_emplace(node_type, count);
-   if(! inserted && it->second < count) {
+   if(not inserted and it->second < count) {
       it->second = count;
    }
 }
@@ -115,7 +116,7 @@ void BatchBuilder::set_node_names(const std::string& node_type, std::vector< std
       existing.insert(existing.end(), names.begin(), names.end());
    }
    auto [count_it, count_inserted] = current_node_counts.try_emplace(node_type, graph_count);
-   if(! count_inserted && count_it->second < graph_count) {
+   if(not count_inserted and count_it->second < graph_count) {
       count_it->second = graph_count;
    }
 }
@@ -257,6 +258,39 @@ void vector_deleter(void* p) noexcept
    delete static_cast< std::vector< T >* >(p);
 }
 
+template < typename T >
+std::vector< T >* heap_vector(std::vector< T >&& vec, bool compact)
+{
+   auto* heap_vec = new std::vector< T >(std::move(vec));
+   if(compact) {
+      if(heap_vec->capacity() != heap_vec->size()) {
+         std::vector< T > tight(heap_vec->begin(), heap_vec->end());
+         *heap_vec = std::move(tight);
+      }
+   } else {
+      heap_vec->shrink_to_fit();
+   }
+   return heap_vec;
+}
+
+template < typename T >
+auto vector_to_1d_ndarray(std::vector< T >&& vec, bool compact = false)
+{
+   auto* heap_vec = heap_vector(std::move(vec), compact);
+   size_t shape[1] = {heap_vec->size()};
+   nb::capsule owner(heap_vec, vector_deleter< T >);
+   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
+}
+
+template < typename T >
+auto vector_to_2d_ndarray(std::vector< T >&& vec, size_t rows, size_t cols, bool compact = false)
+{
+   auto* heap_vec = heap_vector(std::move(vec), compact);
+   size_t shape[2] = {rows, cols};
+   nb::capsule owner(heap_vec, vector_deleter< T >);
+   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(heap_vec->data(), 2, shape, owner);
+}
+
 // --- Build / Export ---
 
 nb::dict BatchBuilder::build_dict()
@@ -270,32 +304,18 @@ nb::dict BatchBuilder::build_dict()
             using VectorType = std::decay_t< decltype(items) >;
             using ScalarType = typename VectorType::value_type;
 
-            // Move the vector onto the heap so the capsule can own it
-            auto* heap_vec = new VectorType(std::move(items));
-
-            size_t size = heap_vec->size();
-
-            nb::capsule owner(heap_vec, [](void* p) noexcept {
-               delete static_cast< VectorType* >(p);
-            });
-
+            std::vector< ScalarType > vec = FWD(items);
+            size_t size = vec.size();
             if(is_edge_index) {
-               size_t shape[1] = {size};
-               auto tensor = nb::ndarray< nb::numpy, ScalarType, nb::shape< -1 > >(
-                  heap_vec->data(), 1, shape, owner
-               );
-               out[key.c_str()] = tensor;
+               out[key.c_str()] = vector_to_1d_ndarray(std::move(vec));
                return;
             }
 
             int dim = col.dim;
             size_t num_rows = dim > 0 ? size / dim : 0;
-            size_t shape[2] = {num_rows, (size_t) dim};
-            auto tensor = nb::ndarray< nb::numpy, ScalarType, nb::shape< -1, -1 > >(
-               heap_vec->data(), 2, shape, owner
+            out[key.c_str()] = vector_to_2d_ndarray(
+               std::move(vec), num_rows, static_cast< size_t >(dim)
             );
-
-            out[key.c_str()] = tensor;
          },
          col.data
       );
@@ -304,17 +324,7 @@ nb::dict BatchBuilder::build_dict()
    // Also export Ptr columns (converting them to tensor columns first
    // essentially)
    for(auto& [ntype, p_vec] : ptrs) {
-      auto* heap_vec = new std::vector< int64_t >(std::move(p_vec));
-      size_t shape[1] = {heap_vec->size()};
-
-      nb::capsule owner(heap_vec, [](void* p) noexcept {
-         delete static_cast< std::vector< int64_t >* >(p);
-      });
-
-      auto tensor = nb::ndarray< nb::numpy, int64_t, nb::shape< -1 > >(
-         heap_vec->data(), 1, shape, owner
-      );
-
+      auto tensor = vector_to_1d_ndarray(std::move(p_vec), true);
       std::string key = ntype + "/ptr";
       out[key.c_str()] = tensor;
    }
@@ -348,7 +358,7 @@ nb::object BatchBuilder::build()
       );
    }
    for(const auto& [node_type, ptr] : ptrs) {
-      if(! ptr.empty()) {
+      if(not ptr.empty()) {
          const int64_t count = ptr.back();
          auto& existing = node_counts[node_type];
          if(count > existing) {
@@ -371,7 +381,7 @@ nb::object BatchBuilder::build()
    }
    for(const auto& [node_type, dim] : node_feature_dims) {
       (void) dim;
-      if(! node_counts.contains(node_type)) {
+      if(not node_counts.contains(node_type)) {
          node_counts[node_type] = 0;
       }
    }
@@ -401,7 +411,7 @@ nb::object BatchBuilder::build()
          ptr_vectors[node_type] = {0, count};
          batch_vectors[node_type] = std::vector< int64_t >(count, 0);
       }
-      if(! node_counts.empty()) {
+      if(not node_counts.empty()) {
          graph_count = 1;
       }
    }
@@ -423,7 +433,7 @@ nb::object BatchBuilder::build()
 
    for(auto [key_handle, value_handle] : payload) {
       const std::string key = nb::str(key_handle).c_str();
-      if(key.size() >= 4 && key.compare(key.size() - 4, 4, "/ptr") == 0) {
+      if(key.size() >= 4 and key.compare(key.size() - 4, 4, "/ptr") == 0) {
          continue;
       }
 
@@ -465,7 +475,7 @@ nb::object BatchBuilder::build()
    }
 
    for(const auto& [edge_key, parts] : edge_parts) {
-      if(! parts.src.is_valid() || ! parts.dst.is_valid()) {
+      if(not parts.src.is_valid() || not parts.dst.is_valid()) {
          throw std::invalid_argument("Incomplete edge_index parts for edge type");
       }
       nb::object edge_index = torch.attr("stack")(
@@ -509,7 +519,7 @@ nb::object BatchBuilder::build()
    for(const auto& [node_type, count] : node_counts) {
       nb::object store = batch.attr("__getitem__")(node_type);
       bool has_x = nb::cast< bool >(store.attr("__contains__")("x"));
-      if(! has_x) {
+      if(not has_x) {
          int dim = 0;
          auto dim_it = node_feature_dims.find(node_type);
          if(dim_it != node_feature_dims.end()) {
@@ -527,7 +537,7 @@ nb::object BatchBuilder::build()
       if(graph_count > 0) {
          std::vector< std::vector< std::string > > per_graph;
          auto ptr_it = ptr_vectors.find(node_type);
-         if(ptr_it != ptr_vectors.end() && ptr_it->second.size() >= 2) {
+         if(ptr_it != ptr_vectors.end() and ptr_it->second.size() >= 2) {
             const auto& ptr = ptr_it->second;
             per_graph.reserve(ptr.size() - 1);
             for(size_t i = 0; i + 1 < ptr.size(); ++i) {
@@ -535,7 +545,7 @@ nb::object BatchBuilder::build()
                const auto end = static_cast< size_t >(
                   std::min< int64_t >(ptr[i + 1], static_cast< int64_t >(names.size()))
                );
-               if(start <= end && end <= names.size()) {
+               if(start <= end and end <= names.size()) {
                   per_graph.emplace_back(names.begin() + start, names.begin() + end);
                } else {
                   per_graph.emplace_back();
@@ -549,7 +559,7 @@ nb::object BatchBuilder::build()
          store.attr("node_names") = nb::cast(names);
       }
    }
-   if(! object_names.empty()) {
+   if(not object_names.empty()) {
       if(graph_count > 0) {
          std::vector< std::vector< std::string > > per_graph;
          bool assigned = false;
@@ -568,7 +578,7 @@ nb::object BatchBuilder::build()
                const auto end = static_cast< size_t >(
                   std::min< int64_t >(ptr[i + 1], static_cast< int64_t >(object_names.size()))
                );
-               if(start <= end && end <= object_names.size()) {
+               if(start <= end and end <= object_names.size()) {
                   per_graph.emplace_back(object_names.begin() + start, object_names.begin() + end);
                } else {
                   per_graph.emplace_back();
@@ -577,7 +587,7 @@ nb::object BatchBuilder::build()
             assigned = true;
             break;
          }
-         if(! assigned) {
+         if(not assigned) {
             per_graph.emplace_back(object_names);
          }
          batch.attr("object_names") = nb::cast(per_graph);
@@ -619,7 +629,7 @@ nb::dict BatchBuilder::build_parts()
       );
    }
    for(const auto& [node_type, ptr] : ptrs) {
-      if(! ptr.empty()) {
+      if(not ptr.empty()) {
          const int64_t count = ptr.back();
          auto& existing = node_counts[node_type];
          if(count > existing) {
@@ -642,7 +652,7 @@ nb::dict BatchBuilder::build_parts()
    }
    for(const auto& [node_type, dim] : node_feature_dims) {
       (void) dim;
-      if(! node_counts.contains(node_type)) {
+      if(not node_counts.contains(node_type)) {
          node_counts[node_type] = 0;
       }
    }
@@ -672,7 +682,7 @@ nb::dict BatchBuilder::build_parts()
          ptr_vectors[node_type] = {0, count};
          batch_vectors[node_type] = std::vector< int64_t >(count, 0);
       }
-      if(! node_counts.empty()) {
+      if(not node_counts.empty()) {
          graph_count = 1;
       }
    }
@@ -721,7 +731,7 @@ nb::dict BatchBuilder::build_parts()
          continue;
       }
       const bool is_edge = key.find('|') != std::string::npos;
-      if(! is_edge) {
+      if(not is_edge) {
          node_specs.push_back(
             NodeTensorSpec{
                key.substr(0, slash),
@@ -803,7 +813,7 @@ nb::dict BatchBuilder::build_parts()
    out["object_names"] = nb::cast(object_names);
    out["num_graphs"] = graph_count;
 
-   if(! graph_attrs.empty()) {
+   if(not graph_attrs.empty()) {
       nb::dict graph_attrs_dict;
       for(const auto& [key, value] : graph_attrs) {
          std::visit([&](const auto& v) { graph_attrs_dict[key.c_str()] = nb::cast(v); }, value);

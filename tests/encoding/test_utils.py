@@ -81,7 +81,8 @@ def format_atom_with_suffix(atom, suffix: str = "") -> str:
 
 def format_literal_with_suffix(atom, polarity: bool, suffix: str = "") -> str:
     atom_str = format_atom_with_suffix(atom, suffix)
-    return atom_str if polarity else f"(not {atom_str})"
+    prefix = "[+]" if polarity else "[-]"
+    return f"{prefix}{atom_str}"
 
 
 def hetero_data_equal(data: HeteroData, expected: HeteroData):

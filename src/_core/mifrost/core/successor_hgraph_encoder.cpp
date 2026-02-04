@@ -20,7 +20,7 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
     : HGraphEncoderEngine(
          domain,
          [&]() {
-            if(config.successor_mode == Mode::Delta && ! config.support_literals) {
+            if(config.successor_mode == Mode::Delta and not config.support_literals) {
                config.support_literals = true;
             }
             return config;
@@ -42,7 +42,7 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
     : HGraphEncoderEngine(
          domain,
          [&]() {
-            if(config.successor_mode == Mode::Delta && ! config.support_literals) {
+            if(config.successor_mode == Mode::Delta and not config.support_literals) {
                config.support_literals = true;
             }
             return config;
@@ -108,8 +108,12 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       const std::string atom_str = RelationFormatter::format_atom< Tag >(
          atom, successor_config_.successor_suffix
       );
-      const std::string node_key = (polarity.has_value() && ! *polarity)
-                                      ? fmt::format("(not {})", atom_str)
+      const std::string node_key = polarity.has_value()
+                                      ? fmt::format(
+                                           "{}{}",
+                                           RelationFormatter::polarity_prefix(*polarity),
+                                           atom_str
+                                        )
                                       : atom_str;
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names
@@ -141,7 +145,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          symbol_to_relations[obj_key].insert(rel_key);
       }
 
-      if(! polarity.has_value() || *polarity) {
+      if(not polarity.has_value() || *polarity) {
          suc_fact_keys.insert(RelationFormatter::format_atom< Tag >(atom));
       }
    };
@@ -232,7 +236,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
 
    if(successor_config_.successor_mode == Mode::Full) {
       // 5. Encode goal satisfaction for current
-      if(! goals.static_goals.empty()) {
+      if(not goals.static_goals.empty()) {
          encode_goal_satisfaction(
             std::span{goals.static_goals},
             goals.static_goal_levels,
@@ -244,7 +248,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
             symbol_to_relations
          );
       }
-      if(! goals.fluent_goals.empty()) {
+      if(not goals.fluent_goals.empty()) {
          encode_goal_satisfaction(
             std::span{goals.fluent_goals},
             goals.fluent_goal_levels,
@@ -256,7 +260,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
             symbol_to_relations
          );
       }
-      if(! goals.derived_goals.empty()) {
+      if(not goals.derived_goals.empty()) {
          encode_goal_satisfaction(
             std::span{goals.derived_goals},
             goals.derived_goal_levels,
@@ -270,7 +274,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       }
 
       if(successor_config_.include_successor_goal_satisfaction) {
-         if(! goals.static_goals.empty()) {
+         if(not goals.static_goals.empty()) {
             encode_goal_satisfaction(
                std::span{goals.static_goals},
                goals.static_goal_levels,
@@ -283,7 +287,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
                successor_config_.successor_suffix
             );
          }
-         if(! goals.fluent_goals.empty()) {
+         if(not goals.fluent_goals.empty()) {
             encode_goal_satisfaction(
                std::span{goals.fluent_goals},
                goals.fluent_goal_levels,
@@ -296,7 +300,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
                successor_config_.successor_suffix
             );
          }
-         if(! goals.derived_goals.empty()) {
+         if(not goals.derived_goals.empty()) {
             encode_goal_satisfaction(
                std::span{goals.derived_goals},
                goals.derived_goal_levels,
@@ -319,11 +323,11 @@ void SuccessorHGraphEncoderEngine::encode_impl(
 
    // 8. Finalize node names
    for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(! node_names.contains(node_type)) {
+      if(not node_names.contains(node_type)) {
          builder.set_node_names(node_type, {});
       }
    }
-   if(! node_names.contains(config_.symbol_type_id)) {
+   if(not node_names.contains(config_.symbol_type_id)) {
       builder.set_node_names(config_.symbol_type_id, {});
    } else {
       builder.set_node_names(config_.symbol_type_id, node_names[config_.symbol_type_id]);

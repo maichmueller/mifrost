@@ -56,7 +56,7 @@ void HGraphEncoderEngine::initialize_from_domain()
    rel_config.top_type_predicates.insert(config_.symbol_type_id);
 
    std::vector< mimir::formalism::Action > actions;
-   if(! config_.ignore_actions) {
+   if(not config_.ignore_actions) {
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
    relation_dict_ = RelationDict::build(domain_, actions, rel_config);
@@ -169,12 +169,12 @@ void HGraphEncoderEngine::encode_impl(
       relation_to_symbols,
       symbol_to_relations
    );
-   if(! config_.ignore_actions) {
+   if(not config_.ignore_actions) {
       encode_actions(
          actions, builder, node_indices, node_names, relation_to_symbols, symbol_to_relations
       );
    }
-   if(! goals.static_goals.empty()) {
+   if(not goals.static_goals.empty()) {
       encode_goal_satisfaction(
          std::span{goals.static_goals},
          goals.static_goal_levels,
@@ -186,7 +186,7 @@ void HGraphEncoderEngine::encode_impl(
          symbol_to_relations
       );
    }
-   if(! goals.fluent_goals.empty()) {
+   if(not goals.fluent_goals.empty()) {
       encode_goal_satisfaction(
          std::span{goals.fluent_goals},
          goals.fluent_goal_levels,
@@ -198,7 +198,7 @@ void HGraphEncoderEngine::encode_impl(
          symbol_to_relations
       );
    }
-   if(! goals.derived_goals.empty()) {
+   if(not goals.derived_goals.empty()) {
       encode_goal_satisfaction(
          std::span{goals.derived_goals},
          goals.derived_goal_levels,
@@ -215,11 +215,11 @@ void HGraphEncoderEngine::encode_impl(
    }
 
    for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(! node_names.contains(node_type)) {
+      if(not node_names.contains(node_type)) {
          builder.set_node_names(node_type, {});
       }
    }
-   if(! node_names.contains(config_.symbol_type_id)) {
+   if(not node_names.contains(config_.symbol_type_id)) {
       builder.set_node_names(config_.symbol_type_id, {});
    } else {
       builder.set_node_names(config_.symbol_type_id, node_names[config_.symbol_type_id]);
@@ -338,7 +338,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
    if(config_.include_static) {
       const auto& literals = problem.get_initial_literals< mimir::formalism::StaticTag >();
       for(const auto& literal : literals) {
-         if(! literal->get_polarity()) {
+         if(not literal->get_polarity()) {
             continue;
          }
          handle_atom(literal->get_atom());
@@ -398,7 +398,7 @@ void HGraphEncoderEngine::encode_literals(
 
       std::vector< std::string > object_keys;
       if(predicate->get_arity() == 0) {
-         if(! config_.add_nullary_predicates) {
+         if(not config_.add_nullary_predicates) {
             continue;
          }
          object_keys.emplace_back(config_.nullary_object_name);
@@ -524,7 +524,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
       const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                              : GoalSatisfaction::unsatisfied;
-      if(! relation_dict_.goal_satisfaction_derivations.contains(sat)) {
+      if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
          continue;
       }
 
@@ -553,7 +553,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
 
       std::vector< std::string > object_keys;
       if(predicate->get_arity() == 0) {
-         if(! config_.add_nullary_predicates) {
+         if(not config_.add_nullary_predicates) {
             continue;
          }
          object_keys.emplace_back(config_.nullary_object_name);
@@ -654,12 +654,12 @@ void HGraphEncoderEngine::add_lgan_nn_edges(
          }
          bool is_subset = true;
          for(const auto& sym : arg_set) {
-            if(! tn.contains(sym)) {
+            if(not tn.contains(sym)) {
                is_subset = false;
                break;
             }
          }
-         if(! is_subset) {
+         if(not is_subset) {
             continue;
          }
          auto sym_idx_it = symbol_it->second.find(target_key);
@@ -680,7 +680,7 @@ void HGraphEncoderEngine::add_lgan_nn_edges(
 
 void HGraphEncoderEngine::ensure_empty_edge_types(BatchBuilder& builder) const
 {
-   if(! config_.include_empty_edge_types) {
+   if(not config_.include_empty_edge_types) {
       return;
    }
    for(const auto& [src, rel, dst] : all_edge_types_) {

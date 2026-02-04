@@ -8,7 +8,7 @@ import mifrost
 from mifrost.encoders import HGraphEncoder
 
 from .test_utils import (
-    format_atom_with_suffix,
+    format_literal_with_suffix,
     goal_inputs_from_problem,
     object_names,
     parts_to_pyg,
@@ -125,7 +125,7 @@ def test_successor_delta_marks_added_and_removed_atoms(small_blocks):
     for atom in added:
         if _arity(atom) == 0:
             continue
-        node_name = format_atom_with_suffix(atom, successor_suffix)
+        node_name = format_literal_with_suffix(atom, True, successor_suffix)
         node_type = formatter.format_predicate(
             _predicate(atom), polarity=True, suffix=successor_suffix
         )

@@ -28,7 +28,12 @@ option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
 #endif()
 #unset(_conan_generators)
 
-# Nanobind requires finding Python first
+# Nanobind requires finding Python first.
+# Prefer the active conda env if present to avoid ABI mismatches.
+if (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
+    set(Python_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+    set(Python_ROOT_DIR "$ENV{CONDA_PREFIX}")
+endif ()
 find_package(Python 3.8 COMPONENTS Interpreter Development.Module Development.Embed REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 if (NOT COMMAND nanobind_build_library)
@@ -259,9 +264,15 @@ if (BUILD_TESTING)
     add_executable(
             mifrost_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/color_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_stream_contract_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/horizon_hgraph_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/successor_hgraph_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/transition_dag_test.cpp"
     )
     target_include_directories(mifrost_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/_core")
     target_link_libraries(mifrost_tests PRIVATE GTest::gtest_main mifrost_core ${_python_embed_target})
+    target_compile_definitions(mifrost_tests PRIVATE MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
     add_test(NAME mifrost_tests COMMAND mifrost_tests)
 endif ()

@@ -41,7 +41,7 @@ void init_hgraph_encoders(nb::module_& m)
             const std::string& node_type,
             const std::string& attr_name,
             nb::ndarray< nb::numpy, float > data) {
-            if(data.ndim() != 1 && data.ndim() != 2) {
+            if(data.ndim() != 1 and data.ndim() != 2) {
                throw std::invalid_argument("add_node_features expects a 1D/2D array");
             }
             const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
@@ -82,7 +82,7 @@ void init_hgraph_encoders(nb::module_& m)
             const std::string& dst_type,
             const std::string& attr_name,
             nb::ndarray< nb::numpy, float > data) {
-            if(data.ndim() != 1 && data.ndim() != 2) {
+            if(data.ndim() != 1 and data.ndim() != 2) {
                throw std::invalid_argument("add_edge_features expects a 1D/2D array");
             }
             const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;

@@ -1,7 +1,6 @@
 import pytest
 from tests.conftest import problem_setup
-from mifrost.encoders import HGraphEncoder
-from mifrost.color_encoder import ColorEncoder
+from mifrost.encoders import ColorEncoder, HGraphEncoder
 
 
 SMALL_DOMAIN_CASES = [
