@@ -43,7 +43,6 @@ struct Schema {
    std::vector< NodeTensorSpec > node_tensors;
    std::vector< EdgeTensorSpec > edge_tensors;
    std::map< std::string, bool > flags;
-   nb::dict extensions;
 
    Schema();
 

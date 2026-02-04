@@ -50,7 +50,7 @@ struct RelationDict {
          for(auto pred : domain.get_predicates< Tag >()) {
             const auto& name = pred->get_name();
             const int arity = static_cast< int >(pred->get_arity());
-            out.arity[RelationFormatter::format_predicate(name)] = arity;
+            out.arity[RelationFormatter::format_predicate(pred)] = arity;
             if(config.top_type_predicates.contains(name)) {
                continue;
             }

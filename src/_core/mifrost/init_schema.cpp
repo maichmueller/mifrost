@@ -39,7 +39,6 @@ void init_schema(nb::module_& m)
       .def_rw("node_tensors", &Schema::node_tensors)
       .def_rw("edge_tensors", &Schema::edge_tensors)
       .def_rw("flags", &Schema::flags)
-      .def_rw("extensions", &Schema::extensions)
       .def("validate", &Schema::validate)
       .def("to_dict", &Schema::to_dict)
       .def_static("from_dict", &Schema::from_dict);

@@ -138,7 +138,22 @@ struct RelationFormatter {
    static std::string
    format_atom(mimir::formalism::GroundAtom< P > atom, const std::string_view suffix = "")
    {
-      return fmt::format("{}{}", mimir::to_string(atom), suffix);
+      const auto& predicate = atom->get_predicate();
+      const std::string name = fmt::format("{}{}", predicate->get_name(), suffix);
+      if(predicate->get_arity() == 0) {
+         return fmt::format("({})", name);
+      }
+      return fmt::format(
+         "({} {})",
+         name,
+         fmt::join(
+            std::views::transform(
+               atom->get_objects(),
+               [](const mimir::formalism::Object& obj) { return obj->get_name(); }
+            ),
+            " "
+         )
+      );
    }
 
    template <
@@ -158,10 +173,12 @@ struct RelationFormatter {
    )
    {
       // Optional arguments are resolved at compile time via overloads on std::nullopt_t.
+      const std::string atom_str = format_atom(literal->get_atom(), suffix);
+      const std::string literal_str = literal->get_polarity() ? atom_str
+                                                              : fmt::format("(not {})", atom_str);
       return fmt::format(
-         "{}{}{}{}",
-         mimir::to_string(literal),
-         suffix,
+         "{}{}{}",
+         literal_str,
          goal_level_suffix(goal_level),
          goal_satisfaction_suffix(satisfaction)
       );
@@ -190,6 +207,51 @@ struct RelationFormatter {
    static std::string format_object(const mimir::formalism::ObjectImpl& object)
    {
       return object.get_name();
+   }
+
+   template < typename... Args >
+   std::string operator()(Args&&... args) const
+   {
+      return format(std::forward< Args >(args)...);
+   }
+
+   template < typename... Args >
+   static std::string format(std::string_view name, Args&&... args)
+   {
+      return format_predicate(name, std::forward< Args >(args)...);
+   }
+
+   template < typename Tag, typename... Args >
+   static std::string format(mimir::formalism::Predicate< Tag > predicate, Args&&... args)
+   {
+      return format_predicate(predicate, std::forward< Args >(args)...);
+   }
+
+   template < typename P, typename... Args >
+   static std::string format(mimir::formalism::GroundLiteral< P > literal, Args&&... args)
+   {
+      return format_literal(literal, std::forward< Args >(args)...);
+   }
+
+   template < typename P, typename... Args >
+   static std::string format(mimir::formalism::GroundAtom< P > atom, Args&&... args)
+   {
+      return format_atom(atom, std::forward< Args >(args)...);
+   }
+
+   static std::string format(const mimir::formalism::ObjectImpl& object)
+   {
+      return format_object(object);
+   }
+
+   static std::string format(const mimir::formalism::GroundAction& action)
+   {
+      return format_action(action);
+   }
+
+   static std::string format(const mimir::formalism::ActionImpl& action)
+   {
+      return format_action_schema(action);
    }
 };
 

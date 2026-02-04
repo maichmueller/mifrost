@@ -8,7 +8,7 @@
 
 namespace mifrost {
 
-Schema::Schema() : extensions(nb::dict()) {}
+Schema::Schema() = default;
 
 void Schema::validate_base() const
 {
@@ -54,34 +54,34 @@ nb::dict Schema::to_dict() const
    out["node_types"] = node_type_list;
 
    nb::list edge_type_list;
-   for(const auto& edge_type : edge_types) {
+   for(const auto& [src, rel, dst] : edge_types) {
       nb::dict entry;
-      entry["src"] = edge_type.src;
-      entry["rel"] = edge_type.rel;
-      entry["dst"] = edge_type.dst;
+      entry["src"] = src;
+      entry["rel"] = rel;
+      entry["dst"] = dst;
       edge_type_list.append(entry);
    }
    out["edge_types"] = edge_type_list;
 
    nb::list node_tensor_list;
-   for(const auto& spec : node_tensors) {
+   for(const auto& [node_type, attr, key] : node_tensors) {
       nb::dict entry;
-      entry["node_type"] = spec.node_type;
-      entry["attr"] = spec.attr;
-      entry["key"] = spec.key;
+      entry["node_type"] = node_type;
+      entry["attr"] = attr;
+      entry["key"] = key;
       node_tensor_list.append(entry);
    }
    out["node_tensors"] = node_tensor_list;
 
    nb::list edge_tensor_list;
-   for(const auto& spec : edge_tensors) {
+   for(const auto& [edge_type, attr, key, part] : edge_tensors) {
       nb::dict entry;
-      entry["edge_type"] = spec.edge_type;
-      entry["attr"] = spec.attr;
-      if(! spec.part.empty()) {
-         entry["part"] = spec.part;
+      entry["edge_type"] = edge_type;
+      entry["attr"] = attr;
+      if(! part.empty()) {
+         entry["part"] = part;
       }
-      entry["key"] = spec.key;
+      entry["key"] = key;
       edge_tensor_list.append(entry);
    }
    out["edge_tensors"] = edge_tensor_list;
@@ -91,8 +91,8 @@ nb::dict Schema::to_dict() const
       flags_dict[key.c_str()] = value;
    }
    out["flags"] = flags_dict;
+   out["extensions"] = nb::dict{};
 
-   out["extensions"] = extensions;
    return out;
 }
 
@@ -113,11 +113,13 @@ Schema Schema::from_dict(const nb::dict& schema)
       out.edge_types.reserve(edge_type_list.size());
       for(nb::handle entry_handle : edge_type_list) {
          auto entry = nb::cast< nb::dict >(entry_handle);
-         EdgeType edge_type;
-         edge_type.src = nb::cast< std::string >(entry["src"]);
-         edge_type.rel = nb::cast< std::string >(entry["rel"]);
-         edge_type.dst = nb::cast< std::string >(entry["dst"]);
-         out.edge_types.push_back(std::move(edge_type));
+         out.edge_types.emplace_back(
+            EdgeType{
+               .src = nb::cast< std::string >(entry["src"]),
+               .rel = nb::cast< std::string >(entry["rel"]),
+               .dst = nb::cast< std::string >(entry["dst"])
+            }
+         );
       }
    }
    if(schema.contains("node_tensors")) {
@@ -125,11 +127,13 @@ Schema Schema::from_dict(const nb::dict& schema)
       out.node_tensors.reserve(node_tensor_list.size());
       for(nb::handle entry_handle : node_tensor_list) {
          auto entry = nb::cast< nb::dict >(entry_handle);
-         NodeTensorSpec spec;
-         spec.node_type = nb::cast< std::string >(entry["node_type"]);
-         spec.attr = nb::cast< std::string >(entry["attr"]);
-         spec.key = nb::cast< std::string >(entry["key"]);
-         out.node_tensors.push_back(std::move(spec));
+         out.node_tensors.emplace_back(
+            NodeTensorSpec{
+               .node_type = nb::cast< std::string >(entry["node_type"]),
+               .attr = nb::cast< std::string >(entry["attr"]),
+               .key = nb::cast< std::string >(entry["key"])
+            }
+         );
       }
    }
    if(schema.contains("edge_tensors")) {
@@ -137,21 +141,18 @@ Schema Schema::from_dict(const nb::dict& schema)
       out.edge_tensors.reserve(edge_tensor_list.size());
       for(nb::handle entry_handle : edge_tensor_list) {
          auto entry = nb::cast< nb::dict >(entry_handle);
-         EdgeTensorSpec spec;
-         spec.edge_type = nb::cast< int >(entry["edge_type"]);
-         spec.attr = nb::cast< std::string >(entry["attr"]);
-         spec.key = nb::cast< std::string >(entry["key"]);
-         if(entry.contains("part")) {
-            spec.part = nb::cast< std::string >(entry["part"]);
-         }
-         out.edge_tensors.push_back(std::move(spec));
+         out.edge_tensors.emplace_back(
+            EdgeTensorSpec{
+               .edge_type = nb::cast< int >(entry["edge_type"]),
+               .attr = nb::cast< std::string >(entry["attr"]),
+               .key = nb::cast< std::string >(entry["key"]),
+               .part = entry.contains("part") ? nb::cast< std::string >(entry["part"]) : ""
+            }
+         );
       }
    }
    if(schema.contains("flags")) {
       out.flags = nb::cast< std::map< std::string, bool > >(schema["flags"]);
-   }
-   if(schema.contains("extensions")) {
-      out.extensions = nb::cast< nb::dict >(schema["extensions"]);
    }
    out.validate();
    return out;

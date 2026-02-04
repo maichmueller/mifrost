@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <array>
+#include <mimir/search/formatter.hpp>
 #include <set>
+#include <sstream>
 
 namespace mifrost {
 
@@ -98,9 +100,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             if(predicate->get_arity() == 0 && ! config_.add_nullary_predicates) {
                continue;
             }
-            const std::string node_type = RelationFormatter::format_predicate(
-               predicate->get_name()
-            );
+            const std::string node_type = RelationFormatter::format_predicate(predicate);
             const std::string node_key = prefix + RelationFormatter::format_atom(atom);
             const auto relation_idx = get_or_add_node(
                node_type, node_key, builder, node_indices, node_names
@@ -227,7 +227,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             std::string node_key;
             auto format_with = [&](auto level_arg, auto satisfaction_arg) {
                node_type = RelationFormatter::format_predicate(
-                  predicate->get_name(), level_arg, satisfaction_arg, literal->get_polarity()
+                  predicate, level_arg, satisfaction_arg, literal->get_polarity()
                );
                node_key = prefix
                           + RelationFormatter::format_literal< GoalTag >(
@@ -333,12 +333,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
             if(goal_level.has_value()) {
                const GoalLevel level(*goal_level);
                node_type = RelationFormatter::format_predicate(
-                  predicate->get_name(), level, sat, goal->get_polarity()
+                  predicate, level, sat, goal->get_polarity()
                );
                node_key = prefix + RelationFormatter::format_literal< GoalTag >(goal, level, sat);
             } else {
                node_type = RelationFormatter::format_predicate(
-                  predicate->get_name(), std::nullopt, sat, goal->get_polarity()
+                  predicate, std::nullopt, sat, goal->get_polarity()
                );
                node_key = prefix
                           + RelationFormatter::format_literal< GoalTag >(goal, std::nullopt, sat);
@@ -585,6 +585,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
          hash_set< int > succ_fluent_indices;
          for(const auto& atom : succ_fluents) {
+            if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+               continue;
+            }
             succ_fluent_indices.insert(atom->get_index());
             if(! root_fluent_indices.contains(atom->get_index())) {
                added_fluents.insert(atom->get_index());
@@ -595,12 +598,18 @@ void HorizonHGraphEncoderEngine::encode_impl(
             if(! succ_fluent_indices.contains(idx)) {
                removed_fluents.insert(idx);
                auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
+               if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+                  continue;
+               }
                fluent_literals.push_back(repos.get_or_create_ground_literal(false, atom));
             }
          }
 
          hash_set< int > succ_derived_indices;
          for(const auto& atom : succ_derived) {
+            if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+               continue;
+            }
             succ_derived_indices.insert(atom->get_index());
             if(! root_derived_indices.contains(atom->get_index())) {
                added_derived.insert(atom->get_index());
@@ -611,6 +620,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
             if(! succ_derived_indices.contains(idx)) {
                removed_derived.insert(idx);
                auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
+               if(atom->get_predicate()->get_arity() == 0 && ! config_.add_nullary_predicates) {
+                  continue;
+               }
                derived_literals.push_back(repos.get_or_create_ground_literal(false, atom));
             }
          }
@@ -809,11 +821,62 @@ void HorizonHGraphEncoderEngine::encode_impl(
          builder.set_node_names(node_type, {});
       }
    }
+
+   if(! nodes.empty()) {
+      std::vector< int64_t > target_positions;
+      std::vector< int64_t > target_depths;
+      std::vector< std::string > target_names;
+      target_positions.reserve(nodes.size());
+      target_depths.reserve(nodes.size());
+      target_names.reserve(nodes.size());
+
+      const auto& symbol_indices = node_indices[config_.symbol_type_id];
+      for(const auto& node : nodes) {
+         const auto key = target_keys[node.index];
+         const auto it = symbol_indices.find(key);
+         if(it == symbol_indices.end()) {
+            continue;
+         }
+         target_positions.push_back(it->second);
+         target_depths.push_back(node.depth);
+
+         std::ostringstream stream;
+         stream << node.state;
+         target_names.emplace_back(stream.str());
+      }
+
+      builder.set_graph_attr("target_positions", std::move(target_positions));
+      builder.set_graph_attr("target_depths", std::move(target_depths));
+      builder.set_graph_attr("target_names", std::move(target_names));
+      builder.set_graph_attr("target_symbol_prefix", horizon_config_.target_symbol_prefix);
+      builder.set_graph_attr("parent_relation", horizon_config_.parent_relation);
+   }
    if(! node_names.contains(config_.symbol_type_id)) {
       builder.set_node_names(config_.symbol_type_id, {});
+      builder.set_object_names({});
    } else {
-      builder.set_node_names(config_.symbol_type_id, node_names[config_.symbol_type_id]);
-      builder.set_object_names(node_names[config_.symbol_type_id]);
+      const auto& symbol_names = node_names[config_.symbol_type_id];
+      builder.set_node_names(config_.symbol_type_id, symbol_names);
+
+      if(target_keys.empty()) {
+         builder.set_object_names(symbol_names);
+      } else {
+         hash_set< std::string > target_set;
+         target_set.reserve(target_keys.size());
+         for(const auto& key : target_keys) {
+            if(! key.empty()) {
+               target_set.insert(key);
+            }
+         }
+         std::vector< std::string > object_names;
+         object_names.reserve(symbol_names.size());
+         for(const auto& name : symbol_names) {
+            if(! target_set.contains(name)) {
+               object_names.push_back(name);
+            }
+         }
+         builder.set_object_names(std::move(object_names));
+      }
    }
 
    for(const auto& [node_type, names] : node_names) {

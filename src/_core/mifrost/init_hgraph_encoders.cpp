@@ -104,8 +104,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def("build_parts", &BatchBuilder::build_parts)
       .def("next_graph", &BatchBuilder::next_graph)
       .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
-      .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
-      .def("set_schema_extension", &BatchBuilder::set_schema_extension, "key"_a, "value"_a);
+      .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a);
 
    nb::class_< GoalInputs >(m, "GoalInputs")
       .def(nb::init<>())

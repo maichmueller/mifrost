@@ -1,6 +1,7 @@
 #include "batch_builder.hpp"
 
 #include <fmt/format.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
@@ -24,7 +25,6 @@ BatchBuilder::BatchBuilder()
    node_names.reserve(kSmallReserve);
    ptrs.reserve(kSmallReserve);
    columns.reserve(kColumnReserve);
-   schema_extensions = nb::dict();
 }
 
 void BatchBuilder::add_node_features(
@@ -140,9 +140,24 @@ void BatchBuilder::set_schema_flag(const std::string& key, bool value)
    schema_flags[key] = value;
 }
 
-void BatchBuilder::set_schema_extension(const std::string& key, nb::object value)
+void BatchBuilder::set_graph_attr(const std::string& key, std::vector< int64_t > values)
 {
-   schema_extensions[key.c_str()] = std::move(value);
+   graph_attrs[key] = std::move(values);
+}
+
+void BatchBuilder::set_graph_attr(const std::string& key, std::vector< std::string > values)
+{
+   graph_attrs[key] = std::move(values);
+}
+
+void BatchBuilder::set_graph_attr(const std::string& key, int64_t value)
+{
+   graph_attrs[key] = value;
+}
+
+void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
+{
+   graph_attrs[key] = std::move(value);
 }
 
 void BatchBuilder::add_edges(
@@ -509,10 +524,66 @@ nb::object BatchBuilder::build()
 
    for(const auto& [node_type, names] : node_names) {
       nb::object store = batch.attr("__getitem__")(node_type);
-      store.attr("node_names") = nb::cast(names);
+      if(graph_count > 0) {
+         std::vector< std::vector< std::string > > per_graph;
+         auto ptr_it = ptr_vectors.find(node_type);
+         if(ptr_it != ptr_vectors.end() && ptr_it->second.size() >= 2) {
+            const auto& ptr = ptr_it->second;
+            per_graph.reserve(ptr.size() - 1);
+            for(size_t i = 0; i + 1 < ptr.size(); ++i) {
+               const auto start = static_cast< size_t >(std::max< int64_t >(0, ptr[i]));
+               const auto end = static_cast< size_t >(
+                  std::min< int64_t >(ptr[i + 1], static_cast< int64_t >(names.size()))
+               );
+               if(start <= end && end <= names.size()) {
+                  per_graph.emplace_back(names.begin() + start, names.begin() + end);
+               } else {
+                  per_graph.emplace_back();
+               }
+            }
+         } else {
+            per_graph.emplace_back(names);
+         }
+         store.attr("node_names") = nb::cast(per_graph);
+      } else {
+         store.attr("node_names") = nb::cast(names);
+      }
    }
    if(! object_names.empty()) {
-      batch.attr("object_names") = nb::cast(object_names);
+      if(graph_count > 0) {
+         std::vector< std::vector< std::string > > per_graph;
+         bool assigned = false;
+         for(const auto& [node_type, names] : node_names) {
+            if(names != object_names) {
+               continue;
+            }
+            auto ptr_it = ptr_vectors.find(node_type);
+            if(ptr_it == ptr_vectors.end() || ptr_it->second.size() < 2) {
+               break;
+            }
+            const auto& ptr = ptr_it->second;
+            per_graph.reserve(ptr.size() - 1);
+            for(size_t i = 0; i + 1 < ptr.size(); ++i) {
+               const auto start = static_cast< size_t >(std::max< int64_t >(0, ptr[i]));
+               const auto end = static_cast< size_t >(
+                  std::min< int64_t >(ptr[i + 1], static_cast< int64_t >(object_names.size()))
+               );
+               if(start <= end && end <= object_names.size()) {
+                  per_graph.emplace_back(object_names.begin() + start, object_names.begin() + end);
+               } else {
+                  per_graph.emplace_back();
+               }
+            }
+            assigned = true;
+            break;
+         }
+         if(! assigned) {
+            per_graph.emplace_back(object_names);
+         }
+         batch.attr("object_names") = nb::cast(per_graph);
+      } else {
+         batch.attr("object_names") = nb::cast(object_names);
+      }
    }
 
    if(graph_count > 0) {
@@ -732,6 +803,14 @@ nb::dict BatchBuilder::build_parts()
    out["object_names"] = nb::cast(object_names);
    out["num_graphs"] = graph_count;
 
+   if(! graph_attrs.empty()) {
+      nb::dict graph_attrs_dict;
+      for(const auto& [key, value] : graph_attrs) {
+         std::visit([&](const auto& v) { graph_attrs_dict[key.c_str()] = nb::cast(v); }, value);
+      }
+      out["graph_attrs"] = graph_attrs_dict;
+   }
+
    std::vector< std::string > node_types;
    node_types.reserve(node_counts.size());
    for(const auto& [node_type, count] : node_counts) {
@@ -762,7 +841,6 @@ nb::dict BatchBuilder::build_parts()
    schema.node_tensors = std::move(node_specs);
    schema.edge_tensors = std::move(edge_tensor_specs);
    schema.flags = schema_flags;
-   schema.extensions = schema_extensions;
    schema.validate();
 
    out["schema"] = schema.to_dict();

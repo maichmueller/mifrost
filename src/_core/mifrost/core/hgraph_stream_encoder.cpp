@@ -286,7 +286,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
       if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
-      const std::string node_type = RelationFormatter::format_predicate(predicate->get_name());
+      const std::string node_type = RelationFormatter::format_predicate(predicate);
       const std::string node_key = RelationFormatter::format_atom< Tag >(atom);
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names
@@ -386,12 +386,12 @@ void HGraphEncoderEngine::encode_literals(
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), level, std::nullopt, literal->get_polarity()
+            predicate, level, std::nullopt, literal->get_polarity()
          );
          node_key = RelationFormatter::format_literal< GoalTag >(literal, level);
       } else {
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), std::nullopt, std::nullopt, literal->get_polarity()
+            predicate, std::nullopt, std::nullopt, literal->get_polarity()
          );
          node_key = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
       }
@@ -537,14 +537,14 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), level, sat, goal->get_polarity(), suffix
+            predicate, level, sat, goal->get_polarity(), suffix
          );
          node_key = RelationFormatter::format_literal< GoalTag >(
             goal, level, sat, std::nullopt, suffix
          );
       } else {
          node_type = RelationFormatter::format_predicate(
-            predicate->get_name(), std::nullopt, sat, goal->get_polarity(), suffix
+            predicate, std::nullopt, sat, goal->get_polarity(), suffix
          );
          node_key = RelationFormatter::format_literal< GoalTag >(
             goal, std::nullopt, sat, std::nullopt, suffix

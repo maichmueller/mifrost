@@ -61,14 +61,18 @@ class BatchBuilder {
    // Schema graph kind (e.g. "hetero" or "homo").
    std::string graph_kind;
 
-   // Schema metadata (flags + extensions).
+   // Schema metadata (flags).
    std::map< std::string, bool > schema_flags;
-   nb::dict schema_extensions;
 
    // Graph pointer (ptr) tracking.
    // For homogeneous: simple vector. For hetero: ptr per node type (PyG convention).
    ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
    std::vector< int64_t > batch_indices;  // For homogeneous case if needed
+
+   // Graph-level attributes (used by horizon encoders and schema metadata).
+   using GraphAttrValue = std::
+      variant< int64_t, std::string, std::vector< int64_t >, std::vector< std::string > >;
+   ankerl::unordered_dense::map< std::string, GraphAttrValue > graph_attrs;
 
    // --- Storage ---
    // Key format: "node_type/attr_name" or "edge_type/attr_name"
@@ -153,7 +157,10 @@ class BatchBuilder {
    void set_object_names(std::vector< std::string > names);
    void set_graph_kind(std::string kind);
    void set_schema_flag(const std::string& key, bool value);
-   void set_schema_extension(const std::string& key, nb::object value);
+   void set_graph_attr(const std::string& key, std::vector< int64_t > values);
+   void set_graph_attr(const std::string& key, std::vector< std::string > values);
+   void set_graph_attr(const std::string& key, int64_t value);
+   void set_graph_attr(const std::string& key, std::string value);
 
   private:
    // Helper to get or create a column

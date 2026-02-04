@@ -89,22 +89,28 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    const auto& problem = successor.get_problem();
    const auto& repos = problem.get_repositories();
 
-   auto handle_suc_atom = [&](auto atom, bool polarity = true) {
+   auto handle_suc_atom = [&](auto atom, std::optional< bool > polarity = std::nullopt) {
       using Tag = typename std::remove_pointer_t< decltype(atom) >::Type;
       const auto predicate = atom->get_predicate();
       if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
-      const std::string node_type = RelationFormatter::format_predicate(
-         predicate->get_name(),
-         std::nullopt,
-         std::nullopt,
-         polarity,
-         successor_config_.successor_suffix
-      );
-      const std::string node_key = RelationFormatter::format_atom< Tag >(
+      std::string node_type;
+      if(polarity.has_value()) {
+         node_type = RelationFormatter::format_predicate(
+            predicate, std::nullopt, std::nullopt, *polarity, successor_config_.successor_suffix
+         );
+      } else {
+         node_type = RelationFormatter::format_predicate(
+            predicate, std::nullopt, std::nullopt, std::nullopt, successor_config_.successor_suffix
+         );
+      }
+      const std::string atom_str = RelationFormatter::format_atom< Tag >(
          atom, successor_config_.successor_suffix
       );
+      const std::string node_key = (polarity.has_value() && ! *polarity)
+                                      ? fmt::format("(not {})", atom_str)
+                                      : atom_str;
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names
       );
@@ -135,7 +141,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          symbol_to_relations[obj_key].insert(rel_key);
       }
 
-      if(polarity) {
+      if(! polarity.has_value() || *polarity) {
          suc_fact_keys.insert(RelationFormatter::format_atom< Tag >(atom));
       }
    };
@@ -145,14 +151,14 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          successor.get_atoms< mimir::formalism::FluentTag >()
       );
       for(const auto& atom : fluent_atoms) {
-         handle_suc_atom(atom);
+         handle_suc_atom(atom, std::nullopt);
       }
       const auto derived_atoms = repos
                                     .get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
                                        successor.get_atoms< mimir::formalism::DerivedTag >()
                                     );
       for(const auto& atom : derived_atoms) {
-         handle_suc_atom(atom);
+         handle_suc_atom(atom, std::nullopt);
       }
    } else {
       // Delta mode
@@ -195,36 +201,36 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       );
    }
 
-   if(successor_config_.successor_mode == Mode::Full) {
-      // 4. Encode goals for current
-      encode_literals(
-         std::span{goals.static_goals},
-         goals.static_goal_levels,
-         builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
-      );
-      encode_literals(
-         std::span{goals.fluent_goals},
-         goals.fluent_goal_levels,
-         builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
-      );
-      encode_literals(
-         std::span{goals.derived_goals},
-         goals.derived_goal_levels,
-         builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
-      );
+   // 4. Encode goals for current (always)
+   encode_literals(
+      std::span{goals.static_goals},
+      goals.static_goal_levels,
+      builder,
+      node_indices,
+      node_names,
+      relation_to_symbols,
+      symbol_to_relations
+   );
+   encode_literals(
+      std::span{goals.fluent_goals},
+      goals.fluent_goal_levels,
+      builder,
+      node_indices,
+      node_names,
+      relation_to_symbols,
+      symbol_to_relations
+   );
+   encode_literals(
+      std::span{goals.derived_goals},
+      goals.derived_goal_levels,
+      builder,
+      node_indices,
+      node_names,
+      relation_to_symbols,
+      symbol_to_relations
+   );
 
+   if(successor_config_.successor_mode == Mode::Full) {
       // 5. Encode goal satisfaction for current
       if(! goals.static_goals.empty()) {
          encode_goal_satisfaction(
