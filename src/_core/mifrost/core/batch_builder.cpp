@@ -173,8 +173,6 @@ void BatchBuilder::add_edges(
       throw std::invalid_argument("src and dst indices must have same length");
    }
 
-   // Key Convention: Store source/dest columns separately for simplified concats
-   // later? Or store as single flattened vector?
    // We stick to storing separate src and dst index columns for now as they are easier to build.
    // Construct keys: "src_type|rel_type|dst_type/edge_index_0"
    std::string edge_key_base;
@@ -259,33 +257,26 @@ void vector_deleter(void* p) noexcept
 }
 
 template < typename T >
-std::vector< T >* heap_vector(std::vector< T >&& vec, bool compact)
+std::vector< T >* heap_vector(std::vector< T >&& vec)
 {
    auto* heap_vec = new std::vector< T >(std::move(vec));
-   if(compact) {
-      if(heap_vec->capacity() != heap_vec->size()) {
-         std::vector< T > tight(heap_vec->begin(), heap_vec->end());
-         *heap_vec = std::move(tight);
-      }
-   } else {
-      heap_vec->shrink_to_fit();
-   }
+   heap_vec->shrink_to_fit();
    return heap_vec;
 }
 
 template < typename T >
-auto vector_to_1d_ndarray(std::vector< T >&& vec, bool compact = false)
+auto vector_to_1d_ndarray(std::vector< T >&& vec)
 {
-   auto* heap_vec = heap_vector(std::move(vec), compact);
+   auto* heap_vec = heap_vector(std::move(vec));
    size_t shape[1] = {heap_vec->size()};
    nb::capsule owner(heap_vec, vector_deleter< T >);
    return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
 }
 
 template < typename T >
-auto vector_to_2d_ndarray(std::vector< T >&& vec, size_t rows, size_t cols, bool compact = false)
+auto vector_to_2d_ndarray(std::vector< T >&& vec, size_t rows, size_t cols)
 {
-   auto* heap_vec = heap_vector(std::move(vec), compact);
+   auto* heap_vec = heap_vector(std::move(vec));
    size_t shape[2] = {rows, cols};
    nb::capsule owner(heap_vec, vector_deleter< T >);
    return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(heap_vec->data(), 2, shape, owner);
@@ -324,7 +315,7 @@ nb::dict BatchBuilder::build_dict()
    // Also export Ptr columns (converting them to tensor columns first
    // essentially)
    for(auto& [ntype, p_vec] : ptrs) {
-      auto tensor = vector_to_1d_ndarray(std::move(p_vec), true);
+      auto tensor = vector_to_1d_ndarray(std::move(p_vec));
       std::string key = ntype + "/ptr";
       out[key.c_str()] = tensor;
    }
