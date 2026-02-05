@@ -19,6 +19,7 @@
 
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/horizon_hgraph_encoder.hpp"
@@ -33,6 +34,12 @@ namespace mifrost {
 
 void init_hgraph_encoders(nb::module_& m)
 {
+   m.attr("DEFAULT_SYMBOL_TYPE_ID") = defaults::symbol_type_id;
+   m.attr("DEFAULT_LGAN_NN_EDGE_POS") = defaults::lgan_nn_edge_pos;
+   m.attr("DEFAULT_PARENT_RELATION") = defaults::parent_relation;
+   m.attr("DEFAULT_SIBLING_RELATION") = defaults::sibling_relation;
+   m.attr("DEFAULT_COUSIN_RELATION") = defaults::cousin_relation;
+
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
       .def(
@@ -137,7 +144,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def_rw(
          "lgan_nn_edge_pos",
          &HGraphEncoderEngine::Config::lgan_nn_edge_pos,
-         "lgan_nn_edge_pos"_a = "lgan_nn"
+         "lgan_nn_edge_pos"_a = defaults::lgan_nn_edge_pos
       );
 
    nb::class_< HGraphEncoderEngine >(m, "HGraphEncoderEngine")

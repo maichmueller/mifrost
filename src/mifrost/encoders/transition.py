@@ -6,6 +6,8 @@ from torch_geometric.data import HeteroData
 
 from .._core import (
     BatchBuilder,
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_SYMBOL_TYPE_ID,
     GoalInputs,
     SuccessorEncoderConfig,
     SuccessorEncoderMode,
@@ -40,7 +42,7 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
         successor_mode: SuccessorEncoderMode,
         successor_suffix: str,
         include_successor_goal_satisfaction: bool = False,
-        symbol_type_id: str = "_symbol_",
+        symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
         ignore_actions: bool = True,
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
@@ -49,7 +51,7 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
-        lgan_nn_edge_pos: str = "lgan_nn",
+        lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
     ) -> None:
         """Create a transition encoder C++ engine with the given mode/config."""
         config = SuccessorEncoderConfig()

@@ -13,6 +13,7 @@
 
 #include "batch_builder.hpp"
 #include "common_types.hpp"
+#include "default_relations.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "relation_formatter.hpp"
@@ -30,9 +31,9 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
   public:
    /// Runtime configuration for relation/node/edge derivation behavior.
    struct Config {
-      std::string symbol_type_id = "_symbol_";
+      std::string symbol_type_id = defaults::symbol_type_id;
       std::string nullary_object_name = "![nullary_symbol]!";
-      std::string lgan_nn_edge_pos = "lgan_nn";
+      std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
       int max_goal_level = 0;
       bool support_literals = false;
       bool add_nullary_predicates = false;

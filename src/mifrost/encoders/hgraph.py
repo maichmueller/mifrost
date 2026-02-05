@@ -5,7 +5,14 @@ from typing import Iterable, Mapping, Sequence
 
 from torch_geometric.data import HeteroData
 
-from .._core import BatchBuilder, GoalInputs, HGraphEncoderConfig, HGraphEncoderEngine
+from .._core import (
+    BatchBuilder,
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_SYMBOL_TYPE_ID,
+    GoalInputs,
+    HGraphEncoderConfig,
+    HGraphEncoderEngine,
+)
 from .base import (
     ActionBatchInput,
     EncoderBase,
@@ -101,7 +108,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         self,
         domain: DomainInput,
         *,
-        symbol_type_id: str = "_symbol_",
+        symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
         ignore_actions: bool = True,
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
@@ -110,7 +117,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
-        lgan_nn_edge_pos: str = "lgan_nn",
+        lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
     ) -> None:
         """Create an HGraph encoder for one domain."""
         config = HGraphEncoderConfig()

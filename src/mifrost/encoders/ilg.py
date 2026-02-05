@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData
 
-from .._core import BatchBuilder
+from .._core import BatchBuilder, DEFAULT_LGAN_NN_EDGE_POS, DEFAULT_SYMBOL_TYPE_ID
 from .accessors import (
     action_arity,
     action_objects,
@@ -166,12 +166,12 @@ class ILGEncoder(EncoderBase[HeteroData]):
         self,
         domain: Any,
         *,
-        symbol_type_id: str = "_symbol_",
+        symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
         action_type_id: str = "action",
         nullary_object_name: str = "![nullary_symbol]!",
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
-        lgan_nn_edge_pos: str = "lgan_nn",
+        lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
     ) -> None:
         """Create an ILG encoder for one domain."""
         self._domain = domain

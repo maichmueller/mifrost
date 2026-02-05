@@ -11,6 +11,7 @@ from torch_geometric.data.data import BaseData
 from torch_geometric.utils import to_networkx
 from tests.conftest import load_problem
 from mifrost.encoders import _parts_to_pyg, _split_goals
+from mifrost import DEFAULT_LGAN_NN_EDGE_POS
 
 
 def adv_state(state):
@@ -144,7 +145,10 @@ def goal_inputs_from_problem(problem, *, goals=None, subgoal_layers=None):
 
 
 def to_named_networkx(
-    data: HeteroData, *, drop_lgan: bool = False, lgan_rel: str = "lgan_nn"
+    data: HeteroData,
+    *,
+    drop_lgan: bool = False,
+    lgan_rel: str = DEFAULT_LGAN_NN_EDGE_POS,
 ) -> nx.MultiDiGraph:
     graph = to_networkx(data, node_attrs=["node_names"], edge_attrs=[], to_multi=True)
     name_counts: Dict[str, int] = {}

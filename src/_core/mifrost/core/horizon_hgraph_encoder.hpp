@@ -1,5 +1,6 @@
 #pragma once
 
+#include "default_relations.hpp"
 #include "hgraph_stream_encoder.hpp"
 #include "transition_dag.hpp"
 
@@ -22,9 +23,9 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    struct Config: HGraphEncoderEngine::Config {
       Mode transition_mode = Mode::Full;
       std::string target_symbol_prefix = "target:";
-      std::string parent_relation = "parent";
-      std::string sibling_relation = "sibling";
-      std::string cousin_relation = "cousin";
+      std::string parent_relation = defaults::parent_relation;
+      std::string sibling_relation = defaults::sibling_relation;
+      std::string cousin_relation = defaults::cousin_relation;
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;

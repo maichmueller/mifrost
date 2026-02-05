@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "default_relations.hpp"
 #include "relation_formatter.hpp"
 
 namespace mifrost {
@@ -21,7 +22,7 @@ struct RelationDictConfig {
    std::set< std::string > top_type_predicates = {
       "object",
       "number",
-      "_symbol_",
+      defaults::symbol_type_id,
       "_action_",
    };
    std::set< GoalSatisfaction > goal_satisfaction_derivations = {
