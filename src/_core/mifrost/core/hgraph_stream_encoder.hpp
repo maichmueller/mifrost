@@ -264,4 +264,206 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
 };
 
+template < typename GoalTag >
+void HGraphEncoderEngine::encode_step_impl(
+   const mimir::search::State& state,
+   std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
+   std::span< const mimir::formalism::GroundAction > actions,
+   BatchBuilder& builder
+)
+{
+   GoalInputs inputs;
+   for(const auto& goal : goals) {
+      if constexpr(std::is_same_v< GoalTag, mimir::formalism::StaticTag >) {
+         inputs.static_goals.emplace_back(goal);
+         inputs.static_goal_levels[goal] = 0;
+      } else if constexpr(std::is_same_v< GoalTag, mimir::formalism::FluentTag >) {
+         inputs.fluent_goals.emplace_back(goal);
+         inputs.fluent_goal_levels[goal] = 0;
+      } else {
+         inputs.derived_goals.emplace_back(goal);
+         inputs.derived_goal_levels[goal] = 0;
+      }
+   }
+   encode_impl(state, inputs, actions, builder);
+}
+
+template < typename GoalTag >
+void HGraphEncoderEngine::encode_literals(
+   std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+   BatchBuilder& builder,
+   hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
+   hash_map< std::string, std::vector< std::string > >& node_names,
+   hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::span< const std::string > extra_objects
+)
+{
+   for(const auto& literal : goals) {
+      const auto atom = literal->get_atom();
+      const auto predicate = atom->get_predicate();
+      const std::optional< int > goal_level = goal_levels.contains(literal)
+                                                 ? std::optional< int >(goal_levels.at(literal))
+                                                 : std::nullopt;
+
+      std::string node_type;
+      std::string node_key;
+      if(goal_level.has_value()) {
+         const GoalLevel level(*goal_level);
+         node_type = RelationFormatter::format_predicate(
+            predicate, level, std::nullopt, literal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(literal, level);
+      } else {
+         node_type = RelationFormatter::format_predicate(
+            predicate, std::nullopt, std::nullopt, literal->get_polarity()
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
+      }
+
+      std::vector< std::string > object_keys;
+      if(predicate->get_arity() == 0) {
+         if(not config_.add_nullary_predicates) {
+            continue;
+         }
+         object_keys.emplace_back(config_.nullary_object_name);
+      } else {
+         for(const auto& obj : atom->get_objects()) {
+            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+         }
+      }
+      const auto relation_idx = get_or_add_node(
+         node_type, node_key, builder, node_indices, node_names
+      );
+
+      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
+         const auto& obj_key = object_keys[pos];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(pos);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
+      const std::string rel_key = relation_key(node_type, node_key);
+      auto& symbols = relation_to_symbols[rel_key];
+      for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+   }
+}
+
+template < typename GoalTag >
+void HGraphEncoderEngine::encode_goal_satisfaction(
+   std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+   const hash_set< std::string >& fact_keys,
+   BatchBuilder& builder,
+   hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
+   hash_map< std::string, std::vector< std::string > >& node_names,
+   hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   std::string_view suffix,
+   std::span< const std::string > extra_objects
+)
+{
+   for(const auto& goal : goals) {
+      const auto atom = goal->get_atom();
+      const auto predicate = atom->get_predicate();
+      const auto key = RelationFormatter::format_atom< GoalTag >(atom);
+      const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
+      const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
+                                             : GoalSatisfaction::unsatisfied;
+      if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
+         continue;
+      }
+
+      std::optional< int > goal_level = goal_levels.contains(goal)
+                                           ? std::optional< int >(goal_levels.at(goal))
+                                           : std::nullopt;
+
+      std::string node_type;
+      std::string node_key;
+      if(goal_level.has_value()) {
+         const GoalLevel level(*goal_level);
+         node_type = RelationFormatter::format_predicate(
+            predicate, level, sat, goal->get_polarity(), suffix
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(
+            goal, level, sat, std::nullopt, suffix
+         );
+      } else {
+         node_type = RelationFormatter::format_predicate(
+            predicate, std::nullopt, sat, goal->get_polarity(), suffix
+         );
+         node_key = RelationFormatter::format_literal< GoalTag >(
+            goal, std::nullopt, sat, std::nullopt, suffix
+         );
+      }
+
+      std::vector< std::string > object_keys;
+      if(predicate->get_arity() == 0) {
+         if(not config_.add_nullary_predicates) {
+            continue;
+         }
+         object_keys.emplace_back(config_.nullary_object_name);
+      } else {
+         for(const auto& obj : atom->get_objects()) {
+            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+         }
+      }
+      const auto relation_idx = get_or_add_node(
+         node_type, node_key, builder, node_indices, node_names
+      );
+
+      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
+         const auto& obj_key = object_keys[pos];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(pos);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
+      for(size_t i = 0; i < extra_objects.size(); ++i) {
+         const auto& obj_key = extra_objects[i];
+         const auto obj_idx = get_or_add_node(
+            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+         );
+         const std::string pos_str = std::to_string(object_keys.size() + i);
+         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
+         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
+      }
+
+      const std::string rel_key = relation_key(node_type, node_key);
+      auto& symbols = relation_to_symbols[rel_key];
+      for(const auto& obj_key : object_keys) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+      for(const auto& obj_key : extra_objects) {
+         symbols.insert(obj_key);
+         symbol_to_relations[obj_key].insert(rel_key);
+      }
+   }
+}
+
 }  // namespace mifrost
