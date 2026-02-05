@@ -5,6 +5,8 @@ __pycache__
 build
 *.pyd
 *.egg-info
+*.so
+*.dylib
 .vscode
 .vs
 
