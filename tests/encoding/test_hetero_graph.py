@@ -7,8 +7,6 @@ from torch_geometric.data import HeteroData
 import mifrost
 from mifrost.encoders import HGraphEncoder
 
-from tests.ground_truth.hgraph_encoder import HGraphEncoder as PyHGraphEncoder
-
 from .test_utils import predicate_arity, state_atoms, to_named_networkx
 
 
@@ -56,16 +54,21 @@ def validate_hetero_data(
 def test_hetero_data(small_blocks):
     space, domain, problem = small_blocks
     encoder = HGraphEncoder(domain)
-    py_encoder = PyHGraphEncoder(domain)
     symbol_type_id = "_symbol_"
+    # This test validates positional arity constraints for base predicate node
+    # types only. Additional relation types (goal/sat/action/horizon links) are
+    # covered by dedicated encoder tests.
+    base_predicate_arities = {
+        pred.get_name(): pred.get_arity() for pred in domain.get_predicates()
+    }
 
     for state in space.get_states()[:5]:
         data = encoder.encode(state)
-        validate_hetero_data(data, py_encoder.relation_dict.arity, symbol_type_id)
+        validate_hetero_data(data, base_predicate_arities, symbol_type_id)
 
         goals = list(problem.get_goal_condition().get_literals())
         direct = encoder.encode(state, goals=goals)
-        validate_hetero_data(direct, py_encoder.relation_dict.arity, symbol_type_id)
+        validate_hetero_data(direct, base_predicate_arities, symbol_type_id)
 
 
 def test_nullary_predicates_connect_to_placeholder(small_blocks):

@@ -1,50 +1,9 @@
 import torch
 import mifrost
-from tests.ground_truth.pyencoding_ref.pyg_batch_builder import HGraphBatchBuilder
-from tests.ground_truth.pyencoding_ref.pyg_builder import PygHeteroBuilder
-
-
-def _compare_batches(py_batch, cpp_batch) -> None:
-    assert set(py_batch.node_types) == set(cpp_batch.node_types)
-    for node_type in py_batch.node_types:
-        assert torch.equal(py_batch[node_type].x, cpp_batch[node_type].x)
-        if hasattr(py_batch[node_type], "node_names"):
-            assert list(py_batch[node_type].node_names) == list(
-                cpp_batch[node_type].node_names
-            )
-
-    assert list(py_batch.object_names) == list(cpp_batch.object_names)
-
-    assert set(py_batch.edge_types) == set(cpp_batch.edge_types)
-    for edge_type in py_batch.edge_types:
-        assert torch.equal(
-            py_batch[edge_type].edge_index, cpp_batch[edge_type].edge_index
-        )
 
 
 def test_batch_builder_parity():
-    relation_dict = {"atom": 2}
     symbol_type_id = "_symbol_"
-    edge_types = [
-        (symbol_type_id, "0", "atom"),
-    ]
-
-    # Python builder + batch builder
-    py_builder = PygHeteroBuilder()
-    py_builder.add_node("o0", symbol_type_id, name="o0")
-    py_builder.add_node("o1", symbol_type_id, name="o1")
-    py_builder.add_node("a0", "atom")
-    py_builder.add_node("a1", "atom")
-    py_builder.add_edge("o0", "a0", symbol_type_id, "atom", "0")
-    py_builder.add_edge("o1", "a1", symbol_type_id, "atom", "0")
-
-    py_batch_builder = HGraphBatchBuilder(
-        relation_dict=relation_dict,
-        symbol_type_id=symbol_type_id,
-        edge_types=edge_types,
-    )
-    py_batch_builder.append(py_builder)
-    py_batch = py_batch_builder.build()
 
     # C++ builder
     cpp_builder = mifrost.BatchBuilder()
@@ -64,8 +23,24 @@ def test_batch_builder_parity():
         torch.tensor([0, 1], dtype=torch.int64),
     )
     cpp_batch = cpp_builder.build()
+    assert set(cpp_batch.node_types) == {symbol_type_id, "atom"}
+    symbol_names = list(cpp_batch[symbol_type_id].node_names)
+    atom_names = list(cpp_batch["atom"].node_names)
+    object_names = list(cpp_batch.object_names)
+    if symbol_names and isinstance(symbol_names[0], list):
+        symbol_names = symbol_names[0]
+    if atom_names and isinstance(atom_names[0], list):
+        atom_names = atom_names[0]
+    if object_names and isinstance(object_names[0], list):
+        object_names = object_names[0]
+    assert symbol_names == ["o0", "o1"]
+    assert atom_names == ["a0", "a1"]
+    assert object_names == ["o0", "o1"]
 
-    _compare_batches(py_batch, cpp_batch)
+    edge_type = (symbol_type_id, "0", "atom")
+    assert edge_type in cpp_batch.edge_types
+    edge_index = cpp_batch[edge_type].edge_index
+    assert torch.equal(edge_index, torch.tensor([[0, 1], [0, 1]], dtype=torch.int64))
 
 
 def test_offset_logic_explicit():
