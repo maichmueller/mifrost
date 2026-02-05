@@ -1,3 +1,8 @@
+"""Public encoder API surface.
+
+Exports concrete encoders, stream variants, and shared base/helpers.
+"""
+
 from .base import EncoderBase, StreamEncoderBase
 from .common import _parts_to_pyg, _split_goals, parts_to_tensors
 from .hgraph import HGraphEncoder, HGraphEncoderStream
@@ -11,6 +16,16 @@ from .transition import (
 )
 from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
 from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
+from .types import (
+    register_action_adapter,
+    register_domain_adapter,
+    register_literal_adapter,
+    register_state_adapter,
+    unregister_action_adapter,
+    unregister_domain_adapter,
+    unregister_literal_adapter,
+    unregister_state_adapter,
+)
 
 __all__ = [
     "HGraphEncoder",
@@ -33,4 +48,12 @@ __all__ = [
     "_parts_to_pyg",
     "_split_goals",
     "parts_to_tensors",
+    "register_state_adapter",
+    "unregister_state_adapter",
+    "register_domain_adapter",
+    "unregister_domain_adapter",
+    "register_literal_adapter",
+    "unregister_literal_adapter",
+    "register_action_adapter",
+    "unregister_action_adapter",
 ]

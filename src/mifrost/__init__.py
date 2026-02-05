@@ -18,6 +18,14 @@ from .encoders import (  # noqa: F401
     TransitionHGraphEncoder,
     TransitionHGraphEncoderStream,
     parts_to_tensors,
+    register_action_adapter,
+    register_domain_adapter,
+    register_literal_adapter,
+    register_state_adapter,
+    unregister_action_adapter,
+    unregister_domain_adapter,
+    unregister_literal_adapter,
+    unregister_state_adapter,
 )
 
 __all__ = list(getattr(_core, "__all__", [])) + [
@@ -36,4 +44,12 @@ __all__ = list(getattr(_core, "__all__", [])) + [
     "EncoderBase",
     "StreamEncoderBase",
     "parts_to_tensors",
+    "register_state_adapter",
+    "unregister_state_adapter",
+    "register_domain_adapter",
+    "unregister_domain_adapter",
+    "register_literal_adapter",
+    "unregister_literal_adapter",
+    "register_action_adapter",
+    "unregister_action_adapter",
 ]

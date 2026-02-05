@@ -1,38 +1,59 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Tuple
+from typing import Any, Iterable, Mapping
 
+import pymimir.advanced.formalism as af
 import torch
 from torch_geometric.data import Batch, HeteroData
 
+from .types import (
+    DomainInput,
+    GoalLiteralInput,
+    GroundActionInput,
+    StateInput,
+    to_advanced_action,
+    to_advanced_domain,
+    to_advanced_literal,
+    to_advanced_state,
+)
+
 
 def _to_tensor(value: Any) -> torch.Tensor:
+    """Normalize array-like values to torch tensors."""
     return torch.as_tensor(value)
 
 
 # The C++ boundary is strict/typed; wrappers are unwrapped explicitly here.
-def _advanced_domain(domain: Any) -> Any:
-    return getattr(domain, "_advanced_domain", domain)
+def _advanced_domain(domain: DomainInput):
+    """Return the advanced pymimir domain object when wrapped."""
+    return to_advanced_domain(domain)
 
 
-def _advanced_state(state: Any) -> Any:
-    return getattr(state, "_advanced_state", state)
+def _advanced_state(state: StateInput):
+    """Return the advanced pymimir state object when wrapped."""
+    return to_advanced_state(state)
 
 
-def _advanced_literal(literal: Any) -> Any:
-    return getattr(literal, "_advanced_ground_literal", literal)
+def _advanced_literal(literal: GoalLiteralInput):
+    """Return the advanced pymimir literal object when wrapped."""
+    return to_advanced_literal(literal)
 
 
-def _advanced_action(action: Any) -> Any:
-    return getattr(action, "_advanced_ground_action", action)
+def _advanced_action(action: GroundActionInput):
+    """Return the advanced pymimir action object when wrapped."""
+    return to_advanced_action(action)
 
 
 def _split_goals(
-    goals: Iterable[Any],
-    subgoal_layers: Iterable[Iterable[Any]] | None,
-) -> Tuple[Any, int]:
-    import pymimir.advanced.formalism as af
+    goals: Iterable[GoalLiteralInput],
+    subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None,
+) -> tuple[Any, int]:
+    """
+    Build ``GoalInputs`` from goals and optional layered subgoals.
 
+    Returns ``(goal_inputs, layer_count)`` where ``layer_count`` includes the
+    primary goal layer plus optional subgoal layers.
+    """
     goals = list(goals)
     if subgoal_layers is None:
         from .._core import GoalInputs
@@ -43,12 +64,12 @@ def _split_goals(
     from .._core import GoalInputs
 
     inputs = GoalInputs([])
-    static_goals: list[Any] = []
-    fluent_goals: list[Any] = []
-    derived_goals: list[Any] = []
-    static_levels: dict[Any, int] = {}
-    fluent_levels: dict[Any, int] = {}
-    derived_levels: dict[Any, int] = {}
+    static_goals: list[af.StaticGroundLiteral] = []
+    fluent_goals: list[af.FluentGroundLiteral] = []
+    derived_goals: list[af.DerivedGroundLiteral] = []
+    static_levels: dict[af.StaticGroundLiteral, int] = {}
+    fluent_levels: dict[af.FluentGroundLiteral, int] = {}
+    derived_levels: dict[af.DerivedGroundLiteral, int] = {}
 
     layers = [goals]
     if subgoal_layers is not None:
@@ -67,7 +88,7 @@ def _split_goals(
                 static_goals.append(adv)
                 static_levels[adv] = depth
             else:
-                raise TypeError(f"Unsupported goal literal type: {type(literal)}")
+                raise TypeError(f"Unsupported goal literal type: {type(literal)!r}")
 
     inputs.static_goals = static_goals
     inputs.fluent_goals = fluent_goals
@@ -79,16 +100,15 @@ def _split_goals(
     return inputs, len(layers)
 
 
-def _prepare_actions(actions: Iterable[Any] | None) -> list[Any]:
+def _prepare_actions(
+    actions: Iterable[GroundActionInput] | None,
+) -> list[af.GroundAction]:
+    """Convert action wrappers to advanced pymimir ``GroundAction`` objects."""
     if actions is None:
         return []
-    import pymimir.advanced.formalism as af
-
-    out: list[Any] = []
+    out: list[af.GroundAction] = []
     for action in actions:
         adv = _advanced_action(action)
-        if not isinstance(adv, af.GroundAction):
-            raise TypeError(f"Unsupported action type: {type(action)}")
         out.append(adv)
     return out
 
@@ -99,6 +119,14 @@ def _parts_to_pyg(
     as_batch: bool | None = None,
     include_metadata: bool = True,
 ) -> HeteroData:
+    """
+    Convert normalized encoder parts into PyG ``HeteroData``/``Batch`` output.
+
+    Expected parts contract:
+    - ``parts["schema"]``: schema descriptor
+    - ``parts["tensors"]``: flat tensor payload keyed by schema keys
+    - optional metadata: ``node_names``, ``object_names``, ``graph_attrs``
+    """
     # Assemble engine "parts" into PyG objects on the Python side only.
     raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
     schema_obj = parts.get("schema")
@@ -269,5 +297,6 @@ def _parts_to_pyg(
 
 
 def parts_to_tensors(parts: Mapping[str, Any]) -> Mapping[str, torch.Tensor]:
+    """Return ``parts['tensors']`` as a plain ``str -> torch.Tensor`` mapping."""
     tensors: Mapping[str, Any] = parts.get("tensors", {})
     return {str(key): _to_tensor(value) for key, value in tensors.items()}

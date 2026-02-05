@@ -1,79 +1,102 @@
 from __future__ import annotations
 
-from typing import Iterable, Protocol, runtime_checkable
+from collections.abc import Iterable
+
+import pymimir.advanced.formalism as af
+import pymimir.wrapper_formalism as wf
+
+from .types import (
+    ATOM_TYPES,
+    GROUND_ACTION_TYPES,
+    GOAL_LITERAL_TYPES,
+    OBJECT_TYPES,
+    PREDICATE_TYPES,
+    GroundAtomInput,
+    GroundActionInput,
+    GoalLiteralInput,
+    ObjectInput,
+    PredicateInput,
+)
 
 
-@runtime_checkable
-class PredicateLike(Protocol):
-    def get_name(self) -> str: ...
-    def get_arity(self) -> int: ...
-
-
-@runtime_checkable
-class AtomLike(Protocol):
-    def get_predicate(self) -> PredicateLike: ...
-    def get_terms(self) -> Iterable: ...
-
-
-@runtime_checkable
-class LiteralLike(Protocol):
-    def get_atom(self) -> AtomLike: ...
-    def get_polarity(self) -> bool: ...
-
-
-def predicate(atom: AtomLike) -> PredicateLike:
+def predicate(atom: GroundAtomInput) -> PredicateInput:
+    """Return an atom's predicate object."""
+    if not isinstance(atom, ATOM_TYPES):
+        raise TypeError(f"Expected ground atom, got {type(atom)!r}")
     return atom.get_predicate()
 
 
-def atom_objects(atom: AtomLike) -> Iterable:
-    return atom.get_terms()
+def atom_objects(atom: GroundAtomInput) -> Iterable[ObjectInput]:
+    """Return ordered object terms for a ground atom."""
+    if isinstance(atom, wf.GroundAtom):
+        return atom.get_terms()
+    if isinstance(
+        atom, (af.StaticGroundAtom, af.FluentGroundAtom, af.DerivedGroundAtom)
+    ):
+        return atom.get_objects()
+    raise TypeError(f"Expected ground atom, got {type(atom)!r}")
 
 
-def literal_atom(literal: LiteralLike) -> AtomLike:
+def literal_atom(literal: GoalLiteralInput) -> GroundAtomInput:
+    """Return the atom wrapped by a ground literal."""
+    if not isinstance(literal, GOAL_LITERAL_TYPES):
+        raise TypeError(f"Expected ground literal, got {type(literal)!r}")
     return literal.get_atom()
 
 
-def literal_polarity(literal: LiteralLike) -> bool:
+def literal_polarity(literal: GoalLiteralInput) -> bool:
+    """Return literal polarity (True=positive, False=negative)."""
+    if not isinstance(literal, GOAL_LITERAL_TYPES):
+        raise TypeError(f"Expected ground literal, got {type(literal)!r}")
     return literal.get_polarity()
 
 
-def predicate_name(pred: PredicateLike) -> str:
+def predicate_name(pred: PredicateInput) -> str:
+    """Return predicate name."""
+    if not isinstance(pred, PREDICATE_TYPES):
+        raise TypeError(f"Expected predicate, got {type(pred)!r}")
     return pred.get_name()
 
 
-def predicate_arity(pred: PredicateLike) -> int:
+def predicate_arity(pred: PredicateInput) -> int:
+    """Return predicate arity."""
+    if not isinstance(pred, PREDICATE_TYPES):
+        raise TypeError(f"Expected predicate, got {type(pred)!r}")
     return pred.get_arity()
 
 
-def object_name(obj) -> str:
+def object_name(obj: ObjectInput) -> str:
+    """Return object name."""
+    if not isinstance(obj, OBJECT_TYPES):
+        raise TypeError(f"Expected object, got {type(obj)!r}")
     return obj.get_name()
 
 
-def action_name(action) -> str:
-    if hasattr(action, "get_name"):
-        return action.get_name()
-    if hasattr(action, "get_action"):
+def action_name(action: GroundActionInput) -> str:
+    """Return action schema name for a grounded action."""
+    if not isinstance(action, GROUND_ACTION_TYPES):
+        raise TypeError(f"Expected ground action, got {type(action)!r}")
+    if isinstance(action, wf.GroundAction):
         return action.get_action().get_name()
-    return str(action)
+    return action.get_action().get_name()
 
 
-def action_arity(action) -> int:
-    if hasattr(action, "get_arity"):
-        return action.get_arity()
-    if hasattr(action, "get_action"):
-        return action.get_action().get_arity()
-    return 0
+def action_arity(action: GroundActionInput) -> int:
+    """Return action schema arity for a grounded action."""
+    if not isinstance(action, GROUND_ACTION_TYPES):
+        raise TypeError(f"Expected ground action, got {type(action)!r}")
+    return action.get_action().get_arity()
 
 
-def action_objects(action) -> Iterable:
-    if hasattr(action, "get_objects"):
-        return action.get_objects()
-    if hasattr(action, "get_action"):
-        return action.get_action().get_objects()
-    return []
+def action_objects(action: GroundActionInput) -> Iterable[ObjectInput]:
+    """Return ordered action argument objects for a grounded action."""
+    if not isinstance(action, GROUND_ACTION_TYPES):
+        raise TypeError(f"Expected ground action, got {type(action)!r}")
+    return action.get_objects()
 
 
-def atom_signature(atom: AtomLike) -> tuple[str, tuple[str, ...]]:
+def atom_signature(atom: GroundAtomInput) -> tuple[str, tuple[str, ...]]:
+    """Return canonical atom signature used for equality checks."""
     pred = predicate(atom)
     return (
         predicate_name(pred),
@@ -81,5 +104,6 @@ def atom_signature(atom: AtomLike) -> tuple[str, tuple[str, ...]]:
     )
 
 
-def atoms_equal(lhs: AtomLike, rhs: AtomLike) -> bool:
+def atoms_equal(lhs: GroundAtomInput, rhs: GroundAtomInput) -> bool:
+    """Compare atoms by predicate name and ordered object names."""
     return atom_signature(lhs) == atom_signature(rhs)

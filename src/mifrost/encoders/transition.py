@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Mapping
 
 from torch_geometric.data import HeteroData
 
@@ -13,14 +13,29 @@ from .._core import (
 )
 from dataclasses import dataclass
 
-from .base import EncoderBase, StreamEncoderBase
+from .base import (
+    ActionBatchInput,
+    EncoderBase,
+    GoalBatchInput,
+    StateBatchInput,
+    StreamEncoderBase,
+    SubgoalLayersInput,
+)
 from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
+from .types import (
+    DomainInput,
+    StateInput,
+    default_goals_from_state,
+    is_state_input,
+)
 
 
 class _TransitionEncoderBase(EncoderBase[HeteroData]):
+    """Shared implementation for transition-state encoders."""
+
     def __init__(
         self,
-        domain: Any,
+        domain: DomainInput,
         *,
         successor_mode: SuccessorEncoderMode,
         successor_suffix: str,
@@ -36,6 +51,7 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
         nullary_object_name: str = "![nullary_symbol]!",
         lgan_nn_edge_pos: str = "lgan_nn",
     ) -> None:
+        """Create a transition encoder C++ engine with the given mode/config."""
         config = SuccessorEncoderConfig()
         config.successor_mode = successor_mode
         config.successor_suffix = successor_suffix
@@ -54,46 +70,45 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
 
     @property
     def engine(self) -> SuccessorHGraphEncoderEngine:
+        """Expose the underlying successor encoder engine."""
         return self._engine
 
     def _accepted_kwargs(self) -> set[str]:
+        """Accept successor/successors kwargs in generic base API calls."""
         return {"successor", "successors"}
 
     def encode_parts(
         self,
-        state: Any,
+        state: StateInput,
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-        successor: Any | None = None,
-        **kwargs: Any,
-    ) -> Mapping[str, Any]:
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        successor: StateInput | None = None,
+        **kwargs: object,
+    ) -> Mapping[str, object]:
+        """Encode one ``state -> successor`` transition into parts."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
         adv_state = _advanced_state(state)
         adv_successor = _advanced_state(successor)
         if goals is None:
-            if hasattr(state, "get_problem"):
-                goals = list(state.get_problem().get_goal_condition().get_literals())
-            else:
-                raise ValueError(
-                    "goals must be provided when passing an advanced state"
-                )
+            goals = default_goals_from_state(state)
         inputs, _ = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, adv_successor, inputs)
 
     def encode_batch_parts(
         self,
-        states: Iterable[Any] | Any,
+        states: StateBatchInput,
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-        successors: Iterable[Any] | Any | None = None,
-        **kwargs: Any,
-    ) -> Mapping[str, Any]:
-        if hasattr(states, "get_problem"):
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        successors: StateBatchInput | None = None,
+        **kwargs: object,
+    ) -> Mapping[str, object]:
+        """Encode many aligned ``states -> successors`` transitions into parts."""
+        if is_state_input(states):
             state_list = [states]
         else:
             state_list = list(states)
@@ -102,7 +117,7 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
             raise ValueError(
                 "successors must be provided for transition batch encoding"
             )
-        if hasattr(successors, "get_problem") or hasattr(successors, "_advanced_state"):
+        if is_state_input(successors):
             succ_list = [successors]
         else:
             succ_list = list(successors)
@@ -119,25 +134,17 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
             adv_state = _advanced_state(state)
             adv_successor = _advanced_state(succ_list[idx])
             if goals is None:
-                if hasattr(state, "get_problem"):
-                    goals_for_state = list(
-                        state.get_problem().get_goal_condition().get_literals()
-                    )
-                    inputs, _ = _split_goals(goals_for_state, subgoal_layers)
-                else:
-                    raise ValueError(
-                        "goals must be provided when passing an advanced state"
-                    )
+                goals_for_state = default_goals_from_state(state)
+                inputs, _ = _split_goals(goals_for_state, subgoal_layers)
             else:
                 inputs = shared_inputs
             self._engine.encode(adv_state, adv_successor, inputs, builder)
-            if hasattr(builder, "next_graph"):
-                builder.next_graph()
+            builder.next_graph()
         return builder.build_parts()
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -147,45 +154,45 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
         )
 
     def stream(self) -> "_TransitionEncoderStream":
+        """Create a stream wrapper for transition encoding."""
         return _TransitionEncoderStream(self)
 
 
 @dataclass
 class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
+    """Shared stream implementation for transition encoders."""
+
     _encoder: _TransitionEncoderBase
 
     def __post_init__(self) -> None:
+        """Initialize an empty hetero builder for streaming."""
         self._reset_builder()
 
     def append(
         self,
-        current: Any,
-        successor: Any,
+        current: StateInput,
+        successor: StateInput,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
+        """Append one transition graph to the stream."""
         adv_current = _advanced_state(current)
         adv_successor = _advanced_state(successor)
         if goals is None:
-            if hasattr(current, "get_problem"):
-                goals = list(current.get_problem().get_goal_condition().get_literals())
-            else:
-                raise ValueError(
-                    "goals must be provided when passing an advanced state"
-                )
+            goals = default_goals_from_state(current)
         inputs, _ = _split_goals(goals, subgoal_layers)
         self._encoder.engine.encode(adv_current, adv_successor, inputs, self._builder)
-        if hasattr(self._builder, "next_graph"):
-            self._builder.next_graph()
+        self._builder.next_graph()
 
     def _reset_builder(self) -> None:
+        """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -196,12 +203,14 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
 
 
 class TransitionHGraphEncoder(_TransitionEncoderBase):
+    """Full successor encoder (encodes both source and successor structure)."""
+
     def __init__(
         self,
-        domain: Any,
+        domain: DomainInput,
         *,
         successor_suffix: str = "[suc]",
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         super().__init__(
             domain,
@@ -215,12 +224,14 @@ class TransitionHGraphEncoder(_TransitionEncoderBase):
 
 
 class TransitionEffectsHGraphEncoder(_TransitionEncoderBase):
+    """Delta/effects successor encoder (focuses on transition effects)."""
+
     def __init__(
         self,
-        domain: Any,
+        domain: DomainInput,
         *,
         successor_suffix: str = "",
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         super().__init__(
             domain,
@@ -235,11 +246,15 @@ class TransitionEffectsHGraphEncoder(_TransitionEncoderBase):
 
 @dataclass
 class TransitionHGraphEncoderStream(_TransitionEncoderStream):
+    """Stream encoder for ``TransitionHGraphEncoder``."""
+
     _encoder: TransitionHGraphEncoder
 
 
 @dataclass
 class TransitionEffectsHGraphEncoderStream(_TransitionEncoderStream):
+    """Stream encoder for ``TransitionEffectsHGraphEncoder``."""
+
     _encoder: TransitionEffectsHGraphEncoder
 
 

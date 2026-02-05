@@ -13,12 +13,16 @@ from .common import _parts_to_pyg
 
 @dataclass
 class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
+    """Minimal stream encoder example built fully in Python."""
+
     _default_value: float = 1.0
 
     def __post_init__(self) -> None:
+        """Initialize an empty hetero builder for streaming."""
         self._reset_builder()
 
     def append(self, state: Any, *, value: float | None = None, **_: Any) -> None:
+        """Append one single-node graph with a constant feature value."""
         node_value = self._default_value if value is None else float(value)
         x = np.asarray([[node_value]], dtype=np.float32)
         self._builder.add_node_features("node", "x", x)
@@ -27,6 +31,7 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
         self._builder.next_graph()
 
     def _reset_builder(self) -> None:
+        """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
@@ -51,9 +56,11 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
     """
 
     def __init__(self, *, default_value: float = 1.0) -> None:
+        """Create the example encoder with a default scalar feature."""
         self._default_value = float(default_value)
 
     def _accepted_kwargs(self) -> set[str]:
+        """Allow overriding the scalar value via ``value=...``."""
         return {"value"}
 
     def encode_parts(
@@ -66,6 +73,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         value: float | None = None,
         **_: Any,
     ) -> Mapping[str, Any]:
+        """Encode one input into a one-node hetero graph payload."""
         del goals, actions, subgoal_layers
         node_value = self._default_value if value is None else float(value)
         builder = BatchBuilder()
@@ -86,6 +94,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         value: float | None = None,
         **_: Any,
     ) -> Mapping[str, Any]:
+        """Encode one or many inputs into one-node-per-sample payloads."""
         del goals, actions, subgoal_layers
         if hasattr(states, "__iter__") and not isinstance(states, (str, bytes)):
             state_list = list(states)
@@ -104,4 +113,5 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         return builder.build_parts()
 
     def stream(self) -> ExampleConstantStreamEncoder:
+        """Create a streaming variant of this example encoder."""
         return ExampleConstantStreamEncoder(self._default_value)

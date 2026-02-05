@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from torch_geometric.data import HeteroData
 
@@ -12,11 +12,26 @@ from .._core import (
     HorizonHGraphEncoderEngine,
     TransitionDAG,
 )
-from .base import EncoderBase, StreamEncoderBase
+from .base import (
+    EncoderBase,
+    GoalBatchInput,
+    StateBatchInput,
+    StreamEncoderBase,
+    SubgoalLayersInput,
+)
 from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
+from .types import (
+    DomainInput,
+    GoalLiteralInput,
+    StateInput,
+    default_goals_from_state,
+    is_goal_literal_input,
+    is_state_input,
+)
 
 
-def _ensure_dag(root: Any, dag: TransitionDAG | None) -> TransitionDAG:
+def _ensure_dag(root: StateInput, dag: TransitionDAG | None) -> TransitionDAG:
+    """Return an explicit DAG or create a default single-root DAG."""
     if dag is not None:
         return dag
     adv_root = _advanced_state(root)
@@ -24,62 +39,55 @@ def _ensure_dag(root: Any, dag: TransitionDAG | None) -> TransitionDAG:
 
 
 def _prepare_horizon_goals(
-    root: Any,
-    goals: Iterable[Any] | None,
-    subgoal_layers: Iterable[Iterable[Any]] | None,
+    root: StateInput,
+    goals: GoalBatchInput,
+    subgoal_layers: SubgoalLayersInput,
 ) -> GoalInputs:
+    """Resolve user-provided or problem-default goals into ``GoalInputs``."""
     if goals is None:
-        if hasattr(root, "get_problem"):
-            goals = list(root.get_problem().get_goal_condition().get_literals())
-        else:
-            raise ValueError("goals must be provided when passing an advanced state")
+        goals = default_goals_from_state(root)
     inputs, _ = _split_goals(goals, subgoal_layers)
     return inputs
 
 
-def _is_literal(value: Any) -> bool:
-    if hasattr(value, "_advanced_ground_literal"):
-        return True
-    try:
-        import pymimir.advanced.formalism as af
-
-        return isinstance(
-            value,
-            (af.StaticGroundLiteral, af.FluentGroundLiteral, af.DerivedGroundLiteral),
-        )
-    except Exception:
-        return False
+def _is_literal(value: object) -> bool:
+    """Best-effort literal type probe for per-state goal detection."""
+    return is_goal_literal_input(value)
 
 
 @dataclass
 class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
+    """Streaming wrapper for ``HorizonHGraphEncoderEngine``."""
+
     _engine: HorizonHGraphEncoderEngine
 
     def __post_init__(self) -> None:
+        """Initialize an empty hetero builder for streaming."""
         self._reset_builder()
 
     def append(
         self,
-        root: Any,
+        root: StateInput,
         dag: TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
+        """Append one root/DAG encoding to the stream."""
         adv_root = _advanced_state(root)
         dag = _ensure_dag(root, dag)
         inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
         self._engine.encode(adv_root, dag, inputs, self._builder)
-        if hasattr(self._builder, "next_graph"):
-            self._builder.next_graph()
+        self._builder.next_graph()
 
     def _reset_builder(self) -> None:
+        """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -90,11 +98,18 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
 
 
 class HorizonEncoder(EncoderBase[HeteroData]):
+    """
+    Horizon lookahead encoder backed by ``HorizonHGraphEncoderEngine``.
+
+    This encoder combines a root state, a ``TransitionDAG`` and goals into one
+    hetero graph representation.
+    """
+
     def __init__(
         self,
-        domain: Any,
+        domain: DomainInput,
         *,
-        transition_mode: Any | None = None,
+        transition_mode: object | None = None,
         target_symbol_prefix: str | None = None,
         parent_relation: str | None = None,
         sibling_relation: str | None = None,
@@ -105,6 +120,7 @@ class HorizonEncoder(EncoderBase[HeteroData]):
         exclude_root_candidate: bool | None = None,
         max_goal_level: int | None = None,
     ) -> None:
+        """Create a horizon encoder for one domain."""
         config = HorizonEncoderConfig()
         if transition_mode is not None:
             config.transition_mode = transition_mode
@@ -130,16 +146,18 @@ class HorizonEncoder(EncoderBase[HeteroData]):
 
     @property
     def engine(self) -> HorizonHGraphEncoderEngine:
+        """Expose the underlying C++ horizon engine."""
         return self._engine
 
     def encode_parts(
         self,
-        root: Any,
+        root: StateInput,
         dag: TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> Mapping[str, object]:
+        """Encode one root/DAG pair into parts."""
         adv_root = _advanced_state(root)
         dag = _ensure_dag(root, dag)
         inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
@@ -147,14 +165,15 @@ class HorizonEncoder(EncoderBase[HeteroData]):
 
     def encode(
         self,
-        root: Any,
+        root: StateInput,
         dag: TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> HeteroData:
+        """Encode one root/DAG pair into ``HeteroData``."""
         return super().encode(
             root,
             goals=goals,
@@ -166,16 +185,14 @@ class HorizonEncoder(EncoderBase[HeteroData]):
 
     def _encode_batch_parts(
         self,
-        roots: Iterable[Any] | Any,
+        roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
-        is_state_like = hasattr(roots, "get_problem") or hasattr(
-            roots, "_advanced_state"
-        )
-        if is_state_like:
+        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> Mapping[str, object]:
+        """Internal batch implementation shared by public batch APIs."""
+        if is_state_input(roots):
             root_list = [roots]
         else:
             if isinstance(roots, (str, bytes)):
@@ -191,7 +208,7 @@ class HorizonEncoder(EncoderBase[HeteroData]):
         if len(dag_list) != len(root_list):
             raise ValueError("dags length must match roots length")
 
-        goals_per_state: list[Iterable[Any]] | None = None
+        goals_per_state: list[Iterable[GoalLiteralInput]] | None = None
         if (
             goals is not None
             and isinstance(goals, Sequence)
@@ -219,20 +236,20 @@ class HorizonEncoder(EncoderBase[HeteroData]):
                     else _prepare_horizon_goals(root, None, subgoal_layers)
                 )
             self._engine.encode(adv_root, dag, inputs, builder)
-            if hasattr(builder, "next_graph"):
-                builder.next_graph()
+            builder.next_graph()
         return builder.build_parts()
 
     def encode_batch(
         self,
-        roots: Iterable[Any] | Any,
+        roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
+        subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> HeteroData:
+        """Encode one or many root/DAG pairs into batched ``HeteroData``."""
         return super().encode_batch(
             roots,
             goals=goals,
@@ -243,11 +260,12 @@ class HorizonEncoder(EncoderBase[HeteroData]):
         )
 
     def _accepted_kwargs(self) -> set[str]:
+        """Accept transition DAG kwargs in the generic base API."""
         return {"dag", "dags"}
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -258,17 +276,19 @@ class HorizonEncoder(EncoderBase[HeteroData]):
 
     def encode_batch_parts(
         self,
-        roots: Iterable[Any] | Any,
+        roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
+        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> Mapping[str, object]:
+        """Encode one or many root/DAG pairs into batch parts."""
         return self._encode_batch_parts(
             roots, dags, goals=goals, subgoal_layers=subgoal_layers
         )
 
     def stream(self) -> HorizonEncoderStream:
+        """Create a streaming encoder sharing this encoder's C++ engine."""
         return HorizonEncoderStream(self._engine)
 
 

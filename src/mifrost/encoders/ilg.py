@@ -20,11 +20,28 @@ from .accessors import (
     predicate_arity,
     predicate_name,
 )
-from .base import EncoderBase, StreamEncoderBase
-from .common import _parts_to_pyg
+from .base import (
+    ActionBatchInput,
+    EncoderBase,
+    GoalBatchInput,
+    StateBatchInput,
+    StreamEncoderBase,
+    SubgoalLayersInput,
+)
+from .common import _advanced_action, _advanced_literal, _advanced_state, _parts_to_pyg
+from .types import (
+    ATOM_TYPES,
+    WRAPPER_STATE_TYPES,
+    StateInput,
+    is_action_input,
+    is_goal_literal_input,
+    is_state_input,
+)
 
 
 class AtomStatus:
+    """Bit-packed status descriptor used for ILG atom node features."""
+
     def __init__(
         self,
         *,
@@ -39,10 +56,12 @@ class AtomStatus:
         self.goal_levels = tuple(goal_levels)
 
     def encode(self) -> int:
+        """Encode flags and goal-level mask into a compact integer."""
         bits = self.is_regular | (self.is_negated << 1) | (self.is_satisfied << 2)
         return (self._mask() << 3) | bits
 
     def _mask(self) -> int:
+        """Return bitmask with one bit per present goal layer."""
         mask = 0
         for lvl in self.goal_levels:
             if lvl < 0:
@@ -54,17 +73,18 @@ class AtomStatus:
 def _gather_objects(
     items: Iterable[Any],
 ) -> list[Any]:
+    """Collect unique objects referenced by atoms/literals/actions."""
     objs: list[Any] = []
     seen: set[str] = set()
     for item in items:
-        if hasattr(item, "get_objects"):
-            candidates = list(action_objects(item))
-        elif hasattr(item, "get_atom") and hasattr(item, "get_polarity"):
-            candidates = list(atom_objects(literal_atom(item)))
-        elif hasattr(item, "get_terms"):
+        if is_action_input(item):
+            candidates = list(action_objects(_advanced_action(item)))
+        elif is_goal_literal_input(item):
+            candidates = list(atom_objects(literal_atom(_advanced_literal(item))))
+        elif isinstance(item, ATOM_TYPES):
             candidates = list(atom_objects(item))
         else:
-            candidates = []
+            raise TypeError(f"Unsupported object source type: {type(item)!r}")
         for obj in candidates:
             name = object_name(obj)
             if name in seen:
@@ -78,6 +98,7 @@ def _goal_levels(
     goals: Sequence[Any],
     subgoal_layers: Iterable[Iterable[Any]] | None,
 ) -> dict[Any, int]:
+    """Assign each literal to its layer depth (goals layer = 0)."""
     layers = [list(goals)]
     if subgoal_layers is not None:
         layers.extend(list(layer) for layer in subgoal_layers)
@@ -90,19 +111,23 @@ def _goal_levels(
 
 @dataclass
 class ILGEncoderStream(StreamEncoderBase[HeteroData]):
+    """Streaming wrapper for the pure-Python ``ILGEncoder``."""
+
     _encoder: "ILGEncoder"
 
     def __post_init__(self) -> None:
+        """Initialize an empty hetero builder for streaming."""
         self._reset_builder()
 
     def append(
         self,
-        state: Any,
+        state: StateInput | Iterable[Any],
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
+        """Append one ILG graph to the stream."""
         self._encoder._encode_to_builder(
             self._builder,
             state,
@@ -110,16 +135,16 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
             actions=actions,
             subgoal_layers=subgoal_layers,
         )
-        if hasattr(self._builder, "next_graph"):
-            self._builder.next_graph()
+        self._builder.next_graph()
 
     def _reset_builder(self) -> None:
+        """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -131,7 +156,10 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
 
 class ILGEncoder(EncoderBase[HeteroData]):
     """
-    Instance‑Learning Graph encoder (ILG).
+    Instance‑Learning Graph encoder (ILG) implemented in Python.
+
+    This encoder mirrors the ILG topology/features and emits normalized parts via
+    ``BatchBuilder``, then relies on the shared parts-to-PyG path.
     """
 
     def __init__(
@@ -145,6 +173,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         include_lgan_edges: bool = False,
         lgan_nn_edge_pos: str = "lgan_nn",
     ) -> None:
+        """Create an ILG encoder for one domain."""
         self._domain = domain
         self.symbol_type_id = symbol_type_id
         self.action_type_id = action_type_id
@@ -164,6 +193,11 @@ class ILGEncoder(EncoderBase[HeteroData]):
         goals: Sequence[Any],
         goal_level_map: dict[Any, int],
     ) -> tuple[list[Any], dict[Any, AtomStatus]]:
+        """
+        Compute per-atom status flags and collect unsatisfied goal atoms.
+
+        Returns ``(missing_goal_facts, status_by_atom)``.
+        """
         goal_matches = {
             literal_atom(goal)
             for goal in goals
@@ -190,13 +224,18 @@ class ILGEncoder(EncoderBase[HeteroData]):
     def _encode_to_builder(
         self,
         builder: BatchBuilder,
-        state: Any,
+        state: StateInput | Iterable[Any],
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
-        if hasattr(state, "get_problem"):
+        """
+        Encode one sample into an existing builder.
+
+        This is the common implementation used by single, batch and stream paths.
+        """
+        if isinstance(state, WRAPPER_STATE_TYPES):
             problem = state.get_problem()
             facts = list(state.get_atoms())
             if goals is None:
@@ -204,19 +243,40 @@ class ILGEncoder(EncoderBase[HeteroData]):
             objects = list(problem.get_objects()) + list(
                 problem.get_domain().get_constants()
             )
+        elif is_state_input(state):
+            advanced_state = _advanced_state(state)
+            facts = list(advanced_state.get_fluent_atoms()) + list(
+                advanced_state.get_derived_atoms()
+            )
+            if goals is None:
+                goals = []
+            objects = _gather_objects(facts)
         else:
             facts = list(state)
             if goals is None:
                 goals = []
             objects = _gather_objects(facts)
 
-        actions_list = list(actions) if actions is not None else []
-        if not objects:
-            objects = _gather_objects(list(facts) + list(goals) + actions_list)
+        goals_list = (
+            [_advanced_literal(goal) for goal in goals] if goals is not None else []
+        )
+        actions_list = (
+            [_advanced_action(action) for action in actions]
+            if actions is not None
+            else []
+        )
+        subgoal_layers_list = (
+            [[_advanced_literal(goal) for goal in layer] for layer in subgoal_layers]
+            if subgoal_layers is not None
+            else None
+        )
 
-        goal_level_map = _goal_levels(list(goals), subgoal_layers)
+        if not objects:
+            objects = _gather_objects(list(facts) + goals_list + actions_list)
+
+        goal_level_map = _goal_levels(goals_list, subgoal_layers_list)
         missing_goal_facts, statuses = self._compute_statuses(
-            facts, list(goals), goal_level_map
+            facts, goals_list, goal_level_map
         )
 
         symbol_names = [object_name(obj) for obj in objects]
@@ -360,13 +420,14 @@ class ILGEncoder(EncoderBase[HeteroData]):
 
     def encode_parts(
         self,
-        state: Any,
+        state: StateInput | Iterable[Any],
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-        **kwargs: Any,
-    ) -> Mapping[str, Any]:
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        **kwargs: object,
+    ) -> Mapping[str, object]:
+        """Encode one state into ILG parts."""
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         self._encode_to_builder(
@@ -376,14 +437,15 @@ class ILGEncoder(EncoderBase[HeteroData]):
 
     def encode_batch_parts(
         self,
-        states: Iterable[Any] | Any,
+        states: StateBatchInput,
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-        **kwargs: Any,
-    ) -> Mapping[str, Any]:
-        if hasattr(states, "get_problem"):
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        **kwargs: object,
+    ) -> Mapping[str, object]:
+        """Encode one or many states into ILG batch parts."""
+        if isinstance(states, WRAPPER_STATE_TYPES):
             state_list = [states]
         else:
             state_list = list(states)
@@ -398,11 +460,11 @@ class ILGEncoder(EncoderBase[HeteroData]):
                 actions=actions,
                 subgoal_layers=subgoal_layers,
             )
-            if hasattr(builder, "next_graph"):
-                builder.next_graph()
+            builder.next_graph()
         return builder.build_parts()
 
     def stream(self) -> ILGEncoderStream:
+        """Create a streaming ILG encoder."""
         return ILGEncoderStream(self)
 
 

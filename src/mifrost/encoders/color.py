@@ -8,8 +8,22 @@ import torch
 from torch_geometric.data import Batch, Data
 
 from .._core import BatchBuilder, ColorEncoderConfig, ColorEncoderEngine, GoalInputs
-from .base import EncoderBase, StreamEncoderBase
+from .base import (
+    ActionBatchInput,
+    EncoderBase,
+    GoalBatchInput,
+    StateBatchInput,
+    StreamEncoderBase,
+    SubgoalLayersInput,
+)
 from .common import _advanced_domain, _advanced_state, _split_goals
+from .types import (
+    STATE_TYPES,
+    DomainInput,
+    GoalLiteralInput,
+    StateInput,
+    default_goals_from_state,
+)
 
 
 def _parts_to_pyg_homo(
@@ -19,6 +33,11 @@ def _parts_to_pyg_homo(
     include_metadata: bool = True,
     undirected: bool = True,
 ) -> Data:
+    """
+    Convert color-encoder parts into homogeneous PyG ``Data``/``Batch``.
+
+    This adapter expects the standard parts schema and uses a single node type.
+    """
     raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
     schema_obj = parts.get("schema")
     if schema_obj is None:
@@ -120,42 +139,40 @@ def _parts_to_pyg_homo(
 
 @dataclass
 class ColorEncoderStream(StreamEncoderBase[Data]):
+    """Streaming wrapper for ``ColorEncoder``."""
+
     _encoder: "ColorEncoder"
 
     def __post_init__(self) -> None:
+        """Initialize an empty homo builder for streaming."""
         self._reset_builder()
 
     def append(
         self,
-        state: Any,
+        state: StateInput,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
+        """Append one state encoding to the color stream."""
         adv_state = _advanced_state(state)
         if goals is None and subgoal_layers is None:
             self._encoder.engine.encode(adv_state, self._builder)
         else:
             if goals is None:
-                if hasattr(state, "get_problem"):
-                    goals = list(
-                        state.get_problem().get_goal_condition().get_literals()
-                    )
-                else:
-                    raise ValueError(
-                        "goals must be provided when passing an advanced state"
-                    )
+                goals = default_goals_from_state(state)
             inputs, _ = _split_goals(goals, subgoal_layers)
             self._encoder.engine.encode(adv_state, inputs, self._builder)
         self._builder.next_graph()
 
     def _reset_builder(self) -> None:
+        """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("homo")
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -166,13 +183,21 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
 
 
 class ColorEncoder(EncoderBase[Data]):
+    """
+    Homogeneous color encoder backed by ``ColorEncoderEngine``.
+
+    Produces compact ``Data``/``Batch`` outputs with integer-like node/edge
+    attributes suitable for color-based graph models.
+    """
+
     def __init__(
         self,
-        domain: Any,
+        domain: DomainInput,
         *,
         edge_features: bool = False,
         enable_global_predicate_nodes: bool = False,
     ) -> None:
+        """Create a color encoder for one domain."""
         config = ColorEncoderConfig()
         config.edge_features = edge_features
         config.enable_global_predicate_nodes = enable_global_predicate_nodes
@@ -182,38 +207,36 @@ class ColorEncoder(EncoderBase[Data]):
 
     @property
     def engine(self) -> ColorEncoderEngine:
+        """Expose the underlying C++ color engine."""
         return self._engine
 
     def encode_parts(
         self,
-        state: Any,
+        state: StateInput,
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> Mapping[str, object]:
+        """Encode one state into homogeneous parts."""
         adv_state = _advanced_state(state)
         if goals is None and subgoal_layers is None:
             return self._engine.encode(adv_state)
         if goals is None:
-            if hasattr(state, "get_problem"):
-                goals = list(state.get_problem().get_goal_condition().get_literals())
-            else:
-                raise ValueError(
-                    "goals must be provided when passing an advanced state"
-                )
+            goals = default_goals_from_state(state)
         inputs, _ = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, inputs)
 
     def encode(
         self,
-        state: Any,
+        state: StateInput,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> Data:
+        """Encode one state into ``Data``."""
         return super().encode(
             state,
             goals=goals,
@@ -224,16 +247,14 @@ class ColorEncoder(EncoderBase[Data]):
 
     def encode_batch_parts(
         self,
-        states: Iterable[Any] | Any,
+        states: StateBatchInput,
         *,
-        goals: Iterable[Any] | None = None,
-        actions: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
-    ) -> Mapping[str, Any]:
-        is_state_like = hasattr(states, "get_problem") or hasattr(
-            states, "_advanced_state"
-        )
-        if is_state_like:
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> Mapping[str, object]:
+        """Encode one or many states into homogeneous batch parts."""
+        if isinstance(states, STATE_TYPES):
             state_list = [states]
         else:
             if isinstance(states, (str, bytes)):
@@ -252,15 +273,8 @@ class ColorEncoder(EncoderBase[Data]):
                 self._engine.encode(adv_state, builder)
             else:
                 if goals is None:
-                    if hasattr(state, "get_problem"):
-                        goals_for_state = list(
-                            state.get_problem().get_goal_condition().get_literals()
-                        )
-                        inputs, _ = _split_goals(goals_for_state, subgoal_layers)
-                    else:
-                        raise ValueError(
-                            "goals must be provided when passing an advanced state"
-                        )
+                    goals_for_state = default_goals_from_state(state)
+                    inputs, _ = _split_goals(goals_for_state, subgoal_layers)
                 else:
                     inputs = shared_inputs
                 self._engine.encode(adv_state, inputs, builder)
@@ -269,13 +283,14 @@ class ColorEncoder(EncoderBase[Data]):
 
     def encode_batch(
         self,
-        states: Iterable[Any] | Any,
+        states: StateBatchInput,
         *,
-        goals: Iterable[Any] | None = None,
-        subgoal_layers: Iterable[Iterable[Any]] | None = None,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> Data:
+        """Encode one or many states into batched ``Data``."""
         return super().encode_batch(
             states,
             goals=goals,
@@ -286,7 +301,7 @@ class ColorEncoder(EncoderBase[Data]):
 
     def _parts_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        parts: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -296,9 +311,11 @@ class ColorEncoder(EncoderBase[Data]):
         )
 
     def stream(self) -> ColorEncoderStream:
+        """Create a streaming encoder sharing this encoder's C++ engine."""
         return ColorEncoderStream(self)
 
     def to_networkx(self, data: Data) -> nx.Graph:
+        """Convert a color-encoded PyG graph into a NetworkX graph."""
         graph = nx.Graph()
         node_names = getattr(data, "node_names", None)
         if not node_names:
