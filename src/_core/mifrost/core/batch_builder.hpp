@@ -28,60 +28,63 @@ namespace nb = nanobind;
  */
 class BatchBuilder {
   public:
-   // Supported column types
+   /// Floating-point tensor column storage.
    using FloatCol = std::vector< float >;
+   /// Integer tensor column storage.
    using LongCol = std::vector< int64_t >;
-   // Extend with other types if needed (e.g. half float, int32)
+   /// Variant over supported tensor scalar storage backends.
    using ColumnData = std::variant< FloatCol, LongCol >;
 
+   /// One logical tensor column.
    struct Column {
+      /// Contiguous scalar storage.
       ColumnData data;
-      int dim = 1;  // Feature dimension (strides[1])
+      /// Feature dimension for this column.
+      int dim = 1;
    };
 
    // --- Graph Structure Tracking ---
 
-   // Per-node-type cumulative counts in the current batch
-   // Key: node_type (e.g. "atom", "_symbol_")
+   /// Per-node-type cumulative node counts in the current (open) graph.
    ankerl::unordered_dense::map< std::string, int64_t > current_node_counts;
 
-   // Global offsets for the *start* of the current graph
-   // (Used to shift edge indices)
+   /// Per-node-type offset of the current graph start in the batch.
    ankerl::unordered_dense::map< std::string, int64_t > node_offsets;
 
-   // Feature dimensions per node type (used when x is implicit).
+   /// Node feature dimensions per node type (used to synthesize empty x tensors).
    ankerl::unordered_dense::map< std::string, int > node_feature_dims;
 
-   // Optional node names per node type for PyG output.
+   /// Optional node names per node type (metadata path).
    ankerl::unordered_dense::map< std::string, std::vector< std::string > > node_names;
 
-   // Optional graph-level object names.
+   /// Optional per-graph object names (metadata path).
    std::vector< std::string > object_names;
 
-   // Schema graph kind (e.g. "hetero" or "homo").
+   /// Schema graph kind ("hetero" or "homo").
    std::string graph_kind;
 
-   // Schema metadata (flags).
+   /// Schema feature flags exposed to Python.
    std::map< std::string, bool > schema_flags;
 
-   // Graph pointer (ptr) tracking.
-   // For homogeneous: simple vector. For hetero: ptr per node type (PyG convention).
+   /// PyG-style ptr tracking (per node type).
    ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
-   std::vector< int64_t > batch_indices;  // For homogeneous case if needed
+   /// Optional homogeneous batch index cache.
+   std::vector< int64_t > batch_indices;
 
-   // Graph-level attributes (used by horizon encoders and schema metadata).
+   /// Supported graph-level attribute value types.
    using GraphAttrValue = std::
       variant< int64_t, std::string, std::vector< int64_t >, std::vector< std::string > >;
+   /// Graph-level attributes forwarded to Python metadata.
    ankerl::unordered_dense::map< std::string, GraphAttrValue > graph_attrs;
 
-   // --- Storage ---
-   // Key format: "node_type/attr_name" or "edge_type/attr_name"
-   // For edges, key could be "src|rel|dst/edge_index"
+   /// Flat tensor column storage keyed by schema keys.
    ankerl::unordered_dense::map< std::string, Column > columns;
 
+   /// Number of committed graphs.
    int64_t current_graph_idx = 0;
 
   public:
+   /// Create an empty builder.
    BatchBuilder();
 
    // --- Data Ingestion ---
@@ -142,31 +145,43 @@ class BatchBuilder {
     */
    nb::object build();
    /**
-    * @brief Finalize and return graph parts for Python assembly.
+    * @brief Finalize and return normalized parts for Python-side assembly.
     */
    nb::dict build_parts();
 
+   /// Set feature dim for a node type (used for implicit empty x tensors).
    void set_node_feature_dim(const std::string& node_type, int dim);
+   /// Add a node count delta for a node type.
    void add_nodes(const std::string& node_type, int64_t count);
+   /// Register an edge type even if no concrete edges exist yet.
    void ensure_edge_type(
       const std::string& src_type,
       const std::string& rel_type,
       const std::string& dst_type
    );
+   /// Set node names metadata for one node type.
    void set_node_names(const std::string& node_type, std::vector< std::string > names);
+   /// Set object names metadata.
    void set_object_names(std::vector< std::string > names);
+   /// Set schema graph kind ("hetero"/"homo").
    void set_graph_kind(std::string kind);
+   /// Set schema flag.
    void set_schema_flag(const std::string& key, bool value);
+   /// Set integer vector graph attribute.
    void set_graph_attr(const std::string& key, std::vector< int64_t > values);
+   /// Set string vector graph attribute.
    void set_graph_attr(const std::string& key, std::vector< std::string > values);
+   /// Set integer graph attribute.
    void set_graph_attr(const std::string& key, int64_t value);
+   /// Set string graph attribute.
    void set_graph_attr(const std::string& key, std::string value);
 
   private:
-   // Helper to get or create a column
+   /// Get or create a typed column with the requested feature dimension.
    template < typename T >
    std::vector< T >& get_column(const std::string& key, int dim);
 
+   /// Build the internal tensor dictionary used by build/build_parts.
    nb::dict build_dict();
 };
 

@@ -11,6 +11,9 @@ namespace mifrost {
 
 namespace nb = nanobind;
 
+/**
+ * @brief Canonical hetero edge type descriptor.
+ */
 struct EdgeType {
    std::string src;
    std::string rel;
@@ -22,12 +25,18 @@ struct EdgeType {
    }
 };
 
+/**
+ * @brief Mapping entry for one node tensor in the flat parts tensor dict.
+ */
 struct NodeTensorSpec {
    std::string node_type;
    std::string attr;
    std::string key;
 };
 
+/**
+ * @brief Mapping entry for one edge tensor in the flat parts tensor dict.
+ */
 struct EdgeTensorSpec {
    int edge_type = -1;
    std::string attr;
@@ -35,6 +44,12 @@ struct EdgeTensorSpec {
    std::string part;
 };
 
+/**
+ * @brief Versioned schema for normalized encoder parts payloads.
+ *
+ * This schema defines how flat tensors map to semantic node and edge stores.
+ * Python assembly uses this contract to reconstruct ``Data``/``HeteroData``.
+ */
 struct Schema {
    int version = 1;
    std::string graph_kind;
@@ -48,11 +63,20 @@ struct Schema {
 
    virtual ~Schema() = default;
 
+   /**
+    * @brief Validate schema invariants.
+    *
+    * Override in derived schemas to apply additional encoder-specific checks.
+    */
    virtual void validate() const;
+
+   /// Serialize to Python dictionary form.
    nb::dict to_dict() const;
+   /// Parse schema from Python dictionary form.
    static Schema from_dict(const nb::dict& schema);
 
   protected:
+   /// Base validation shared by all schema variants.
    void validate_base() const;
 };
 

@@ -37,10 +37,15 @@ namespace mifrost {
  */
 class TransitionDAG {
   public:
+   /// One transition DAG node.
    struct Node {
+      /// State represented by this node.
       mimir::search::State state;
+      /// Stable insertion-order index.
       int64_t index;
+      /// Depth from root.
       int depth;
+      /// Optional incoming action from parent to this node.
       std::optional< mimir::formalism::GroundAction > action;
    };
 
@@ -122,6 +127,7 @@ class TransitionDAG {
    bool contains(mimir::search::State state) const;
 
   private:
+   /// Recompute depth labels from current adjacency.
    void finalize_depths();
 
    mimir::search::State root_;

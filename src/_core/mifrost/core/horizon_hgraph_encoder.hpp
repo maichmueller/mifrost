@@ -13,11 +13,12 @@ namespace mifrost {
 class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
-      Full,  // Each transition encodes full successor state
-      Delta,  // Each transition encodes only changed literals vs root
-      Action  // Only encodes actions, no state atoms for transitions
+      Full,  ///< Each transition encodes full successor state.
+      Delta,  ///< Each transition encodes only changed literals vs root.
+      Action  ///< Only encodes actions, no state atoms for transitions.
    };
 
+   /// Runtime config for horizon lookahead encoding.
    struct Config: HGraphEncoderEngine::Config {
       Mode transition_mode = Mode::Full;
       std::string target_symbol_prefix = "target:";
@@ -46,8 +47,10 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    );
 
   private:
+   /// Effective horizon-specific config.
    Config horizon_config_;
 
+   /// Internal lookahead encode implementation.
    void encode_impl(
       const mimir::search::State& root,
       const TransitionDAG& dag,
@@ -55,9 +58,12 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
+   /// Register transition relation types based on config flags.
    void configure_relations();
+   /// Register one transition relation in relation metadata.
    void register_relation_type(const std::string& relation);
 
+   /// Build target-symbol node key for one transition node index.
    [[nodiscard]] std::string target_node_key(int idx) const;
 };
 

@@ -22,6 +22,9 @@
 
 namespace mifrost {
 
+/**
+ * @brief Goal-satisfaction suffix modes used in relation names.
+ */
 enum class GoalSatisfaction {
    none,
    satisfied,
@@ -30,11 +33,17 @@ enum class GoalSatisfaction {
    added_unsatisfied,
 };
 
+/**
+ * @brief Literal polarity prefix mode.
+ */
 enum class LiteralPrefix {
    positive,
    negative,
 };
 
+/**
+ * @brief Strong type for goal layer index.
+ */
 struct GoalLevel: strong::type< std::size_t, GoalLevel, strong::regular > {
    using base = strong::type< std::size_t, GoalLevel, strong::regular >;
    using base::base;  // keep the normal constructors
@@ -46,6 +55,12 @@ struct GoalLevel: strong::type< std::size_t, GoalLevel, strong::regular > {
    }
 };
 
+/**
+ * @brief Central formatter for relation, atom, literal, action and object keys.
+ *
+ * This class defines naming conventions used across all encoders and tests.
+ * Keep all formatter changes here so relation naming stays globally consistent.
+ */
 struct RelationFormatter {
    static constexpr auto kPositivePrefix = "[+]";
    static constexpr auto kNegativePrefix = "[-]";
@@ -56,15 +71,19 @@ struct RelationFormatter {
    static constexpr auto kGoalSatisfiedRemovedSuffix = "[sat-]";
    static constexpr auto kDefaultNullarySymbolName = "![nullary_symbol]!";
 
+   /// Return no goal-level suffix.
    static std::string_view goal_level_suffix(std::nullopt_t) { return ""; }
 
+   /// Return level suffix for a concrete goal level.
    static std::string_view goal_level_suffix(const GoalLevel& level)
    {
       return kGoalSuffixes.at(level.value_of());
    }
 
+   /// Return no satisfaction suffix.
    static std::string_view goal_satisfaction_suffix(std::nullopt_t) { return ""; }
 
+   /// Return suffix for a concrete goal-satisfaction mode.
    static std::string_view goal_satisfaction_suffix(GoalSatisfaction satisfaction)
    {
       switch(satisfaction) {
@@ -77,19 +96,23 @@ struct RelationFormatter {
       return "";
    }
 
+   /// Return no polarity prefix.
    static std::string_view polarity_prefix(std::nullopt_t) { return ""; }
 
+   /// Return polarity prefix ("[+]" / "[-]").
    static std::string_view polarity_prefix(bool polarity)
    {
       return polarity ? kPositivePrefix : kNegativePrefix;
    }
 
+   /// Format a predicate relation name from raw predicate name + optional suffix.
    static std::string
    format_predicate(const std::string_view name, const std::string_view suffix = "")
    {
       return fmt::format("{}{}", name, suffix);
    }
 
+   /// Format a predicate relation name from typed predicate object.
    template < typename Tag, typename... Args >
    static std::string
    format_predicate(const mimir::formalism::Predicate< Tag > predicate, Args&&... args)
@@ -97,6 +120,7 @@ struct RelationFormatter {
       return format_predicate(predicate->get_name(), std::forward< Args >(args)...);
    }
 
+   /// Format predicate with explicit goal-level suffix.
    static std::string format_predicate(
       const std::string_view name,
       const GoalLevel goal_level,
@@ -106,6 +130,12 @@ struct RelationFormatter {
       return fmt::format("{}{}{}", name, suffix, goal_level_suffix(goal_level));
    }
 
+   /**
+    * @brief Fully-parameterized predicate formatter.
+    *
+    * Optional arguments are modeled via overload resolution on std::nullopt_t
+    * to keep dispatch compile-time and avoid runtime optional branching.
+    */
    template <
       typename GoalLevelArg = std::nullopt_t,
       typename SatisfactionArg = std::nullopt_t,
@@ -134,6 +164,7 @@ struct RelationFormatter {
       );
    }
 
+   /// Format a ground atom.
    template < typename P >
    static std::string
    format_atom(mimir::formalism::GroundAtom< P > atom, const std::string_view suffix = "")
@@ -156,6 +187,7 @@ struct RelationFormatter {
       );
    }
 
+   /// Format a ground literal.
    template <
       typename P,
       typename GoalLevelArg = std::nullopt_t,
@@ -192,11 +224,13 @@ struct RelationFormatter {
       );
    }
 
+   /// Format action schema relation key.
    static std::string format_action_schema(const mimir::formalism::ActionImpl& action)
    {
       return action.get_name();
    }
 
+   /// Format grounded action relation key.
    static std::string format_action(const mimir::formalism::GroundAction action)
    {
       return fmt::format(
@@ -212,35 +246,41 @@ struct RelationFormatter {
       );
    }
 
+   /// Format object key.
    static std::string format_object(const mimir::formalism::ObjectImpl& object)
    {
       return object.get_name();
    }
 
+   /// Callable formatter entrypoint forwarding to overload set.
    template < typename... Args >
    std::string operator()(Args&&... args) const
    {
       return format(std::forward< Args >(args)...);
    }
 
+   /// Generic format overload for raw predicate names.
    template < typename... Args >
    static std::string format(std::string_view name, Args&&... args)
    {
       return format_predicate(name, std::forward< Args >(args)...);
    }
 
+   /// Generic format overload for typed predicates.
    template < typename Tag, typename... Args >
    static std::string format(mimir::formalism::Predicate< Tag > predicate, Args&&... args)
    {
       return format_predicate(predicate, std::forward< Args >(args)...);
    }
 
+   /// Generic format overload for literals.
    template < typename P, typename... Args >
    static std::string format(mimir::formalism::GroundLiteral< P > literal, Args&&... args)
    {
       return format_literal(literal, std::forward< Args >(args)...);
    }
 
+   /// Generic format overload for atoms.
    template < typename P, typename... Args >
    static std::string format(mimir::formalism::GroundAtom< P > atom, Args&&... args)
    {

@@ -12,6 +12,9 @@
 
 namespace mifrost {
 
+/**
+ * @brief Configuration for relation dictionary derivation from a domain.
+ */
 struct RelationDictConfig {
    int max_goal_level = 0;
    bool support_literals = false;
@@ -26,12 +29,25 @@ struct RelationDictConfig {
    };
 };
 
+/**
+ * @brief Relation arity table used by encoders to enforce relation contracts.
+ *
+ * The dictionary expands base domain predicates with derived relation variants
+ * (goal levels, polarities, satisfaction suffixes) according to config.
+ */
 struct RelationDict {
+   /// Relation key -> arity.
    std::map< std::string, int > arity;
+   /// Highest configured goal level included in derived relation variants.
    int max_goal_level = 0;
+   /// Whether literal variants (without goal-level suffix) are included.
    bool support_literals = false;
+   /// Satisfaction derivations that are materialized.
    std::set< GoalSatisfaction > goal_satisfaction_derivations;
 
+   /**
+    * @brief Build a relation dictionary from a domain and action list.
+    */
    static RelationDict build(
       const mimir::formalism::DomainImpl& domain,
       const std::vector< mimir::formalism::Action >& actions,

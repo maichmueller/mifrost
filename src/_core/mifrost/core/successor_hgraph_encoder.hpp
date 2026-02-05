@@ -12,10 +12,11 @@ namespace mifrost {
 class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
-      Full,  // Successor encodes full state
-      Delta  // Successor encodes only changed literals (add/delete)
+      Full,  ///< Successor encodes full state.
+      Delta  ///< Successor encodes only changed literals (add/delete).
    };
 
+   /// Runtime config for successor transition encoding.
    struct Config: HGraphEncoderEngine::Config {
       Mode successor_mode = Mode::Full;
       std::string successor_suffix = "[suc]";
@@ -38,8 +39,10 @@ class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
    );
 
   private:
+   /// Effective successor-specific config.
    Config successor_config_;
 
+   /// Internal transition encode implementation.
    void encode_impl(
       const mimir::search::State& current,
       const mimir::search::State& successor,
