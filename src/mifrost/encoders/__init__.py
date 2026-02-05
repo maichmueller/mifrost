@@ -10,6 +10,7 @@ from .transition import (
     TransitionHGraphEncoderStream,
 )
 from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
+from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
 
 __all__ = [
     "HGraphEncoder",
@@ -25,6 +26,8 @@ __all__ = [
     "ILGEncoder",
     "ILGEncoderStream",
     "AtomStatus",
+    "ExampleConstantEncoder",
+    "ExampleConstantStreamEncoder",
     "EncoderBase",
     "StreamEncoderBase",
     "_parts_to_pyg",
