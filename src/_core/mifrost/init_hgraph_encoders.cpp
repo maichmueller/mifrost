@@ -2,6 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -39,6 +40,7 @@ void init_hgraph_encoders(nb::module_& m)
    m.attr("DEFAULT_PARENT_RELATION") = defaults::parent_relation;
    m.attr("DEFAULT_SIBLING_RELATION") = defaults::sibling_relation;
    m.attr("DEFAULT_COUSIN_RELATION") = defaults::cousin_relation;
+   m.attr("DEFAULT_HISTORY_LINK_RELATION") = defaults::history_link_relation;
 
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
@@ -141,6 +143,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def_rw("include_static", &HGraphEncoderEngine::Config::include_static)
       .def_rw("include_lgan_edges", &HGraphEncoderEngine::Config::include_lgan_edges)
       .def_rw("include_empty_edge_types", &HGraphEncoderEngine::Config::include_empty_edge_types)
+      .def_rw("history_link_relation", &HGraphEncoderEngine::Config::history_link_relation)
       .def_rw(
          "lgan_nn_edge_pos",
          &HGraphEncoderEngine::Config::lgan_nn_edge_pos,
@@ -181,6 +184,25 @@ void init_hgraph_encoders(nb::module_& m)
          "encode",
          [](HGraphEncoderEngine& encoder,
             const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            const std::vector< HGraphEncoderEngine::HistorySubgoal >& history_subgoals,
+            std::optional< int > history_max_steps) {
+            BatchBuilder builder;
+            builder.set_graph_kind("hetero");
+            encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
+            return builder.build_parts();
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt
+      )
+      .def(
+         "encode",
+         [](HGraphEncoderEngine& encoder,
+            const mimir::search::State& state,
             BatchBuilder& builder) { encoder.encode(state, builder); },
          "state"_a,
          "builder"_a
@@ -195,6 +217,24 @@ void init_hgraph_encoders(nb::module_& m)
          "state"_a,
          "goals"_a,
          "actions"_a,
+         "builder"_a
+      )
+      .def(
+         "encode",
+         [](HGraphEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            const std::vector< HGraphEncoderEngine::HistorySubgoal >& history_subgoals,
+            std::optional< int > history_max_steps,
+            BatchBuilder& builder) {
+            encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
          "builder"_a
       );
 

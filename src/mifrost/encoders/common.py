@@ -9,6 +9,7 @@ from torch_geometric.data import Batch, HeteroData
 from .types import (
     DomainInput,
     GoalLiteralInput,
+    HistorySubgoalInput,
     GroundActionInput,
     StateInput,
     to_advanced_action,
@@ -110,6 +111,33 @@ def _prepare_actions(
     for action in actions:
         adv = _advanced_action(action)
         out.append(adv)
+    return out
+
+
+def _prepare_history_subgoals(
+    history_subgoals: HistorySubgoalInput | None,
+) -> list[
+    tuple[
+        int,
+        list[af.StaticGroundLiteral | af.FluentGroundLiteral | af.DerivedGroundLiteral],
+    ]
+]:
+    """Normalize history subgoals into advanced literal lists."""
+    if history_subgoals is None:
+        return []
+    out: list[
+        tuple[
+            int,
+            list[
+                af.StaticGroundLiteral
+                | af.FluentGroundLiteral
+                | af.DerivedGroundLiteral
+            ],
+        ]
+    ] = []
+    for dt, literals in history_subgoals:
+        adv_literals = [_advanced_literal(literal) for literal in literals]
+        out.append((int(dt), adv_literals))
     return out
 
 

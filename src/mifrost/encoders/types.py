@@ -16,6 +16,7 @@ AdvancedGroundLiteral: TypeAlias = (
     af.StaticGroundLiteral | af.FluentGroundLiteral | af.DerivedGroundLiteral
 )
 GoalLiteralInput: TypeAlias = wf.GroundLiteral | AdvancedGroundLiteral
+HistorySubgoalInput: TypeAlias = Iterable[tuple[int, Iterable[GoalLiteralInput]]]
 
 GroundAtomInput: TypeAlias = (
     wf.GroundAtom | af.StaticGroundAtom | af.FluentGroundAtom | af.DerivedGroundAtom

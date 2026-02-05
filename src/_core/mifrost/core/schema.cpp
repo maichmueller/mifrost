@@ -4,6 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <set>
 #include <stdexcept>
 
@@ -54,6 +55,81 @@ void Schema::validate() const
    validate_base();
    if(graph_kind != "hetero" and graph_kind != "homo") {
       throw std::invalid_argument("Schema graph_kind must be 'hetero' or 'homo'");
+   }
+   validate_history();
+}
+
+void Schema::validate_history() const
+{
+   const auto it = flags.find("history");
+   if(it == flags.end() or not it->second) {
+      return;
+   }
+
+   if(graph_kind != "hetero") {
+      throw std::invalid_argument("History encoding requires graph_kind='hetero'");
+   }
+
+   if(std::find(node_types.begin(), node_types.end(), "history") == node_types.end()) {
+      throw std::invalid_argument("History encoding requires 'history' node type");
+   }
+
+   const auto has_history_dt = std::any_of(
+      node_tensors.begin(), node_tensors.end(), [](const NodeTensorSpec& spec) {
+         return spec.node_type == "history" and spec.attr == "history_dt";
+      }
+   );
+   if(not has_history_dt) {
+      throw std::invalid_argument("History encoding requires history/history_dt tensor");
+   }
+
+   std::vector< int > history_edge_ids;
+   history_edge_ids.reserve(edge_types.size());
+   for(size_t idx = 0; idx < edge_types.size(); ++idx) {
+      const auto& edge_type = edge_types[idx];
+      if(edge_type.src == "history" or edge_type.dst == "history") {
+         history_edge_ids.push_back(static_cast< int >(idx));
+      }
+   }
+
+   if(history_edge_ids.empty()) {
+      throw std::invalid_argument("History encoding requires history link edge types");
+   }
+
+   bool has_pair = false;
+   for(const auto& edge_type : edge_types) {
+      if(edge_type.src != "history") {
+         continue;
+      }
+      const bool has_reverse = std::any_of(
+         edge_types.begin(), edge_types.end(), [&](const EdgeType& candidate) {
+            return candidate.src == edge_type.dst and candidate.dst == "history"
+                   and candidate.rel == edge_type.rel;
+         }
+      );
+      if(has_reverse) {
+         has_pair = true;
+         break;
+      }
+   }
+
+   if(not has_pair) {
+      throw std::invalid_argument("History encoding requires bidirectional history link edges");
+   }
+
+   std::map< int, std::set< std::string > > parts_by_edge;
+   for(const auto& spec : edge_tensors) {
+      if(spec.attr == "edge_index") {
+         parts_by_edge[spec.edge_type].insert(spec.part);
+      }
+   }
+   for(const auto edge_id : history_edge_ids) {
+      const auto it = parts_by_edge.find(edge_id);
+      if(it == parts_by_edge.end() or it->second.count("0") == 0 or it->second.count("1") == 0) {
+         throw std::invalid_argument(
+            "History encoding requires edge_index parts for history link edges"
+         );
+      }
    }
 }
 

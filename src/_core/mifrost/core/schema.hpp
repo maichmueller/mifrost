@@ -78,6 +78,7 @@ struct Schema {
   protected:
    /// Base validation shared by all schema variants.
    void validate_base() const;
+   void validate_history() const;
 };
 
 }  // namespace mifrost

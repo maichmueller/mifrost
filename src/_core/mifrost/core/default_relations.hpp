@@ -8,5 +8,6 @@ inline constexpr const char* lgan_nn_edge_pos = "_lgan_nn_";
 inline constexpr const char* parent_relation = "_parent_";
 inline constexpr const char* sibling_relation = "_sibling_";
 inline constexpr const char* cousin_relation = "_cousin_";
+inline constexpr const char* history_link_relation = "_history_link_";
 
 }  // namespace mifrost::defaults

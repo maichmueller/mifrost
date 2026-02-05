@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Iterable, Mapping, Sequence
 
 from torch_geometric.data import HeteroData
 
 from .._core import (
     BatchBuilder,
+    DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
     GoalInputs,
@@ -26,12 +28,14 @@ from .common import (
     _advanced_state,
     _parts_to_pyg,
     _prepare_actions,
+    _prepare_history_subgoals,
     _split_goals,
 )
 from .types import (
     GroundActionInput,
     GoalLiteralInput,
     DomainInput,
+    HistorySubgoalInput,
     StateInput,
     is_action_input,
     default_goals_from_state,
@@ -56,6 +60,8 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         goals: Iterable[GoalLiteralInput] | None = None,
         actions: Iterable[GroundActionInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
     ) -> None:
         """
         Append one state encoding to the current stream.
@@ -64,19 +70,35 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         """
         adv_state = _advanced_state(state)
         action_list = _prepare_actions(actions)
-        if goals is None and subgoal_layers is None and not action_list:
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if (
+            goals is None
+            and subgoal_layers is None
+            and not action_list
+            and not history_list
+        ):
             # Fast path: let the engine derive goals from the state/problem.
             self._engine.encode(adv_state, self._builder)
         else:
             if goals is None:
                 goals = default_goals_from_state(state)
             inputs, _ = _split_goals(goals, subgoal_layers)
-            self._engine.encode(
-                adv_state,
-                inputs,
-                action_list,
-                self._builder,
-            )
+            if history_list:
+                self._engine.encode(
+                    adv_state,
+                    inputs,
+                    action_list,
+                    history_list,
+                    history_max_steps,
+                    self._builder,
+                )
+            else:
+                self._engine.encode(
+                    adv_state,
+                    inputs,
+                    action_list,
+                    self._builder,
+                )
         self._builder.next_graph()
 
     def _reset_builder(self) -> None:
@@ -118,6 +140,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
+        history_link_relation: str = DEFAULT_HISTORY_LINK_RELATION,
     ) -> None:
         """Create an HGraph encoder for one domain."""
         config = HGraphEncoderConfig()
@@ -131,12 +154,16 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         config.support_literals = support_literals
         config.nullary_object_name = nullary_object_name
         config.lgan_nn_edge_pos = lgan_nn_edge_pos
+        config.history_link_relation = history_link_relation
         self._engine = HGraphEncoderEngine(_advanced_domain(domain), config)
 
     @property
     def engine(self) -> HGraphEncoderEngine:
         """Expose the underlying C++ engine for advanced usage."""
         return self._engine
+
+    def _accepted_kwargs(self) -> set[str]:
+        return {"history_subgoals", "history_max_steps"}
 
     def encode_parts(
         self,
@@ -145,15 +172,27 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         goals: GoalBatchInput = None,
         actions: Iterable[GroundActionInput] | None = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
     ) -> Mapping[str, object]:
         """Encode one state to normalized parts."""
         adv_state = _advanced_state(state)
         action_list = _prepare_actions(actions)
-        if goals is None and subgoal_layers is None and not action_list:
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if (
+            goals is None
+            and subgoal_layers is None
+            and not action_list
+            and not history_list
+        ):
             return self._engine.encode(adv_state)
         if goals is None:
             goals = default_goals_from_state(state)
         inputs, _ = _split_goals(goals, subgoal_layers)
+        if history_list:
+            return self._engine.encode(
+                adv_state, inputs, action_list, history_list, history_max_steps
+            )
         # Explicitly pass goals/actions across the strict C++ boundary.
         return self._engine.encode(adv_state, inputs, action_list)
 
@@ -164,6 +203,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         goals: GoalBatchInput = None,
         actions: Iterable[GroundActionInput] | None = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HeteroData:
@@ -173,6 +214,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             include_metadata=include_metadata,
             **kwargs,
         )
@@ -186,6 +229,10 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         | Sequence[Iterable[GroundActionInput] | None]
         | None = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput
+        | Sequence[HistorySubgoalInput]
+        | None = None,
+        history_max_steps: int | None = None,
     ) -> Mapping[str, object]:
         """
         Encode one or many states to batch parts.
@@ -222,6 +269,33 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         if goals is not None:
             shared_inputs, _ = _split_goals(goals, subgoal_layers)
 
+        history_per_state: list[list[tuple[int, list[object]]]] | None = None
+        if history_subgoals is not None:
+
+            def is_history_item(value: object) -> bool:
+                return (
+                    isinstance(value, tuple)
+                    and len(value) == 2
+                    and isinstance(value[0], Integral)
+                )
+
+            if isinstance(history_subgoals, Sequence) and history_subgoals:
+                if is_history_item(history_subgoals[0]):
+                    prepared = _prepare_history_subgoals(history_subgoals)
+                    history_per_state = [prepared for _ in state_list]
+                else:
+                    history_per_state = [
+                        _prepare_history_subgoals(item) for item in history_subgoals
+                    ]
+            else:
+                prepared = _prepare_history_subgoals(history_subgoals)
+                history_per_state = [prepared for _ in state_list]
+
+            if history_per_state is not None and len(history_per_state) != len(
+                state_list
+            ):
+                raise ValueError("history_subgoals length must match states length")
+
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
@@ -236,7 +310,16 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             else:
                 action_list = shared_action_list
 
-            if goals is None and subgoal_layers is None and not action_list:
+            history_list: list[tuple[int, list[object]]] = []
+            if history_per_state is not None:
+                history_list = history_per_state[idx]
+
+            if (
+                goals is None
+                and subgoal_layers is None
+                and not action_list
+                and not history_list
+            ):
                 # Fast path: let the engine derive goals from the state/problem.
                 self._engine.encode(adv_state, builder)
             else:
@@ -245,7 +328,17 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     inputs, _ = _split_goals(goals_for_state, subgoal_layers)
                 else:
                     inputs = shared_inputs
-                self._engine.encode(adv_state, inputs, action_list, builder)
+                if history_list:
+                    self._engine.encode(
+                        adv_state,
+                        inputs,
+                        action_list,
+                        history_list,
+                        history_max_steps,
+                        builder,
+                    )
+                else:
+                    self._engine.encode(adv_state, inputs, action_list, builder)
             builder.next_graph()
 
         return builder.build_parts()
@@ -259,6 +352,10 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         | Sequence[Iterable[GroundActionInput] | None]
         | None = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput
+        | Sequence[HistorySubgoalInput]
+        | None = None,
+        history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HeteroData:
@@ -268,6 +365,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             include_metadata=include_metadata,
             **kwargs,
         )
