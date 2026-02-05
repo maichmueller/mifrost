@@ -3,7 +3,7 @@ import mifrost
 
 
 def test_batch_builder_parity():
-    symbol_type_id = "_symbol_"
+    symbol_type_id = mifrost.DEFAULT_SYMBOL_TYPE_ID
 
     # C++ builder
     cpp_builder = mifrost.BatchBuilder()

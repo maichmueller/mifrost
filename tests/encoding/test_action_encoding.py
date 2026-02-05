@@ -19,7 +19,7 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
     encoder = HGraphEncoder(domain, ignore_actions=False)
     data = encoder.encode(state, actions=actions)
 
-    symbol_type = "_symbol_"
+    symbol_type = mifrost.DEFAULT_SYMBOL_TYPE_ID
     symbol_names = list(getattr(data[symbol_type], "node_names", []))
 
     formatter = mifrost.RelationFormatter

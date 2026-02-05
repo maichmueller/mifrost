@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "mifrost/core/default_relations.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -70,25 +72,25 @@ TEST(BatchBuilderTest, HeteroNamesAndEdgesAreRecorded)
    std::vector< float > symbol_nodes = {0.0f, 0.0f};
    std::vector< float > atom_nodes = {1.0f, 2.0f, 3.0f, 4.0f};
 
-   builder.add_node_features("_symbol_", "x", symbol_nodes, 1);
+   builder.add_node_features(defaults::symbol_type_id, "x", symbol_nodes, 1);
    builder.add_node_features("atom", "x", atom_nodes, 2);
-   builder.set_node_names("_symbol_", {"o0", "o1"});
+   builder.set_node_names(defaults::symbol_type_id, {"o0", "o1"});
    builder.set_node_names("atom", {"a0", "a1"});
    builder.set_object_names({"o0", "o1"});
 
    std::vector< int64_t > src = {0, 1};
    std::vector< int64_t > dst = {0, 1};
-   builder.add_edges("_symbol_", "0", "atom", src, dst);
+   builder.add_edges(defaults::symbol_type_id, "0", "atom", src, dst);
 
-   ASSERT_EQ(builder.node_names.at("_symbol_").size(), 2u);
+   ASSERT_EQ(builder.node_names.at(defaults::symbol_type_id).size(), 2u);
    ASSERT_EQ(builder.node_names.at("atom").size(), 2u);
    ASSERT_EQ(builder.object_names.size(), 2u);
 
    const auto& edge_src = std::get< BatchBuilder::LongCol >(
-      builder.columns.at("_symbol_|0|atom/edge_index_0").data
+      builder.columns.at(std::string(defaults::symbol_type_id) + "|0|atom/edge_index_0").data
    );
    const auto& edge_dst = std::get< BatchBuilder::LongCol >(
-      builder.columns.at("_symbol_|0|atom/edge_index_1").data
+      builder.columns.at(std::string(defaults::symbol_type_id) + "|0|atom/edge_index_1").data
    );
    ASSERT_EQ(edge_src.size(), 2u);
    ASSERT_EQ(edge_dst.size(), 2u);

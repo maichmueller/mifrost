@@ -54,7 +54,7 @@ def validate_hetero_data(
 def test_hetero_data(small_blocks):
     space, domain, problem = small_blocks
     encoder = HGraphEncoder(domain)
-    symbol_type_id = "_symbol_"
+    symbol_type_id = mifrost.DEFAULT_SYMBOL_TYPE_ID
     # This test validates positional arity constraints for base predicate node
     # types only. Additional relation types (goal/sat/action/horizon links) are
     # covered by dedicated encoder tests.
@@ -73,7 +73,7 @@ def test_hetero_data(small_blocks):
 
 def test_nullary_predicates_connect_to_placeholder(small_blocks):
     space, domain, problem = small_blocks
-    symbol_type_id = "_symbol_"
+    symbol_type_id = mifrost.DEFAULT_SYMBOL_TYPE_ID
     nullary_object_name = "![nullary_symbol]!"
     encoder = HGraphEncoder(
         domain,
