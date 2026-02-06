@@ -126,6 +126,46 @@ void init_color_encoder(nb::module_& m)
          "actions"_a,
          "builder"_a
       );
+
+   nb::class_< ColorStreamEncoder >(m, "ColorStreamEncoder")
+      .def(nb::init< ColorEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State& >(&ColorStreamEncoder::append),
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
+            &ColorStreamEncoder::append
+         ),
+         "state"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State& >(&ColorStreamEncoder::update),
+         "id"_a,
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State&, const GoalInputs& >(
+            &ColorStreamEncoder::update
+         ),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &ColorStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &ColorStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush_parts", &ColorStreamEncoder::flush_parts)
+      .def("flush", &ColorStreamEncoder::flush)
+      .def("reset", &ColorStreamEncoder::reset);
 }
 
 }  // namespace mifrost

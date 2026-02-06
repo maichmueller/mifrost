@@ -126,8 +126,10 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> None:
+    ) -> int:
         """Append one ILG graph to the stream."""
+        stream_id = getattr(self, "_next_stream_id", 0)
+        self._next_stream_id = stream_id + 1
         self._encoder._encode_to_builder(
             self._builder,
             state,
@@ -136,11 +138,15 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
             subgoal_layers=subgoal_layers,
         )
         self._builder.next_graph()
+        return stream_id
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
+
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        return self._builder.build_parts()
 
     def _parts_to_pyg(
         self,

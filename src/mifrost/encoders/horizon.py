@@ -10,9 +10,11 @@ from .._core import (
     GoalInputs,
     HorizonEncoderConfig,
     HorizonHGraphEncoderEngine,
+    HorizonStreamEncoder as _HorizonStreamEncoder,
     TransitionDAG,
 )
 from .base import (
+    ActionBatchInput,
     EncoderBase,
     GoalBatchInput,
     StateBatchInput,
@@ -63,6 +65,7 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
 
     def __post_init__(self) -> None:
         """Initialize an empty hetero builder for streaming."""
+        self._stream = _HorizonStreamEncoder(self._engine)
         self._reset_builder()
 
     def append(
@@ -72,18 +75,36 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         *,
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
-    ) -> None:
+    ) -> int:
         """Append one root/DAG encoding to the stream."""
         adv_root = _advanced_state(root)
         dag = _ensure_dag(root, dag)
         inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
-        self._engine.encode(adv_root, dag, inputs, self._builder)
-        self._builder.next_graph()
+        return self._coerce_stream_id(self._stream.append(adv_root, dag, inputs))
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        root: StateInput,
+        dag: TransitionDAG | None = None,
+        *,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
+    ) -> None:
+        adv_root = _advanced_state(root)
+        dag = _ensure_dag(root, dag)
+        inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
+        self._stream.update(stream_id, adv_root, dag, inputs)
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
+        self._stream.reset()
+
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        return self._stream.flush_parts()
 
     def _parts_to_pyg(
         self,
@@ -155,9 +176,14 @@ class HorizonEncoder(EncoderBase[HeteroData]):
         dag: TransitionDAG | None = None,
         *,
         goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
+        **_: object,
     ) -> Mapping[str, object]:
         """Encode one root/DAG pair into parts."""
+        if actions is not None:
+            # Horizon encoding does not consume actions directly.
+            _ = actions
         adv_root = _advanced_state(root)
         dag = _ensure_dag(root, dag)
         inputs = _prepare_horizon_goals(root, goals, subgoal_layers)

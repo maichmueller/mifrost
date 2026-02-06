@@ -86,27 +86,25 @@ TEST_P(HGraphHistoryTest, HistoryNodesAndEdgesPresent)
       EXPECT_EQ(actual, expected);
    }
 
+   auto expected_history = history;
+   std::ranges::stable_sort(expected_history, [](const auto& lhs, const auto& rhs) {
+      return lhs.first < rhs.first;
+   });
+
    const auto index_map = mifrost_test::build_index_map(builder);
    const auto history_index = index_map.at("history");
 
-   for(size_t entry_idx = 0; entry_idx < history.size(); ++entry_idx) {
-      const auto& entry = history[entry_idx];
+   for(size_t entry_idx = 0; entry_idx < expected_history.size(); ++entry_idx) {
+      const auto& [time_delta, subgoals] = expected_history[entry_idx];
       const auto history_name = history_names[entry_idx];
       const auto history_idx_it = history_index.find(history_name);
       ASSERT_NE(history_idx_it, history_index.end());
       const int64_t history_idx = history_idx_it->second;
 
-      for(const auto& goal : entry.second) {
+      for(const auto& goal : subgoals) {
          std::visit(
-            [&](const auto& literal) {
-               using LiteralT = std::decay_t< decltype(literal) >;
-               using Tag = std::conditional_t<
-                  std::is_same_v< LiteralT, mifrost::GoalInputs::FluentLiteral >,
-                  mimir::formalism::FluentTag,
-                  std::conditional_t<
-                     std::is_same_v< LiteralT, mifrost::GoalInputs::DerivedLiteral >,
-                     mimir::formalism::DerivedTag,
-                     mimir::formalism::StaticTag > >;
+            [&]< typename LiteralT >(const LiteralT& literal) {
+               using Tag = std::remove_pointer_t< LiteralT >::Type;
                const auto predicate = literal->get_atom()->get_predicate();
                const auto node_type = mifrost::RelationFormatter::format_predicate(
                   predicate, std::nullopt, std::nullopt, literal->get_polarity()
@@ -128,16 +126,12 @@ TEST_P(HGraphHistoryTest, HistoryNodesAndEdgesPresent)
                EdgePairs reverse_pairs = mifrost_test::edge_pairs_for(builder, reverse_key);
 
                const int64_t literal_idx = node_it->second;
-               bool has_forward = std::any_of(
-                  forward_pairs.begin(), forward_pairs.end(), [&](const auto& pair) {
-                     return pair.first == literal_idx and pair.second == history_idx;
-                  }
-               );
-               bool has_reverse = std::any_of(
-                  reverse_pairs.begin(), reverse_pairs.end(), [&](const auto& pair) {
-                     return pair.first == history_idx and pair.second == literal_idx;
-                  }
-               );
+               bool has_forward = std::ranges::any_of(forward_pairs, [&](const auto& pair) {
+                  return pair.first == literal_idx and pair.second == history_idx;
+               });
+               bool has_reverse = std::ranges::any_of(reverse_pairs, [&](const auto& pair) {
+                  return pair.first == history_idx and pair.second == literal_idx;
+               });
 
                EXPECT_TRUE(has_forward);
                EXPECT_TRUE(has_reverse);
@@ -181,15 +175,8 @@ TEST(HGraphHistoryOverrideTest, CustomHistoryRelation)
 
    const auto& goal_variant = history.front().second.front();
    std::visit(
-      [&](const auto& literal) {
-         using LiteralT = std::decay_t< decltype(literal) >;
-         using Tag = std::conditional_t<
-            std::is_same_v< LiteralT, mifrost::GoalInputs::FluentLiteral >,
-            mimir::formalism::FluentTag,
-            std::conditional_t<
-               std::is_same_v< LiteralT, mifrost::GoalInputs::DerivedLiteral >,
-               mimir::formalism::DerivedTag,
-               mimir::formalism::StaticTag > >;
+      [&]< typename LiteralT >(const LiteralT& literal) {
+         using Tag = std::remove_pointer_t< LiteralT >::Type;
          const auto predicate = literal->get_atom()->get_predicate();
          const auto node_type = mifrost::RelationFormatter::format_predicate(
             predicate, std::nullopt, std::nullopt, literal->get_polarity()

@@ -21,19 +21,25 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
         """Initialize an empty hetero builder for streaming."""
         self._reset_builder()
 
-    def append(self, state: Any, *, value: float | None = None, **_: Any) -> None:
+    def append(self, state: Any, *, value: float | None = None, **_: Any) -> int:
         """Append one single-node graph with a constant feature value."""
+        stream_id = getattr(self, "_next_stream_id", 0)
+        self._next_stream_id = stream_id + 1
         node_value = self._default_value if value is None else float(value)
         x = np.asarray([[node_value]], dtype=np.float32)
         self._builder.add_node_features("node", "x", x)
         self._builder.set_node_names("node", [str(state)])
         self._builder.set_object_names([str(state)])
         self._builder.next_graph()
+        return stream_id
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
+
+    def _flush_parts_impl(self) -> Mapping[str, Any]:
+        return self._builder.build_parts()
 
     def _parts_to_pyg(
         self,

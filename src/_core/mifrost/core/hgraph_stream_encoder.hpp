@@ -8,6 +8,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -30,7 +31,7 @@ namespace mifrost {
  * Encodes states/goals/actions into relation-typed node/edge structures using
  * ``BatchBuilder`` output conventions.
  */
-class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
+class HGraphEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< GoalInputs::AnyGoalLiteral > >;
 
@@ -60,8 +61,8 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
 
    virtual ~HGraphEncoderEngine() = default;
 
-   /// StreamEncoderInterface entrypoint.
-   void encode_state(const mimir::search::State& state, BatchBuilder& builder) override
+   /// Encode a state-only step into an existing builder.
+   void encode_state(const mimir::search::State& state, BatchBuilder& builder)
    {
       encode_state_impl(state, builder);
    }
@@ -112,8 +113,6 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
    const Config& get_config() const { return config_; }
 
   protected:
-   friend class StreamEncoderBase< HGraphEncoderEngine >;
-
    /// Initialize relation dictionary and precomputed relation metadata from domain config.
    void initialize_from_domain();
 
@@ -262,6 +261,135 @@ class HGraphEncoderEngine: public StreamEncoderBase< HGraphEncoderEngine > {
    RelationDict relation_dict_;
    /// Precomputed edge types used when include_empty_edge_types is enabled.
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
+};
+
+/**
+ * @brief Payload for one streaming HGraph encode step.
+ */
+struct HGraphStepInput {
+   const mimir::search::State* state = nullptr;
+   const GoalInputs* goals = nullptr;
+   const std::vector< mimir::formalism::GroundAction >* actions = nullptr;
+   const std::vector< HGraphEncoderEngine::HistorySubgoal >* history = nullptr;
+   std::optional< int > history_max_steps;
+};
+
+/**
+ * @brief Streaming HGraph encoder with static dispatch.
+ */
+class HGraphStreamEncoder: public StreamEncoderBase< HGraphStreamEncoder, HGraphStepInput > {
+  public:
+   static constexpr std::string_view graph_kind() { return "hetero"; }
+
+   explicit HGraphStreamEncoder(HGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
+
+   int64_t append(const mimir::search::State& state)
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< HGraphEncoderEngine::HistorySubgoal >& history,
+      std::optional< int > history_max_steps
+   )
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      step.history = &history;
+      step.history_max_steps = history_max_steps;
+      return StreamEncoderBase::append(step);
+   }
+
+   void update(int64_t id, const mimir::search::State& state)
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< HGraphEncoderEngine::HistorySubgoal >& history,
+      std::optional< int > history_max_steps
+   )
+   {
+      HGraphStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      step.history = &history;
+      step.history_max_steps = history_max_steps;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void encode_step(const HGraphStepInput& step, BatchBuilder& builder)
+   {
+      if(engine_ == nullptr or step.state == nullptr) {
+         throw std::invalid_argument("HGraphStreamEncoder requires a valid engine/state");
+      }
+
+      const auto& state = *step.state;
+      if(step.goals == nullptr) {
+         if(step.history != nullptr and not step.history->empty()) {
+            throw std::invalid_argument("History encoding requires explicit GoalInputs");
+         }
+         engine_->encode(state, builder);
+         return;
+      }
+
+      std::span< const mimir::formalism::GroundAction > actions_span;
+      if(step.actions != nullptr) {
+         actions_span = std::span< const mimir::formalism::GroundAction >(*step.actions);
+      }
+
+      if(step.history != nullptr and not step.history->empty()) {
+         engine_->encode(
+            state, *step.goals, actions_span, *step.history, step.history_max_steps, builder
+         );
+      } else {
+         engine_->encode(state, *step.goals, actions_span, builder);
+      }
+   }
+
+  private:
+   HGraphEncoderEngine* engine_ = nullptr;
 };
 
 template < typename GoalTag >

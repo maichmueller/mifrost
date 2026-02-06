@@ -6,6 +6,7 @@
 #include <mimir/search/state.hpp>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,7 @@ namespace mifrost {
 /**
  * @brief Color-encoding engine producing homogeneous graph payloads.
  */
-class ColorEncoderEngine: public StreamEncoderBase< ColorEncoderEngine > {
+class ColorEncoderEngine {
   public:
    /// Runtime config for color encoding behavior.
    struct Config {
@@ -36,8 +37,8 @@ class ColorEncoderEngine: public StreamEncoderBase< ColorEncoderEngine > {
    explicit ColorEncoderEngine(mimir::formalism::Domain domain);
    ColorEncoderEngine(mimir::formalism::Domain domain, Config config);
 
-   /// StreamEncoderInterface entrypoint.
-   void encode_state(const mimir::search::State& state, BatchBuilder& builder) override
+   /// Encode state-only into an existing builder.
+   void encode_state(const mimir::search::State& state, BatchBuilder& builder)
    {
       encode_state_impl(state, builder);
    }
@@ -69,8 +70,6 @@ class ColorEncoderEngine: public StreamEncoderBase< ColorEncoderEngine > {
    const Config& get_config() const { return config_; }
 
   private:
-   friend class StreamEncoderBase< ColorEncoderEngine >;
-
    /// Internal state-only encode implementation.
    void encode_state_impl(const mimir::search::State& state, BatchBuilder& builder);
 
@@ -88,6 +87,69 @@ class ColorEncoderEngine: public StreamEncoderBase< ColorEncoderEngine > {
    const mimir::formalism::DomainImpl& domain_;
    /// Effective runtime config.
    Config config_;
+};
+
+/**
+ * @brief Payload for one streaming color encode step.
+ */
+struct ColorStepInput {
+   const mimir::search::State* state = nullptr;
+   const GoalInputs* goals = nullptr;
+};
+
+/**
+ * @brief Streaming color encoder with static dispatch.
+ */
+class ColorStreamEncoder: public StreamEncoderBase< ColorStreamEncoder, ColorStepInput > {
+  public:
+   static constexpr std::string_view graph_kind() { return "homo"; }
+
+   explicit ColorStreamEncoder(ColorEncoderEngine& engine) : engine_(&engine) { reset(); }
+
+   int64_t append(const mimir::search::State& state)
+   {
+      ColorStepInput step;
+      step.state = &state;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(const mimir::search::State& state, const GoalInputs& goals)
+   {
+      ColorStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   void update(int64_t id, const mimir::search::State& state)
+   {
+      ColorStepInput step;
+      step.state = &state;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(int64_t id, const mimir::search::State& state, const GoalInputs& goals)
+   {
+      ColorStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void encode_step(const ColorStepInput& step, BatchBuilder& builder)
+   {
+      if(engine_ == nullptr or step.state == nullptr) {
+         throw std::invalid_argument("ColorStreamEncoder requires a valid engine/state");
+      }
+      if(step.goals == nullptr) {
+         engine_->encode(*step.state, builder);
+      } else {
+         engine_->encode(*step.state, *step.goals, builder);
+      }
+   }
+
+  private:
+   ColorEncoderEngine* engine_ = nullptr;
 };
 
 }  // namespace mifrost

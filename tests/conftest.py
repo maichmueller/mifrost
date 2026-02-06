@@ -1,4 +1,4 @@
-"""Test helpers to avoid editable-import hooks during local runs."""
+"""Test helpers for encoder fixtures."""
 
 import pathlib
 import sys
@@ -47,14 +47,3 @@ def load_problem(
     problem = pymimir.Problem(domain, problem_path, mode="lifted")
     state = problem.get_initial_state()
     return domain, problem, state, domain_path, problem_path
-
-
-def _strip_scikit_build_editable() -> None:
-    sys.meta_path = [
-        finder
-        for finder in sys.meta_path
-        if finder.__class__.__module__ != "_mifrost_editable"
-    ]
-
-
-_strip_scikit_build_editable()

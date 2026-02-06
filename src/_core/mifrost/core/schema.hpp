@@ -1,8 +1,8 @@
 #pragma once
 
+#include <absl/container/btree_map.h>
 #include <nanobind/nanobind.h>
 
-#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -57,7 +57,7 @@ struct Schema {
    std::vector< EdgeType > edge_types;
    std::vector< NodeTensorSpec > node_tensors;
    std::vector< EdgeTensorSpec > edge_tensors;
-   std::map< std::string, bool > flags;
+   absl::btree_map< std::string, bool > flags;
 
    Schema();
 

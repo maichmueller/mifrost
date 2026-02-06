@@ -1,11 +1,11 @@
 #pragma once
 
+#include <absl/container/btree_map.h>
 #include <ankerl/unordered_dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
+
+#include "schema.hpp"
 
 namespace mifrost {
 
@@ -43,6 +45,9 @@ class BatchBuilder {
       int dim = 1;
    };
 
+   /// Native (non-Python) representation of normalized encoder parts.
+   struct PartsNative;
+
    // --- Graph Structure Tracking ---
 
    /// Per-node-type cumulative node counts in the current (open) graph.
@@ -64,7 +69,7 @@ class BatchBuilder {
    std::string graph_kind;
 
    /// Schema feature flags exposed to Python.
-   std::map< std::string, bool > schema_flags;
+   absl::btree_map< std::string, bool > schema_flags;
 
    /// PyG-style ptr tracking (per node type).
    ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
@@ -148,6 +153,19 @@ class BatchBuilder {
     * @brief Finalize and return normalized parts for Python-side assembly.
     */
    nb::dict build_parts();
+   /**
+    * @brief Finalize and return normalized parts as native C++ data.
+    *
+    * This consumes the builder state. Use for stream caching or C++ assembly.
+    */
+   PartsNative build_parts_native();
+
+   /**
+    * @brief Append one graph worth of parts into the current batch.
+    *
+    * Expects parts with num_graphs == 1.
+    */
+   void append_parts(const PartsNative& parts);
 
    /// Set feature dim for a node type (used for implicit empty x tensors).
    void set_node_feature_dim(const std::string& node_type, int dim);
@@ -211,5 +229,22 @@ std::vector< T >& BatchBuilder::get_column(const std::string& key, int dim)
       throw std::logic_error("Unsupported column type");
    }
 }
+
+/**
+ * @brief Native (non-Python) representation of normalized encoder parts.
+ */
+struct BatchBuilder::PartsNative {
+   ankerl::unordered_dense::map< std::string, Column > columns;
+   ankerl::unordered_dense::map< std::string, std::vector< std::string > > node_names;
+   std::vector< std::string > object_names;
+   ankerl::unordered_dense::map< std::string, int > node_feature_dims;
+   ankerl::unordered_dense::map< std::string, GraphAttrValue > graph_attrs;
+   ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
+   absl::btree_map< std::string, bool > schema_flags;
+   std::string graph_kind;
+   int64_t num_graphs = 0;
+   absl::btree_map< std::string, int64_t > node_counts;
+   Schema schema;
+};
 
 }  // namespace mifrost

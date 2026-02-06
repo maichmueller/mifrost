@@ -1,5 +1,6 @@
 #include "schema.hpp"
 
+#include <absl/container/btree_map.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -20,7 +21,7 @@ void Schema::validate_base() const
    if(graph_kind.empty()) {
       throw std::invalid_argument("Schema graph_kind must be set");
    }
-   std::map< int, std::set< std::string > > edge_index_parts;
+   absl::btree_map< int, std::set< std::string > > edge_index_parts;
    for(const auto& spec : node_tensors) {
       if(spec.node_type.empty() || spec.attr.empty() || spec.key.empty()) {
          throw std::invalid_argument("Schema node_tensors contain empty fields");
@@ -117,7 +118,7 @@ void Schema::validate_history() const
       throw std::invalid_argument("History encoding requires bidirectional history link edges");
    }
 
-   std::map< int, std::set< std::string > > parts_by_edge;
+   absl::btree_map< int, std::set< std::string > > parts_by_edge;
    for(const auto& spec : edge_tensors) {
       if(spec.attr == "edge_index") {
          parts_by_edge[spec.edge_type].insert(spec.part);
@@ -244,7 +245,12 @@ Schema Schema::from_dict(const nb::dict& schema)
       }
    }
    if(schema.contains("flags")) {
-      out.flags = nb::cast< std::map< std::string, bool > >(schema["flags"]);
+      if(schema.contains("flags")) {
+         nb::dict flags = nb::cast< nb::dict >(schema["flags"]);
+         for(auto [key, value] : flags) {
+            out.flags[nb::cast< std::string >(key)] = nb::cast< bool >(value);
+         }
+      }
    }
    out.validate();
    return out;

@@ -7,7 +7,13 @@ import networkx as nx
 import torch
 from torch_geometric.data import Batch, Data
 
-from .._core import BatchBuilder, ColorEncoderConfig, ColorEncoderEngine, GoalInputs
+from .._core import (
+    BatchBuilder,
+    ColorEncoderConfig,
+    ColorEncoderEngine,
+    ColorStreamEncoder as _ColorStreamEncoder,
+    GoalInputs,
+)
 from .base import (
     ActionBatchInput,
     EncoderBase,
@@ -137,6 +143,24 @@ def _parts_to_pyg_homo(
     return data
 
 
+def _add_color_extension(parts: Mapping[str, Any]) -> None:
+    """Ensure the schema extensions include color encoding metadata."""
+    schema_obj = parts.get("schema")
+    if schema_obj is None:
+        return
+    if hasattr(schema_obj, "to_dict"):
+        schema_obj = schema_obj.to_dict()
+    if not isinstance(schema_obj, Mapping):
+        return
+    schema = dict(schema_obj)
+    flags = schema.get("flags", {})
+    edge_features = bool(flags.get("edge_features", False))
+    extensions = dict(schema.get("extensions", {}))
+    extensions["color_encoding"] = "edge" if edge_features else "node"
+    schema["extensions"] = extensions
+    parts["schema"] = schema
+
+
 @dataclass
 class ColorEncoderStream(StreamEncoderBase[Data]):
     """Streaming wrapper for ``ColorEncoder``."""
@@ -145,6 +169,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
 
     def __post_init__(self) -> None:
         """Initialize an empty homo builder for streaming."""
+        self._stream = _ColorStreamEncoder(self._encoder.engine)
         self._reset_builder()
 
     def append(
@@ -153,22 +178,45 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         *,
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
-    ) -> None:
+    ) -> int:
         """Append one state encoding to the color stream."""
         adv_state = _advanced_state(state)
         if goals is None and subgoal_layers is None:
-            self._encoder.engine.encode(adv_state, self._builder)
+            return self._coerce_stream_id(self._stream.append(adv_state))
         else:
             if goals is None:
                 goals = default_goals_from_state(state)
             inputs, _ = _split_goals(goals, subgoal_layers)
-            self._encoder.engine.encode(adv_state, inputs, self._builder)
-        self._builder.next_graph()
+            return self._coerce_stream_id(self._stream.append(adv_state, inputs))
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        state: StateInput,
+        *,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
+    ) -> None:
+        adv_state = _advanced_state(state)
+        if goals is None and subgoal_layers is None:
+            self._stream.update(stream_id, adv_state)
+            return
+        if goals is None:
+            goals = default_goals_from_state(state)
+        inputs, _ = _split_goals(goals, subgoal_layers)
+        self._stream.update(stream_id, adv_state, inputs)
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("homo")
+        self._stream.reset()
+
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        parts = self._stream.flush_parts()
+        _add_color_extension(parts)
+        return parts
 
     def _parts_to_pyg(
         self,

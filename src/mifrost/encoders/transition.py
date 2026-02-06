@@ -12,6 +12,7 @@ from .._core import (
     SuccessorEncoderConfig,
     SuccessorEncoderMode,
     SuccessorHGraphEncoderEngine,
+    TransitionStreamEncoder as _TransitionStreamEncoder,
 )
 from dataclasses import dataclass
 
@@ -168,6 +169,7 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
 
     def __post_init__(self) -> None:
         """Initialize an empty hetero builder for streaming."""
+        self._stream = _TransitionStreamEncoder(self._encoder.engine)
         self._reset_builder()
 
     def append(
@@ -177,20 +179,42 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         *,
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> None:
+    ) -> int:
         """Append one transition graph to the stream."""
         adv_current = _advanced_state(current)
         adv_successor = _advanced_state(successor)
         if goals is None:
             goals = default_goals_from_state(current)
         inputs, _ = _split_goals(goals, subgoal_layers)
-        self._encoder.engine.encode(adv_current, adv_successor, inputs, self._builder)
-        self._builder.next_graph()
+        return self._coerce_stream_id(
+            self._stream.append(adv_current, adv_successor, inputs)
+        )
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        current: StateInput,
+        successor: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> None:
+        adv_current = _advanced_state(current)
+        adv_successor = _advanced_state(successor)
+        if goals is None:
+            goals = default_goals_from_state(current)
+        inputs, _ = _split_goals(goals, subgoal_layers)
+        self._stream.update(stream_id, adv_current, adv_successor, inputs)
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
+        self._stream.reset()
+
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        return self._stream.flush_parts()
 
     def _parts_to_pyg(
         self,

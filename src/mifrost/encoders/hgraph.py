@@ -14,6 +14,7 @@ from .._core import (
     GoalInputs,
     HGraphEncoderConfig,
     HGraphEncoderEngine,
+    HGraphStreamEncoder as _HGraphStreamEncoder,
 )
 from .base import (
     ActionBatchInput,
@@ -51,6 +52,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
 
     def __post_init__(self) -> None:
         """Initialize an empty hetero builder for streaming."""
+        self._stream = _HGraphStreamEncoder(self._engine)
         self._reset_builder()
 
     def append(
@@ -62,7 +64,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-    ) -> None:
+    ) -> int:
         """
         Append one state encoding to the current stream.
 
@@ -78,33 +80,76 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
             and not history_list
         ):
             # Fast path: let the engine derive goals from the state/problem.
-            self._engine.encode(adv_state, self._builder)
+            return self._coerce_stream_id(self._stream.append(adv_state))
         else:
             if goals is None:
                 goals = default_goals_from_state(state)
             inputs, _ = _split_goals(goals, subgoal_layers)
             if history_list:
-                self._engine.encode(
-                    adv_state,
-                    inputs,
-                    action_list,
-                    history_list,
-                    history_max_steps,
-                    self._builder,
+                return self._coerce_stream_id(
+                    self._stream.append(
+                        adv_state,
+                        inputs,
+                        action_list,
+                        history_list,
+                        history_max_steps,
+                    )
                 )
-            else:
-                self._engine.encode(
-                    adv_state,
-                    inputs,
-                    action_list,
-                    self._builder,
-                )
-        self._builder.next_graph()
+            return self._coerce_stream_id(
+                self._stream.append(adv_state, inputs, action_list)
+            )
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        state: StateInput,
+        *,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        actions: Iterable[GroundActionInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        adv_state = _advanced_state(state)
+        action_list = _prepare_actions(actions)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if (
+            goals is None
+            and subgoal_layers is None
+            and not action_list
+            and not history_list
+        ):
+            self._stream.update(stream_id, adv_state)
+            return
+        if goals is None:
+            goals = default_goals_from_state(state)
+        inputs, _ = _split_goals(goals, subgoal_layers)
+        if history_list:
+            self._stream.update(
+                stream_id,
+                adv_state,
+                inputs,
+                action_list,
+                history_list,
+                history_max_steps,
+            )
+        else:
+            self._stream.update(
+                stream_id,
+                adv_state,
+                inputs,
+                action_list,
+            )
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind("hetero")
+        self._stream.reset()
+
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        return self._stream.flush_parts()
 
     def _parts_to_pyg(
         self,

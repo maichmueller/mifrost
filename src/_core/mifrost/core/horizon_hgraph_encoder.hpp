@@ -68,4 +68,79 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    [[nodiscard]] std::string target_node_key(int idx) const;
 };
 
+/**
+ * @brief Payload for one streaming horizon encode step.
+ */
+struct HorizonStepInput {
+   const mimir::search::State* root = nullptr;
+   const TransitionDAG* dag = nullptr;
+   const GoalInputs* goals = nullptr;
+};
+
+/**
+ * @brief Streaming horizon encoder with static dispatch.
+ */
+class HorizonStreamEncoder: public StreamEncoderBase< HorizonStreamEncoder, HorizonStepInput > {
+  public:
+   static constexpr std::string_view graph_kind() { return "hetero"; }
+
+   explicit HorizonStreamEncoder(HorizonHGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
+
+   int64_t
+   append(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
+   {
+      HorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(const mimir::search::State& root, const GoalInputs& goals)
+   {
+      TransitionDAG dag(root);
+      HorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& root,
+      const TransitionDAG& dag,
+      const GoalInputs& goals
+   )
+   {
+      HorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(int64_t id, const mimir::search::State& root, const GoalInputs& goals)
+   {
+      TransitionDAG dag(root);
+      HorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void encode_step(const HorizonStepInput& step, BatchBuilder& builder)
+   {
+      if(engine_ == nullptr or step.root == nullptr or step.dag == nullptr
+         or step.goals == nullptr) {
+         throw std::invalid_argument("HorizonStreamEncoder requires root/dag/goals");
+      }
+      engine_->encode(*step.root, *step.dag, *step.goals, builder);
+   }
+
+  private:
+   HorizonHGraphEncoderEngine* engine_ = nullptr;
+};
+
 }  // namespace mifrost

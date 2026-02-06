@@ -1,12 +1,12 @@
 #include "batch_builder.hpp"
 
+#include <absl/container/btree_map.h>
 #include <fmt/format.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
-#include <map>
 #include <set>
 #include <stdexcept>
 #include <tuple>
@@ -325,7 +325,7 @@ nb::dict BatchBuilder::build_dict()
 
 nb::object BatchBuilder::build()
 {
-   std::map< std::string, int64_t > node_counts;
+   absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
       if(key.find('|') != std::string::npos) {
          continue;
@@ -377,8 +377,8 @@ nb::object BatchBuilder::build()
       }
    }
 
-   std::map< std::string, std::vector< int64_t > > ptr_vectors;
-   std::map< std::string, std::vector< int64_t > > batch_vectors;
+   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
+   absl::btree_map< std::string, std::vector< int64_t > > batch_vectors;
    int64_t graph_count = 0;
    for(const auto& [node_type, ptr] : ptrs) {
       if(ptr.size() < 2) {
@@ -418,7 +418,7 @@ nb::object BatchBuilder::build()
       nb::object src;
       nb::object dst;
    };
-   std::map< EdgeKey, EdgeParts > edge_parts;
+   absl::btree_map< EdgeKey, EdgeParts > edge_parts;
 
    auto to_tensor = [&](const nb::object& array) { return torch.attr("as_tensor")(array); };
 
@@ -596,7 +596,7 @@ nb::object BatchBuilder::build()
 
 nb::dict BatchBuilder::build_parts()
 {
-   std::map< std::string, int64_t > node_counts;
+   absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
       if(key.find('|') != std::string::npos) {
          continue;
@@ -648,8 +648,8 @@ nb::dict BatchBuilder::build_parts()
       }
    }
 
-   std::map< std::string, std::vector< int64_t > > ptr_vectors;
-   std::map< std::string, std::vector< int64_t > > batch_vectors;
+   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
+   absl::btree_map< std::string, std::vector< int64_t > > batch_vectors;
    int64_t graph_count = 0;
    for(const auto& [node_type, ptr] : ptrs) {
       if(ptr.size() < 2) {
@@ -784,7 +784,7 @@ nb::dict BatchBuilder::build_parts()
    for(const auto& entry : edge_types_set) {
       edge_types.push_back(entry);
    }
-   std::map< EdgeType, int > edge_type_ids;
+   absl::btree_map< EdgeType, int > edge_type_ids;
    for(size_t idx = 0; idx < edge_types.size(); ++idx) {
       edge_type_ids[edge_types[idx]] = static_cast< int >(idx);
    }
@@ -846,6 +846,366 @@ nb::dict BatchBuilder::build_parts()
 
    out["schema"] = schema.to_dict();
    return out;
+}
+
+BatchBuilder::PartsNative BatchBuilder::build_parts_native()
+{
+   PartsNative out;
+   out.columns = std::move(columns);
+   out.node_names = std::move(node_names);
+   out.object_names = std::move(object_names);
+   out.node_feature_dims = std::move(node_feature_dims);
+   out.graph_attrs = std::move(graph_attrs);
+   out.ptrs = std::move(ptrs);
+   out.schema_flags = std::move(schema_flags);
+   out.graph_kind = std::move(graph_kind);
+
+   absl::btree_map< std::string, int64_t > node_counts;
+   for(const auto& [key, col] : out.columns) {
+      if(key.find('|') != std::string::npos) {
+         continue;
+      }
+      const auto slash = key.find('/');
+      if(slash == std::string::npos) {
+         continue;
+      }
+      const std::string node_type = key.substr(0, slash);
+      std::visit(
+         [&](const auto& items) {
+            const size_t size = items.size();
+            const int dim = col.dim;
+            const int64_t rows = dim > 0 ? static_cast< int64_t >(size / dim) : 0;
+            auto& count = node_counts[node_type];
+            if(rows > count) {
+               count = rows;
+            }
+         },
+         col.data
+      );
+   }
+   for(const auto& [node_type, ptr] : out.ptrs) {
+      if(not ptr.empty()) {
+         const int64_t count = ptr.back();
+         auto& existing = node_counts[node_type];
+         if(count > existing) {
+            existing = count;
+         }
+      }
+   }
+   for(const auto& [node_type, names] : out.node_names) {
+      auto& existing = node_counts[node_type];
+      const int64_t count = static_cast< int64_t >(names.size());
+      if(count > existing) {
+         existing = count;
+      }
+   }
+   for(const auto& [node_type, dim] : out.node_feature_dims) {
+      (void) dim;
+      if(not node_counts.contains(node_type)) {
+         node_counts[node_type] = 0;
+      }
+   }
+   out.node_counts = node_counts;
+
+   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
+   int64_t graph_count = 0;
+   for(const auto& [node_type, ptr] : out.ptrs) {
+      if(ptr.size() < 2) {
+         continue;
+      }
+      ptr_vectors[node_type] = ptr;
+      graph_count = std::max< int64_t >(graph_count, ptr.size() - 1);
+   }
+   if(ptr_vectors.empty()) {
+      for(const auto& [node_type, count] : node_counts) {
+         if(count <= 0) {
+            continue;
+         }
+         ptr_vectors[node_type] = {0, count};
+      }
+      if(not node_counts.empty()) {
+         graph_count = 1;
+      }
+   }
+   out.num_graphs = graph_count;
+
+   std::vector< NodeTensorSpec > node_specs;
+   struct EdgeTensorKeySpec {
+      EdgeType edge_type;
+      std::string attr;
+      std::string part;
+      std::string key;
+   };
+   std::vector< EdgeTensorKeySpec > edge_specs;
+   std::set< EdgeType > edge_types_set;
+
+   for(const auto& [key, col] : out.columns) {
+      (void) col;
+      const auto slash = key.find('/');
+      if(slash == std::string::npos) {
+         continue;
+      }
+      const bool is_edge = key.find('|') != std::string::npos;
+      if(not is_edge) {
+         node_specs.push_back(
+            NodeTensorSpec{
+               key.substr(0, slash),
+               key.substr(slash + 1),
+               key,
+            }
+         );
+         continue;
+      }
+      const std::string base = key.substr(0, slash);
+      const std::string attr = key.substr(slash + 1);
+      const auto first = base.find('|');
+      if(first == std::string::npos) {
+         continue;
+      }
+      const auto second = base.find('|', first + 1);
+      if(second == std::string::npos) {
+         continue;
+      }
+      EdgeType edge_key{
+         base.substr(0, first),
+         base.substr(first + 1, second - first - 1),
+         base.substr(second + 1),
+      };
+      edge_types_set.insert(edge_key);
+
+      std::string part;
+      std::string attr_name = attr;
+      constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
+      if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+         attr_name = "edge_index";
+         part = attr.substr(kEdgeIndexPrefix.size());
+      }
+      edge_specs.push_back(
+         EdgeTensorKeySpec{
+            edge_key,
+            attr_name,
+            part,
+            key,
+         }
+      );
+   }
+
+   for(const auto& [node_type, ptr] : ptr_vectors) {
+      (void) ptr;
+      node_specs.push_back(NodeTensorSpec{node_type, "ptr", node_type + "/ptr"});
+      node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
+   }
+
+   std::sort(node_specs.begin(), node_specs.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.key < rhs.key;
+   });
+   std::sort(edge_specs.begin(), edge_specs.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.key < rhs.key;
+   });
+
+   std::vector< EdgeType > edge_types;
+   edge_types.reserve(edge_types_set.size());
+   for(const auto& entry : edge_types_set) {
+      edge_types.push_back(entry);
+   }
+   absl::btree_map< EdgeType, int > edge_type_ids;
+   for(size_t idx = 0; idx < edge_types.size(); ++idx) {
+      edge_type_ids[edge_types[idx]] = static_cast< int >(idx);
+   }
+
+   std::vector< std::string > node_types;
+   node_types.reserve(node_counts.size());
+   for(const auto& [node_type, count] : node_counts) {
+      (void) count;
+      node_types.push_back(node_type);
+   }
+
+   std::vector< EdgeTensorSpec > edge_tensor_specs;
+   edge_tensor_specs.reserve(edge_specs.size());
+   for(const auto& spec : edge_specs) {
+      const auto it = edge_type_ids.find(spec.edge_type);
+      if(it == edge_type_ids.end()) {
+         throw std::invalid_argument("Edge tensor spec references unknown edge type");
+      }
+      EdgeTensorSpec out_spec;
+      out_spec.edge_type = it->second;
+      out_spec.attr = spec.attr;
+      out_spec.key = spec.key;
+      out_spec.part = spec.part;
+      edge_tensor_specs.push_back(std::move(out_spec));
+   }
+
+   Schema schema;
+   schema.version = 1;
+   schema.graph_kind = out.graph_kind;
+   schema.node_types = std::move(node_types);
+   schema.edge_types = std::move(edge_types);
+   schema.node_tensors = std::move(node_specs);
+   schema.edge_tensors = std::move(edge_tensor_specs);
+   schema.flags = out.schema_flags;
+   schema.validate();
+   out.schema = std::move(schema);
+
+   *this = BatchBuilder();
+   return out;
+}
+
+void BatchBuilder::append_parts(const PartsNative& parts)
+{
+   if(parts.num_graphs <= 0) {
+      return;
+   }
+   if(parts.num_graphs != 1) {
+      throw std::invalid_argument("append_parts expects num_graphs == 1");
+   }
+
+   if(graph_kind.empty()) {
+      graph_kind = parts.graph_kind;
+   } else if(not parts.graph_kind.empty() and graph_kind != parts.graph_kind) {
+      throw std::invalid_argument("append_parts graph_kind mismatch");
+   }
+
+   for(const auto& [key, value] : parts.schema_flags) {
+      auto [it, inserted] = schema_flags.try_emplace(key, value);
+      if(not inserted and it->second != value) {
+         throw std::invalid_argument("append_parts schema flag mismatch");
+      }
+   }
+
+   for(const auto& [node_type, dim] : parts.node_feature_dims) {
+      set_node_feature_dim(node_type, dim);
+   }
+   for(const auto& [node_type, names] : parts.node_names) {
+      set_node_names(node_type, names);
+   }
+   if(not parts.object_names.empty()) {
+      set_object_names(parts.object_names);
+   }
+   for(const auto& [key, value] : parts.graph_attrs) {
+      std::visit([&](const auto& v) { set_graph_attr(key, v); }, value);
+   }
+
+   absl::btree_map< std::string, int64_t > node_counts = parts.node_counts;
+   if(node_counts.empty()) {
+      for(const auto& [key, col] : parts.columns) {
+         if(key.find('|') != std::string::npos) {
+            continue;
+         }
+         const auto slash = key.find('/');
+         if(slash == std::string::npos) {
+            continue;
+         }
+         const std::string node_type = key.substr(0, slash);
+         std::visit(
+            [&](const auto& items) {
+               const size_t size = items.size();
+               const int dim = col.dim;
+               const int64_t rows = dim > 0 ? static_cast< int64_t >(size / dim) : 0;
+               auto& count = node_counts[node_type];
+               if(rows > count) {
+                  count = rows;
+               }
+            },
+            col.data
+         );
+      }
+      for(const auto& [node_type, ptr] : parts.ptrs) {
+         if(not ptr.empty()) {
+            const int64_t count = ptr.back();
+            auto& existing = node_counts[node_type];
+            if(count > existing) {
+               existing = count;
+            }
+         }
+      }
+      for(const auto& [node_type, names] : parts.node_names) {
+         auto& existing = node_counts[node_type];
+         const int64_t count = static_cast< int64_t >(names.size());
+         if(count > existing) {
+            existing = count;
+         }
+      }
+      for(const auto& [node_type, dim] : parts.node_feature_dims) {
+         (void) dim;
+         if(not node_counts.contains(node_type)) {
+            node_counts[node_type] = 0;
+         }
+      }
+   }
+
+   for(const auto& [node_type, count] : node_counts) {
+      add_nodes(node_type, count);
+   }
+
+   auto offset_for = [&](const std::string& node_type) -> int64_t {
+      auto it = node_offsets.find(node_type);
+      if(it == node_offsets.end()) {
+         return 0;
+      }
+      return it->second;
+   };
+
+   for(const auto& [key, col] : parts.columns) {
+      if(key.size() >= 4 and key.compare(key.size() - 4, 4, "/ptr") == 0) {
+         continue;
+      }
+      if(key.size() >= 6 and key.compare(key.size() - 6, 6, "/batch") == 0) {
+         continue;
+      }
+
+      const auto slash = key.find('/');
+      if(slash == std::string::npos) {
+         continue;
+      }
+      const bool is_edge = key.find('|') != std::string::npos;
+      if(is_edge) {
+         const std::string base = key.substr(0, slash);
+         const std::string attr = key.substr(slash + 1);
+         const auto first = base.find('|');
+         const auto second = base.find('|', first + 1);
+         if(first == std::string::npos or second == std::string::npos) {
+            throw std::invalid_argument("Malformed edge key in append_parts");
+         }
+         const std::string src_type = base.substr(0, first);
+         const std::string dst_type = base.substr(second + 1);
+
+         constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
+         if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+            if(not std::holds_alternative< LongCol >(col.data)) {
+               throw std::invalid_argument("edge_index column must be int64");
+            }
+            const std::string part = attr.substr(kEdgeIndexPrefix.size());
+            int64_t offset = 0;
+            if(part == "0") {
+               offset = offset_for(src_type);
+            } else if(part == "1") {
+               offset = offset_for(dst_type);
+            } else {
+               throw std::invalid_argument("Unexpected edge_index part in append_parts");
+            }
+            auto& dest = get_column< int64_t >(key, 1);
+            const auto& src = std::get< LongCol >(col.data);
+            dest.reserve(dest.size() + src.size());
+            for(const auto value : src) {
+               dest.push_back(value + offset);
+            }
+            continue;
+         }
+      }
+
+      std::visit(
+         [&](const auto& items) {
+            using VectorType = std::decay_t< decltype(items) >;
+            using ScalarType = typename VectorType::value_type;
+            auto& dest = get_column< ScalarType >(key, col.dim);
+            dest.reserve(dest.size() + items.size());
+            dest.insert(dest.end(), items.begin(), items.end());
+         },
+         col.data
+      );
+   }
+
+   next_graph();
 }
 
 }  // namespace mifrost

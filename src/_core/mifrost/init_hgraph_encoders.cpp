@@ -238,6 +238,83 @@ void init_hgraph_encoders(nb::module_& m)
          "builder"_a
       );
 
+   nb::class_< HGraphStreamEncoder >(m, "HGraphStreamEncoder")
+      .def(nb::init< HGraphEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State& >(&HGraphStreamEncoder::append),
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >& >(&HGraphStreamEncoder::append),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >&,
+            const std::vector< HGraphEncoderEngine::HistorySubgoal >&,
+            std::optional< int > >(&HGraphStreamEncoder::append),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State& >(&HGraphStreamEncoder::update),
+         "id"_a,
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >& >(&HGraphStreamEncoder::update),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >&,
+            const std::vector< HGraphEncoderEngine::HistorySubgoal >&,
+            std::optional< int > >(&HGraphStreamEncoder::update),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &HGraphStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &HGraphStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush_parts", &HGraphStreamEncoder::flush_parts)
+      .def("flush", &HGraphStreamEncoder::flush)
+      .def("reset", &HGraphStreamEncoder::reset);
+
    nb::enum_< HorizonHGraphEncoderEngine::Mode >(m, "HorizonEncoderMode")
       .value("Full", HorizonHGraphEncoderEngine::Mode::Full)
       .value("Delta", HorizonHGraphEncoderEngine::Mode::Delta)
@@ -306,6 +383,56 @@ void init_hgraph_encoders(nb::module_& m)
          nb::call_guard< nb::gil_scoped_release >()
       );
 
+   nb::class_< HorizonStreamEncoder >(m, "HorizonStreamEncoder")
+      .def(nb::init< HorizonHGraphEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const TransitionDAG&, const GoalInputs& >(
+            &HorizonStreamEncoder::append
+         ),
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
+            &HorizonStreamEncoder::append
+         ),
+         "root"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const TransitionDAG&,
+            const GoalInputs& >(&HorizonStreamEncoder::update),
+         "id"_a,
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State&, const GoalInputs& >(
+            &HorizonStreamEncoder::update
+         ),
+         "id"_a,
+         "root"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &HorizonStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &HorizonStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush_parts", &HorizonStreamEncoder::flush_parts)
+      .def("flush", &HorizonStreamEncoder::flush)
+      .def("reset", &HorizonStreamEncoder::reset);
+
    nb::class_< SuccessorHGraphEncoderEngine, HGraphEncoderEngine >(
       m, "SuccessorHGraphEncoderEngine"
    )
@@ -337,6 +464,38 @@ void init_hgraph_encoders(nb::module_& m)
          "builder"_a,
          nb::call_guard< nb::gil_scoped_release >()
       );
+
+   nb::class_< TransitionStreamEncoder >(m, "TransitionStreamEncoder")
+      .def(nb::init< SuccessorHGraphEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const mimir::search::State&,
+            const GoalInputs& >(&TransitionStreamEncoder::append),
+         "current"_a,
+         "successor"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const mimir::search::State&,
+            const GoalInputs& >(&TransitionStreamEncoder::update),
+         "id"_a,
+         "current"_a,
+         "successor"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &TransitionStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush_parts", &TransitionStreamEncoder::flush_parts)
+      .def("flush", &TransitionStreamEncoder::flush)
+      .def("reset", &TransitionStreamEncoder::reset);
 }
 
 }  // namespace mifrost

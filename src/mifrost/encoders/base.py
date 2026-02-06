@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from numbers import Integral
 from typing import Generic, Iterable, Mapping, TypeAlias, TypeVar
 
 from torch_geometric.data import Data, HeteroData
@@ -142,9 +143,34 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
     """
 
     @abstractmethod
-    def append(self, *args: object, **kwargs: object) -> None:
-        """Append one item to the in-memory stream."""
+    def append(self, *args: object, **kwargs: object) -> int:
+        """Append one item to the in-memory stream and return its stream id."""
         ...
+
+    def _coerce_stream_id(self, value: object) -> int:
+        """Normalize a C++ stream id, falling back to a local counter when needed."""
+        if isinstance(value, Integral):
+            return int(value)
+        stream_id = getattr(self, "_stream_id_counter", 0)
+        self._stream_id_counter = stream_id + 1
+        return stream_id
+
+    def remove(self, _stream_id: int) -> None:
+        """Remove a previously appended item from the stream."""
+        raise NotImplementedError("remove is not implemented for this stream")
+
+    def set_reuse_removed(self, value: bool) -> None:
+        """Enable or disable removed-slot reuse (replace-in-order semantics)."""
+        stream = getattr(self, "_stream", None)
+        if stream is None or not hasattr(stream, "set_reuse_removed"):
+            raise NotImplementedError(
+                "set_reuse_removed is not implemented for this stream"
+            )
+        stream.set_reuse_removed(bool(value))
+
+    def update(self, _stream_id: int, *args: object, **kwargs: object) -> None:
+        """Re-encode and replace a previously appended item in the stream."""
+        raise NotImplementedError("update is not implemented for this stream")
 
     def flush(
         self, *, as_batch: bool = True, include_metadata: bool = True
@@ -157,13 +183,18 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
 
     def flush_parts(self) -> Mapping[str, object]:
         """Flush accumulated items and return normalized parts."""
-        parts = self._builder.build_parts()
+        parts = self._flush_parts_impl()
         self._reset_builder()
         return parts
 
     @abstractmethod
     def _reset_builder(self) -> None:
         """Create/reset the internal builder used by ``append``."""
+        ...
+
+    @abstractmethod
+    def _flush_parts_impl(self) -> Mapping[str, object]:
+        """Return normalized parts for the current stream contents."""
         ...
 
     @abstractmethod
