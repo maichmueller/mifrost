@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
+option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
 
 # --- Dependencies ---
 # Ensure Conan's CMakeDeps generator folder is on the prefix path (helps CLion).
@@ -226,6 +227,30 @@ endif ()
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "mifrost")
 if (TARGET nanobind)
     install(TARGETS nanobind LIBRARY DESTINATION "mifrost")
+endif ()
+
+if (MIFROST_GENERATE_STUBS)
+    set(_mifrost_stub_output "mifrost/_core.pyi")
+    if (MIFROST_RPATH_MODE STREQUAL "dev")
+        # Dev mode: keep stubs in source tree so IDEs can pick them up directly.
+        STRING(PREPEND _mifrost_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        nanobind_add_stub(
+                mifrost_core_module_stubs
+                MODULE mifrost._core
+                OUTPUT "${_mifrost_stub_output}"
+                PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+                DEPENDS mifrost_core_module
+        )
+    else ()
+        # Wheel/install mode: generate stubs at install time in the install prefix.
+        nanobind_add_stub(
+                mifrost_core_module_stubs
+                MODULE mifrost._core
+                OUTPUT "${_mifrost_stub_output}"
+                DEPENDS mifrost_core_module
+                INSTALL_TIME
+        )
+    endif ()
 endif ()
 
 # Loki's AST uses >20 variant types; bump Boost limits to avoid MPL list errors.
