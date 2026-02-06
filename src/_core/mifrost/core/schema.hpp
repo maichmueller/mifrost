@@ -19,10 +19,7 @@ struct EdgeType {
    std::string rel;
    std::string dst;
 
-   bool operator<(const EdgeType& other) const
-   {
-      return std::tie(src, rel, dst) < std::tie(other.src, other.rel, other.dst);
-   }
+   auto operator<=>(const EdgeType&) const noexcept = default;
 };
 
 /**
@@ -42,6 +39,8 @@ struct EdgeTensorSpec {
    std::string attr;
    std::string key;
    std::string part;
+
+   auto operator<=>(const EdgeTensorSpec&) const noexcept = default;
 };
 
 /**
@@ -60,7 +59,10 @@ struct Schema {
    absl::btree_map< std::string, bool > flags;
 
    Schema() = default;
-
+   Schema(Schema&&) = default;
+   Schema(const Schema&) = default;
+   Schema& operator=(Schema&&) = default;
+   Schema& operator=(const Schema&) = default;
    virtual ~Schema() = default;
 
    /**

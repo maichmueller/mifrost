@@ -7,6 +7,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <range/v3/view/enumerate.hpp>
 #include <set>
 #include <stdexcept>
 #include <tuple>
@@ -888,19 +889,8 @@ nb::dict BatchBuilder::build_batch_encoding_py()
 
 BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
 {
-   BatchEncoding out{
-      .columns = std::move(columns),
-      .node_names = std::move(node_names),
-      .object_names = std::move(object_names),
-      .node_feature_dims = std::move(node_feature_dims),
-      .graph_attrs = std::move(graph_attrs),
-      .ptrs = std::move(ptrs),
-      .schema_flags = std::move(schema_flags),
-      .graph_kind = std::move(graph_kind),
-   };
-
    absl::btree_map< std::string, int64_t > node_counts;
-   for(const auto& [key, col] : out.columns) {
+   for(const auto& [key, col] : columns) {
       if(key.find('|') != std::string::npos) {
          continue;
       }
@@ -922,7 +912,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
          col.data
       );
    }
-   for(const auto& [node_type, ptr] : out.ptrs) {
+   for(const auto& [node_type, ptr] : ptrs) {
       if(not ptr.empty()) {
          const int64_t count = ptr.back();
          auto& existing = node_counts[node_type];
@@ -931,24 +921,23 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
          }
       }
    }
-   for(const auto& [node_type, names] : out.node_names) {
+   for(const auto& [node_type, names] : node_names) {
       auto& existing = node_counts[node_type];
       const int64_t count = static_cast< int64_t >(names.size());
       if(count > existing) {
          existing = count;
       }
    }
-   for(const auto& [node_type, dim] : out.node_feature_dims) {
+   for(const auto& [node_type, dim] : node_feature_dims) {
       (void) dim;
       if(not node_counts.contains(node_type)) {
          node_counts[node_type] = 0;
       }
    }
-   out.node_counts = node_counts;
 
    absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
    int64_t graph_count = 0;
-   for(const auto& [node_type, ptr] : out.ptrs) {
+   for(const auto& [node_type, ptr] : ptrs) {
       if(ptr.size() < 2) {
          continue;
       }
@@ -966,7 +955,6 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
          graph_count = 1;
       }
    }
-   out.num_graphs = graph_count;
 
    std::vector< NodeTensorSpec > node_specs;
    struct EdgeTensorKeySpec {
@@ -976,9 +964,9 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
       std::string key;
    };
    std::vector< EdgeTensorKeySpec > edge_specs;
-   std::set< EdgeType > edge_types_set;
+   std::vector< EdgeType > edge_types;
 
-   for(const auto& [key, col] : out.columns) {
+   for(const auto& [key, col] : columns) {
       (void) col;
       const auto slash = key.find('/');
       if(slash == std::string::npos) {
@@ -1005,12 +993,11 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
       if(second == std::string::npos) {
          continue;
       }
-      EdgeType edge_key{
-         base.substr(0, first),
+      const EdgeType& edge_key = edge_types.emplace_back(
+         base.substr(0, first),  //
          base.substr(first + 1, second - first - 1),
-         base.substr(second + 1),
-      };
-      edge_types_set.insert(edge_key);
+         base.substr(second + 1)
+      );
 
       std::string part;
       std::string attr_name = attr;
@@ -1042,14 +1029,14 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
       return lhs.key < rhs.key;
    });
 
-   std::vector< EdgeType > edge_types;
-   edge_types.reserve(edge_types_set.size());
-   for(const auto& entry : edge_types_set) {
-      edge_types.push_back(entry);
-   }
+   // deduplicate edge types
+   std::ranges::sort(edge_types);
+   auto uniq = std::ranges::unique(edge_types);
+   edge_types.erase(uniq.begin(), edge_types.end());
+
    absl::btree_map< EdgeType, int > edge_type_ids;
-   for(size_t idx = 0; idx < edge_types.size(); ++idx) {
-      edge_type_ids[edge_types[idx]] = static_cast< int >(idx);
+   for(auto&& [idx, edge_type] : ranges::views::enumerate(edge_types)) {
+      edge_type_ids.emplace(edge_type, static_cast< int >(idx));
    }
 
    std::vector< std::string > node_types;
@@ -1066,26 +1053,39 @@ BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
       if(it == edge_type_ids.end()) {
          throw std::invalid_argument("Edge tensor spec references unknown edge type");
       }
-      EdgeTensorSpec out_spec;
-      out_spec.edge_type = it->second;
-      out_spec.attr = spec.attr;
-      out_spec.key = spec.key;
-      out_spec.part = spec.part;
-      edge_tensor_specs.push_back(std::move(out_spec));
+      edge_tensor_specs.emplace_back(
+         EdgeTensorSpec{
+            .edge_type = it->second,
+            .attr = spec.attr,
+            .key = spec.key,
+            .part = spec.part,
+         }
+      );
    }
 
    Schema schema;
    schema.version = 1;
-   schema.graph_kind = out.graph_kind;
+   schema.graph_kind = graph_kind;
    schema.node_types = std::move(node_types);
    schema.edge_types = std::move(edge_types);
    schema.node_tensors = std::move(node_specs);
    schema.edge_tensors = std::move(edge_tensor_specs);
-   schema.flags = out.schema_flags;
+   schema.flags = schema_flags;
    schema.validate();
 
-   out.schema = std::move(schema);
-
+   BatchEncoding out{
+      .columns = std::move(columns),
+      .node_names = std::move(node_names),
+      .object_names = std::move(object_names),
+      .node_feature_dims = std::move(node_feature_dims),
+      .graph_attrs = std::move(graph_attrs),
+      .ptrs = std::move(ptrs),
+      .schema_flags = std::move(schema_flags),
+      .graph_kind = std::move(graph_kind),
+      .num_graphs = graph_count,
+      .node_counts = std::move(node_counts),
+      .schema = std::move(schema)
+   };
    reset();
    return out;
 }
@@ -1234,10 +1234,8 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
       }
 
       std::visit(
-         [&](const auto& items) {
-            using VectorType = std::decay_t< decltype(items) >;
-            using ScalarType = typename VectorType::value_type;
-            auto& dest = get_column< ScalarType >(key, col.dim);
+         [&]< typename T >(const std::vector< T >& items) {
+            auto& dest = get_column< T >(key, col.dim);
             dest.reserve(dest.size() + items.size());
             dest.insert(dest.end(), items.begin(), items.end());
          },
