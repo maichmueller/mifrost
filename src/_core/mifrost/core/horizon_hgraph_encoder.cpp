@@ -831,8 +831,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
                for(size_t j = i + 1; j < par.size(); ++j) {
                   const int pu = par[i];
                   const int pv = par[j];
-                  const auto& cu = parent_to_children[pu];
-                  const auto& cv = parent_to_children[pv];
+                  const auto cu_it = parent_to_children.find(pu);
+                  const auto cv_it = parent_to_children.find(pv);
+                  if(cu_it == parent_to_children.end() or cv_it == parent_to_children.end()) {
+                     continue;
+                  }
+                  const auto& cu = cu_it->second;
+                  const auto& cv = cv_it->second;
                   for(int u : cu) {
                      for(int v : cv) {
                         if(u == v) {
