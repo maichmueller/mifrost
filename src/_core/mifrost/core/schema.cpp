@@ -11,8 +11,6 @@
 
 namespace mifrost {
 
-Schema::Schema() = default;
-
 void Schema::validate_base() const
 {
    if(version <= 0) {

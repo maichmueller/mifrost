@@ -59,7 +59,7 @@ struct Schema {
    std::vector< EdgeTensorSpec > edge_tensors;
    absl::btree_map< std::string, bool > flags;
 
-   Schema();
+   Schema() = default;
 
    virtual ~Schema() = default;
 
@@ -71,7 +71,7 @@ struct Schema {
    virtual void validate() const;
 
    /// Serialize to Python dictionary form.
-   nb::dict to_dict() const;
+   [[nodiscard]] nb::dict to_dict() const;
    /// Parse schema from Python dictionary form.
    static Schema from_dict(const nb::dict& schema);
 

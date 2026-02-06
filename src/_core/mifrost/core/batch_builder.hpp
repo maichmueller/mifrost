@@ -1,7 +1,6 @@
 #pragma once
 
 #include <absl/container/btree_map.h>
-#include <ankerl/unordered_dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
@@ -14,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+#include "common_types.hpp"
 #include "schema.hpp"
 
 namespace mifrost {
@@ -45,22 +45,22 @@ class BatchBuilder {
       int dim = 1;
    };
 
-   /// Native (non-Python) representation of normalized encoder parts.
-   struct PartsNative;
+   /// Native (non-Python) representation of normalized batch encoding.
+   struct BatchEncoding;
 
    // --- Graph Structure Tracking ---
 
    /// Per-node-type cumulative node counts in the current (open) graph.
-   ankerl::unordered_dense::map< std::string, int64_t > current_node_counts;
+   hash_map< std::string, int64_t > current_node_counts;
 
    /// Per-node-type offset of the current graph start in the batch.
-   ankerl::unordered_dense::map< std::string, int64_t > node_offsets;
+   hash_map< std::string, int64_t > node_offsets;
 
    /// Node feature dimensions per node type (used to synthesize empty x tensors).
-   ankerl::unordered_dense::map< std::string, int > node_feature_dims;
+   hash_map< std::string, int > node_feature_dims;
 
    /// Optional node names per node type (metadata path).
-   ankerl::unordered_dense::map< std::string, std::vector< std::string > > node_names;
+   hash_map< std::string, std::vector< std::string > > node_names;
 
    /// Optional per-graph object names (metadata path).
    std::vector< std::string > object_names;
@@ -72,7 +72,7 @@ class BatchBuilder {
    absl::btree_map< std::string, bool > schema_flags;
 
    /// PyG-style ptr tracking (per node type).
-   ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
+   hash_map< std::string, std::vector< int64_t > > ptrs;
    /// Optional homogeneous batch index cache.
    std::vector< int64_t > batch_indices;
 
@@ -80,10 +80,10 @@ class BatchBuilder {
    using GraphAttrValue = std::
       variant< int64_t, std::string, std::vector< int64_t >, std::vector< std::string > >;
    /// Graph-level attributes forwarded to Python metadata.
-   ankerl::unordered_dense::map< std::string, GraphAttrValue > graph_attrs;
+   hash_map< std::string, GraphAttrValue > graph_attrs;
 
    /// Flat tensor column storage keyed by schema keys.
-   ankerl::unordered_dense::map< std::string, Column > columns;
+   hash_map< std::string, Column > columns;
 
    /// Number of committed graphs.
    int64_t current_graph_idx = 0;
@@ -91,6 +91,8 @@ class BatchBuilder {
   public:
    /// Create an empty builder.
    BatchBuilder();
+   /// Reset builder state to a fresh, empty instance.
+   void reset();
 
    // --- Data Ingestion ---
 
@@ -147,25 +149,32 @@ class BatchBuilder {
 
    /**
     * @brief Finalize and return a PyG Batch/HeteroData object.
+    *
+    * This call consumes internal tensor buffers (moved into Python-owned ndarrays/tensors).
+    * The builder is reset after export.
     */
    nb::object build();
    /**
-    * @brief Finalize and return normalized parts for Python-side assembly.
-    */
-   nb::dict build_parts();
-   /**
-    * @brief Finalize and return normalized parts as native C++ data.
+    * @brief Finalize and return normalized batch encoding for Python-side assembly.
     *
-    * This consumes the builder state. Use for stream caching or C++ assembly.
+    * This call consumes internal tensor buffers (moved into Python-owned ndarrays).
+    * The builder is reset after export.
     */
-   PartsNative build_parts_native();
+   nb::dict build_batch_encoding_py();
+   /**
+    * @brief Finalize and return normalized batch encoding as native C++ data.
+    *
+    * This consumes the builder state and resets the builder. Use for stream
+    * caching or C++ assembly.
+    */
+   BatchEncoding build_batch_encoding();
 
    /**
-    * @brief Append one graph worth of parts into the current batch.
+    * @brief Append one graph worth of batch encoding into the current batch.
     *
-    * Expects parts with num_graphs == 1.
+    * Expects batch encoding with num_graphs == 1.
     */
-   void append_parts(const PartsNative& parts);
+   void append_batch_encoding(const BatchEncoding& batch_encoding);
 
    /// Set feature dim for a node type (used for implicit empty x tensors).
    void set_node_feature_dim(const std::string& node_type, int dim);
@@ -199,7 +208,12 @@ class BatchBuilder {
    template < typename T >
    std::vector< T >& get_column(const std::string& key, int dim);
 
-   /// Build the internal tensor dictionary used by build/build_parts.
+   /**
+    * @brief Build tensor dictionary by moving out internal vector storage.
+    *
+    * Destructive export: column and ptr vectors are moved into Python-owned
+    * ndarray capsules for zero-copy transfer.
+    */
    nb::dict build_dict();
 };
 
@@ -231,15 +245,15 @@ std::vector< T >& BatchBuilder::get_column(const std::string& key, int dim)
 }
 
 /**
- * @brief Native (non-Python) representation of normalized encoder parts.
+ * @brief Native (non-Python) representation of normalized batch encoding.
  */
-struct BatchBuilder::PartsNative {
-   ankerl::unordered_dense::map< std::string, Column > columns;
-   ankerl::unordered_dense::map< std::string, std::vector< std::string > > node_names;
+struct BatchBuilder::BatchEncoding {
+   hash_map< std::string, Column > columns;
+   hash_map< std::string, std::vector< std::string > > node_names;
    std::vector< std::string > object_names;
-   ankerl::unordered_dense::map< std::string, int > node_feature_dims;
-   ankerl::unordered_dense::map< std::string, GraphAttrValue > graph_attrs;
-   ankerl::unordered_dense::map< std::string, std::vector< int64_t > > ptrs;
+   hash_map< std::string, int > node_feature_dims;
+   hash_map< std::string, GraphAttrValue > graph_attrs;
+   hash_map< std::string, std::vector< int64_t > > ptrs;
    absl::btree_map< std::string, bool > schema_flags;
    std::string graph_kind;
    int64_t num_graphs = 0;

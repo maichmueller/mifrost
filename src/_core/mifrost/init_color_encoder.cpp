@@ -56,7 +56,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, builder);
-            auto parts = builder.build_parts();
+            auto parts = builder.build_batch_encoding_py();
             add_color_extension(parts);
             return parts;
          },
@@ -70,7 +70,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, builder);
-            auto parts = builder.build_parts();
+            auto parts = builder.build_batch_encoding_py();
             add_color_extension(parts);
             return parts;
          },
@@ -88,7 +88,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, actions, builder);
-            auto parts = builder.build_parts();
+            auto parts = builder.build_batch_encoding_py();
             add_color_extension(parts);
             return parts;
          },
@@ -163,7 +163,7 @@ void init_color_encoder(nb::module_& m)
       )
       .def("remove", &ColorStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &ColorStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_parts", &ColorStreamEncoder::flush_parts)
+      .def("flush_batch_encoding_py", &ColorStreamEncoder::flush_batch_encoding_py)
       .def("flush", &ColorStreamEncoder::flush)
       .def("reset", &ColorStreamEncoder::reset);
 }

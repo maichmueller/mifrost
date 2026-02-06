@@ -39,8 +39,8 @@ void expect_schema_equal(const Schema& actual, const Schema& expected)
 }
 
 void expect_parts_equal(
-   const BatchBuilder::PartsNative& actual,
-   const BatchBuilder::PartsNative& expected
+   const BatchBuilder::BatchEncoding& actual,
+   const BatchBuilder::BatchEncoding& expected
 )
 {
    EXPECT_EQ(actual.num_graphs, expected.num_graphs);
@@ -108,13 +108,13 @@ TEST_P(HorizonStreamCacheTest, RemoveDropsGraph)
    const auto full_id = stream.append(ctx.root, successor_dag, goals);
    (void) full_id;
    stream.remove(empty_id);
-   const auto actual = stream.flush_parts_native();
+   const auto actual = stream.flush_batch_encoding();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    engine.encode(ctx.root, successor_dag, goals, builder);
    builder.next_graph();
-   const auto expected = builder.build_parts_native();
+   const auto expected = builder.build_batch_encoding();
 
    expect_parts_equal(actual, expected);
 }
@@ -136,13 +136,13 @@ TEST_P(HorizonStreamCacheTest, UpdateReplacesGraph)
    const auto full_id = stream.append(ctx.root, successor_dag, goals);
    stream.update(empty_id, ctx.root, successor_dag, goals);
    stream.remove(full_id);
-   const auto actual = stream.flush_parts_native();
+   const auto actual = stream.flush_batch_encoding();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    engine.encode(ctx.root, successor_dag, goals, builder);
    builder.next_graph();
-   const auto expected = builder.build_parts_native();
+   const auto expected = builder.build_batch_encoding();
 
    expect_parts_equal(actual, expected);
 }
@@ -169,7 +169,7 @@ TEST_P(HorizonStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
 
    EXPECT_EQ(reused_id, empty_id);
 
-   const auto actual = stream.flush_parts_native();
+   const auto actual = stream.flush_batch_encoding();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
@@ -177,7 +177,7 @@ TEST_P(HorizonStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
    builder.next_graph();
    engine.encode(ctx.root, successor_dag, goals, builder);
    builder.next_graph();
-   const auto expected = builder.build_parts_native();
+   const auto expected = builder.build_batch_encoding();
 
    expect_parts_equal(actual, expected);
 }

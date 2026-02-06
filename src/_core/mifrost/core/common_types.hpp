@@ -2,6 +2,9 @@
 
 #include <ankerl/unordered_dense.h>
 
+#include <string>
+#include <string_view>
+
 namespace mifrost {
 
 /**
@@ -10,11 +13,52 @@ namespace mifrost {
  * Uses ankerl::unordered_dense for cache-friendly performance.
  */
 
+struct transparent_string_hash {
+   using is_transparent = void;
+   using is_avalanching = void;
+
+   auto operator()(const std::string_view value) const noexcept -> uint64_t
+   {
+      return ankerl::unordered_dense::hash< std::string_view >{}(value);
+   }
+};
+
+struct transparent_string_equal {
+   using is_transparent = void;
+
+   auto operator()(const std::string_view lhs, const std::string_view rhs) const noexcept -> bool
+   {
+      return lhs == rhs;
+   }
+};
+
+template < typename Key >
+struct hash_map_hash {
+   using type = ankerl::unordered_dense::hash< Key >;
+};
+
+template <>
+struct hash_map_hash< std::string > {
+   using type = transparent_string_hash;
+};
+
+template < typename Key >
+struct hash_map_equal {
+   using type = std::equal_to< Key >;
+};
+
+template <>
+struct hash_map_equal< std::string > {
+   using type = transparent_string_equal;
+};
+
 template < typename Key, typename T >
-using hash_map = ankerl::unordered_dense::map< Key, T >;
+using hash_map = ankerl::unordered_dense::
+   map< Key, T, typename hash_map_hash< Key >::type, typename hash_map_equal< Key >::type >;
 
 /// Project-wide hash set alias.
 template < typename Key >
-using hash_set = ankerl::unordered_dense::set< Key >;
+using hash_set = ankerl::unordered_dense::
+   set< Key, typename hash_map_hash< Key >::type, typename hash_map_equal< Key >::type >;
 
 }  // namespace mifrost

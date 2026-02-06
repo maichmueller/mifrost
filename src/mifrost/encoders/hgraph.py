@@ -148,8 +148,8 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_parts_impl(self) -> Mapping[str, object]:
-        return self._stream.flush_parts()
+    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
+        return self._stream.flush_batch_encoding_py()
 
     def _parts_to_pyg(
         self,
@@ -220,7 +220,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> Mapping[str, object]:
-        """Encode one state to normalized parts."""
+        """Encode one state to normalized batch encoding."""
         adv_state = _advanced_state(state)
         action_list = _prepare_actions(actions)
         history_list = _prepare_history_subgoals(history_subgoals)
@@ -386,7 +386,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     self._engine.encode(adv_state, inputs, action_list, builder)
             builder.next_graph()
 
-        return builder.build_parts()
+        return builder.build_batch_encoding_py()
 
     def encode_batch(
         self,

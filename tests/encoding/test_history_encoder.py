@@ -157,7 +157,7 @@ def test_history_batch_and_stream_parity(domain_name, problem_name):
     stream = encoder.stream()
     for state in states:
         stream.append(state, goals=goals, history_subgoals=history_subgoals)
-    stream_parts = stream.flush_parts()
+    stream_parts = stream.flush_batch_encoding_py()
 
     keywise_equal(batch_parts, stream_parts)
 

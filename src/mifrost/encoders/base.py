@@ -23,7 +23,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
     Public contract:
     - ``encode(...)`` returns one PyG object (``Data`` or ``HeteroData``).
     - ``encode_batch(...)`` returns a PyG batch object over multiple inputs.
-    - ``encode_parts(...)`` and ``encode_batch_parts(...)`` return raw parts produced
+    - ``encode_parts(...)`` and ``encode_batch_parts(...)`` return raw Python batch encoding produced
       by C++ engines or Python encoders and consumed by ``_parts_to_pyg``.
 
     Unknown keyword arguments are ignored by default. Concrete encoders opt into
@@ -104,7 +104,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
     ) -> Mapping[str, object]:
-        """Encode one input into the normalized parts payload."""
+        """Encode one input into the normalized batch encoding payload."""
         ...
 
     @abstractmethod
@@ -127,7 +127,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        """Convert normalized parts into PyG objects."""
+        """Convert normalized batch encoding into PyG objects."""
         return _parts_to_pyg(
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
@@ -138,7 +138,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
     Base class for stream encoders that accumulate graphs incrementally.
 
     Stream encoders append inputs into an internal ``BatchBuilder`` and expose:
-    - ``flush_parts()`` for raw parts
+    - ``flush_batch_encoding_py()`` for raw Python batch encoding
     - ``flush()`` for immediate PyG conversion
     """
 
@@ -176,14 +176,14 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         self, *, as_batch: bool = True, include_metadata: bool = True
     ) -> PygDataT:
         """Flush accumulated items and return PyG output."""
-        parts = self.flush_parts()
+        parts = self.flush_batch_encoding_py()
         return self._parts_to_pyg(
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def flush_parts(self) -> Mapping[str, object]:
-        """Flush accumulated items and return normalized parts."""
-        parts = self._flush_parts_impl()
+    def flush_batch_encoding_py(self) -> Mapping[str, object]:
+        """Flush accumulated items and return normalized batch encoding."""
+        parts = self._flush_batch_encoding_py_impl()
         self._reset_builder()
         return parts
 
@@ -193,8 +193,8 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         ...
 
     @abstractmethod
-    def _flush_parts_impl(self) -> Mapping[str, object]:
-        """Return normalized parts for the current stream contents."""
+    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
+        """Return normalized batch encoding for the current stream contents."""
         ...
 
     @abstractmethod
@@ -205,5 +205,5 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        """Convert normalized parts into PyG output for stream flush."""
+        """Convert normalized batch encoding into PyG output for stream flush."""
         ...

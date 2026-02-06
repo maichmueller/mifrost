@@ -13,7 +13,7 @@
 namespace mifrost {
 
 namespace nb = nanobind;
-using PartsNative = BatchBuilder::PartsNative;
+using BatchEncoding = BatchBuilder::BatchEncoding;
 
 /**
  * @brief CRTP base for stream encoders with static dispatch.
@@ -26,11 +26,11 @@ class StreamEncoderBase {
   public:
    StreamEncoderBase() = default;
 
-   /// Encode one step and cache the resulting parts.
+   /// Encode one step and cache the resulting batch encoding.
    int64_t append(const Step& step)
    {
-      PartsNative parts = encode_step_to_parts(step);
-      return insert_entry(std::move(parts));
+      BatchEncoding batch_encoding = encode_step_to_batch_encoding(step);
+      return insert_entry(std::move(batch_encoding));
    }
 
    /// Remove a cached graph by id.
@@ -40,7 +40,7 @@ class StreamEncoderBase {
          throw std::out_of_range("StreamEncoderBase::remove invalid id");
       }
       entries_[static_cast< size_t >(id)].active = false;
-      entries_[static_cast< size_t >(id)].parts = PartsNative{};
+      entries_[static_cast< size_t >(id)].batch_encoding = BatchEncoding{};
    }
 
    /// Re-encode a cached graph by id.
@@ -52,17 +52,17 @@ class StreamEncoderBase {
       if(not entries_[static_cast< size_t >(id)].active) {
          throw std::invalid_argument("StreamEncoderBase::update on inactive entry");
       }
-      entries_[static_cast< size_t >(id)].parts = encode_step_to_parts(step);
+      entries_[static_cast< size_t >(id)].batch_encoding = encode_step_to_batch_encoding(step);
    }
 
-   /// Build parts for the accumulated graphs (Python dict form).
-   nb::dict flush_parts() { return build_merged_builder().build_parts(); }
+   /// Build Python batch encoding for the accumulated graphs.
+   nb::dict flush_batch_encoding_py() { return build_merged_builder().build_batch_encoding_py(); }
 
-   /// Build a PyG object for the accumulated graphs.
+   /// Build a PyG Batch for the accumulated graphs.
    nb::object flush() { return build_merged_builder().build(); }
 
-   /// Build parts for the accumulated graphs (native C++ form).
-   PartsNative flush_parts_native() { return build_merged_builder().build_parts_native(); }
+   /// Build native batch encoding for the accumulated graphs.
+   BatchEncoding flush_batch_encoding() { return build_merged_builder().build_batch_encoding(); }
 
    /// Reset the stream to an empty cache.
    void reset() { entries_.clear(); }
@@ -72,32 +72,32 @@ class StreamEncoderBase {
 
   protected:
    struct Entry {
-      PartsNative parts;
+      BatchEncoding batch_encoding;
       bool active = true;
    };
 
-   int64_t insert_entry(PartsNative parts)
+   int64_t insert_entry(BatchEncoding batch_encoding)
    {
       if(reuse_removed_) {
          for(size_t idx = 0; idx < entries_.size(); ++idx) {
             if(not entries_[idx].active) {
-               entries_[idx].parts = std::move(parts);
+               entries_[idx].batch_encoding = std::move(batch_encoding);
                entries_[idx].active = true;
                return static_cast< int64_t >(idx);
             }
          }
       }
-      entries_.push_back(Entry{std::move(parts), true});
+      entries_.push_back(Entry{std::move(batch_encoding), true});
       return static_cast< int64_t >(entries_.size() - 1);
    }
 
-   PartsNative encode_step_to_parts(const Step& step)
+   BatchEncoding encode_step_to_batch_encoding(const Step& step)
    {
       BatchBuilder builder;
       builder.set_graph_kind(std::string(Derived::graph_kind()));
       static_cast< Derived* >(this)->encode_step(step, builder);
       builder.next_graph();
-      return builder.build_parts_native();
+      return builder.build_batch_encoding();
    }
 
    BatchBuilder build_merged_builder()
@@ -108,7 +108,7 @@ class StreamEncoderBase {
          if(not entry.active) {
             continue;
          }
-         builder.append_parts(entry.parts);
+         builder.append_batch_encoding(entry.batch_encoding);
       }
       return builder;
    }

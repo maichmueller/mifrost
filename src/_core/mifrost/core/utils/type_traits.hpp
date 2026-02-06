@@ -80,21 +80,21 @@ template < typename T >
 using raw = std::remove_cvref< T >;
 
 template < typename T >
-using raw_t = typename raw< T >::type;
+using raw_t = raw< T >::type;
 
 template < typename T >
-using value_t = typename T::value_type;
+using value_t = T::value_type;
 
 template < typename T >
-using batch_value_t = typename T::batch_value_type;
+using batch_value_t = T::batch_value_type;
 
 template < typename T >
-using data_t = typename T::data_type;
+using data_t = T::data_type;
 
 template < typename T, typename U >
 consteval bool same_as(const T&, const U&)
 {
-   return std::same_as< T, U >;
+   return ::std::same_as< T, U >;
 }
 
 template < typename T >

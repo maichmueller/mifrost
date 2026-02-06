@@ -28,6 +28,44 @@ BatchBuilder::BatchBuilder()
    columns.reserve(kColumnReserve);
 }
 
+void BatchBuilder::reset()
+{
+   constexpr size_t kSmallReserve = 32;
+   constexpr size_t kColumnReserve = 64;
+
+   current_node_counts.clear();
+   current_node_counts.reserve(kSmallReserve);
+
+   node_offsets.clear();
+   node_offsets.reserve(kSmallReserve);
+
+   node_feature_dims.clear();
+   node_feature_dims.reserve(kSmallReserve);
+
+   node_names.clear();
+   node_names.reserve(kSmallReserve);
+
+   object_names.clear();
+   object_names.reserve(kSmallReserve);
+
+   graph_kind.clear();
+   schema_flags.clear();
+
+   ptrs.clear();
+   ptrs.reserve(kSmallReserve);
+
+   batch_indices.clear();
+   batch_indices.reserve(kSmallReserve);
+
+   graph_attrs.clear();
+   graph_attrs.reserve(kSmallReserve);
+
+   columns.clear();
+   columns.reserve(kColumnReserve);
+
+   current_graph_idx = 0;
+}
+
 void BatchBuilder::add_node_features(
    const std::string& node_type,
    const std::string& attr_name,
@@ -45,7 +83,7 @@ void BatchBuilder::add_node_features(
    auto& col = get_column< float >(key, feature_dim);
    col.insert(col.end(), data.begin(), data.end());
 
-   int64_t num_nodes = data.size() / feature_dim;
+   const auto num_nodes = static_cast< int64_t >(data.size() / feature_dim);
    auto [it, inserted] = current_node_counts.try_emplace(node_type, num_nodes);
    if(not inserted and it->second < num_nodes) {
       it->second = num_nodes;
@@ -286,16 +324,14 @@ auto vector_to_2d_ndarray(std::vector< T >&& vec, size_t rows, size_t cols)
 
 nb::dict BatchBuilder::build_dict()
 {
+   // Destructive export: tensor backing vectors are moved into Python-owned
+   // ndarray capsules to avoid copies.
    nb::dict out;
 
    for(auto& [key, col] : columns) {
       bool is_edge_index = key.find("/edge_index_") != std::string::npos;
       std::visit(
-         [&](auto&& items) {
-            using VectorType = std::decay_t< decltype(items) >;
-            using ScalarType = typename VectorType::value_type;
-
-            std::vector< ScalarType > vec = FWD(items);
+         [&]< typename T >(std::vector< T >& vec) {
             size_t size = vec.size();
             if(is_edge_index) {
                out[key.c_str()] = vector_to_1d_ndarray(std::move(vec));
@@ -591,10 +627,11 @@ nb::object BatchBuilder::build()
       batch.attr("_num_graphs") = graph_count;
    }
 
+   reset();
    return batch;
 }
 
-nb::dict BatchBuilder::build_parts()
+nb::dict BatchBuilder::build_batch_encoding_py()
 {
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
@@ -772,10 +809,10 @@ nb::dict BatchBuilder::build_parts()
       node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
    }
 
-   std::sort(node_specs.begin(), node_specs.end(), [](const auto& lhs, const auto& rhs) {
+   std::ranges::sort(node_specs, [](const auto& lhs, const auto& rhs) {
       return lhs.key < rhs.key;
    });
-   std::sort(edge_specs.begin(), edge_specs.end(), [](const auto& lhs, const auto& rhs) {
+   std::ranges::sort(edge_specs, [](const auto& lhs, const auto& rhs) {
       return lhs.key < rhs.key;
    });
 
@@ -845,20 +882,22 @@ nb::dict BatchBuilder::build_parts()
    schema.validate();
 
    out["schema"] = schema.to_dict();
+   reset();
    return out;
 }
 
-BatchBuilder::PartsNative BatchBuilder::build_parts_native()
+BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
 {
-   PartsNative out;
-   out.columns = std::move(columns);
-   out.node_names = std::move(node_names);
-   out.object_names = std::move(object_names);
-   out.node_feature_dims = std::move(node_feature_dims);
-   out.graph_attrs = std::move(graph_attrs);
-   out.ptrs = std::move(ptrs);
-   out.schema_flags = std::move(schema_flags);
-   out.graph_kind = std::move(graph_kind);
+   BatchEncoding out{
+      .columns = std::move(columns),
+      .node_names = std::move(node_names),
+      .object_names = std::move(object_names),
+      .node_feature_dims = std::move(node_feature_dims),
+      .graph_attrs = std::move(graph_attrs),
+      .ptrs = std::move(ptrs),
+      .schema_flags = std::move(schema_flags),
+      .graph_kind = std::move(graph_kind),
+   };
 
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : out.columns) {
@@ -996,10 +1035,10 @@ BatchBuilder::PartsNative BatchBuilder::build_parts_native()
       node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
    }
 
-   std::sort(node_specs.begin(), node_specs.end(), [](const auto& lhs, const auto& rhs) {
+   std::ranges::sort(node_specs, [](const auto& lhs, const auto& rhs) {
       return lhs.key < rhs.key;
    });
-   std::sort(edge_specs.begin(), edge_specs.end(), [](const auto& lhs, const auto& rhs) {
+   std::ranges::sort(edge_specs, [](const auto& lhs, const auto& rhs) {
       return lhs.key < rhs.key;
    });
 
@@ -1044,50 +1083,51 @@ BatchBuilder::PartsNative BatchBuilder::build_parts_native()
    schema.edge_tensors = std::move(edge_tensor_specs);
    schema.flags = out.schema_flags;
    schema.validate();
+
    out.schema = std::move(schema);
 
-   *this = BatchBuilder();
+   reset();
    return out;
 }
 
-void BatchBuilder::append_parts(const PartsNative& parts)
+void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
 {
-   if(parts.num_graphs <= 0) {
+   if(batch_encoding.num_graphs <= 0) {
       return;
    }
-   if(parts.num_graphs != 1) {
-      throw std::invalid_argument("append_parts expects num_graphs == 1");
+   if(batch_encoding.num_graphs != 1) {
+      throw std::invalid_argument("append_batch_encoding expects num_graphs == 1");
    }
 
    if(graph_kind.empty()) {
-      graph_kind = parts.graph_kind;
-   } else if(not parts.graph_kind.empty() and graph_kind != parts.graph_kind) {
-      throw std::invalid_argument("append_parts graph_kind mismatch");
+      graph_kind = batch_encoding.graph_kind;
+   } else if(not batch_encoding.graph_kind.empty() and graph_kind != batch_encoding.graph_kind) {
+      throw std::invalid_argument("append_batch_encoding graph_kind mismatch");
    }
 
-   for(const auto& [key, value] : parts.schema_flags) {
+   for(const auto& [key, value] : batch_encoding.schema_flags) {
       auto [it, inserted] = schema_flags.try_emplace(key, value);
       if(not inserted and it->second != value) {
-         throw std::invalid_argument("append_parts schema flag mismatch");
+         throw std::invalid_argument("append_batch_encoding schema flag mismatch");
       }
    }
 
-   for(const auto& [node_type, dim] : parts.node_feature_dims) {
+   for(const auto& [node_type, dim] : batch_encoding.node_feature_dims) {
       set_node_feature_dim(node_type, dim);
    }
-   for(const auto& [node_type, names] : parts.node_names) {
+   for(const auto& [node_type, names] : batch_encoding.node_names) {
       set_node_names(node_type, names);
    }
-   if(not parts.object_names.empty()) {
-      set_object_names(parts.object_names);
+   if(not batch_encoding.object_names.empty()) {
+      set_object_names(batch_encoding.object_names);
    }
-   for(const auto& [key, value] : parts.graph_attrs) {
+   for(const auto& [key, value] : batch_encoding.graph_attrs) {
       std::visit([&](const auto& v) { set_graph_attr(key, v); }, value);
    }
 
-   absl::btree_map< std::string, int64_t > node_counts = parts.node_counts;
+   absl::btree_map< std::string, int64_t > node_counts = batch_encoding.node_counts;
    if(node_counts.empty()) {
-      for(const auto& [key, col] : parts.columns) {
+      for(const auto& [key, col] : batch_encoding.columns) {
          if(key.find('|') != std::string::npos) {
             continue;
          }
@@ -1109,7 +1149,7 @@ void BatchBuilder::append_parts(const PartsNative& parts)
             col.data
          );
       }
-      for(const auto& [node_type, ptr] : parts.ptrs) {
+      for(const auto& [node_type, ptr] : batch_encoding.ptrs) {
          if(not ptr.empty()) {
             const int64_t count = ptr.back();
             auto& existing = node_counts[node_type];
@@ -1118,14 +1158,14 @@ void BatchBuilder::append_parts(const PartsNative& parts)
             }
          }
       }
-      for(const auto& [node_type, names] : parts.node_names) {
+      for(const auto& [node_type, names] : batch_encoding.node_names) {
          auto& existing = node_counts[node_type];
          const int64_t count = static_cast< int64_t >(names.size());
          if(count > existing) {
             existing = count;
          }
       }
-      for(const auto& [node_type, dim] : parts.node_feature_dims) {
+      for(const auto& [node_type, dim] : batch_encoding.node_feature_dims) {
          (void) dim;
          if(not node_counts.contains(node_type)) {
             node_counts[node_type] = 0;
@@ -1145,7 +1185,7 @@ void BatchBuilder::append_parts(const PartsNative& parts)
       return it->second;
    };
 
-   for(const auto& [key, col] : parts.columns) {
+   for(const auto& [key, col] : batch_encoding.columns) {
       if(key.size() >= 4 and key.compare(key.size() - 4, 4, "/ptr") == 0) {
          continue;
       }
@@ -1164,7 +1204,7 @@ void BatchBuilder::append_parts(const PartsNative& parts)
          const auto first = base.find('|');
          const auto second = base.find('|', first + 1);
          if(first == std::string::npos or second == std::string::npos) {
-            throw std::invalid_argument("Malformed edge key in append_parts");
+            throw std::invalid_argument("Malformed edge key in append_batch_encoding");
          }
          const std::string src_type = base.substr(0, first);
          const std::string dst_type = base.substr(second + 1);
@@ -1181,7 +1221,7 @@ void BatchBuilder::append_parts(const PartsNative& parts)
             } else if(part == "1") {
                offset = offset_for(dst_type);
             } else {
-               throw std::invalid_argument("Unexpected edge_index part in append_parts");
+               throw std::invalid_argument("Unexpected edge_index part in append_batch_encoding");
             }
             auto& dest = get_column< int64_t >(key, 1);
             const auto& src = std::get< LongCol >(col.data);

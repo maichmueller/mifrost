@@ -213,8 +213,8 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_parts_impl(self) -> Mapping[str, object]:
-        parts = self._stream.flush_parts()
+    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
+        parts = self._stream.flush_batch_encoding_py()
         _add_color_extension(parts)
         return parts
 
@@ -327,7 +327,7 @@ class ColorEncoder(EncoderBase[Data]):
                     inputs = shared_inputs
                 self._engine.encode(adv_state, inputs, builder)
             builder.next_graph()
-        return builder.build_parts()
+        return builder.build_batch_encoding_py()
 
     def encode_batch(
         self,

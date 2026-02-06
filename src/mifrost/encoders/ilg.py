@@ -145,8 +145,8 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
-    def _flush_parts_impl(self) -> Mapping[str, object]:
-        return self._builder.build_parts()
+    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
+        return self._builder.build_batch_encoding_py()
 
     def _parts_to_pyg(
         self,
@@ -164,7 +164,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
     """
     Instance‑Learning Graph encoder (ILG) implemented in Python.
 
-    This encoder mirrors the ILG topology/features and emits normalized parts via
+    This encoder mirrors the ILG topology/features and emits normalized batch encoding via
     ``BatchBuilder``, then relies on the shared parts-to-PyG path.
     """
 
@@ -439,7 +439,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         self._encode_to_builder(
             builder, state, goals=goals, actions=actions, subgoal_layers=subgoal_layers
         )
-        return builder.build_parts()
+        return builder.build_batch_encoding_py()
 
     def encode_batch_parts(
         self,
@@ -467,7 +467,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
                 subgoal_layers=subgoal_layers,
             )
             builder.next_graph()
-        return builder.build_parts()
+        return builder.build_batch_encoding_py()
 
     def stream(self) -> ILGEncoderStream:
         """Create a streaming ILG encoder."""

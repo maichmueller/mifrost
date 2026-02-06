@@ -110,7 +110,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def("set_node_names", &BatchBuilder::set_node_names)
       .def("set_object_names", &BatchBuilder::set_object_names)
       .def("build", &BatchBuilder::build)
-      .def("build_parts", &BatchBuilder::build_parts)
+      .def("build_batch_encoding_py", &BatchBuilder::build_batch_encoding_py)
       .def("next_graph", &BatchBuilder::next_graph)
       .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
       .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a);
@@ -161,7 +161,7 @@ void init_hgraph_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, builder);
-            return builder.build_parts();
+            return builder.build_batch_encoding_py();
          },
          "state"_a
       )
@@ -174,7 +174,7 @@ void init_hgraph_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, goals, actions, builder);
-            return builder.build_parts();
+            return builder.build_batch_encoding_py();
          },
          "state"_a,
          "goals"_a,
@@ -191,7 +191,7 @@ void init_hgraph_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
-            return builder.build_parts();
+            return builder.build_batch_encoding_py();
          },
          "state"_a,
          "goals"_a,
@@ -311,7 +311,7 @@ void init_hgraph_encoders(nb::module_& m)
       )
       .def("remove", &HGraphStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HGraphStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_parts", &HGraphStreamEncoder::flush_parts)
+      .def("flush_batch_encoding_py", &HGraphStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HGraphStreamEncoder::flush)
       .def("reset", &HGraphStreamEncoder::reset);
 
@@ -367,7 +367,7 @@ void init_hgraph_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(root, dag, goals, builder);
-            return builder.build_parts();
+            return builder.build_batch_encoding_py();
          },
          "root"_a,
          "dag"_a,
@@ -429,7 +429,7 @@ void init_hgraph_encoders(nb::module_& m)
       )
       .def("remove", &HorizonStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HorizonStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_parts", &HorizonStreamEncoder::flush_parts)
+      .def("flush_batch_encoding_py", &HorizonStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HorizonStreamEncoder::flush)
       .def("reset", &HorizonStreamEncoder::reset);
 
@@ -449,7 +449,7 @@ void init_hgraph_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(current, successor, goals, builder);
-            return builder.build_parts();
+            return builder.build_batch_encoding_py();
          },
          "current"_a,
          "successor"_a,
@@ -493,7 +493,7 @@ void init_hgraph_encoders(nb::module_& m)
       )
       .def("remove", &TransitionStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_parts", &TransitionStreamEncoder::flush_parts)
+      .def("flush_batch_encoding_py", &TransitionStreamEncoder::flush_batch_encoding_py)
       .def("flush", &TransitionStreamEncoder::flush)
       .def("reset", &TransitionStreamEncoder::reset);
 }
