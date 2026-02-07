@@ -186,7 +186,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         else:
             if goals is None:
                 goals = default_goals_from_state(state)
-            inputs, _ = _split_goals(goals, subgoal_layers)
+            inputs = _split_goals(goals, subgoal_layers)
             return self._coerce_stream_id(self._stream.append(adv_state, inputs))
 
     def remove(self, stream_id: int) -> None:
@@ -206,7 +206,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
             return
         if goals is None:
             goals = default_goals_from_state(state)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         self._stream.update(stream_id, adv_state, inputs)
 
     def _reset_builder(self) -> None:
@@ -272,7 +272,7 @@ class ColorEncoder(EncoderBase[Data]):
             return self._engine.encode(adv_state)
         if goals is None:
             goals = default_goals_from_state(state)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, inputs)
 
     def encode(
@@ -313,7 +313,7 @@ class ColorEncoder(EncoderBase[Data]):
         builder.set_graph_kind("homo")
         shared_inputs: GoalInputs | None = None
         if goals is not None:
-            shared_inputs, _ = _split_goals(goals, subgoal_layers)
+            shared_inputs = _split_goals(goals, subgoal_layers)
 
         for state in state_list:
             adv_state = _advanced_state(state)
@@ -322,7 +322,7 @@ class ColorEncoder(EncoderBase[Data]):
             else:
                 if goals is None:
                     goals_for_state = default_goals_from_state(state)
-                    inputs, _ = _split_goals(goals_for_state, subgoal_layers)
+                    inputs = _split_goals(goals_for_state, subgoal_layers)
                 else:
                     inputs = shared_inputs
                 self._engine.encode(adv_state, inputs, builder)

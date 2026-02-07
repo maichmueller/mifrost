@@ -23,7 +23,7 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
+from .common import _advanced_state, _parts_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -100,7 +100,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         adv_successor = _advanced_state(successor)
         if goals is None:
             goals = default_goals_from_state(state)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, adv_successor, inputs)
 
     def encode_batch_parts(
@@ -132,7 +132,7 @@ class _TransitionEncoderBase(HGraphEncoder):
 
         shared_inputs: GoalInputs | None = None
         if goals is not None:
-            shared_inputs, _ = _split_goals(goals, subgoal_layers)
+            shared_inputs = _split_goals(goals, subgoal_layers)
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
@@ -141,7 +141,7 @@ class _TransitionEncoderBase(HGraphEncoder):
             adv_successor = _advanced_state(succ_list[idx])
             if goals is None:
                 goals_for_state = default_goals_from_state(state)
-                inputs, _ = _split_goals(goals_for_state, subgoal_layers)
+                inputs = _split_goals(goals_for_state, subgoal_layers)
             else:
                 inputs = shared_inputs
             self._engine.encode(adv_state, adv_successor, inputs, builder)
@@ -192,7 +192,7 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         adv_successor = _advanced_state(successor)
         if goals is None:
             goals = default_goals_from_state(current)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         return self._coerce_stream_id(
             self._stream.append(adv_current, adv_successor, inputs)
         )
@@ -213,7 +213,7 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         adv_successor = _advanced_state(successor)
         if goals is None:
             goals = default_goals_from_state(current)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         self._stream.update(stream_id, adv_current, adv_successor, inputs)
 
     def _reset_builder(self) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from typing import Any, Iterable, Mapping
 
 import pymimir.advanced.formalism as af
@@ -17,6 +18,8 @@ from .types import (
     to_advanced_literal,
     to_advanced_state,
 )
+
+from .._core import GoalInputs
 
 
 def _to_tensor(value: Any) -> torch.Tensor:
@@ -48,57 +51,28 @@ def _advanced_action(action: GroundActionInput):
 def _split_goals(
     goals: Iterable[GoalLiteralInput],
     subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None,
-) -> tuple[Any, int]:
+) -> GoalInputs:
     """
     Build ``GoalInputs`` from goals and optional layered subgoals.
 
     Returns ``(goal_inputs, layer_count)`` where ``layer_count`` includes the
     primary goal layer plus optional subgoal layers.
     """
+    # Keep Python-side unwrapping/normalization (registered conversion logic) but
+    # delegate type splitting and level bookkeeping to the C++ GoalInputs container.
     goals = list(goals)
+
     if subgoal_layers is None:
-        from .._core import GoalInputs
-
-        return GoalInputs([_advanced_literal(goal) for goal in goals], 0), 1
-
-    # Split tagged literals into the universal GoalInputs container.
-    from .._core import GoalInputs
+        adv_goals = [_advanced_literal(goal) for goal in goals]
+        return GoalInputs(adv_goals, 0)
 
     inputs = GoalInputs([])
-    static_goals: list[af.StaticGroundLiteral] = []
-    fluent_goals: list[af.FluentGroundLiteral] = []
-    derived_goals: list[af.DerivedGroundLiteral] = []
-    static_levels: dict[af.StaticGroundLiteral, int] = {}
-    fluent_levels: dict[af.FluentGroundLiteral, int] = {}
-    derived_levels: dict[af.DerivedGroundLiteral, int] = {}
+    for depth, layer in enumerate(itertools.chain([goals], subgoal_layers)):
+        if not layer:
+            continue
+        inputs.extend((_advanced_literal(literal) for literal in layer), int(depth))
 
-    layers = [goals]
-    if subgoal_layers is not None:
-        layers.extend(list(layer) for layer in subgoal_layers)
-
-    for depth, layer in enumerate(layers):
-        for literal in layer:
-            adv = _advanced_literal(literal)
-            if isinstance(adv, af.FluentGroundLiteral):
-                fluent_goals.append(adv)
-                fluent_levels[adv] = depth
-            elif isinstance(adv, af.DerivedGroundLiteral):
-                derived_goals.append(adv)
-                derived_levels[adv] = depth
-            elif isinstance(adv, af.StaticGroundLiteral):
-                static_goals.append(adv)
-                static_levels[adv] = depth
-            else:
-                raise TypeError(f"Unsupported goal literal type: {type(literal)!r}")
-
-    inputs.static_goals = static_goals
-    inputs.fluent_goals = fluent_goals
-    inputs.derived_goals = derived_goals
-    if hasattr(inputs, "static_goal_levels"):
-        inputs.static_goal_levels = static_levels
-        inputs.fluent_goal_levels = fluent_levels
-        inputs.derived_goal_levels = derived_levels
-    return inputs, len(layers)
+    return inputs
 
 
 def _prepare_actions(
@@ -107,11 +81,7 @@ def _prepare_actions(
     """Convert action wrappers to advanced pymimir ``GroundAction`` objects."""
     if actions is None:
         return []
-    out: list[af.GroundAction] = []
-    for action in actions:
-        adv = _advanced_action(action)
-        out.append(adv)
-    return out
+    return [_advanced_action(action) for action in actions]
 
 
 def _prepare_history_subgoals(

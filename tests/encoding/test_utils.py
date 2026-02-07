@@ -140,7 +140,7 @@ def parts_to_pyg(parts: dict) -> HeteroData:
 def goal_inputs_from_problem(problem, *, goals=None, subgoal_layers=None):
     if goals is None:
         goals = list(problem.get_goal_condition().get_literals())
-    inputs, _ = _split_goals(goals, subgoal_layers)
+    inputs = _split_goals(goals, subgoal_layers)
     return inputs
 
 

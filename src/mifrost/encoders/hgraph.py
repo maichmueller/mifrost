@@ -378,7 +378,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         else:
             if goals is None:
                 goals = default_goals_from_state(state)
-            inputs, _ = _split_goals(goals, subgoal_layers)
+            inputs = _split_goals(goals, subgoal_layers)
             if history_list:
                 return self._coerce_stream_id(
                     self._stream.append(
@@ -420,7 +420,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
             return
         if goals is None:
             goals = default_goals_from_state(state)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         if history_list:
             self._stream.update(
                 stream_id,
@@ -530,7 +530,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             return self._engine.encode(adv_state)
         if goals is None:
             goals = default_goals_from_state(state)
-        inputs, _ = _split_goals(goals, subgoal_layers)
+        inputs = _split_goals(goals, subgoal_layers)
         if history_list:
             return self._engine.encode(
                 adv_state, inputs, action_list, history_list, history_max_steps
@@ -590,7 +590,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                 raise TypeError("encode_batch expects a state or an iterable of states")
             state_list = list(states)
 
-        shared_actions: list[GroundActionInput] | None = None
+        shared_actions: list[GroundActionInput]
         shared_action_list: list[object] = []
         per_state_actions: list[Iterable[GroundActionInput] | None] | None = None
         if actions is not None:
@@ -611,7 +611,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
 
         shared_inputs: GoalInputs | None = None
         if goals is not None:
-            shared_inputs, _ = _split_goals(goals, subgoal_layers)
+            shared_inputs = _split_goals(goals, subgoal_layers)
 
         history_per_state: list[list[tuple[int, list[object]]]] | None = None
         if history_subgoals is not None:
@@ -669,7 +669,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             else:
                 if goals is None:
                     goals_for_state = default_goals_from_state(state)
-                    inputs, _ = _split_goals(goals_for_state, subgoal_layers)
+                    inputs = _split_goals(goals_for_state, subgoal_layers)
                 else:
                     inputs = shared_inputs
                 if history_list:

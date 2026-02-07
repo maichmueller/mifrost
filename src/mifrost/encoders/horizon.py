@@ -23,7 +23,7 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
+from .common import _advanced_state, _parts_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -51,7 +51,7 @@ def _prepare_horizon_goals(
     """Resolve user-provided or problem-default goals into ``GoalInputs``."""
     if goals is None:
         goals = default_goals_from_state(root)
-    inputs, _ = _split_goals(goals, subgoal_layers)
+    inputs = _split_goals(goals, subgoal_layers)
     return inputs
 
 
@@ -258,7 +258,7 @@ class HorizonEncoder(HGraphEncoder):
 
         shared_inputs: GoalInputs | None = None
         if goals is not None and goals_per_state is None:
-            shared_inputs, _ = _split_goals(goals, subgoal_layers)
+            shared_inputs = _split_goals(goals, subgoal_layers)
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
@@ -266,7 +266,7 @@ class HorizonEncoder(HGraphEncoder):
             adv_root = _advanced_state(root)
             dag = _ensure_dag(root, dag_list[idx])
             if goals_per_state is not None:
-                inputs, _ = _split_goals(goals_per_state[idx], subgoal_layers)
+                inputs = _split_goals(goals_per_state[idx], subgoal_layers)
             else:
                 inputs = (
                     shared_inputs
