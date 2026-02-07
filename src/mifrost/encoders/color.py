@@ -395,5 +395,53 @@ class ColorEncoder(EncoderBase[Data]):
         graph.graph["encoder_hash"] = getattr(data, "encoder_hash", None)
         return graph
 
+    def draw(
+        self,
+        data: Data,
+        *,
+        with_labels: bool = True,
+        edge_labels: bool = False,
+        ax: Any | None = None,
+        node_size: int = 300,
+        font_size: int = 8,
+    ) -> Any:
+        """Render a color-encoded graph with matplotlib and return the axis."""
+        try:
+            import matplotlib.pyplot as plt
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "ColorEncoder.draw requires matplotlib to be installed"
+            ) from exc
+
+        graph = self.to_networkx(data)
+        if ax is None:
+            _, ax = plt.subplots()
+
+        positions = nx.spring_layout(graph, seed=0)
+        nx.draw_networkx(
+            graph,
+            pos=positions,
+            ax=ax,
+            with_labels=with_labels,
+            node_size=node_size,
+            font_size=font_size,
+        )
+
+        if edge_labels:
+            labels = {}
+            for src, dst, attrs in graph.edges(data=True):
+                if "type" in attrs:
+                    labels[(src, dst)] = attrs["type"]
+            if labels:
+                nx.draw_networkx_edge_labels(
+                    graph,
+                    pos=positions,
+                    edge_labels=labels,
+                    ax=ax,
+                    font_size=max(6, font_size - 1),
+                )
+
+        return ax
+
 
 __all__ = ["ColorEncoder", "ColorEncoderStream"]

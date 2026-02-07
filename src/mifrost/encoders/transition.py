@@ -18,13 +18,13 @@ from dataclasses import dataclass
 
 from .base import (
     ActionBatchInput,
-    EncoderBase,
     GoalBatchInput,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
 )
 from .common import _advanced_domain, _advanced_state, _parts_to_pyg, _split_goals
+from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
     StateInput,
@@ -33,7 +33,7 @@ from .types import (
 )
 
 
-class _TransitionEncoderBase(EncoderBase[HeteroData]):
+class _TransitionEncoderBase(HGraphEncoder):
     """Shared implementation for transition-state encoders."""
 
     def __init__(
@@ -70,6 +70,9 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
         config.nullary_object_name = nullary_object_name
         config.lgan_nn_edge_pos = lgan_nn_edge_pos
         self._engine = SuccessorHGraphEncoderEngine(_advanced_domain(domain), config)
+        self.symbol_type_id = symbol_type_id
+        self.lgan_nn_edge_pos = lgan_nn_edge_pos
+        self.include_lgan_edges = include_lgan_edges
 
     @property
     def engine(self) -> SuccessorHGraphEncoderEngine:
@@ -159,6 +162,10 @@ class _TransitionEncoderBase(EncoderBase[HeteroData]):
     def stream(self) -> "_TransitionEncoderStream":
         """Create a stream wrapper for transition encoding."""
         return _TransitionEncoderStream(self)
+
+    def draw(self, data: HeteroData, **kwargs: object) -> object:
+        """Reuse generic heterogeneous graph drawing from ``HGraphEncoder``."""
+        return HGraphEncoder.draw(self, data, **kwargs)
 
 
 @dataclass
