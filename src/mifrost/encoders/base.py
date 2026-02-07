@@ -49,7 +49,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> PygDataT:
         """
         Encode one input into a PyG object.
@@ -76,7 +76,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> PygDataT:
         """
         Encode one or many inputs into a PyG batch object.
@@ -102,7 +102,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs: object,
+        **kwargs,
     ) -> Mapping[str, object]:
         """Encode one input into the normalized batch encoding payload."""
         ...
@@ -115,7 +115,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs: object,
+        **kwargs,
     ) -> Mapping[str, object]:
         """Encode one or many inputs into a batch-oriented parts payload."""
         ...

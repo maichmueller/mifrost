@@ -370,7 +370,7 @@ class ColorEncoder(EncoderBase[Data]):
             if hasattr(data, "x") and data.x is not None:
                 count = data.x.shape[0]
             else:
-                count = getattr(data, "num_nodes", 0) or 0
+                count = data.num_nodes
             node_names = [str(i) for i in range(count)]
 
         for i, name in enumerate(node_names):
@@ -381,19 +381,16 @@ class ColorEncoder(EncoderBase[Data]):
                 attrs["goal_level"] = gval.item() if torch.is_tensor(gval) else gval
             graph.add_node(name, **attrs)
 
-        if hasattr(data, "edge_index"):
-            for i in range(data.edge_index.shape[1]):
-                u_idx = data.edge_index[0, i].item()
-                v_idx = data.edge_index[1, i].item()
-                u_name = node_names[u_idx]
-                v_name = node_names[v_idx]
-                attrs = {}
-                if hasattr(data, "edge_attr") and data.edge_attr is not None:
-                    val = data.edge_attr[i]
-                    attrs["type"] = (
-                        int(val.item()) if torch.is_tensor(val) else int(val)
-                    )
-                graph.add_edge(u_name, v_name, **attrs)
+        for i in range(data.edge_index.shape[1]):
+            u_idx = data.edge_index[0, i].item()
+            v_idx = data.edge_index[1, i].item()
+            u_name = node_names[u_idx]
+            v_name = node_names[v_idx]
+            attrs = {}
+            if hasattr(data, "edge_attr") and data.edge_attr is not None:
+                val = data.edge_attr[i]
+                attrs["type"] = int(val.item()) if torch.is_tensor(val) else int(val)
+            graph.add_edge(u_name, v_name, **attrs)
 
         graph.graph["encoder_hash"] = getattr(data, "encoder_hash", None)
         return graph

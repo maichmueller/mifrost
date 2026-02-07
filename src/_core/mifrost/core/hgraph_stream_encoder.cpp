@@ -282,8 +282,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
    const auto& problem = state.get_problem();
    const auto& repos = problem.get_repositories();
 
-   auto handle_atom = [&](auto atom) {
-      using Tag = typename std::remove_pointer_t< decltype(atom) >::Type;
+   auto handle_atom = [&]< typename Tag >(mimir::formalism::GroundAtom< Tag > atom) {
       const auto predicate = atom->get_predicate();
       if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;

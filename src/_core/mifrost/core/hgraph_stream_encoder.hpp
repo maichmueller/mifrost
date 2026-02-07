@@ -59,7 +59,7 @@ class HGraphEncoderEngine {
    explicit HGraphEncoderEngine(mimir::formalism::Domain domain);
    HGraphEncoderEngine(mimir::formalism::Domain domain, Config config);
 
-   virtual ~HGraphEncoderEngine() = default;
+   ~HGraphEncoderEngine() = default;
 
    /// Encode a state-only step into an existing builder.
    void encode_state(const mimir::search::State& state, BatchBuilder& builder)
@@ -128,8 +128,8 @@ class HGraphEncoderEngine {
    /// Internal state-only encode implementation.
    void encode_state_impl(const mimir::search::State& state, BatchBuilder& builder);
 
-   /// Internal full encode implementation (overridable by specialized encoders).
-   virtual void encode_impl(
+   /// Internal full encode implementation.
+   void encode_impl(
       const mimir::search::State& state,
       const GoalInputs& goals,
       std::span< const mimir::formalism::GroundAction > actions,
@@ -147,7 +147,7 @@ class HGraphEncoderEngine {
    );
 
    /// Encode object/symbol node type and register node indices.
-   virtual void encode_objects(
+   void encode_objects(
       const mimir::search::State& state,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
@@ -156,7 +156,7 @@ class HGraphEncoderEngine {
    );
 
    /// Encode fact atoms and return formatted fact keys.
-   virtual hash_set< std::string > encode_facts(
+   hash_set< std::string > encode_facts(
       const mimir::search::State& state,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
@@ -180,7 +180,7 @@ class HGraphEncoderEngine {
    );
 
    /// Encode grounded actions as nodes and connect relation edges.
-   virtual void encode_actions(
+   void encode_actions(
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
