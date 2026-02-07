@@ -16,6 +16,24 @@ using namespace nb::literals;
 
 namespace mifrost {
 
+namespace {
+
+void apply_color_config_kwargs(ColorEncoderEngine::Config& config, const nb::kwargs& kwargs)
+{
+   for(const auto& [key_handle, value_handle] : kwargs) {
+      const std::string key = nb::cast< std::string >(key_handle);
+      if(key == "edge_features") {
+         config.edge_features = nb::cast< bool >(value_handle);
+      } else if(key == "enable_global_predicate_nodes") {
+         config.enable_global_predicate_nodes = nb::cast< bool >(value_handle);
+      } else {
+         throw std::invalid_argument("Unknown ColorEncoderConfig kwarg '" + key + "'");
+      }
+   }
+}
+
+}  // namespace
+
 void init_color_encoder(nb::module_& m)
 {
    auto add_color_extension = [](nb::dict& parts) {
@@ -40,6 +58,13 @@ void init_color_encoder(nb::module_& m)
 
    nb::class_< ColorEncoderEngine::Config >(m, "ColorEncoderConfig")
       .def(nb::init<>())
+      .def(
+         "__init__",
+         [](ColorEncoderEngine::Config* self, nb::kwargs kwargs) {
+            new(self) ColorEncoderEngine::Config();
+            apply_color_config_kwargs(*self, kwargs);
+         }
+      )
       .def_rw("edge_features", &ColorEncoderEngine::Config::edge_features)
       .def_rw(
          "enable_global_predicate_nodes", &ColorEncoderEngine::Config::enable_global_predicate_nodes

@@ -51,6 +51,12 @@ class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
    );
 };
 
+BOOST_DESCRIBE_STRUCT(
+   SuccessorHGraphEncoderEngine::Config,
+   (HGraphEncoderEngine::Config),
+   (successor_mode, successor_suffix, include_successor_goal_satisfaction)
+)
+
 /**
  * @brief Payload for one streaming transition encode step.
  */

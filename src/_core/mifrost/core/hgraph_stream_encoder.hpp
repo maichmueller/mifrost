@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boost/describe.hpp>
 #include <mimir/formalism/action.hpp>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/ground_action.hpp>
@@ -262,6 +263,23 @@ class HGraphEncoderEngine {
    /// Precomputed edge types used when include_empty_edge_types is enabled.
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
 };
+
+BOOST_DESCRIBE_STRUCT(
+   HGraphEncoderEngine::Config,
+   (),
+   (symbol_type_id,
+    nullary_object_name,
+    lgan_nn_edge_pos,
+    history_link_relation,
+    max_goal_level,
+    support_literals,
+    add_nullary_predicates,
+    ignore_actions,
+    include_lgan_edges,
+    include_static,
+    include_empty_edge_types,
+    goal_satisfaction_derivations)
+)
 
 /**
  * @brief Payload for one streaming HGraph encode step.

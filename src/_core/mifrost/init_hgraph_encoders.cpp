@@ -18,6 +18,7 @@
 #include <mimir/search/state_repository.hpp>
 #include <optional>
 
+#include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/default_relations.hpp"
@@ -32,6 +33,31 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mifrost {
+
+namespace {
+
+void apply_hgraph_config_kwargs(HGraphEncoderEngine::Config& config, const nb::kwargs& kwargs)
+{
+   apply_config_kwargs(config, kwargs, "HGraphEncoderConfig");
+}
+
+void apply_horizon_config_kwargs(
+   HorizonHGraphEncoderEngine::Config& config,
+   const nb::kwargs& kwargs
+)
+{
+   apply_config_kwargs(config, kwargs, "HorizonEncoderConfig");
+}
+
+void apply_successor_config_kwargs(
+   SuccessorHGraphEncoderEngine::Config& config,
+   const nb::kwargs& kwargs
+)
+{
+   apply_config_kwargs(config, kwargs, "SuccessorEncoderConfig");
+}
+
+}  // namespace
 
 void init_hgraph_encoders(nb::module_& m)
 {
@@ -130,6 +156,13 @@ void init_hgraph_encoders(nb::module_& m)
 
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())
+      .def(
+         "__init__",
+         [](HGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
+            new(self) HGraphEncoderEngine::Config();
+            apply_hgraph_config_kwargs(*self, kwargs);
+         }
+      )
       .def_rw("symbol_type_id", &HGraphEncoderEngine::Config::symbol_type_id)
       .def_rw("nullary_object_name", &HGraphEncoderEngine::Config::nullary_object_name)
       .def_rw("max_goal_level", &HGraphEncoderEngine::Config::max_goal_level)
@@ -324,6 +357,13 @@ void init_hgraph_encoders(nb::module_& m)
       m, "HorizonEncoderConfig"
    )
       .def(nb::init<>())
+      .def(
+         "__init__",
+         [](HorizonHGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
+            new(self) HorizonHGraphEncoderEngine::Config();
+            apply_horizon_config_kwargs(*self, kwargs);
+         }
+      )
       .def_rw("transition_mode", &HorizonHGraphEncoderEngine::Config::transition_mode)
       .def_rw("target_symbol_prefix", &HorizonHGraphEncoderEngine::Config::target_symbol_prefix)
       .def_rw("parent_relation", &HorizonHGraphEncoderEngine::Config::parent_relation)
@@ -346,6 +386,13 @@ void init_hgraph_encoders(nb::module_& m)
       m, "SuccessorEncoderConfig"
    )
       .def(nb::init<>())
+      .def(
+         "__init__",
+         [](SuccessorHGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
+            new(self) SuccessorHGraphEncoderEngine::Config();
+            apply_successor_config_kwargs(*self, kwargs);
+         }
+      )
       .def_rw("successor_mode", &SuccessorHGraphEncoderEngine::Config::successor_mode)
       .def_rw("successor_suffix", &SuccessorHGraphEncoderEngine::Config::successor_suffix)
       .def_rw(

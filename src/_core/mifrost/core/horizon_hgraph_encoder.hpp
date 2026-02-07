@@ -68,6 +68,20 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    [[nodiscard]] std::string target_node_key(int idx) const;
 };
 
+BOOST_DESCRIBE_STRUCT(
+   HorizonHGraphEncoderEngine::Config,
+   (HGraphEncoderEngine::Config),
+   (transition_mode,
+    target_symbol_prefix,
+    parent_relation,
+    sibling_relation,
+    cousin_relation,
+    enable_parent_relation,
+    enable_sibling_relation,
+    enable_cousin_relation,
+    exclude_root_candidate)
+)
+
 /**
  * @brief Payload for one streaming horizon encode step.
  */
