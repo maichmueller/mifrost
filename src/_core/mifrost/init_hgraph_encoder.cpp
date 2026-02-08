@@ -41,33 +41,10 @@ void apply_hgraph_config_kwargs(HGraphEncoderEngine::Config& config, const nb::k
    apply_config_kwargs(config, kwargs, "HGraphEncoderConfig");
 }
 
-void apply_horizon_config_kwargs(
-   HorizonHGraphEncoderEngine::Config& config,
-   const nb::kwargs& kwargs
-)
-{
-   apply_config_kwargs(config, kwargs, "HorizonEncoderConfig");
-}
-
-void apply_successor_config_kwargs(
-   SuccessorHGraphEncoderEngine::Config& config,
-   const nb::kwargs& kwargs
-)
-{
-   apply_config_kwargs(config, kwargs, "SuccessorEncoderConfig");
-}
-
 }  // namespace
 
-void init_hgraph_encoders(nb::module_& m)
+void init_hgraph_encoder(nb::module_& m)
 {
-   m.attr("DEFAULT_SYMBOL_TYPE_ID") = defaults::symbol_type_id;
-   m.attr("DEFAULT_LGAN_NN_EDGE_POS") = defaults::lgan_nn_edge_pos;
-   m.attr("DEFAULT_PARENT_RELATION") = defaults::parent_relation;
-   m.attr("DEFAULT_SIBLING_RELATION") = defaults::sibling_relation;
-   m.attr("DEFAULT_COUSIN_RELATION") = defaults::cousin_relation;
-   m.attr("DEFAULT_HISTORY_LINK_RELATION") = defaults::history_link_relation;
-
    nb::class_< BatchBuilder >(m, "BatchBuilder")
       .def(nb::init<>())
       .def(
@@ -141,55 +118,11 @@ void init_hgraph_encoders(nb::module_& m)
       .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
       .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a);
 
-   nb::class_< GoalInputs >(m, "GoalInputs")
-      .def(nb::init<>())
-      .def(
-         "__init__",
-         [](GoalInputs* self, nb::iterable goals, const size_t level) {
-            new(self) GoalInputs();
-            self->extend(
-               goals | std::views::transform(AS_LAMBDA(nb::cast< LiteralVariant >)), level
-            );
-         },
-         "goals"_a,
-         "level"_a = 0ul
-      )
-      .def_rw("static_goals", &GoalInputs::static_goals)
-      .def_rw("fluent_goals", &GoalInputs::fluent_goals)
-      .def_rw("derived_goals", &GoalInputs::derived_goals)
-      .def_rw("static_goal_levels", &GoalInputs::static_goal_levels)
-      .def_rw("fluent_goal_levels", &GoalInputs::fluent_goal_levels)
-      .def_rw("derived_goal_levels", &GoalInputs::derived_goal_levels)
-      .def(
-         "extend",
-         [](GoalInputs& self, nb::iterable goals, const size_t level) {
-            self.extend(
-               goals | std::views::transform(AS_LAMBDA(nb::cast< LiteralVariant >)), level
-            );
-         },
-         "goals"_a,
-         "level"_a = 0ul
-      )
-      .def("append", [](GoalInputs& self, const nb::object& goal, const size_t level) {
-         if(nb::isinstance< FluentLiteral >(goal)) {
-            self.append(nb::cast< FluentLiteral >(goal), level);
-         } else if(nb::isinstance< DerivedLiteral >(goal)) {
-            self.append(nb::cast< DerivedLiteral >(goal), level);
-         } else if(nb::isinstance< StaticLiteral >(goal)) {
-            self.append(nb::cast< StaticLiteral >(goal), level);
-         } else {
-            throw std::invalid_argument(
-               "No known literal type passed. Expected one of "
-               "'FluentLiteral', 'DerivedLiteral', or 'StaticLiteral'."
-            );
-         }
-      });
-
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())
       .def(
          "__init__",
-         [](HGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
+         [](HGraphEncoderEngine::Config* self, const nb::kwargs& kwargs) {
             new(self) HGraphEncoderEngine::Config();
             apply_hgraph_config_kwargs(*self, kwargs);
          }
@@ -219,6 +152,7 @@ void init_hgraph_encoders(nb::module_& m)
       .def(nb::init< const mimir::formalism::DomainImpl&, HGraphEncoderEngine::Config >())
       .def(nb::init< mimir::formalism::Domain >())
       .def(nb::init< mimir::formalism::Domain, HGraphEncoderEngine::Config >())
+      .def_prop_ro("config", &HGraphEncoderEngine::get_config, nb::rv_policy::reference_internal)
       .def(
          "encode",
          [](HGraphEncoderEngine& encoder, const mimir::search::State& state) {
@@ -378,202 +312,6 @@ void init_hgraph_encoders(nb::module_& m)
       .def("flush_batch_encoding_py", &HGraphStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HGraphStreamEncoder::flush)
       .def("reset", &HGraphStreamEncoder::reset);
-
-   nb::enum_< HorizonHGraphEncoderEngine::Mode >(m, "HorizonEncoderMode")
-      .value("Full", HorizonHGraphEncoderEngine::Mode::Full)
-      .value("Delta", HorizonHGraphEncoderEngine::Mode::Delta)
-      .value("Action", HorizonHGraphEncoderEngine::Mode::Action);
-
-   nb::class_< HorizonHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
-      m, "HorizonEncoderConfig"
-   )
-      .def(nb::init<>())
-      .def(
-         "__init__",
-         [](HorizonHGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
-            new(self) HorizonHGraphEncoderEngine::Config();
-            apply_horizon_config_kwargs(*self, kwargs);
-         }
-      )
-      .def_rw("transition_mode", &HorizonHGraphEncoderEngine::Config::transition_mode)
-      .def_rw("target_symbol_prefix", &HorizonHGraphEncoderEngine::Config::target_symbol_prefix)
-      .def_rw("parent_relation", &HorizonHGraphEncoderEngine::Config::parent_relation)
-      .def_rw("sibling_relation", &HorizonHGraphEncoderEngine::Config::sibling_relation)
-      .def_rw("cousin_relation", &HorizonHGraphEncoderEngine::Config::cousin_relation)
-      .def_rw("enable_parent_relation", &HorizonHGraphEncoderEngine::Config::enable_parent_relation)
-      .def_rw(
-         "enable_sibling_relation", &HorizonHGraphEncoderEngine::Config::enable_sibling_relation
-      )
-      .def_rw("enable_cousin_relation", &HorizonHGraphEncoderEngine::Config::enable_cousin_relation)
-      .def_rw(
-         "exclude_root_candidate", &HorizonHGraphEncoderEngine::Config::exclude_root_candidate
-      );
-
-   nb::enum_< SuccessorHGraphEncoderEngine::Mode >(m, "SuccessorEncoderMode")
-      .value("Full", SuccessorHGraphEncoderEngine::Mode::Full)
-      .value("Delta", SuccessorHGraphEncoderEngine::Mode::Delta);
-
-   nb::class_< SuccessorHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
-      m, "SuccessorEncoderConfig"
-   )
-      .def(nb::init<>())
-      .def(
-         "__init__",
-         [](SuccessorHGraphEncoderEngine::Config* self, nb::kwargs kwargs) {
-            new(self) SuccessorHGraphEncoderEngine::Config();
-            apply_successor_config_kwargs(*self, kwargs);
-         }
-      )
-      .def_rw("successor_mode", &SuccessorHGraphEncoderEngine::Config::successor_mode)
-      .def_rw("successor_suffix", &SuccessorHGraphEncoderEngine::Config::successor_suffix)
-      .def_rw(
-         "include_successor_goal_satisfaction",
-         &SuccessorHGraphEncoderEngine::Config::include_successor_goal_satisfaction
-      );
-
-   nb::class_< HorizonHGraphEncoderEngine, HGraphEncoderEngine >(m, "HorizonHGraphEncoderEngine")
-      .def(nb::init< const mimir::formalism::DomainImpl& >())
-      .def(nb::init< const mimir::formalism::DomainImpl&, HorizonHGraphEncoderEngine::Config >())
-      .def(nb::init< mimir::formalism::Domain >())
-      .def(nb::init< mimir::formalism::Domain, HorizonHGraphEncoderEngine::Config >())
-      .def(
-         "encode",
-         [](HorizonHGraphEncoderEngine& encoder,
-            const mimir::search::State& root,
-            const TransitionDAG& dag,
-            const GoalInputs& goals) {
-            BatchBuilder builder;
-            builder.set_graph_kind("hetero");
-            encoder.encode(root, dag, goals, builder);
-            return builder.build_batch_encoding_py();
-         },
-         "root"_a,
-         "dag"_a,
-         "goals"_a
-      )
-      .def(
-         "encode",
-         &HorizonHGraphEncoderEngine::encode,
-         "root"_a,
-         "dag"_a,
-         "goals"_a,
-         "builder"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      );
-
-   nb::class_< HorizonStreamEncoder >(m, "HorizonStreamEncoder")
-      .def(nb::init< HorizonHGraphEncoderEngine& >(), nb::keep_alive< 1, 2 >())
-      .def(
-         "append",
-         nb::overload_cast< const mimir::search::State&, const TransitionDAG&, const GoalInputs& >(
-            &HorizonStreamEncoder::append
-         ),
-         "root"_a,
-         "dag"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def(
-         "append",
-         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
-            &HorizonStreamEncoder::append
-         ),
-         "root"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def(
-         "update",
-         nb::overload_cast<
-            int64_t,
-            const mimir::search::State&,
-            const TransitionDAG&,
-            const GoalInputs& >(&HorizonStreamEncoder::update),
-         "id"_a,
-         "root"_a,
-         "dag"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def(
-         "update",
-         nb::overload_cast< int64_t, const mimir::search::State&, const GoalInputs& >(
-            &HorizonStreamEncoder::update
-         ),
-         "id"_a,
-         "root"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def("remove", &HorizonStreamEncoder::remove, "id"_a)
-      .def("set_reuse_removed", &HorizonStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &HorizonStreamEncoder::flush_batch_encoding_py)
-      .def("flush", &HorizonStreamEncoder::flush)
-      .def("reset", &HorizonStreamEncoder::reset);
-
-   nb::class_< SuccessorHGraphEncoderEngine, HGraphEncoderEngine >(
-      m, "SuccessorHGraphEncoderEngine"
-   )
-      .def(nb::init< const mimir::formalism::DomainImpl& >())
-      .def(nb::init< const mimir::formalism::DomainImpl&, SuccessorHGraphEncoderEngine::Config >())
-      .def(nb::init< mimir::formalism::Domain >())
-      .def(nb::init< mimir::formalism::Domain, SuccessorHGraphEncoderEngine::Config >())
-      .def(
-         "encode",
-         [](SuccessorHGraphEncoderEngine& encoder,
-            const mimir::search::State& current,
-            const mimir::search::State& successor,
-            const GoalInputs& goals) {
-            BatchBuilder builder;
-            builder.set_graph_kind("hetero");
-            encoder.encode(current, successor, goals, builder);
-            return builder.build_batch_encoding_py();
-         },
-         "current"_a,
-         "successor"_a,
-         "goals"_a
-      )
-      .def(
-         "encode",
-         &SuccessorHGraphEncoderEngine::encode,
-         "current"_a,
-         "successor"_a,
-         "goals"_a,
-         "builder"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      );
-
-   nb::class_< TransitionStreamEncoder >(m, "TransitionStreamEncoder")
-      .def(nb::init< SuccessorHGraphEncoderEngine& >(), nb::keep_alive< 1, 2 >())
-      .def(
-         "append",
-         nb::overload_cast<
-            const mimir::search::State&,
-            const mimir::search::State&,
-            const GoalInputs& >(&TransitionStreamEncoder::append),
-         "current"_a,
-         "successor"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def(
-         "update",
-         nb::overload_cast<
-            int64_t,
-            const mimir::search::State&,
-            const mimir::search::State&,
-            const GoalInputs& >(&TransitionStreamEncoder::update),
-         "id"_a,
-         "current"_a,
-         "successor"_a,
-         "goals"_a,
-         nb::call_guard< nb::gil_scoped_release >()
-      )
-      .def("remove", &TransitionStreamEncoder::remove, "id"_a)
-      .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &TransitionStreamEncoder::flush_batch_encoding_py)
-      .def("flush", &TransitionStreamEncoder::flush)
-      .def("reset", &TransitionStreamEncoder::reset);
 }
 
 }  // namespace mifrost
