@@ -63,14 +63,13 @@ def _split_goals(
     goals = list(goals)
 
     if subgoal_layers is None:
-        adv_goals = [_advanced_literal(goal) for goal in goals]
-        return GoalInputs(adv_goals, 0)
+        return GoalInputs(map(_advanced_literal, goals), 0)
 
     inputs = GoalInputs([])
     for depth, layer in enumerate(itertools.chain([goals], subgoal_layers)):
         if not layer:
             continue
-        inputs.extend((_advanced_literal(literal) for literal in layer), int(depth))
+        inputs.extend(map(_advanced_literal, layer), int(depth))
 
     return inputs
 

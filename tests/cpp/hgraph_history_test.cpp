@@ -27,9 +27,9 @@ std::string edge_key(std::string_view src, std::string_view rel, std::string_vie
    return key;
 }
 
-std::vector< mifrost::AnyGoalLiteral > collect_goals(const mimir::formalism::Problem& problem)
+std::vector< mifrost::LiteralVariant > collect_goals(const mimir::formalism::Problem& problem)
 {
-   std::vector< mifrost::AnyGoalLiteral > goals;
+   std::vector< mifrost::LiteralVariant > goals;
    for(const auto& goal : problem->get_goal_literals< mimir::formalism::StaticTag >()) {
       goals.emplace_back(goal);
    }

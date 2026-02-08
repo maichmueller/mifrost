@@ -143,16 +143,47 @@ void init_hgraph_encoders(nb::module_& m)
 
    nb::class_< GoalInputs >(m, "GoalInputs")
       .def(nb::init<>())
-      .def(nb::init< const std::vector< GoalInputs::AnyGoalLiteral >& >(), "goals"_a)
       .def(
-         nb::init< const std::vector< GoalInputs::AnyGoalLiteral >&, int >(), "goals"_a, "level"_a
+         "__init__",
+         [](GoalInputs* self, nb::iterable goals, const size_t level) {
+            new(self) GoalInputs();
+            self->extend(
+               goals | std::views::transform(AS_LAMBDA(nb::cast< LiteralVariant >)), level
+            );
+         },
+         "goals"_a,
+         "level"_a = 0ul
       )
       .def_rw("static_goals", &GoalInputs::static_goals)
       .def_rw("fluent_goals", &GoalInputs::fluent_goals)
       .def_rw("derived_goals", &GoalInputs::derived_goals)
       .def_rw("static_goal_levels", &GoalInputs::static_goal_levels)
       .def_rw("fluent_goal_levels", &GoalInputs::fluent_goal_levels)
-      .def_rw("derived_goal_levels", &GoalInputs::derived_goal_levels);
+      .def_rw("derived_goal_levels", &GoalInputs::derived_goal_levels)
+      .def(
+         "extend",
+         [](GoalInputs& self, nb::iterable goals, const size_t level) {
+            self.extend(
+               goals | std::views::transform(AS_LAMBDA(nb::cast< LiteralVariant >)), level
+            );
+         },
+         "goals"_a,
+         "level"_a = 0ul
+      )
+      .def("append", [](GoalInputs& self, const nb::object& goal, const size_t level) {
+         if(nb::isinstance< FluentLiteral >(goal)) {
+            self.append(nb::cast< FluentLiteral >(goal), level);
+         } else if(nb::isinstance< DerivedLiteral >(goal)) {
+            self.append(nb::cast< DerivedLiteral >(goal), level);
+         } else if(nb::isinstance< StaticLiteral >(goal)) {
+            self.append(nb::cast< StaticLiteral >(goal), level);
+         } else {
+            throw std::invalid_argument(
+               "No known literal type passed. Expected one of "
+               "'FluentLiteral', 'DerivedLiteral', or 'StaticLiteral'."
+            );
+         }
+      });
 
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())
