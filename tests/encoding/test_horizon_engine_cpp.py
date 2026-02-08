@@ -71,3 +71,31 @@ def test_horizon_encoder_parent_relations(horizon_cases):
         child_node = f"{prefix}{child}"
         assert graph.has_edge(parent_node, rel_node)
         assert graph.has_edge(child_node, rel_node)
+
+
+def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
+    space, domain, problem = horizon_cases
+    root = problem.get_initial_state()
+    dag = _build_dag(space, root)
+    if len(dag.nodes()) < 2:
+        import pytest
+
+        pytest.skip("Need at least one non-root node to test candidate filtering")
+
+    goals = goal_inputs_from_problem(problem)
+
+    excluded = mifrost.HorizonEncoderConfig()
+    excluded.exclude_root_candidate = True
+    encoder_excluded = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), excluded)
+    data_excluded = parts_to_pyg(encoder_excluded.encode(_adv(root), dag, goals))
+    indices_excluded = list(getattr(data_excluded, "target_indices", []))
+    assert 0 not in indices_excluded
+    assert len(indices_excluded) == len(dag.nodes()) - 1
+
+    included = mifrost.HorizonEncoderConfig()
+    included.exclude_root_candidate = False
+    encoder_included = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), included)
+    data_included = parts_to_pyg(encoder_included.encode(_adv(root), dag, goals))
+    indices_included = list(getattr(data_included, "target_indices", []))
+    assert 0 in indices_included
+    assert len(indices_included) == len(dag.nodes())

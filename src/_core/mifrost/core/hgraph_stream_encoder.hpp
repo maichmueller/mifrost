@@ -34,7 +34,14 @@ namespace mifrost {
  */
 class HGraphEncoderEngine {
   public:
-   using HistorySubgoal = std::pair< int, std::vector< GoalInputs::AnyGoalLiteral > >;
+   using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
+
+   struct HeteroEncodingWorkspace {
+      hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
+      hash_map< std::string, std::vector< std::string > > node_names;
+      hash_map< std::string, hash_set< std::string > > relation_to_symbols;
+      hash_map< std::string, hash_set< std::string > > symbol_to_relations;
+   };
 
    /// Runtime configuration for relation/node/edge derivation behavior.
    struct Config {
@@ -42,7 +49,7 @@ class HGraphEncoderEngine {
       std::string nullary_object_name = "![nullary_symbol]!";
       std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
       std::string history_link_relation = defaults::history_link_relation;
-      int max_goal_level = 0;
+      size_t max_goal_level = 0;
       bool support_literals = false;
       bool add_nullary_predicates = false;
       bool ignore_actions = true;
@@ -114,6 +121,37 @@ class HGraphEncoderEngine {
    const Config& get_config() const { return config_; }
 
   protected:
+   /// Initialize per-graph hetero encoding workspace and node feature defaults.
+   HeteroEncodingWorkspace init_hetero_workspace(BatchBuilder& builder) const;
+
+   /// Add configured goal literal nodes/edges for all goal tags.
+   void encode_goal_inputs(
+      const GoalInputs& goals,
+      BatchBuilder& builder,
+      HeteroEncodingWorkspace& workspace,
+      std::span< const std::string > extra_objects = {}
+   );
+
+   /// Add configured goal satisfaction nodes/edges for all goal tags.
+   void encode_goal_satisfaction_inputs(
+      const GoalInputs& goals,
+      const hash_set< std::string >& fact_keys,
+      BatchBuilder& builder,
+      HeteroEncodingWorkspace& workspace,
+      std::string_view suffix = "",
+      std::span< const std::string > extra_objects = {}
+   );
+
+   /// Optionally add LGAN nearest-neighbor edges from accumulated relation-symbol maps.
+   void maybe_add_lgan_edges(BatchBuilder& builder, const HeteroEncodingWorkspace& workspace);
+
+   /// Finalize hetero output node names/object names and empty edge schema.
+   void finalize_hetero_encoding(
+      BatchBuilder& builder,
+      const HeteroEncodingWorkspace& workspace,
+      const std::vector< std::string >* object_names_override = nullptr
+   ) const;
+
    /// Initialize relation dictionary and precomputed relation metadata from domain config.
    void initialize_from_domain();
 
@@ -171,7 +209,7 @@ class HGraphEncoderEngine {
    template < typename GoalTag >
    void encode_literals(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-      const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+      const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
@@ -195,7 +233,7 @@ class HGraphEncoderEngine {
    template < typename GoalTag >
    void encode_goal_satisfaction(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-      const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+      const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
       const hash_set< std::string >& fact_keys,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
@@ -437,7 +475,7 @@ void HGraphEncoderEngine::encode_step_impl(
 template < typename GoalTag >
 void HGraphEncoderEngine::encode_literals(
    std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
@@ -450,7 +488,7 @@ void HGraphEncoderEngine::encode_literals(
       const auto atom = literal->get_atom();
       const auto predicate = atom->get_predicate();
       const std::optional< int > goal_level = goal_levels.contains(literal)
-                                                 ? std::optional< int >(goal_levels.at(literal))
+                                                 ? std::optional< size_t >(goal_levels.at(literal))
                                                  : std::nullopt;
 
       std::string node_type;
@@ -519,7 +557,7 @@ void HGraphEncoderEngine::encode_literals(
 template < typename GoalTag >
 void HGraphEncoderEngine::encode_goal_satisfaction(
    std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
-   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+   const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
    const hash_set< std::string >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
@@ -541,9 +579,9 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          continue;
       }
 
-      std::optional< int > goal_level = goal_levels.contains(goal)
-                                           ? std::optional< int >(goal_levels.at(goal))
-                                           : std::nullopt;
+      std::optional< size_t > goal_level = goal_levels.contains(goal)
+                                              ? std::optional< size_t >(goal_levels.at(goal))
+                                              : std::nullopt;
 
       std::string node_type;
       std::string node_key;

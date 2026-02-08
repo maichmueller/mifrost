@@ -47,6 +47,12 @@ from .types import (
 )
 
 
+def _build_config(config_cls, **kwargs: object):
+    """Build a nanobind config object from non-None keyword values."""
+    clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
+    return config_cls(**clean_kwargs)
+
+
 def _draw_hgraph_graph(
     graph: nx.Graph,
     *,
@@ -465,6 +471,27 @@ class HGraphEncoder(EncoderBase[HeteroData]):
     hetero PyG format.
     """
 
+    @staticmethod
+    def _make_config(config_cls, **kwargs: object):
+        """Create a config object with optional-field filtering."""
+        return _build_config(config_cls, **kwargs)
+
+    def _init_engine_from_config(
+        self,
+        domain: DomainInput,
+        config: object,
+        *,
+        engine_cls=HGraphEncoderEngine,
+    ) -> None:
+        """Initialize encoder runtime state from a prepared config object."""
+        self._engine = engine_cls(_advanced_domain(domain), config)
+        self._config = config
+        self.symbol_type_id = config.symbol_type_id
+        self.lgan_nn_edge_pos = getattr(
+            config, "lgan_nn_edge_pos", DEFAULT_LGAN_NN_EDGE_POS
+        )
+        self.include_lgan_edges = getattr(config, "include_lgan_edges", False)
+
     def __init__(
         self,
         domain: DomainInput,
@@ -480,29 +507,37 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         nullary_object_name: str = "![nullary_symbol]!",
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         history_link_relation: str = DEFAULT_HISTORY_LINK_RELATION,
+        _config_cls=HGraphEncoderConfig,
+        _engine_cls=HGraphEncoderEngine,
+        **extra_config_kwargs: object,
     ) -> None:
         """Create an HGraph encoder for one domain."""
-        config = HGraphEncoderConfig()
-        config.symbol_type_id = symbol_type_id
-        config.ignore_actions = ignore_actions
-        config.add_nullary_predicates = add_nullary_predicates
-        config.include_lgan_edges = include_lgan_edges
-        config.include_static = include_static
-        config.include_empty_edge_types = include_empty_edge_types
-        config.max_goal_level = max_goal_level
-        config.support_literals = support_literals
-        config.nullary_object_name = nullary_object_name
-        config.lgan_nn_edge_pos = lgan_nn_edge_pos
-        config.history_link_relation = history_link_relation
-        self._engine = HGraphEncoderEngine(_advanced_domain(domain), config)
-        self.symbol_type_id = config.symbol_type_id
-        self.lgan_nn_edge_pos = config.lgan_nn_edge_pos
-        self.include_lgan_edges = config.include_lgan_edges
+        config = self._make_config(
+            _config_cls,
+            symbol_type_id=symbol_type_id,
+            ignore_actions=ignore_actions,
+            add_nullary_predicates=add_nullary_predicates,
+            include_lgan_edges=include_lgan_edges,
+            include_static=include_static,
+            include_empty_edge_types=include_empty_edge_types,
+            max_goal_level=max_goal_level,
+            support_literals=support_literals,
+            nullary_object_name=nullary_object_name,
+            lgan_nn_edge_pos=lgan_nn_edge_pos,
+            history_link_relation=history_link_relation,
+            **extra_config_kwargs,
+        )
+        self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
 
     @property
     def engine(self) -> HGraphEncoderEngine:
         """Expose the underlying C++ engine for advanced usage."""
         return self._engine
+
+    @property
+    def config(self):
+        """Expose the effective encoder config object."""
+        return self._config
 
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}

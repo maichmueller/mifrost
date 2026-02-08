@@ -81,6 +81,156 @@ void HGraphEncoderEngine::initialize_from_domain()
    all_edge_types_.erase(std::ranges::unique(all_edge_types_).begin(), all_edge_types_.end());
 }
 
+HGraphEncoderEngine::HeteroEncodingWorkspace HGraphEncoderEngine::init_hetero_workspace(
+   BatchBuilder& builder
+) const
+{
+   ensure_node_feature_dims(builder);
+   return {};
+}
+
+void HGraphEncoderEngine::encode_goal_inputs(
+   const GoalInputs& goals,
+   BatchBuilder& builder,
+   HeteroEncodingWorkspace& workspace,
+   std::span< const std::string > extra_objects
+)
+{
+   encode_literals(
+      std::span{goals.static_goals},
+      goals.static_goal_levels,
+      builder,
+      workspace.node_indices,
+      workspace.node_names,
+      workspace.relation_to_symbols,
+      workspace.symbol_to_relations,
+      extra_objects
+   );
+   encode_literals(
+      std::span{goals.fluent_goals},
+      goals.fluent_goal_levels,
+      builder,
+      workspace.node_indices,
+      workspace.node_names,
+      workspace.relation_to_symbols,
+      workspace.symbol_to_relations,
+      extra_objects
+   );
+   encode_literals(
+      std::span{goals.derived_goals},
+      goals.derived_goal_levels,
+      builder,
+      workspace.node_indices,
+      workspace.node_names,
+      workspace.relation_to_symbols,
+      workspace.symbol_to_relations,
+      extra_objects
+   );
+}
+
+void HGraphEncoderEngine::encode_goal_satisfaction_inputs(
+   const GoalInputs& goals,
+   const hash_set< std::string >& fact_keys,
+   BatchBuilder& builder,
+   HeteroEncodingWorkspace& workspace,
+   std::string_view suffix,
+   std::span< const std::string > extra_objects
+)
+{
+   if(not goals.static_goals.empty()) {
+      encode_goal_satisfaction(
+         std::span{goals.static_goals},
+         goals.static_goal_levels,
+         fact_keys,
+         builder,
+         workspace.node_indices,
+         workspace.node_names,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations,
+         suffix,
+         extra_objects
+      );
+   }
+   if(not goals.fluent_goals.empty()) {
+      encode_goal_satisfaction(
+         std::span{goals.fluent_goals},
+         goals.fluent_goal_levels,
+         fact_keys,
+         builder,
+         workspace.node_indices,
+         workspace.node_names,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations,
+         suffix,
+         extra_objects
+      );
+   }
+   if(not goals.derived_goals.empty()) {
+      encode_goal_satisfaction(
+         std::span{goals.derived_goals},
+         goals.derived_goal_levels,
+         fact_keys,
+         builder,
+         workspace.node_indices,
+         workspace.node_names,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations,
+         suffix,
+         extra_objects
+      );
+   }
+}
+
+void HGraphEncoderEngine::maybe_add_lgan_edges(
+   BatchBuilder& builder,
+   const HeteroEncodingWorkspace& workspace
+)
+{
+   if(config_.include_lgan_edges) {
+      add_lgan_nn_edges(
+         builder,
+         workspace.node_indices,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations
+      );
+   }
+}
+
+void HGraphEncoderEngine::finalize_hetero_encoding(
+   BatchBuilder& builder,
+   const HeteroEncodingWorkspace& workspace,
+   const std::vector< std::string >* object_names_override
+) const
+{
+   for(const auto& [node_type, _] : relation_dict_.arity) {
+      if(not workspace.node_names.contains(node_type)) {
+         builder.set_node_names(node_type, {});
+      }
+   }
+
+   if(not workspace.node_names.contains(config_.symbol_type_id)) {
+      builder.set_node_names(config_.symbol_type_id, {});
+      builder.set_object_names({});
+   } else {
+      const auto& symbol_names = workspace.node_names.at(config_.symbol_type_id);
+      builder.set_node_names(config_.symbol_type_id, symbol_names);
+      if(object_names_override != nullptr) {
+         builder.set_object_names(*object_names_override);
+      } else {
+         builder.set_object_names(symbol_names);
+      }
+   }
+
+   for(const auto& [node_type, names] : workspace.node_names) {
+      if(node_type == config_.symbol_type_id) {
+         continue;
+      }
+      builder.set_node_names(node_type, names);
+   }
+
+   ensure_empty_edge_types(builder);
+}
+
 void HGraphEncoderEngine::encode_state_impl(
    const mimir::search::State& state,
    BatchBuilder& builder
@@ -122,120 +272,42 @@ void HGraphEncoderEngine::encode_impl_core(
    BatchBuilder& builder
 )
 {
-   ensure_node_feature_dims(builder);
+   auto workspace = init_hetero_workspace(builder);
 
-   hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
-   hash_map< std::string, std::vector< std::string > > node_names;
-   hash_map< std::string, hash_set< std::string > > relation_to_symbols;
-   hash_map< std::string, hash_set< std::string > > symbol_to_relations;
-
-   encode_objects(state, builder, node_indices, node_names);
+   encode_objects(state, builder, workspace.node_indices, workspace.node_names);
    const auto fact_keys = encode_facts(
-      state, builder, node_indices, node_names, relation_to_symbols, symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.static_goals},
-      goals.static_goal_levels,
+      state,
       builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
+      workspace.node_indices,
+      workspace.node_names,
+      workspace.relation_to_symbols,
+      workspace.symbol_to_relations
    );
-   encode_literals(
-      std::span{goals.fluent_goals},
-      goals.fluent_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.derived_goals},
-      goals.derived_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
+   encode_goal_inputs(goals, builder, workspace);
    if(! history_subgoals.empty()) {
       encode_history(
          history_subgoals,
          history_max_steps,
          builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
+         workspace.node_indices,
+         workspace.node_names,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations
       );
    }
    if(not config_.ignore_actions) {
       encode_actions(
-         actions, builder, node_indices, node_names, relation_to_symbols, symbol_to_relations
-      );
-   }
-   if(not goals.static_goals.empty()) {
-      encode_goal_satisfaction(
-         std::span{goals.static_goals},
-         goals.static_goal_levels,
-         fact_keys,
+         actions,
          builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
+         workspace.node_indices,
+         workspace.node_names,
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations
       );
    }
-   if(not goals.fluent_goals.empty()) {
-      encode_goal_satisfaction(
-         std::span{goals.fluent_goals},
-         goals.fluent_goal_levels,
-         fact_keys,
-         builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
-      );
-   }
-   if(not goals.derived_goals.empty()) {
-      encode_goal_satisfaction(
-         std::span{goals.derived_goals},
-         goals.derived_goal_levels,
-         fact_keys,
-         builder,
-         node_indices,
-         node_names,
-         relation_to_symbols,
-         symbol_to_relations
-      );
-   }
-   if(config_.include_lgan_edges) {
-      add_lgan_nn_edges(builder, node_indices, relation_to_symbols, symbol_to_relations);
-   }
-
-   for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(not node_names.contains(node_type)) {
-         builder.set_node_names(node_type, {});
-      }
-   }
-   if(not node_names.contains(config_.symbol_type_id)) {
-      builder.set_node_names(config_.symbol_type_id, {});
-   } else {
-      builder.set_node_names(config_.symbol_type_id, node_names[config_.symbol_type_id]);
-      builder.set_object_names(node_names[config_.symbol_type_id]);
-   }
-
-   for(const auto& [node_type, names] : node_names) {
-      if(node_type == config_.symbol_type_id) {
-         continue;
-      }
-      builder.set_node_names(node_type, names);
-   }
-
-   ensure_empty_edge_types(builder);
+   encode_goal_satisfaction_inputs(goals, fact_keys, builder, workspace);
+   maybe_add_lgan_edges(builder, workspace);
+   finalize_hetero_encoding(builder, workspace);
 }
 
 void HGraphEncoderEngine::encode_objects(
@@ -436,7 +508,7 @@ void HGraphEncoderEngine::encode_history(
 
    struct HistoryEntry {
       int dt = 0;
-      std::vector< GoalInputs::AnyGoalLiteral > literals;
+      std::vector< LiteralVariant > literals;
    };
 
    std::vector< HistoryEntry > entries;
@@ -472,16 +544,7 @@ void HGraphEncoderEngine::encode_history(
 
       for(const auto& literal_variant : entry.literals) {
          std::visit(
-            [&](const auto& literal) {
-               using LiteralT = std::decay_t< decltype(literal) >;
-               using Tag = std::conditional_t<
-                  std::is_same_v< LiteralT, GoalInputs::FluentLiteral >,
-                  mimir::formalism::FluentTag,
-                  std::conditional_t<
-                     std::is_same_v< LiteralT, GoalInputs::DerivedLiteral >,
-                     mimir::formalism::DerivedTag,
-                     mimir::formalism::StaticTag > >;
-
+            [&]< typename Tag >(const mimir::formalism::GroundLiteral< Tag >& literal) {
                const auto atom = literal->get_atom();
                const auto predicate = atom->get_predicate();
                if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {

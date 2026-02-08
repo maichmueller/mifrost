@@ -9,7 +9,9 @@ from torch_geometric.data import HeteroData
 
 from .._core import (
     BatchBuilder,
+    DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_SYMBOL_TYPE_ID,
     GoalInputs,
     HorizonEncoderConfig,
     HorizonHGraphEncoderEngine,
@@ -143,39 +145,48 @@ class HorizonEncoder(HGraphEncoder):
         enable_cousin_relation: bool | None = None,
         exclude_root_candidate: bool | None = None,
         max_goal_level: int | None = None,
+        symbol_type_id: str | None = DEFAULT_SYMBOL_TYPE_ID,
+        ignore_actions: bool | None = None,
+        add_nullary_predicates: bool | None = None,
+        include_lgan_edges: bool | None = None,
+        include_static: bool | None = None,
+        include_empty_edge_types: bool | None = None,
+        support_literals: bool | None = None,
+        nullary_object_name: str | None = None,
+        lgan_nn_edge_pos: str | None = DEFAULT_LGAN_NN_EDGE_POS,
+        history_link_relation: str | None = DEFAULT_HISTORY_LINK_RELATION,
     ) -> None:
         """Create a horizon encoder for one domain."""
-        config = HorizonEncoderConfig()
-        if transition_mode is not None:
-            config.transition_mode = transition_mode
-        if target_symbol_prefix is not None:
-            config.target_symbol_prefix = target_symbol_prefix
-        if parent_relation is not None:
-            config.parent_relation = parent_relation
-        if sibling_relation is not None:
-            config.sibling_relation = sibling_relation
-        if cousin_relation is not None:
-            config.cousin_relation = cousin_relation
-        if enable_parent_relation is not None:
-            config.enable_parent_relation = enable_parent_relation
-        if enable_sibling_relation is not None:
-            config.enable_sibling_relation = enable_sibling_relation
-        if enable_cousin_relation is not None:
-            config.enable_cousin_relation = enable_cousin_relation
-        if exclude_root_candidate is not None:
-            config.exclude_root_candidate = exclude_root_candidate
-        if max_goal_level is not None:
-            config.max_goal_level = max_goal_level
-        self._engine = HorizonHGraphEncoderEngine(_advanced_domain(domain), config)
-        self.symbol_type_id = config.symbol_type_id
+        super().__init__(
+            domain,
+            symbol_type_id=symbol_type_id,
+            ignore_actions=ignore_actions,
+            add_nullary_predicates=add_nullary_predicates,
+            include_lgan_edges=include_lgan_edges,
+            include_static=include_static,
+            include_empty_edge_types=include_empty_edge_types,
+            max_goal_level=max_goal_level,
+            support_literals=support_literals,
+            nullary_object_name=nullary_object_name,
+            lgan_nn_edge_pos=lgan_nn_edge_pos,
+            history_link_relation=history_link_relation,
+            _config_cls=HorizonEncoderConfig,
+            _engine_cls=HorizonHGraphEncoderEngine,
+            transition_mode=transition_mode,
+            target_symbol_prefix=target_symbol_prefix,
+            parent_relation=parent_relation,
+            sibling_relation=sibling_relation,
+            cousin_relation=cousin_relation,
+            enable_parent_relation=enable_parent_relation,
+            enable_sibling_relation=enable_sibling_relation,
+            enable_cousin_relation=enable_cousin_relation,
+            exclude_root_candidate=exclude_root_candidate,
+        )
+        config = self.config
         self.target_symbol_prefix = config.target_symbol_prefix
         self.parent_relation = config.parent_relation
         self.sibling_relation = config.sibling_relation
         self.cousin_relation = config.cousin_relation
-        self.lgan_nn_edge_pos = getattr(
-            config, "lgan_nn_edge_pos", DEFAULT_LGAN_NN_EDGE_POS
-        )
-        self.include_lgan_edges = getattr(config, "include_lgan_edges", False)
 
     @property
     def engine(self) -> HorizonHGraphEncoderEngine:

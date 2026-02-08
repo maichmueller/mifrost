@@ -38,6 +38,9 @@ class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
+   /// Return effective successor config (includes inherited hgraph fields).
+   const Config& get_config() const { return successor_config_; }
+
   private:
    /// Effective successor-specific config.
    Config successor_config_;

@@ -45,3 +45,31 @@ def test_color_config_accepts_kwargs() -> None:
 def test_unknown_config_kwarg_raises() -> None:
     with pytest.raises(ValueError, match="Unknown HGraphEncoderConfig kwarg"):
         mifrost.HGraphEncoderConfig(does_not_exist=True)
+
+
+def test_horizon_encoder_exposes_unified_config(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.HorizonEncoder(
+        domain,
+        transition_mode=mifrost.HorizonEncoderMode.Delta,
+        exclude_root_candidate=False,
+        include_static=False,
+        symbol_type_id="_sym_",
+    )
+    assert encoder.config.transition_mode == mifrost.HorizonEncoderMode.Delta
+    assert encoder.config.exclude_root_candidate is False
+    assert encoder.config.include_static is False
+    assert encoder.config.symbol_type_id == "_sym_"
+
+
+def test_transition_encoder_exposes_unified_config(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.TransitionHGraphEncoder(
+        domain,
+        successor_suffix="[next]",
+        include_lgan_edges=True,
+        max_goal_level=1,
+    )
+    assert encoder.config.successor_suffix == "[next]"
+    assert encoder.config.include_lgan_edges is True
+    assert encoder.config.max_goal_level == 1

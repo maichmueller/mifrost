@@ -6,10 +6,25 @@
 
 namespace mifrost {
 
+namespace {
+
+SuccessorHGraphEncoderEngine::Config normalize_successor_config(
+   SuccessorHGraphEncoderEngine::Config config
+)
+{
+   if(config.successor_mode == SuccessorHGraphEncoderEngine::Mode::Delta
+      and not config.support_literals) {
+      config.support_literals = true;
+   }
+   return config;
+}
+
+}  // namespace
+
 SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain
 )
-    : HGraphEncoderEngine(domain)
+    : HGraphEncoderEngine(domain), successor_config_()
 {
 }
 
@@ -17,21 +32,13 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config
 )
-    : HGraphEncoderEngine(
-         domain,
-         [&]() {
-            if(config.successor_mode == Mode::Delta and not config.support_literals) {
-               config.support_literals = true;
-            }
-            return config;
-         }()
-      ),
-      successor_config_(std::move(config))
+    : HGraphEncoderEngine(domain, normalize_successor_config(config)),
+      successor_config_(normalize_successor_config(std::move(config)))
 {
 }
 
 SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(mimir::formalism::Domain domain)
-    : HGraphEncoderEngine(domain)
+    : HGraphEncoderEngine(domain), successor_config_()
 {
 }
 
@@ -39,16 +46,8 @@ SuccessorHGraphEncoderEngine::SuccessorHGraphEncoderEngine(
    mimir::formalism::Domain domain,
    Config config
 )
-    : HGraphEncoderEngine(
-         domain,
-         [&]() {
-            if(config.successor_mode == Mode::Delta and not config.support_literals) {
-               config.support_literals = true;
-            }
-            return config;
-         }()
-      ),
-      successor_config_(std::move(config))
+    : HGraphEncoderEngine(domain, normalize_successor_config(config)),
+      successor_config_(normalize_successor_config(std::move(config)))
 {
 }
 
@@ -69,19 +68,19 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    BatchBuilder& builder
 )
 {
-   ensure_node_feature_dims(builder);
-
-   hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
-   hash_map< std::string, std::vector< std::string > > node_names;
-   hash_map< std::string, hash_set< std::string > > relation_to_symbols;
-   hash_map< std::string, hash_set< std::string > > symbol_to_relations;
+   auto workspace = init_hetero_workspace(builder);
 
    // 1. Encode objects
-   encode_objects(current, builder, node_indices, node_names);
+   encode_objects(current, builder, workspace.node_indices, workspace.node_names);
 
    // 2. Encode current facts
    const auto cur_fact_keys = encode_facts(
-      current, builder, node_indices, node_names, relation_to_symbols, symbol_to_relations
+      current,
+      builder,
+      workspace.node_indices,
+      workspace.node_names,
+      workspace.relation_to_symbols,
+      workspace.symbol_to_relations
    );
 
    // 3. Encode successor facts
@@ -116,7 +115,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
                                         )
                                       : atom_str;
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names
+         node_type, node_key, builder, workspace.node_indices, workspace.node_names
       );
 
       std::vector< std::string > object_keys;
@@ -131,7 +130,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id, obj_key, builder, workspace.node_indices, workspace.node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -139,10 +138,10 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = relation_to_symbols[rel_key];
+      auto& symbols = workspace.relation_to_symbols[rel_key];
       for(const auto& obj_key : object_keys) {
          symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
+         workspace.symbol_to_relations[obj_key].insert(rel_key);
       }
 
       if(not polarity.has_value() || *polarity) {
@@ -206,142 +205,22 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    }
 
    // 4. Encode goals for current (always)
-   encode_literals(
-      std::span{goals.static_goals},
-      goals.static_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.fluent_goals},
-      goals.fluent_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
-   encode_literals(
-      std::span{goals.derived_goals},
-      goals.derived_goal_levels,
-      builder,
-      node_indices,
-      node_names,
-      relation_to_symbols,
-      symbol_to_relations
-   );
+   encode_goal_inputs(goals, builder, workspace);
 
    if(successor_config_.successor_mode == Mode::Full) {
       // 5. Encode goal satisfaction for current
-      if(not goals.static_goals.empty()) {
-         encode_goal_satisfaction(
-            std::span{goals.static_goals},
-            goals.static_goal_levels,
-            cur_fact_keys,
-            builder,
-            node_indices,
-            node_names,
-            relation_to_symbols,
-            symbol_to_relations
-         );
-      }
-      if(not goals.fluent_goals.empty()) {
-         encode_goal_satisfaction(
-            std::span{goals.fluent_goals},
-            goals.fluent_goal_levels,
-            cur_fact_keys,
-            builder,
-            node_indices,
-            node_names,
-            relation_to_symbols,
-            symbol_to_relations
-         );
-      }
-      if(not goals.derived_goals.empty()) {
-         encode_goal_satisfaction(
-            std::span{goals.derived_goals},
-            goals.derived_goal_levels,
-            cur_fact_keys,
-            builder,
-            node_indices,
-            node_names,
-            relation_to_symbols,
-            symbol_to_relations
-         );
-      }
+      encode_goal_satisfaction_inputs(goals, cur_fact_keys, builder, workspace);
 
       if(successor_config_.include_successor_goal_satisfaction) {
-         if(not goals.static_goals.empty()) {
-            encode_goal_satisfaction(
-               std::span{goals.static_goals},
-               goals.static_goal_levels,
-               suc_fact_keys,
-               builder,
-               node_indices,
-               node_names,
-               relation_to_symbols,
-               symbol_to_relations,
-               successor_config_.successor_suffix
-            );
-         }
-         if(not goals.fluent_goals.empty()) {
-            encode_goal_satisfaction(
-               std::span{goals.fluent_goals},
-               goals.fluent_goal_levels,
-               suc_fact_keys,
-               builder,
-               node_indices,
-               node_names,
-               relation_to_symbols,
-               symbol_to_relations,
-               successor_config_.successor_suffix
-            );
-         }
-         if(not goals.derived_goals.empty()) {
-            encode_goal_satisfaction(
-               std::span{goals.derived_goals},
-               goals.derived_goal_levels,
-               suc_fact_keys,
-               builder,
-               node_indices,
-               node_names,
-               relation_to_symbols,
-               symbol_to_relations,
-               successor_config_.successor_suffix
-            );
-         }
+         encode_goal_satisfaction_inputs(
+            goals, suc_fact_keys, builder, workspace, successor_config_.successor_suffix
+         );
       }
    }
 
    // 7. LGAN edges
-   if(config_.include_lgan_edges) {
-      add_lgan_nn_edges(builder, node_indices, relation_to_symbols, symbol_to_relations);
-   }
-
-   // 8. Finalize node names
-   for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(not node_names.contains(node_type)) {
-         builder.set_node_names(node_type, {});
-      }
-   }
-   if(not node_names.contains(config_.symbol_type_id)) {
-      builder.set_node_names(config_.symbol_type_id, {});
-   } else {
-      builder.set_node_names(config_.symbol_type_id, node_names[config_.symbol_type_id]);
-      builder.set_object_names(node_names[config_.symbol_type_id]);
-   }
-
-   for(const auto& [node_type, names] : node_names) {
-      if(node_type == config_.symbol_type_id) {
-         continue;
-      }
-      builder.set_node_names(node_type, names);
-   }
-
-   ensure_empty_edge_types(builder);
+   maybe_add_lgan_edges(builder, workspace);
+   finalize_hetero_encoding(builder, workspace);
 }
 
 }  // namespace mifrost

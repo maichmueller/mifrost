@@ -55,24 +55,24 @@ class _TransitionEncoderBase(HGraphEncoder):
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
     ) -> None:
         """Create a transition encoder C++ engine with the given mode/config."""
-        config = SuccessorEncoderConfig()
-        config.successor_mode = successor_mode
-        config.successor_suffix = successor_suffix
-        config.include_successor_goal_satisfaction = include_successor_goal_satisfaction
-        config.symbol_type_id = symbol_type_id
-        config.ignore_actions = ignore_actions
-        config.add_nullary_predicates = add_nullary_predicates
-        config.include_lgan_edges = include_lgan_edges
-        config.include_static = include_static
-        config.include_empty_edge_types = include_empty_edge_types
-        config.max_goal_level = max_goal_level
-        config.support_literals = support_literals
-        config.nullary_object_name = nullary_object_name
-        config.lgan_nn_edge_pos = lgan_nn_edge_pos
-        self._engine = SuccessorHGraphEncoderEngine(_advanced_domain(domain), config)
-        self.symbol_type_id = symbol_type_id
-        self.lgan_nn_edge_pos = lgan_nn_edge_pos
-        self.include_lgan_edges = include_lgan_edges
+        super().__init__(
+            domain,
+            symbol_type_id=symbol_type_id,
+            ignore_actions=ignore_actions,
+            add_nullary_predicates=add_nullary_predicates,
+            include_lgan_edges=include_lgan_edges,
+            include_static=include_static,
+            include_empty_edge_types=include_empty_edge_types,
+            max_goal_level=max_goal_level,
+            support_literals=support_literals,
+            nullary_object_name=nullary_object_name,
+            lgan_nn_edge_pos=lgan_nn_edge_pos,
+            _config_cls=SuccessorEncoderConfig,
+            _engine_cls=SuccessorHGraphEncoderEngine,
+            successor_mode=successor_mode,
+            successor_suffix=successor_suffix,
+            include_successor_goal_satisfaction=include_successor_goal_satisfaction,
+        )
 
     @property
     def engine(self) -> SuccessorHGraphEncoderEngine:

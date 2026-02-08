@@ -198,8 +198,8 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
 
     # Check fluent + derived goals (static goals are not encoded in successor facts).
     level_map = {
-        **dict(getattr(goals, "fluent_goal_levels", {})),
-        **dict(getattr(goals, "derived_goal_levels", {})),
+        **dict(goals.fluent_goal_levels),
+        **dict(goals.derived_goal_levels),
     }
     for goal in list(goals.fluent_goals) + list(goals.derived_goals):
         expected = _expected(goal, level_map)

@@ -47,6 +47,9 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
+   /// Return effective horizon config (includes inherited hgraph fields).
+   const Config& get_config() const { return horizon_config_; }
+
   private:
    /// Effective horizon-specific config.
    Config horizon_config_;

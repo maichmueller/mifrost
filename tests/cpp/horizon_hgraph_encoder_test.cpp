@@ -50,6 +50,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       EXPECT_EQ(builder.graph_kind, "hetero");
 
       EXPECT_TRUE(builder.graph_attrs.contains("target_positions"));
+      EXPECT_TRUE(builder.graph_attrs.contains("target_indices"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_depths"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_names"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_symbol_prefix"));
@@ -58,6 +59,9 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       const auto& positions = std::get< std::vector< int64_t > >(
          builder.graph_attrs.at("target_positions")
       );
+      const auto& indices = std::get< std::vector< int64_t > >(
+         builder.graph_attrs.at("target_indices")
+      );
       const auto& depths = std::get< std::vector< int64_t > >(
          builder.graph_attrs.at("target_depths")
       );
@@ -65,9 +69,13 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
          builder.graph_attrs.at("target_names")
       );
 
+      ASSERT_EQ(positions.size(), indices.size());
       ASSERT_EQ(positions.size(), depths.size());
       ASSERT_EQ(positions.size(), names.size());
-      ASSERT_EQ(positions.size(), dag.nodes().size());
+      const size_t expected_candidates = config.exclude_root_candidate
+                                            ? (dag.nodes().empty() ? 0u : dag.nodes().size() - 1u)
+                                            : dag.nodes().size();
+      ASSERT_EQ(positions.size(), expected_candidates);
       ASSERT_FALSE(positions.empty());
 
       const auto prefix = std::get< std::string >(builder.graph_attrs.at("target_symbol_prefix"));
@@ -85,13 +93,19 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
          symbol_indices.emplace(symbol_names[i], static_cast< int64_t >(i));
       }
 
-      for(size_t i = 0; i < dag.nodes().size(); ++i) {
-         const auto& node = dag.nodes()[i];
+      size_t candidate_pos = 0;
+      for(const auto& node : dag.nodes()) {
+         if(config.exclude_root_candidate and node.index == dag.root_index()) {
+            continue;
+         }
          const std::string key = config.target_symbol_prefix + std::to_string(node.index);
          const auto sym_it = symbol_indices.find(key);
          ASSERT_NE(sym_it, symbol_indices.end()) << "Missing target symbol node: " << key;
-         EXPECT_EQ(positions[i], sym_it->second);
-         EXPECT_EQ(depths[i], node.depth);
+         ASSERT_LT(candidate_pos, positions.size());
+         EXPECT_EQ(indices[candidate_pos], node.index);
+         EXPECT_EQ(positions[candidate_pos], sym_it->second);
+         EXPECT_EQ(depths[candidate_pos], node.depth);
+         ++candidate_pos;
       }
 
       if(not builder.object_names.empty()) {

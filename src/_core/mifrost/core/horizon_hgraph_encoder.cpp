@@ -10,8 +10,23 @@
 
 namespace mifrost {
 
+namespace {
+
+HorizonHGraphEncoderEngine::Config normalize_horizon_config(
+   HorizonHGraphEncoderEngine::Config config
+)
+{
+   if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::Delta
+      and not config.support_literals) {
+      config.support_literals = true;
+   }
+   return config;
+}
+
+}  // namespace
+
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
-    : HGraphEncoderEngine(domain)
+    : HGraphEncoderEngine(domain), horizon_config_()
 {
    configure_relations();
 }
@@ -20,22 +35,14 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config
 )
-    : HGraphEncoderEngine(
-         domain,
-         [&]() {
-            if(config.transition_mode == Mode::Delta and not config.support_literals) {
-               config.support_literals = true;
-            }
-            return config;
-         }()
-      ),
-      horizon_config_(std::move(config))
+    : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
+      horizon_config_(normalize_horizon_config(std::move(config)))
 {
    configure_relations();
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(mimir::formalism::Domain domain)
-    : HGraphEncoderEngine(domain)
+    : HGraphEncoderEngine(domain), horizon_config_()
 {
    configure_relations();
 }
@@ -44,16 +51,8 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    mimir::formalism::Domain domain,
    Config config
 )
-    : HGraphEncoderEngine(
-         domain,
-         [&]() {
-            if(config.transition_mode == Mode::Delta and not config.support_literals) {
-               config.support_literals = true;
-            }
-            return config;
-         }()
-      ),
-      horizon_config_(std::move(config))
+    : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
+      horizon_config_(normalize_horizon_config(std::move(config)))
 {
    configure_relations();
 }
@@ -75,7 +74,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
    BatchBuilder& builder
 )
 {
-   ensure_node_feature_dims(builder);
+   auto workspace = init_hetero_workspace(builder);
+   auto& node_indices = workspace.node_indices;
+   auto& node_names = workspace.node_names;
+   auto& relation_to_symbols = workspace.relation_to_symbols;
+   auto& symbol_to_relations = workspace.symbol_to_relations;
 
    if(horizon_config_.transition_mode == Mode::Delta and not config_.support_literals) {
       throw std::invalid_argument("Delta horizon encoding requires support_literals=true.");
@@ -83,11 +86,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
    if(horizon_config_.transition_mode == Mode::Action and config_.ignore_actions) {
       throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
    }
-
-   hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
-   hash_map< std::string, std::vector< std::string > > node_names;
-   hash_map< std::string, hash_set< std::string > > relation_to_symbols;
-   hash_map< std::string, hash_set< std::string > > symbol_to_relations;
 
    auto make_prefix = [](const std::string& target_key) { return target_key + "|"; };
 
@@ -205,7 +203,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    auto encode_literals_with_prefix =
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
-         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
          const std::string& prefix,
          std::span< const std::string > extra_objects,
          std::optional< GoalSatisfaction > satisfaction_override = std::nullopt
@@ -213,11 +211,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
          for(const auto& literal : literals) {
             const auto atom = literal->get_atom();
             const auto predicate = atom->get_predicate();
-            const std::optional< int > goal_level = goal_levels.contains(literal)
-                                                       ? std::optional< int >(
-                                                            goal_levels.at(literal)
-                                                         )
-                                                       : std::nullopt;
+            const std::optional< size_t > goal_level = goal_levels.contains(literal)
+                                                          ? std::optional< size_t >(
+                                                               goal_levels.at(literal)
+                                                            )
+                                                          : std::nullopt;
 
             const GoalSatisfaction satisfaction = satisfaction_override.has_value()
                                                      ? *satisfaction_override
@@ -371,7 +369,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    auto encode_goal_satisfaction_with_prefix =
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
-         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
          const hash_set< std::string >& fact_keys,
          const std::string& prefix,
          std::span< const std::string > extra_objects
@@ -690,7 +688,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             auto encode_delta_satisfaction =
                [&]< typename GoalTag >(
                   std::span< const mimir::formalism::GroundLiteral< GoalTag > > goal_list,
-                  const hash_map< mimir::formalism::GroundLiteral< GoalTag >, int >& goal_levels,
+                  const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
                   const hash_set< int >& added_set,
                   const hash_set< int >& removed_set
                ) {
@@ -860,33 +858,34 @@ void HorizonHGraphEncoderEngine::encode_impl(
    }
 
    // 6. LGAN edges
-   if(config_.include_lgan_edges) {
-      add_lgan_nn_edges(builder, node_indices, relation_to_symbols, symbol_to_relations);
-   }
-
-   // 7. Finalize node names
-   for(const auto& [node_type, _] : relation_dict_.arity) {
-      if(not node_names.contains(node_type)) {
-         builder.set_node_names(node_type, {});
-      }
-   }
+   maybe_add_lgan_edges(builder, workspace);
 
    if(not nodes.empty()) {
       std::vector< int64_t > target_positions;
+      std::vector< int64_t > target_indices;
       std::vector< int64_t > target_depths;
       std::vector< std::string > target_names;
-      target_positions.reserve(nodes.size());
-      target_depths.reserve(nodes.size());
-      target_names.reserve(nodes.size());
+      const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
+                                        ? (nodes.size() - 1)
+                                        : nodes.size();
+      target_positions.reserve(candidate_count);
+      target_indices.reserve(candidate_count);
+      target_depths.reserve(candidate_count);
+      target_names.reserve(candidate_count);
 
       const auto& symbol_indices = node_indices[config_.symbol_type_id];
+      const int root_index = dag.root_index();
       for(const auto& node : nodes) {
+         if(horizon_config_.exclude_root_candidate and node.index == root_index) {
+            continue;
+         }
          const auto key = target_keys[node.index];
          const auto it = symbol_indices.find(key);
          if(it == symbol_indices.end()) {
             continue;
          }
          target_positions.push_back(it->second);
+         target_indices.push_back(node.index);
          target_depths.push_back(node.depth);
 
          std::ostringstream stream;
@@ -895,20 +894,19 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
 
       builder.set_graph_attr("target_positions", std::move(target_positions));
+      builder.set_graph_attr("target_indices", std::move(target_indices));
       builder.set_graph_attr("target_depths", std::move(target_depths));
       builder.set_graph_attr("target_names", std::move(target_names));
       builder.set_graph_attr("target_symbol_prefix", horizon_config_.target_symbol_prefix);
       builder.set_graph_attr("parent_relation", horizon_config_.parent_relation);
    }
-   if(not node_names.contains(config_.symbol_type_id)) {
-      builder.set_node_names(config_.symbol_type_id, {});
-      builder.set_object_names({});
-   } else {
-      const auto& symbol_names = node_names[config_.symbol_type_id];
-      builder.set_node_names(config_.symbol_type_id, symbol_names);
 
+   std::vector< std::string > object_names_override;
+   const std::vector< std::string >* object_names_override_ptr = nullptr;
+   if(node_names.contains(config_.symbol_type_id)) {
+      const auto& symbol_names = node_names[config_.symbol_type_id];
       if(target_keys.empty()) {
-         builder.set_object_names(symbol_names);
+         object_names_override = symbol_names;
       } else {
          hash_set< std::string > target_set;
          target_set.reserve(target_keys.size());
@@ -917,25 +915,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
                target_set.insert(key);
             }
          }
-         std::vector< std::string > object_names;
-         object_names.reserve(symbol_names.size());
+         object_names_override.reserve(symbol_names.size());
          for(const auto& name : symbol_names) {
             if(not target_set.contains(name)) {
-               object_names.push_back(name);
+               object_names_override.push_back(name);
             }
          }
-         builder.set_object_names(std::move(object_names));
       }
+      object_names_override_ptr = &object_names_override;
    }
 
-   for(const auto& [node_type, names] : node_names) {
-      if(node_type == config_.symbol_type_id) {
-         continue;
-      }
-      builder.set_node_names(node_type, names);
-   }
-
-   ensure_empty_edge_types(builder);
+   finalize_hetero_encoding(builder, workspace, object_names_override_ptr);
 }
 
 void HorizonHGraphEncoderEngine::configure_relations()
