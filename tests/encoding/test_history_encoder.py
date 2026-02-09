@@ -39,7 +39,7 @@ def test_history_nodes_and_edges(domain_name, problem_name):
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)
 
-    data = encoder.encode(
+    data = encoder.encode_pyg(
         state,
         goals=goals,
         history_subgoals=history_subgoals,
@@ -111,7 +111,7 @@ def test_history_max_steps_filters(domain_name, problem_name):
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)
 
-    data = encoder.encode(
+    data = encoder.encode_pyg(
         state,
         goals=goals,
         history_subgoals=history_subgoals,
@@ -168,7 +168,7 @@ def test_history_custom_relation_override():
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)
 
-    data = encoder.encode(
+    data = encoder.encode_pyg(
         state,
         goals=goals,
         history_subgoals=history_subgoals,

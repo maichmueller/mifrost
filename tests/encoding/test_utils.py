@@ -86,7 +86,22 @@ def format_literal_with_suffix(atom, polarity: bool, suffix: str = "") -> str:
     return f"{prefix}{atom_str}"
 
 
+def as_pyg(data: Any, *, as_batch: bool | None = None) -> HeteroData:
+    if isinstance(data, HeteroData):
+        return data
+    if hasattr(data, "as_pyg"):
+        kwargs = {}
+        if as_batch is not None:
+            kwargs["as_batch"] = as_batch
+        return data.as_pyg(**kwargs)
+    raise TypeError(
+        f"Expected HeteroData or BatchEncoding-like object, got {type(data)}"
+    )
+
+
 def hetero_data_equal(data: HeteroData, expected: HeteroData):
+    data = as_pyg(data)
+    expected = as_pyg(expected)
     assert isinstance(data, HeteroData) and isinstance(expected, HeteroData)
     assert set(data.node_types) == set(expected.node_types)
     assert set(data.edge_types) == set(expected.edge_types)
@@ -106,6 +121,10 @@ def hetero_data_equal(data: HeteroData, expected: HeteroData):
 
 
 def keywise_equal(sample_normal, sample_streaming):
+    if hasattr(sample_normal, "to_parts"):
+        sample_normal = sample_normal.to_parts()
+    if hasattr(sample_streaming, "to_parts"):
+        sample_streaming = sample_streaming.to_parts()
     assert sorted(sample_normal.keys()) == sorted(sample_streaming.keys())
     for key in sample_normal.keys():
         if isinstance(sample_normal[key], torch.Tensor) and isinstance(
@@ -150,6 +169,7 @@ def to_named_networkx(
     drop_lgan: bool = False,
     lgan_rel: str = DEFAULT_LGAN_NN_EDGE_POS,
 ) -> nx.MultiDiGraph:
+    data = as_pyg(data)
     graph = to_networkx(data, node_attrs=["node_names"], edge_attrs=[], to_multi=True)
     name_counts: Dict[str, int] = {}
     mapping: Dict[Any, str] = {}

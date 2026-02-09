@@ -109,6 +109,7 @@ class HGraphEncoderEngine {
       bool include_lgan_edges = false;
       bool include_static = true;
       bool include_empty_edge_types = true;
+      bool export_node_names = true;
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 
@@ -220,7 +221,7 @@ class HGraphEncoderEngine {
     *
     * Called once per encode step. Ensures required node feature dims exist in `builder`.
     */
-   HeteroEncodingWorkspace init_hetero_workspace(BatchBuilder& builder) const;
+   HeteroEncodingWorkspace& init_hetero_workspace(BatchBuilder& builder);
 
    /**
     * @brief Encode goal literals for all goal tags.
@@ -418,6 +419,17 @@ class HGraphEncoderEngine {
       hash_map< std::string, hash_set< std::string > >& symbol_to_relations
    );
 
+   /**
+    * @brief Track relation-symbol incidence only when LGAN edges are enabled.
+    */
+   void track_relation_symbols_if_enabled(
+      const std::string& rel_key,
+      std::span< const std::string > object_keys,
+      std::span< const std::string > extra_objects,
+      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
+      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+   ) const;
+
    /// Ensure configured edge types exist in the schema even when no edges were emitted.
    void ensure_empty_edge_types(BatchBuilder& builder) const;
    /// Ensure node feature dimensions are set for all configured node types.
@@ -440,6 +452,14 @@ class HGraphEncoderEngine {
    static std::string relation_key(const std::string& node_type, const std::string& node_key);
 
    /**
+    * @brief Return the internal key used for one symbol/object node.
+    *
+    * Uses stable object names when metadata export is enabled, and compact
+    * object indices when metadata export is disabled.
+    */
+   std::string symbol_node_key(const mimir::formalism::Object& obj) const;
+
+   /**
     * @brief Get or create a node index for (type,key).
     *
     * Ensures `node_indices[type][key]` and `node_names[type]` stay aligned with builder node
@@ -452,7 +472,8 @@ class HGraphEncoderEngine {
       const std::string& node_key,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-      hash_map< std::string, std::vector< std::string > >& node_names
+      hash_map< std::string, std::vector< std::string > >& node_names,
+      bool store_node_name
    );
 
    /// Optional owning domain storage (used when constructed from a domain handle).
@@ -461,6 +482,8 @@ class HGraphEncoderEngine {
    const mimir::formalism::DomainImpl& domain_;
    /// Effective runtime configuration.
    Config config_;
+   /// Reused scratch workspace to avoid repeated per-step allocations.
+   HeteroEncodingWorkspace workspace_;
    /// Derived relation and schema metadata.
    RelationDict relation_dict_;
    /// Precomputed edge types used when `Config::include_empty_edge_types` is enabled.
@@ -481,6 +504,7 @@ BOOST_DESCRIBE_STRUCT(
     include_lgan_edges,
     include_static,
     include_empty_edge_types,
+    export_node_names,
     goal_satisfaction_derivations)
 )
 
@@ -498,16 +522,17 @@ struct HGraphStepInput {
 };
 
 /**
- * @brief Streaming wrapper around `HGraphEncoderEngine`.
+ * @brief Mutable streaming wrapper around `HGraphEncoderEngine`.
  *
  * Maintains a stream of step inputs and encodes them into builders via `StreamEncoderBase`.
  */
-class HGraphStreamEncoder: public StreamEncoderBase< HGraphStreamEncoder, HGraphStepInput > {
+class HGraphMutableStreamEncoder:
+    public StreamEncoderBase< HGraphMutableStreamEncoder, HGraphStepInput > {
   public:
    /// Identifier of the produced graph kind (used by the stream base).
    static constexpr std::string_view graph_kind() { return "hetero"; }
 
-   explicit HGraphStreamEncoder(HGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
+   explicit HGraphMutableStreamEncoder(HGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
 
    int64_t append(const mimir::search::State& state)
    {
@@ -588,7 +613,7 @@ class HGraphStreamEncoder: public StreamEncoderBase< HGraphStreamEncoder, HGraph
    void encode_step(const HGraphStepInput& step, BatchBuilder& builder)
    {
       if(engine_ == nullptr or step.state == nullptr) {
-         throw std::invalid_argument("HGraphStreamEncoder requires a valid engine/state");
+         throw std::invalid_argument("HGraphMutableStreamEncoder requires a valid engine/state");
       }
 
       const auto& state = *step.state;
@@ -616,6 +641,93 @@ class HGraphStreamEncoder: public StreamEncoderBase< HGraphStreamEncoder, HGraph
 
   private:
    HGraphEncoderEngine* engine_ = nullptr;
+};
+
+/**
+ * @brief Append-only streaming wrapper around `HGraphEncoderEngine`.
+ *
+ * Uses one persistent builder and commits one graph per append.
+ */
+class HGraphStreamEncoder {
+  public:
+   explicit HGraphStreamEncoder(HGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
+
+   int64_t append(const mimir::search::State& state)
+   {
+      ensure_valid();
+      engine_->encode(state, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      ensure_valid();
+      engine_->encode(state, goals, actions, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< HGraphEncoderEngine::HistorySubgoal >& history,
+      std::optional< int > history_max_steps
+   )
+   {
+      ensure_valid();
+      engine_->encode(state, goals, actions, history, history_max_steps, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   nb::dict flush_batch_encoding_py()
+   {
+      ensure_valid();
+      auto out = builder_.build_batch_encoding_py();
+      reset();
+      return out;
+   }
+
+   BatchEncoding flush()
+   {
+      ensure_valid();
+      auto out = builder_.build_batch_encoding();
+      reset();
+      return out;
+   }
+
+   nb::object flush_pyg()
+   {
+      ensure_valid();
+      auto out = builder_.build();
+      reset();
+      return out;
+   }
+
+   void reset()
+   {
+      builder_.reset();
+      builder_.set_graph_kind("hetero");
+      next_id_ = 0;
+   }
+
+  private:
+   void ensure_valid() const
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("HGraphStreamEncoder requires a valid engine");
+      }
+   }
+
+   HGraphEncoderEngine* engine_ = nullptr;
+   BatchBuilder builder_;
+   int64_t next_id_ = 0;
 };
 
 template < typename GoalTag >
@@ -684,17 +796,22 @@ void HGraphEncoderEngine::encode_literals(
          object_keys.emplace_back(config_.nullary_object_name);
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+            object_keys.emplace_back(symbol_node_key(obj));
          }
       }
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names
+         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -704,7 +821,12 @@ void HGraphEncoderEngine::encode_literals(
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& obj_key = extra_objects[i];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(object_keys.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -712,15 +834,9 @@ void HGraphEncoderEngine::encode_literals(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = relation_to_symbols[rel_key];
-      for(const auto& obj_key : object_keys) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
-      for(const auto& obj_key : extra_objects) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
+      track_relation_symbols_if_enabled(
+         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+      );
    }
 }
 
@@ -780,17 +896,22 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          object_keys.emplace_back(config_.nullary_object_name);
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+            object_keys.emplace_back(symbol_node_key(obj));
          }
       }
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names
+         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -800,7 +921,12 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& obj_key = extra_objects[i];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(object_keys.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -808,15 +934,9 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = relation_to_symbols[rel_key];
-      for(const auto& obj_key : object_keys) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
-      for(const auto& obj_key : extra_objects) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
+      track_relation_symbols_if_enabled(
+         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+      );
    }
 }
 

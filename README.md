@@ -1,8 +1,9 @@
 # mifrost
 
 `mifrost` is a high-performance graph encoding library for planning states and transitions.
-It combines C++ encoder engines (via nanobind) with Python-facing APIs that produce
-PyTorch Geometric (`Data` / `HeteroData`) outputs.
+It combines C++ encoder engines (via nanobind) with Python-facing APIs.
+The API is native-first: encoders return `BatchEncoding` by default, and PyTorch Geometric
+(`Data` / `HeteroData`) objects are built on demand.
 
 ## What it does
 
@@ -14,9 +15,9 @@ PyTorch Geometric (`Data` / `HeteroData`) outputs.
   - `TransitionHGraphEncoder` / `TransitionEffectsHGraphEncoder`
   - `ColorEncoder`
   - `ILGEncoder`
-- Returns either:
-  - ready-to-use PyG objects, or
-  - normalized encoding "parts" for custom assembly.
+- Returns native `BatchEncoding` objects, with explicit helpers for:
+  - PyG conversion (`encode_pyg`, `encode_batch_pyg`, `as_pyg`)
+  - normalized encoding export (`export_encoding`, `export_batch_encoding`)
 
 ## Requirements
 
@@ -66,7 +67,7 @@ python -m pip install --no-build-isolation \
 This enables import-triggered rebuild behavior from scikit-build-core for local development.
 
 
-## Quick start
+## Quick start (native-first)
 
 ```python
 import mifrost
@@ -75,15 +76,23 @@ import mifrost
 encoder = mifrost.HGraphEncoder(domain)
 
 # state: pymimir wrapper or advanced state
-data = encoder.encode(state)             # HeteroData
-batch = encoder.encode_batch([state1, state2, state3])  # batched HeteroData
+encoding = encoder.encode(state)         # BatchEncoding
+data = encoding.as_pyg()                 # HeteroData
 
-parts = encoder.export_batch_encoding([state1, state2])    # normalized parts payload
+batch_encoding = encoder.encode_batch([state1, state2, state3])  # BatchEncoding
+batch = batch_encoding.as_pyg(as_batch=True)                     # HeteroDataBatch
+
+# explicit PyG convenience helpers
+data2 = encoder.encode_pyg(state)
+batch2 = encoder.encode_batch_pyg([state1, state2, state3])
+
+parts = encoder.export_batch_encoding([state1, state2])    # normalized encoding payload
 ```
 
 Example output (trimmed):
 
 ```text
+type(encoding): BatchEncoding
 type(data): HeteroData
 node_type_count: 28
 node_types_head:
@@ -91,6 +100,7 @@ node_types_head:
    '[+]clear[g]', '[+]clear[g][sat]', '[+]handempty[g]']
 edge_type_count: 54
 
+type(batch_encoding): BatchEncoding
 type(batch): HeteroDataBatch
 num_graphs: 3
 node_type_count: 28
@@ -112,7 +122,18 @@ Stream workflow:
 stream = encoder.stream()
 stream.append(state1)
 stream.append(state2)
-batch = stream.flush(as_batch=True)
+
+batch_encoding = stream.flush()  # BatchEncoding
+batch = batch_encoding.as_pyg(as_batch=True)    # HeteroDataBatch
+
+# convenience
+batch2 = stream.flush_pyg(as_batch=True)
+
+# mutable stream (supports update/remove)
+mutable = encoder.mutable_stream()
+sid = mutable.append(state1)
+mutable.update(sid, state2)
+mutable.remove(sid)
 ```
 
 Example output:
@@ -143,14 +164,17 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
 - `encode(state, goals, actions_span, history_subgoals, history_max_steps, builder)`
   - Full step graph plus history nodes/links (`dt`-tagged subgoals).
 
-### C++ streaming (`HGraphStreamEncoder` via `StreamEncoderBase`)
-Cached stream with ids (supports edits). Encodes each step into a single-graph cache entry and **merges on flush**.
+### C++ streaming
 
-- `append(...) -> id` (state-only or state+goals+actions, optionally with history)
-- `update(id, ...)` (same overload set as `append`)
-- `remove(id)`
-- `flush_batch_encoding_py()` / `flush_batch_encoding()` / `flush()` (PyG)
-- `reset()`, `set_reuse_removed(bool)`
+- `HGraphStreamEncoder` (append-only)
+  - Direct append into one persistent builder.
+  - `append(...) -> id`, `flush_batch_encoding_py()`, `flush()`, `flush_pyg()`, `reset()`.
+
+- `HGraphMutableStreamEncoder` (cached/mutable, via `StreamEncoderBase`)
+  - Supports `update/remove` with id stability and cache merge on flush.
+  - `append(...) -> id`, `update(id, ...)`, `remove(id)`,
+    `flush_batch_encoding_py()`, `flush()`, `flush_pyg()`,
+    `reset()`, `set_reuse_removed(bool)`.
 
 ---
 
@@ -158,25 +182,40 @@ Cached stream with ids (supports edits). Encodes each step into a single-graph c
 - `export_encoding(state, *, goals=None, actions=None, subgoal_layers=None, history_subgoals=None, history_max_steps=None) -> parts`
   - One graph, normalized tensor payload (no PyG assembly).
 
-- `encode(state, *, ...) -> HeteroData`
-  - One graph, assembled PyG object.
+- `encode(state, *, ...) -> BatchEncoding`
+  - One graph, native encoding object.
+
+- `encode_pyg(state, *, ...) -> HeteroData`
+  - One graph, explicit PyG conversion path.
 
 - `export_batch_encoding(states, *, goals=None, actions=..., subgoal_layers=None, history_subgoals=..., history_max_steps=None) -> parts`
   - Many graphs, one-pass builder accumulation (fast batch path).
 
-- `encode_batch(states, *, ...) -> HeteroData`
-  - Many graphs, assembled PyG batch.
+- `encode_batch(states, *, ...) -> BatchEncoding`
+  - Many graphs, native batch encoding object.
+
+- `encode_batch_pyg(states, *, ...) -> HeteroDataBatch`
+  - Many graphs, explicit PyG conversion path.
 
 - `stream() -> HGraphEncoderStream`
-  - Create a streaming encoder backed by the same C++ engine.
+  - Create an append-only stream encoder backed by the same C++ engine.
 
-### Python streaming (`HGraphEncoderStream`)
+- `mutable_stream() -> HGraphMutableEncoderStream`
+  - Create a mutable stream encoder supporting update/remove.
+
+### Python streaming (`HGraphEncoderStream`, append-only)
+- `append(state, *, goals=None, actions=None, subgoal_layers=None, history_subgoals=None, history_max_steps=None) -> id`
+- `flush() -> BatchEncoding`
+- `flush_pyg(...) -> PyG`
+
+### Python mutable streaming (`HGraphMutableEncoderStream`)
 Cached stream wrapper (ids + edits), merges on flush.
 
 - `append(state, *, goals=None, actions=None, subgoal_layers=None, history_subgoals=None, history_max_steps=None) -> id`
 - `update(id, state, *, ...)`
 - `remove(id)`
-- `flush(...)` (from `StreamEncoderBase`, returns PyG; supports `as_batch=True` in the base API)
+- `flush() -> BatchEncoding`
+- `flush_pyg(...) -> PyG`
 
 ## Extending input types (adapter API)
 
@@ -229,15 +268,22 @@ C++ tests (after configure/build):
 ```bash
 python scripts/profile_encoding.py --domain blocks --problem probBLOCKS-4-0
 python scripts/profile_encoding.py --profile cprofile --include-goals
+python scripts/profile_encoding.py --benchmark-pyg --no-export-node-names
 ```
 
 ## Output assembly notes
 
-- `encode(...)` / `encode_batch(...)` assemble PyG objects directly.
+- Native-first:
+  - `encode(...)` / `encode_batch(...)` return `BatchEncoding`.
+  - `BatchEncoding.as_pyg(...)` converts to PyG.
+- Convenience:
+  - `encode_pyg(...)` / `encode_batch_pyg(...)` return PyG directly.
 - `export_encoding(...)` / `export_batch_encoding(...)` return normalized payloads:
   - `schema`
   - `tensors`
   - optional metadata (`node_names`, `object_names`, `graph_attrs`)
+- `BatchEncoding` supports `to_parts()`, `schema_fingerprint()`, `save(...)`, `load(...)`.
+- `mifrost.batch_encodings([...])` batches single-graph encodings natively with schema checks.
 - Use `mifrost.parts_to_tensors(parts)` when feeding a custom downstream pipeline.
 
 ## Encoder architecture note

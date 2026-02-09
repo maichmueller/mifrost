@@ -6,6 +6,7 @@ import mifrost
 from mifrost.encoders import (
     HGraphEncoder,
     HGraphEncoderStream,
+    HGraphMutableEncoderStream,
     HorizonEncoder,
     HorizonEncoderStream,
 )
@@ -45,7 +46,7 @@ def test_stream_remove_matches_direct_encode(small_blocks):
     succ = _first_successor(space, root)
 
     encoder = HGraphEncoder(domain)
-    stream = HGraphEncoderStream(encoder.engine)
+    stream = HGraphMutableEncoderStream(encoder.engine)
 
     root_id = stream.append(root)
     _succ_id = stream.append(succ)
@@ -63,7 +64,7 @@ def test_stream_update_replaces_graph(small_blocks):
     succ = _first_successor(space, root)
 
     encoder = HGraphEncoder(domain)
-    stream = HGraphEncoderStream(encoder.engine)
+    stream = HGraphMutableEncoderStream(encoder.engine)
 
     root_id = stream.append(root)
     succ_id = stream.append(succ)
@@ -82,7 +83,7 @@ def test_stream_reuse_removed_slot_keeps_ids_and_order(small_blocks):
     succ = _first_successor(space, root)
 
     encoder = HGraphEncoder(domain)
-    stream = HGraphEncoderStream(encoder.engine)
+    stream = HGraphMutableEncoderStream(encoder.engine)
     stream.set_reuse_removed(True)
 
     root_id = stream.append(root)
@@ -135,3 +136,30 @@ def test_horizon_stream_update_replaces_graph(small_blocks):
     data = parts_to_pyg(parts)
     expected = encoder.encode(root, successor_dag, goals=goals)
     assert hetero_data_equal(data, expected)
+
+
+def test_hgraph_append_only_stream_matches_encode_batch(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    succ = _first_successor(space, root)
+
+    encoder = HGraphEncoder(domain)
+    stream = HGraphEncoderStream(encoder.engine)
+    stream.append(root)
+    stream.append(succ)
+
+    parts = stream.flush_batch_encoding_py()
+    data = parts_to_pyg(parts)
+    expected = encoder.encode_batch([root, succ])
+    assert hetero_data_equal(data, expected)
+
+
+def test_hgraph_append_only_stream_has_no_update_remove(small_blocks):
+    _space, domain, _problem = small_blocks
+    encoder = HGraphEncoder(domain)
+    stream = HGraphEncoderStream(encoder.engine)
+
+    with pytest.raises(NotImplementedError):
+        stream.remove(0)
+    with pytest.raises(NotImplementedError):
+        stream.update(0, object())

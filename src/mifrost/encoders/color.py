@@ -33,7 +33,7 @@ from .types import (
 
 
 def _parts_to_pyg_homo(
-    parts: Mapping[str, Any],
+    parts: Mapping[str, Any] | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -44,6 +44,14 @@ def _parts_to_pyg_homo(
 
     This adapter expects the standard parts schema and uses a single node type.
     """
+    if not isinstance(parts, Mapping):
+        if hasattr(parts, "to_parts"):
+            parts = parts.to_parts()
+        else:
+            raise TypeError(
+                f"Expected parts mapping or BatchEncoding-like object, got {type(parts)}"
+            )
+
     raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
     schema_obj = parts.get("schema")
     if schema_obj is None:
@@ -229,6 +237,17 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
             parts, as_batch=as_batch, include_metadata=include_metadata
         )
 
+    def _encoding_to_pyg(
+        self,
+        encoding: Mapping[str, object] | object,
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> Data:
+        return _parts_to_pyg_homo(
+            encoding, as_batch=as_batch, include_metadata=include_metadata
+        )
+
 
 class ColorEncoder(EncoderBase[Data]):
     """
@@ -283,8 +302,8 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> Data:
-        """Encode one state into ``Data``."""
+    ) -> object:
+        """Encode one state into native ``BatchEncoding``."""
         return super().encode(
             state,
             goals=goals,
@@ -327,7 +346,7 @@ class ColorEncoder(EncoderBase[Data]):
                     inputs = shared_inputs
                 self._engine.encode(adv_state, inputs, builder)
             builder.next_graph()
-        return builder.build_batch_encoding_py()
+        return builder.build_batch_encoding()
 
     def encode_batch(
         self,
@@ -337,8 +356,8 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> Data:
-        """Encode one or many states into batched ``Data``."""
+    ) -> object:
+        """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(
             states,
             goals=goals,
@@ -356,6 +375,17 @@ class ColorEncoder(EncoderBase[Data]):
     ) -> Data:
         return _parts_to_pyg_homo(
             parts, as_batch=as_batch, include_metadata=include_metadata
+        )
+
+    def _encoding_to_pyg(
+        self,
+        encoding: Mapping[str, object] | object,
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> Data:
+        return _parts_to_pyg_homo(
+            encoding, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> ColorEncoderStream:

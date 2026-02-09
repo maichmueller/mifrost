@@ -108,7 +108,7 @@ TEST_P(HorizonStreamCacheTest, RemoveDropsGraph)
    const auto full_id = stream.append(ctx.root, successor_dag, goals);
    (void) full_id;
    stream.remove(empty_id);
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
@@ -136,7 +136,7 @@ TEST_P(HorizonStreamCacheTest, UpdateReplacesGraph)
    const auto full_id = stream.append(ctx.root, successor_dag, goals);
    stream.update(empty_id, ctx.root, successor_dag, goals);
    stream.remove(full_id);
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
@@ -169,7 +169,7 @@ TEST_P(HorizonStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
 
    EXPECT_EQ(reused_id, empty_id);
 
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");

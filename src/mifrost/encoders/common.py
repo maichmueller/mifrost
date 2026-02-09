@@ -110,8 +110,20 @@ def _prepare_history_subgoals(
     return out
 
 
+def _coerce_parts(parts: Mapping[str, Any] | Any) -> Mapping[str, Any]:
+    if isinstance(parts, Mapping):
+        return parts
+    if hasattr(parts, "to_parts"):
+        coerced = parts.to_parts()
+        if isinstance(coerced, Mapping):
+            return coerced
+    raise TypeError(
+        f"Expected parts mapping or BatchEncoding-like object, got {type(parts)}"
+    )
+
+
 def _parts_to_pyg(
-    parts: Mapping[str, Any],
+    parts: Mapping[str, Any] | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -125,6 +137,7 @@ def _parts_to_pyg(
     - optional metadata: ``node_names``, ``object_names``, ``graph_attrs``
     """
     # Assemble engine "parts" into PyG objects on the Python side only.
+    parts = _coerce_parts(parts)
     raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
     schema_obj = parts.get("schema")
     if schema_obj is None:
@@ -293,7 +306,8 @@ def _parts_to_pyg(
     return data
 
 
-def parts_to_tensors(parts: Mapping[str, Any]) -> Mapping[str, torch.Tensor]:
+def parts_to_tensors(parts: Mapping[str, Any] | Any) -> Mapping[str, torch.Tensor]:
     """Return ``parts['tensors']`` as a plain ``str -> torch.Tensor`` mapping."""
+    parts = _coerce_parts(parts)
     tensors: Mapping[str, Any] = parts.get("tensors", {})
     return {str(key): _to_tensor(value) for key, value in tensors.items()}

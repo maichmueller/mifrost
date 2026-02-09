@@ -247,6 +247,41 @@ void BatchBuilder::add_edges(
       col_dst.emplace_back(idx + dst_offset);
 }
 
+void BatchBuilder::add_edge(
+   const std::string& src_type,
+   const std::string& rel_type,
+   const std::string& dst_type,
+   int64_t src_index,
+   int64_t dst_index
+)
+{
+   std::string edge_key_base;
+   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
+   edge_key_base.append(src_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(rel_type);
+   edge_key_base.push_back('|');
+   edge_key_base.append(dst_type);
+
+   std::string src_key;
+   src_key.reserve(edge_key_base.size() + 13);
+   src_key.append(edge_key_base);
+   src_key.append("/edge_index_0");
+   std::string dst_key;
+   dst_key.reserve(edge_key_base.size() + 13);
+   dst_key.append(edge_key_base);
+   dst_key.append("/edge_index_1");
+
+   auto& col_src = get_column< int64_t >(src_key, 1);
+   auto& col_dst = get_column< int64_t >(dst_key, 1);
+
+   int64_t src_offset = node_offsets.try_emplace(src_type, 0).first->second;
+   int64_t dst_offset = node_offsets.try_emplace(dst_type, 0).first->second;
+
+   col_src.emplace_back(src_index + src_offset);
+   col_dst.emplace_back(dst_index + dst_offset);
+}
+
 void BatchBuilder::add_edge_features(
    const std::string& src_type,
    const std::string& rel_type,
@@ -1244,6 +1279,68 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
    }
 
    next_graph();
+}
+
+void BatchBuilder::load_from_batch_encoding(const BatchEncoding& batch_encoding)
+{
+   reset();
+   columns = batch_encoding.columns;
+   node_names = batch_encoding.node_names;
+   object_names = batch_encoding.object_names;
+   node_feature_dims = batch_encoding.node_feature_dims;
+   graph_attrs = batch_encoding.graph_attrs;
+   ptrs = batch_encoding.ptrs;
+   schema_flags = batch_encoding.schema_flags;
+   graph_kind = batch_encoding.graph_kind;
+   current_graph_idx = batch_encoding.num_graphs;
+
+   current_node_counts.clear();
+   node_offsets.clear();
+   for(const auto& [node_type, ptr] : ptrs) {
+      if(not ptr.empty()) {
+         node_offsets[node_type] = ptr.back();
+      }
+      current_node_counts[node_type] = 0;
+   }
+   for(const auto& [node_type, count] : batch_encoding.node_counts) {
+      if(not node_offsets.contains(node_type)) {
+         node_offsets[node_type] = count;
+      }
+      if(not current_node_counts.contains(node_type)) {
+         current_node_counts[node_type] = 0;
+      }
+   }
+}
+
+void BatchBuilder::load_from_batch_encoding(BatchEncoding&& batch_encoding)
+{
+   reset();
+   columns = std::move(batch_encoding.columns);
+   node_names = std::move(batch_encoding.node_names);
+   object_names = std::move(batch_encoding.object_names);
+   node_feature_dims = std::move(batch_encoding.node_feature_dims);
+   graph_attrs = std::move(batch_encoding.graph_attrs);
+   ptrs = std::move(batch_encoding.ptrs);
+   schema_flags = std::move(batch_encoding.schema_flags);
+   graph_kind = std::move(batch_encoding.graph_kind);
+   current_graph_idx = batch_encoding.num_graphs;
+
+   current_node_counts.clear();
+   node_offsets.clear();
+   for(const auto& [node_type, ptr] : ptrs) {
+      if(not ptr.empty()) {
+         node_offsets[node_type] = ptr.back();
+      }
+      current_node_counts[node_type] = 0;
+   }
+   for(const auto& [node_type, count] : batch_encoding.node_counts) {
+      if(not node_offsets.contains(node_type)) {
+         node_offsets[node_type] = count;
+      }
+      if(not current_node_counts.contains(node_type)) {
+         current_node_counts[node_type] = 0;
+      }
+   }
 }
 
 }  // namespace mifrost

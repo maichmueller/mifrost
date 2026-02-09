@@ -68,7 +68,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    BatchBuilder& builder
 )
 {
-   auto workspace = init_hetero_workspace(builder);
+   auto& workspace = init_hetero_workspace(builder);
 
    // 1. Encode objects
    encode_objects(current, builder, workspace.node_indices, workspace.node_names);
@@ -115,7 +115,12 @@ void SuccessorHGraphEncoderEngine::encode_impl(
                                         )
                                       : atom_str;
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, workspace.node_indices, workspace.node_names
+         node_type,
+         node_key,
+         builder,
+         workspace.node_indices,
+         workspace.node_names,
+         config_.export_node_names
       );
 
       std::vector< std::string > object_keys;
@@ -123,14 +128,19 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          object_keys.emplace_back(config_.nullary_object_name);
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+            object_keys.emplace_back(symbol_node_key(obj));
          }
       }
 
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, workspace.node_indices, workspace.node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            workspace.node_indices,
+            workspace.node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -138,11 +148,13 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = workspace.relation_to_symbols[rel_key];
-      for(const auto& obj_key : object_keys) {
-         symbols.insert(obj_key);
-         workspace.symbol_to_relations[obj_key].insert(rel_key);
-      }
+      track_relation_symbols_if_enabled(
+         rel_key,
+         std::span{object_keys},
+         {},
+         workspace.relation_to_symbols,
+         workspace.symbol_to_relations
+      );
 
       if(not polarity.has_value() || *polarity) {
          suc_fact_keys.insert(RelationFormatter::format_atom< Tag >(atom));

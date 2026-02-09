@@ -87,14 +87,14 @@ TEST_P(HGraphStreamCacheTest, RemoveDropsGraph)
    (void) succ_action;
 
    HGraphEncoderEngine engine(ctx.problem->get_domain());
-   HGraphStreamEncoder stream(engine);
+   HGraphMutableStreamEncoder stream(engine);
 
    const auto root_id = stream.append(ctx.root);
    const auto succ_id = stream.append(succ_state);
    (void) succ_id;
 
    stream.remove(root_id);
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
@@ -113,14 +113,14 @@ TEST_P(HGraphStreamCacheTest, UpdateReplacesGraph)
    (void) succ_action;
 
    HGraphEncoderEngine engine(ctx.problem->get_domain());
-   HGraphStreamEncoder stream(engine);
+   HGraphMutableStreamEncoder stream(engine);
 
    const auto root_id = stream.append(ctx.root);
    const auto succ_id = stream.append(succ_state);
 
    stream.update(root_id, succ_state);
    stream.remove(succ_id);
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
@@ -139,7 +139,7 @@ TEST_P(HGraphStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
    (void) succ_action;
 
    HGraphEncoderEngine engine(ctx.problem->get_domain());
-   HGraphStreamEncoder stream(engine);
+   HGraphMutableStreamEncoder stream(engine);
    stream.set_reuse_removed(true);
 
    const auto root_id = stream.append(ctx.root);
@@ -150,7 +150,7 @@ TEST_P(HGraphStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
 
    EXPECT_EQ(reused_id, root_id);
 
-   const auto actual = stream.flush_batch_encoding();
+   const auto actual = stream.flush();
 
    BatchBuilder builder;
    builder.set_graph_kind("hetero");

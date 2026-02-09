@@ -17,7 +17,7 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
         pytest.skip("Fixture does not provide applicable actions.")
 
     encoder = HGraphEncoder(domain, ignore_actions=False)
-    data = encoder.encode(state, actions=actions)
+    data = encoder.encode_pyg(state, actions=actions)
 
     symbol_type = mifrost.DEFAULT_SYMBOL_TYPE_ID
     symbol_names = list(getattr(data[symbol_type], "node_names", []))

@@ -8,6 +8,7 @@ from .encoders import (  # noqa: F401
     EncoderBase,
     HGraphEncoder,
     HGraphEncoderStream,
+    HGraphMutableEncoderStream,
     HorizonEncoder,
     HorizonEncoderStream,
     ILGEncoder,
@@ -31,6 +32,7 @@ from .encoders import (  # noqa: F401
 __all__ = list(getattr(_core, "__all__", [])) + [
     "HGraphEncoder",
     "HGraphEncoderStream",
+    "HGraphMutableEncoderStream",
     "ColorEncoder",
     "ColorEncoderStream",
     "HorizonEncoder",

@@ -80,7 +80,7 @@ def encoded_state(
         domain,
         **kwargs,
     )
-    return encoder.encode(state), encoder
+    return encoder.encode_pyg(state), encoder
 
 
 @pytest.fixture
@@ -124,4 +124,4 @@ def color_encoded_state(request):
         )
 
     encoder = ColorEncoder(domain, **kwargs)
-    return encoder.encode(state), encoder, state
+    return encoder.encode_pyg(state), encoder, state

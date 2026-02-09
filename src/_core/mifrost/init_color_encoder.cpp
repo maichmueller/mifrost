@@ -36,26 +36,6 @@ void apply_color_config_kwargs(ColorEncoderEngine::Config& config, const nb::kwa
 
 void init_color_encoder(nb::module_& m)
 {
-   auto add_color_extension = [](nb::dict& parts) {
-      if(not parts.contains("schema")) {
-         return;
-      }
-      auto schema = nb::cast< nb::dict >(parts["schema"]);
-      bool edge_features = false;
-      if(schema.contains("flags")) {
-         auto flags = nb::cast< nb::dict >(schema["flags"]);
-         if(flags.contains("edge_features")) {
-            edge_features = nb::cast< bool >(flags["edge_features"]);
-         }
-      }
-      nb::dict extensions;
-      if(schema.contains("extensions")) {
-         extensions = nb::cast< nb::dict >(schema["extensions"]);
-      }
-      extensions["color_encoding"] = nb::str(edge_features ? "edge" : "node");
-      schema["extensions"] = extensions;
-   };
-
    nb::class_< ColorEncoderEngine::Config >(m, "ColorEncoderConfig")
       .def(nb::init<>())
       .def(
@@ -77,45 +57,37 @@ void init_color_encoder(nb::module_& m)
       .def(nb::init< mimir::formalism::Domain, ColorEncoderEngine::Config >())
       .def(
          "encode",
-         [&add_color_extension](ColorEncoderEngine& encoder, const mimir::search::State& state) {
+         [](ColorEncoderEngine& encoder, const mimir::search::State& state) {
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, builder);
-            auto parts = builder.build_batch_encoding_py();
-            add_color_extension(parts);
-            return parts;
+            return builder.build_batch_encoding();
          },
          "state"_a
       )
       .def(
          "encode",
-         [&add_color_extension](
-            ColorEncoderEngine& encoder, const mimir::search::State& state, const GoalInputs& goals
-         ) {
+         [](ColorEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals) {
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, builder);
-            auto parts = builder.build_batch_encoding_py();
-            add_color_extension(parts);
-            return parts;
+            return builder.build_batch_encoding();
          },
          "state"_a,
          "goals"_a
       )
       .def(
          "encode",
-         [&add_color_extension](
-            ColorEncoderEngine& encoder,
+         [](ColorEncoderEngine& encoder,
             const mimir::search::State& state,
             const GoalInputs& goals,
-            const std::vector< mimir::formalism::GroundAction >& actions
-         ) {
+            const std::vector< mimir::formalism::GroundAction >& actions) {
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, actions, builder);
-            auto parts = builder.build_batch_encoding_py();
-            add_color_extension(parts);
-            return parts;
+            return builder.build_batch_encoding();
          },
          "state"_a,
          "goals"_a,
@@ -190,6 +162,7 @@ void init_color_encoder(nb::module_& m)
       .def("set_reuse_removed", &ColorStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush_batch_encoding_py", &ColorStreamEncoder::flush_batch_encoding_py)
       .def("flush", &ColorStreamEncoder::flush)
+      .def("flush_pyg", &ColorStreamEncoder::flush_pyg)
       .def("reset", &ColorStreamEncoder::reset);
 }
 

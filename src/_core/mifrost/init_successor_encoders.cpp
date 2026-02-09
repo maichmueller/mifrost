@@ -89,7 +89,7 @@ void init_successor_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(current, successor, goals, builder);
-            return builder.build_batch_encoding_py();
+            return builder.build_batch_encoding();
          },
          "current"_a,
          "successor"_a,
@@ -135,6 +135,7 @@ void init_successor_encoders(nb::module_& m)
       .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush_batch_encoding_py", &TransitionStreamEncoder::flush_batch_encoding_py)
       .def("flush", &TransitionStreamEncoder::flush)
+      .def("flush_pyg", &TransitionStreamEncoder::flush_pyg)
       .def("reset", &TransitionStreamEncoder::reset);
 }
 

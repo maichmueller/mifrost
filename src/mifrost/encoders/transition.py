@@ -49,6 +49,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         include_lgan_edges: bool = False,
         include_static: bool = True,
         include_empty_edge_types: bool = True,
+        export_node_names: bool = True,
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
@@ -63,6 +64,7 @@ class _TransitionEncoderBase(HGraphEncoder):
             include_lgan_edges=include_lgan_edges,
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
+            export_node_names=export_node_names,
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
@@ -146,7 +148,7 @@ class _TransitionEncoderBase(HGraphEncoder):
                 inputs = shared_inputs
             self._engine.encode(adv_state, adv_successor, inputs, builder)
             builder.next_graph()
-        return builder.build_batch_encoding_py()
+        return builder.build_batch_encoding()
 
     def _parts_to_pyg(
         self,

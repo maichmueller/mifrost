@@ -9,6 +9,7 @@ import networkx as nx
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
 
+from .. import _core
 from .._core import (
     BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
@@ -44,6 +45,10 @@ from .types import (
     is_action_input,
     default_goals_from_state,
     is_state_input,
+)
+
+_HGraphMutableStreamEncoder = getattr(
+    _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
 )
 
 
@@ -345,14 +350,13 @@ def _draw_hgraph_graph(
 
 
 @dataclass
-class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
-    """Streaming wrapper for ``HGraphEncoderEngine``."""
+class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
+    """Mutable streaming wrapper (append/update/remove) for ``HGraphEncoderEngine``."""
 
     _engine: HGraphEncoderEngine
 
     def __post_init__(self) -> None:
-        """Initialize an empty hetero builder for streaming."""
-        self._stream = _HGraphStreamEncoder(self._engine)
+        self._stream = _HGraphMutableStreamEncoder(self._engine)
         self._reset_builder()
 
     def append(
@@ -463,6 +467,71 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         )
 
 
+@dataclass
+class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
+    """Append-only streaming wrapper for ``HGraphEncoderEngine``."""
+
+    _engine: HGraphEncoderEngine
+
+    def __post_init__(self) -> None:
+        self._stream = _HGraphStreamEncoder(self._engine)
+        self._reset_builder()
+
+    def append(
+        self,
+        state: StateInput,
+        *,
+        goals: Iterable[GoalLiteralInput] | None = None,
+        actions: Iterable[GroundActionInput] | None = None,
+        subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> int:
+        adv_state = _advanced_state(state)
+        action_list = _prepare_actions(actions)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if (
+            goals is None
+            and subgoal_layers is None
+            and not action_list
+            and not history_list
+        ):
+            return self._coerce_stream_id(self._stream.append(adv_state))
+        if goals is None:
+            goals = default_goals_from_state(state)
+        inputs = _split_goals(goals, subgoal_layers)
+        if history_list:
+            return self._coerce_stream_id(
+                self._stream.append(
+                    adv_state,
+                    inputs,
+                    action_list,
+                    history_list,
+                    history_max_steps,
+                )
+            )
+        return self._coerce_stream_id(
+            self._stream.append(adv_state, inputs, action_list)
+        )
+
+    def _reset_builder(self) -> None:
+        self._stream.reset()
+
+    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
+        return self._stream.flush_batch_encoding_py()
+
+    def _parts_to_pyg(
+        self,
+        parts: Mapping[str, object],
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> HeteroData:
+        return _parts_to_pyg(
+            parts, as_batch=as_batch, include_metadata=include_metadata
+        )
+
+
 class HGraphEncoder(EncoderBase[HeteroData]):
     """
     General heterogeneous graph encoder backed by ``HGraphEncoderEngine``.
@@ -502,6 +571,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         include_lgan_edges: bool = False,
         include_static: bool = True,
         include_empty_edge_types: bool = True,
+        export_node_names: bool = True,
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
@@ -520,6 +590,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             include_lgan_edges=include_lgan_edges,
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
+            export_node_names=export_node_names,
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
@@ -584,8 +655,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroData:
-        """Encode one state into ``HeteroData``."""
+    ) -> object:
+        """Encode one state into native ``BatchEncoding``."""
         return super().encode(
             state,
             goals=goals,
@@ -720,7 +791,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     self._engine.encode(adv_state, inputs, action_list, builder)
             builder.next_graph()
 
-        return builder.build_batch_encoding_py()
+        return builder.build_batch_encoding()
 
     def encode_batch(
         self,
@@ -739,8 +810,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroData:
-        """Encode one or many states into a batched ``HeteroData`` object."""
+    ) -> object:
+        """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(
             states,
             goals=goals,
@@ -764,8 +835,12 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         )
 
     def stream(self) -> HGraphEncoderStream:
-        """Create a streaming encoder sharing this encoder's C++ engine."""
+        """Create an append-only streaming encoder sharing this encoder's C++ engine."""
         return HGraphEncoderStream(self._engine)
+
+    def mutable_stream(self) -> HGraphMutableEncoderStream:
+        """Create a mutable streaming encoder supporting update/remove."""
+        return HGraphMutableEncoderStream(self._engine)
 
     def to_networkx(self, data: HeteroData) -> nx.MultiDiGraph:
         """Convert ``HeteroData`` to named NetworkX graph for plotting."""
@@ -1117,4 +1192,4 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         return ax
 
 
-__all__ = ["HGraphEncoder", "HGraphEncoderStream"]
+__all__ = ["HGraphEncoder", "HGraphEncoderStream", "HGraphMutableEncoderStream"]

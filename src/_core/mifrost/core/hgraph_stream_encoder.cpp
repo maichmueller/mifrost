@@ -23,9 +23,7 @@ void HGraphEncoderEngine::append_edges(
    int64_t dst
 )
 {
-   const std::array< int64_t, 1 > src_arr{src};
-   const std::array< int64_t, 1 > dst_arr{dst};
-   builder.add_edges(src_type, rel_type, dst_type, src_arr, dst_arr);
+   builder.add_edge(src_type, rel_type, dst_type, src, dst);
 }
 
 HGraphEncoderEngine::HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
@@ -81,12 +79,46 @@ void HGraphEncoderEngine::initialize_from_domain()
    all_edge_types_.erase(std::ranges::unique(all_edge_types_).begin(), all_edge_types_.end());
 }
 
-HGraphEncoderEngine::HeteroEncodingWorkspace HGraphEncoderEngine::init_hetero_workspace(
+HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_workspace(
    BatchBuilder& builder
-) const
+)
 {
    ensure_node_feature_dims(builder);
-   return {};
+   workspace_.node_indices.clear();
+   workspace_.node_names.clear();
+   workspace_.relation_to_symbols.clear();
+   workspace_.symbol_to_relations.clear();
+
+   const size_t type_hint = relation_dict_.arity.size() + 4;
+   workspace_.node_indices.reserve(type_hint);
+   if(config_.export_node_names) {
+      workspace_.node_names.reserve(type_hint);
+   }
+
+   return workspace_;
+}
+
+void HGraphEncoderEngine::track_relation_symbols_if_enabled(
+   const std::string& rel_key,
+   std::span< const std::string > object_keys,
+   std::span< const std::string > extra_objects,
+   hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
+   hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+) const
+{
+   if(not config_.include_lgan_edges) {
+      return;
+   }
+   auto& symbols = relation_to_symbols[rel_key];
+   symbols.reserve(symbols.size() + object_keys.size() + extra_objects.size());
+   for(const auto& obj_key : object_keys) {
+      symbols.insert(obj_key);
+      symbol_to_relations[obj_key].insert(rel_key);
+   }
+   for(const auto& obj_key : extra_objects) {
+      symbols.insert(obj_key);
+      symbol_to_relations[obj_key].insert(rel_key);
+   }
 }
 
 void HGraphEncoderEngine::encode_goal_inputs(
@@ -202,6 +234,11 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
    const std::vector< std::string >* object_names_override
 ) const
 {
+   if(not config_.export_node_names) {
+      ensure_empty_edge_types(builder);
+      return;
+   }
+
    for(const auto& [node_type, _] : relation_dict_.arity) {
       if(not workspace.node_names.contains(node_type)) {
          builder.set_node_names(node_type, {});
@@ -272,7 +309,7 @@ void HGraphEncoderEngine::encode_impl_core(
    BatchBuilder& builder
 )
 {
-   auto workspace = init_hetero_workspace(builder);
+   auto& workspace = init_hetero_workspace(builder);
 
    encode_objects(state, builder, workspace.node_indices, workspace.node_names);
    const auto fact_keys = encode_facts(
@@ -326,16 +363,34 @@ void HGraphEncoderEngine::encode_objects(
       return lhs->get_index() < rhs->get_index();
    });
 
+   auto& symbol_indices = node_indices[config_.symbol_type_id];
+   const size_t symbol_hint = ordered.size() + extra_objects.size()
+                              + static_cast< size_t >(config_.add_nullary_predicates ? 1 : 0);
+   symbol_indices.reserve(symbol_indices.size() + symbol_hint);
+   if(config_.export_node_names) {
+      auto& symbol_names = node_names[config_.symbol_type_id];
+      symbol_names.reserve(symbol_names.size() + symbol_hint);
+   }
+
    for(const auto& obj : ordered) {
-      const std::string key = RelationFormatter::format_object(*obj);
-      get_or_add_node(config_.symbol_type_id, key, builder, node_indices, node_names);
+      const std::string key = symbol_node_key(obj);
+      get_or_add_node(
+         config_.symbol_type_id, key, builder, node_indices, node_names, config_.export_node_names
+      );
    }
    for(const auto& key : extra_objects) {
-      get_or_add_node(config_.symbol_type_id, key, builder, node_indices, node_names);
+      get_or_add_node(
+         config_.symbol_type_id, key, builder, node_indices, node_names, config_.export_node_names
+      );
    }
    if(config_.add_nullary_predicates) {
       get_or_add_node(
-         config_.symbol_type_id, config_.nullary_object_name, builder, node_indices, node_names
+         config_.symbol_type_id,
+         config_.nullary_object_name,
+         builder,
+         node_indices,
+         node_names,
+         config_.export_node_names
       );
    }
 }
@@ -362,7 +417,7 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
       const std::string node_type = RelationFormatter::format_predicate(predicate);
       const std::string node_key = RelationFormatter::format_atom< Tag >(atom);
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names
+         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
       std::vector< std::string > object_keys;
@@ -370,14 +425,19 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
          object_keys.emplace_back(config_.nullary_object_name);
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(RelationFormatter::format_object(*obj));
+            object_keys.emplace_back(symbol_node_key(obj));
          }
       }
 
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -387,7 +447,12 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& obj_key = extra_objects[i];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(object_keys.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -395,15 +460,9 @@ hash_set< std::string > HGraphEncoderEngine::encode_facts(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = relation_to_symbols[rel_key];
-      for(const auto& obj_key : object_keys) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
-      for(const auto& obj_key : extra_objects) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
+      track_relation_symbols_if_enabled(
+         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+      );
 
       fact_keys.insert(node_key);
    };
@@ -449,22 +508,34 @@ void HGraphEncoderEngine::encode_actions(
       const std::string node_type = RelationFormatter::format_action_schema(*action->get_action());
       const std::string node_key = RelationFormatter::format_action(action);
       const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names
+         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
       const std::string action_symbol = fmt::format("target:{}|{}", action->get_index(), node_key);
-      get_or_add_node(config_.symbol_type_id, action_symbol, builder, node_indices, node_names);
+      get_or_add_node(
+         config_.symbol_type_id,
+         action_symbol,
+         builder,
+         node_indices,
+         node_names,
+         config_.export_node_names
+      );
 
       std::vector< std::string > object_keys;
       object_keys.emplace_back(action_symbol);
       for(const auto& obj : action->get_objects()) {
-         object_keys.emplace_back(RelationFormatter::format_object(*obj));
+         object_keys.emplace_back(symbol_node_key(obj));
       }
 
       for(size_t pos = 0; pos < object_keys.size(); ++pos) {
          const auto& obj_key = object_keys[pos];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -474,7 +545,12 @@ void HGraphEncoderEngine::encode_actions(
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& obj_key = extra_objects[i];
          const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id, obj_key, builder, node_indices, node_names
+            config_.symbol_type_id,
+            obj_key,
+            builder,
+            node_indices,
+            node_names,
+            config_.export_node_names
          );
          const std::string pos_str = std::to_string(object_keys.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
@@ -482,15 +558,9 @@ void HGraphEncoderEngine::encode_actions(
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
-      auto& symbols = relation_to_symbols[rel_key];
-      for(const auto& obj_key : object_keys) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
-      for(const auto& obj_key : extra_objects) {
-         symbols.insert(obj_key);
-         symbol_to_relations[obj_key].insert(rel_key);
-      }
+      track_relation_symbols_if_enabled(
+         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+      );
    }
 }
 
@@ -538,7 +608,7 @@ void HGraphEncoderEngine::encode_history(
       const auto& entry = entries[entry_idx];
       const std::string history_key = fmt::format("history:{}#{}", entry.dt, entry_idx);
       const auto history_idx = get_or_add_node(
-         "history", history_key, builder, node_indices, node_names
+         "history", history_key, builder, node_indices, node_names, config_.export_node_names
       );
       history_dt.push_back(static_cast< float >(entry.dt));
 
@@ -561,7 +631,7 @@ void HGraphEncoderEngine::encode_history(
                auto& indices = node_indices[node_type];
                const bool is_new = indices.find(node_key) == indices.end();
                const auto relation_idx = get_or_add_node(
-                  node_type, node_key, builder, node_indices, node_names
+                  node_type, node_key, builder, node_indices, node_names, config_.export_node_names
                );
 
                std::vector< std::string > object_keys;
@@ -569,7 +639,7 @@ void HGraphEncoderEngine::encode_history(
                   object_keys.emplace_back(config_.nullary_object_name);
                } else {
                   for(const auto& obj : atom->get_objects()) {
-                     object_keys.emplace_back(RelationFormatter::format_object(*obj));
+                     object_keys.emplace_back(symbol_node_key(obj));
                   }
                }
 
@@ -577,7 +647,12 @@ void HGraphEncoderEngine::encode_history(
                   for(size_t pos = 0; pos < object_keys.size(); ++pos) {
                      const auto& obj_key = object_keys[pos];
                      const auto obj_idx = get_or_add_node(
-                        config_.symbol_type_id, obj_key, builder, node_indices, node_names
+                        config_.symbol_type_id,
+                        obj_key,
+                        builder,
+                        node_indices,
+                        node_names,
+                        config_.export_node_names
                      );
                      const std::string pos_str = std::to_string(pos);
                      append_edges(
@@ -590,11 +665,9 @@ void HGraphEncoderEngine::encode_history(
                }
 
                const std::string rel_key = relation_key(node_type, node_key);
-               auto& symbols = relation_to_symbols[rel_key];
-               for(const auto& obj_key : object_keys) {
-                  symbols.insert(obj_key);
-                  symbol_to_relations[obj_key].insert(rel_key);
-               }
+               track_relation_symbols_if_enabled(
+                  rel_key, std::span{object_keys}, {}, relation_to_symbols, symbol_to_relations
+               );
 
                append_edges(
                   builder,
@@ -730,12 +803,21 @@ HGraphEncoderEngine::relation_key(const std::string& node_type, const std::strin
    return node_type + "\n" + node_key;
 }
 
+std::string HGraphEncoderEngine::symbol_node_key(const mimir::formalism::Object& obj) const
+{
+   if(config_.export_node_names) {
+      return RelationFormatter::format_object(*obj);
+   }
+   return std::to_string(obj->get_index());
+}
+
 int64_t HGraphEncoderEngine::get_or_add_node(
    const std::string& node_type,
    const std::string& node_key,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-   hash_map< std::string, std::vector< std::string > >& node_names
+   hash_map< std::string, std::vector< std::string > >& node_names,
+   bool store_node_name
 )
 {
    auto& indices = node_indices[node_type];
@@ -743,9 +825,11 @@ int64_t HGraphEncoderEngine::get_or_add_node(
    if(it != indices.end()) {
       return it->second;
    }
-   const auto idx = static_cast< int64_t >(node_names[node_type].size());
+   const auto idx = static_cast< int64_t >(indices.size());
    indices[node_key] = idx;
-   node_names[node_type].emplace_back(node_key);
+   if(store_node_name) {
+      node_names[node_type].emplace_back(node_key);
+   }
    builder.add_nodes(node_type, idx + 1);
    return idx;
 }

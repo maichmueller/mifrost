@@ -80,6 +80,20 @@ def bench_encode_single(encoder, states, goals, subgoal_layers, actions, iterati
         )
 
 
+def bench_encode_single_pyg(
+    encoder, states, goals, subgoal_layers, actions, iterations
+):
+    n = len(states)
+    for i in range(iterations):
+        idx = i % n
+        encoder.encode_pyg(
+            states[idx],
+            goals=goals,
+            actions=actions[idx] if actions is not None else None,
+            subgoal_layers=subgoal_layers,
+        )
+
+
 def bench_encode_single_parts(
     encoder, states, goals, subgoal_layers, actions, iterations
 ):
@@ -103,6 +117,15 @@ def bench_encode_batch(encoder, states, goals, subgoal_layers, actions):
     )
 
 
+def bench_encode_batch_pyg(encoder, states, goals, subgoal_layers, actions):
+    encoder.encode_batch_pyg(
+        states,
+        goals=goals,
+        actions=actions,
+        subgoal_layers=subgoal_layers,
+    )
+
+
 def bench_encode_stream(encoder, states, goals, subgoal_layers, actions):
     stream = encoder.stream()
     for idx, state in enumerate(states):
@@ -112,7 +135,19 @@ def bench_encode_stream(encoder, states, goals, subgoal_layers, actions):
             actions=actions[idx] if actions is not None else None,
             subgoal_layers=subgoal_layers,
         )
-    stream.flush(as_batch=True)
+    stream.flush_pyg(as_batch=True)
+
+
+def bench_encode_stream_native(encoder, states, goals, subgoal_layers, actions):
+    stream = encoder.stream()
+    for idx, state in enumerate(states):
+        stream.append(
+            state,
+            goals=goals,
+            actions=actions[idx] if actions is not None else None,
+            subgoal_layers=subgoal_layers,
+        )
+    stream.flush()
 
 
 def bench_encode_batch_no_metadata(encoder, states, goals, subgoal_layers, actions):
@@ -184,6 +219,24 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--include-goals", action="store_true")
     parser.add_argument("--include-actions", action="store_true")
     parser.add_argument("--include-subgoals", action="store_true")
+    parser.add_argument(
+        "--benchmark-pyg",
+        action="store_true",
+        help="Also benchmark explicit PyG conversion paths.",
+    )
+    parser.add_argument(
+        "--export-node-names",
+        dest="export_node_names",
+        action="store_true",
+        default=True,
+        help="Enable node/object name metadata export in native encodings (default).",
+    )
+    parser.add_argument(
+        "--no-export-node-names",
+        dest="export_node_names",
+        action="store_false",
+        help="Disable node/object name metadata export in native encodings.",
+    )
     args = parser.parse_args(argv)
 
     domain_obj, problem_obj = load_problem(args.domain, args.problem)
@@ -213,7 +266,11 @@ def main(argv: list[str]) -> int:
         args.include_subgoals,
     )
 
-    encoder = mifrost.HGraphEncoder(domain_obj, ignore_actions=not args.include_actions)
+    encoder = mifrost.HGraphEncoder(
+        domain_obj,
+        ignore_actions=not args.include_actions,
+        export_node_names=args.export_node_names,
+    )
 
     run_profile(
         args.profile,
@@ -289,6 +346,44 @@ def main(argv: list[str]) -> int:
         ),
         count=len(states_batch),
     )
+    if args.benchmark_pyg:
+        run_profile(
+            args.profile,
+            "encode_single_pyg",
+            lambda: bench_encode_single_pyg(
+                encoder,
+                states_single,
+                goals,
+                subgoal_layers,
+                actions_single,
+                args.iterations,
+            ),
+            count=args.iterations,
+        )
+        run_profile(
+            args.profile,
+            "encode_batch_pyg",
+            lambda: bench_encode_batch_pyg(
+                encoder,
+                states_batch,
+                goals,
+                subgoal_layers,
+                actions_batch,
+            ),
+            count=len(states_batch),
+        )
+        run_profile(
+            args.profile,
+            "encode_stream_native",
+            lambda: bench_encode_stream_native(
+                encoder,
+                states_stream,
+                goals,
+                subgoal_layers,
+                actions_stream,
+            ),
+            count=len(states_stream),
+        )
     return 0
 
 

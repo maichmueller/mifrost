@@ -58,11 +58,11 @@ class StreamEncoderBase {
    /// Build Python batch encoding for the accumulated graphs.
    nb::dict flush_batch_encoding_py() { return build_merged_builder().build_batch_encoding_py(); }
 
-   /// Build a PyG Batch for the accumulated graphs.
-   nb::object flush() { return build_merged_builder().build(); }
-
    /// Build native batch encoding for the accumulated graphs.
-   BatchEncoding flush_batch_encoding() { return build_merged_builder().build_batch_encoding(); }
+   BatchEncoding flush() { return build_merged_builder().build_batch_encoding(); }
+
+   /// Build a PyG Batch for the accumulated graphs.
+   nb::object flush_pyg() { return build_merged_builder().build(); }
 
    /// Reset the stream to an empty cache.
    void reset() { entries_.clear(); }

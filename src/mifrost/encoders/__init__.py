@@ -5,7 +5,7 @@ Exports concrete encoders, stream variants, and shared base/helpers.
 
 from .base import EncoderBase, StreamEncoderBase
 from .common import _parts_to_pyg, _split_goals, parts_to_tensors
-from .hgraph import HGraphEncoder, HGraphEncoderStream
+from .hgraph import HGraphEncoder, HGraphEncoderStream, HGraphMutableEncoderStream
 from .horizon import HorizonEncoder, HorizonEncoderStream
 from .color import ColorEncoder, ColorEncoderStream
 from .transition import (
@@ -30,6 +30,7 @@ from .types import (
 __all__ = [
     "HGraphEncoder",
     "HGraphEncoderStream",
+    "HGraphMutableEncoderStream",
     "HorizonEncoder",
     "HorizonEncoderStream",
     "ColorEncoder",

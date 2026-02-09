@@ -7,12 +7,13 @@ from torch_geometric.data import HeteroData
 import mifrost
 from mifrost.encoders import HGraphEncoder
 
-from .test_utils import predicate_arity, state_atoms, to_named_networkx
+from .test_utils import as_pyg, predicate_arity, state_atoms, to_named_networkx
 
 
 def validate_hetero_data(
     data: HeteroData, relation_dict: dict[str, int], symbol_type_id: str
 ):
+    data = as_pyg(data)
     assert symbol_type_id in data.node_types
     x_dict = data.x_dict
     edge_index_dict = data.edge_index_dict
@@ -63,11 +64,11 @@ def test_hetero_data(small_blocks):
     }
 
     for state in space.get_states()[:5]:
-        data = encoder.encode(state)
+        data = encoder.encode_pyg(state)
         validate_hetero_data(data, base_predicate_arities, symbol_type_id)
 
         goals = list(problem.get_goal_condition().get_literals())
-        direct = encoder.encode(state, goals=goals)
+        direct = encoder.encode_pyg(state, goals=goals)
         validate_hetero_data(direct, base_predicate_arities, symbol_type_id)
 
 
@@ -83,7 +84,7 @@ def test_nullary_predicates_connect_to_placeholder(small_blocks):
     )
     state = problem.get_initial_state()
 
-    pyg_data = encoder.encode(state)
+    pyg_data = encoder.encode_pyg(state)
     graph = to_named_networkx(pyg_data)
     placeholder = nullary_object_name
     assert graph.has_node(placeholder)
@@ -132,15 +133,15 @@ def test_consistent_object_node_to_names(small_blocks, medium_blocks):
     space2, domain2, problem2 = medium_blocks
     encoder = HGraphEncoder(domain)
     initial = problem.get_initial_state()
-    initial_pyg = encoder.encode(initial)
+    initial_pyg = encoder.encode_pyg(initial)
     successors = [
-        encoder.encode(target)
+        encoder.encode_pyg(target)
         for action, target in space.get_forward_transitions(initial)
     ]
     initial2 = problem2.get_initial_state()
-    initial_pyg2 = encoder.encode(initial2)
+    initial_pyg2 = encoder.encode_pyg(initial2)
     successors2 = [
-        encoder.encode(target)
+        encoder.encode_pyg(target)
         for action, target in space2.get_forward_transitions(initial2)
     ]
     if not successors or not successors2:

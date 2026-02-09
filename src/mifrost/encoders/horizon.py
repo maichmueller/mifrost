@@ -151,6 +151,7 @@ class HorizonEncoder(HGraphEncoder):
         include_lgan_edges: bool | None = None,
         include_static: bool | None = None,
         include_empty_edge_types: bool | None = None,
+        export_node_names: bool | None = None,
         support_literals: bool | None = None,
         nullary_object_name: str | None = None,
         lgan_nn_edge_pos: str | None = DEFAULT_LGAN_NN_EDGE_POS,
@@ -165,6 +166,7 @@ class HorizonEncoder(HGraphEncoder):
             include_lgan_edges=include_lgan_edges,
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
+            export_node_names=export_node_names,
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
@@ -221,8 +223,8 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroData:
-        """Encode one root/DAG pair into ``HeteroData``."""
+    ) -> object:
+        """Encode one root/DAG pair into native ``BatchEncoding``."""
         return super().encode(
             root,
             goals=goals,
@@ -286,7 +288,7 @@ class HorizonEncoder(HGraphEncoder):
                 )
             self._engine.encode(adv_root, dag, inputs, builder)
             builder.next_graph()
-        return builder.build_batch_encoding_py()
+        return builder.build_batch_encoding()
 
     def encode_batch(
         self,
@@ -297,8 +299,8 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroData:
-        """Encode one or many root/DAG pairs into batched ``HeteroData``."""
+    ) -> object:
+        """Encode one or many root/DAG pairs into native ``BatchEncoding``."""
         return super().encode_batch(
             roots,
             goals=goals,

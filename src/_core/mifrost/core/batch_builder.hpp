@@ -128,6 +128,21 @@ class BatchBuilder {
       std::span< const int64_t > src_indices,
       std::span< const int64_t > dst_indices
    );
+   /**
+    * @brief Add one edge for a specific edge type.
+    * @param src_type Source node type
+    * @param rel_type Relation name
+    * @param dst_type Destination node type
+    * @param src_index Source index (local to current graph)
+    * @param dst_index Destination index (local to current graph)
+    */
+   void add_edge(
+      const std::string& src_type,
+      const std::string& rel_type,
+      const std::string& dst_type,
+      int64_t src_index,
+      int64_t dst_index
+   );
    void add_edge_features(
       const std::string& src_type,
       const std::string& rel_type,
@@ -175,6 +190,16 @@ class BatchBuilder {
     * Expects batch encoding with num_graphs == 1.
     */
    void append_batch_encoding(const BatchEncoding& batch_encoding);
+
+   /**
+    * @brief Replace builder state from a native batch encoding (copy).
+    */
+   void load_from_batch_encoding(const BatchEncoding& batch_encoding);
+
+   /**
+    * @brief Replace builder state from a native batch encoding (move).
+    */
+   void load_from_batch_encoding(BatchEncoding&& batch_encoding);
 
    /// Set feature dim for a node type (used for implicit empty x tensors).
    void set_node_feature_dim(const std::string& node_type, int dim);
