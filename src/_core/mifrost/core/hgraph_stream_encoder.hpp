@@ -27,23 +27,76 @@
 namespace mifrost {
 
 /**
- * @brief Core heterogeneous graph encoder engine.
+ * @brief Heterogeneous graph encoder engine.
  *
- * Encodes states/goals/actions into relation-typed node/edge structures using
- * ``BatchBuilder`` output conventions.
+ * Builds a relation-typed node/edge schema from planning states/goals/actions and writes the
+ * resulting tensors and metadata into a caller-provided `BatchBuilder`.
+ *
+ * Contract:
+ *  - The caller owns `BatchBuilder` and may reuse it across steps.
+ *  - Encoding mutates/extends the builder; it does not clear existing content.
  */
 class HGraphEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
 
+   /**
+    * @brief Per-encode scratch space for heterogeneous graph construction.
+    *
+    * This workspace holds temporary indices and name tables that are accumulated while encoding a
+    * single state/goal/action step into the `BatchBuilder`.
+    *
+    * Lifetime:
+    *  - Created once per encode call (see `init_hetero_workspace`).
+    *  - Mutated by `encode_objects`, `encode_facts`, goal/action/history encoders.
+    *  - Read by `finalize_hetero_encoding` and (optionally) `add_lgan_nn_edges`.
+    *
+    * Invariants:
+    *  - For each node type, `node_indices[type]` maps a stable node key string to the node index
+    *    used in `BatchBuilder`.
+    *  - `node_names[type][idx]` is the key string for the node with index `idx` (aligned with
+    *    `node_indices[type]`).
+    */
    struct HeteroEncodingWorkspace {
+      /**
+       * @brief Node key -> node index mapping per node type.
+       *
+       * Used to deduplicate nodes across the encode step and to retrieve indices when adding edges.
+       * Keys are formatted strings (see `RelationFormatter`) and indices correspond to the order in
+       * which nodes are created via `get_or_add_node`.
+       */
       hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
+
+      /**
+       * @brief Node index -> node key table per node type.
+       *
+       * Maintained in lockstep with `node_indices` so that names can be exported to the builder at
+       * the end of encoding (see `finalize_hetero_encoding`).
+       */
       hash_map< std::string, std::vector< std::string > > node_names;
+
+      /**
+       * @brief Relation-node key -> set of symbol keys appearing in that relation.
+       *
+       * The map key is a stable composite relation identifier (see
+       * `relation_key(node_type,node_key)` and related formatting). The value is the set of symbol
+       * keys (objects) that occur as arguments of that relation node.
+       *
+       * Used to derive LGAN-style nearest-neighbor edges when enabled.
+       */
       hash_map< std::string, hash_set< std::string > > relation_to_symbols;
+
+      /**
+       * @brief Symbol key -> set of relation-node keys in which the symbol appears.
+       *
+       * Reverse index of `relation_to_symbols`.
+       * This enables fast lookup of all relations that a given symbol participates in, which is
+       * used when computing LGAN-style edges.
+       */
       hash_map< std::string, hash_set< std::string > > symbol_to_relations;
    };
 
-   /// Runtime configuration for relation/node/edge derivation behavior.
+   /// Runtime configuration controlling which relations/nodes/edges are emitted.
    struct Config {
       std::string symbol_type_id = defaults::symbol_type_id;
       std::string nullary_object_name = "![nullary_symbol]!";
@@ -59,23 +112,40 @@ class HGraphEncoderEngine {
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 
-   /// Construct from borrowed domain implementation reference.
+   /// Construct from a borrowed domain implementation reference (caller must keep it alive).
    explicit HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);
    HGraphEncoderEngine(const mimir::formalism::DomainImpl& domain, Config config);
 
-   /// Construct from owning domain handle.
+   /// Construct from an owning domain handle (engine stores the domain internally).
    explicit HGraphEncoderEngine(mimir::formalism::Domain domain);
    HGraphEncoderEngine(mimir::formalism::Domain domain, Config config);
 
    ~HGraphEncoderEngine() = default;
 
-   /// Encode a state-only step into an existing builder.
+   /**
+    * @brief Encode a state-only step.
+    *
+    * Writes symbol/object nodes and fact relations derived from `state`.
+    *
+    * @param state Planning state to encode.
+    * @param builder Output builder to append into.
+    */
    void encode_state(const mimir::search::State& state, BatchBuilder& builder)
    {
       encode_state_impl(state, builder);
    }
 
-   /// Encode a state with typed goals/actions into an existing builder.
+   /**
+    * @brief Encode a state with typed goal literals and optional actions.
+    *
+    * Convenience overload that wraps typed goal literals into `GoalInputs` internally.
+    *
+    * @tparam GoalTag Tag of the provided goal literals (Static/Fluent/Derived).
+    * @param state Planning state to encode.
+    * @param goals Goal literals of the given tag.
+    * @param actions Actions to encode (ignored when `Config::ignore_actions` is true).
+    * @param builder Output builder to append into.
+    */
    template < typename GoalTag >
    void encode_step(
       const mimir::search::State& state,
@@ -87,7 +157,17 @@ class HGraphEncoderEngine {
       encode_step_impl(state, goals, actions, builder);
    }
 
-   /// Encode with fully split goal inputs and explicit actions.
+   /**
+    * @brief Encode a state with fully split `GoalInputs` and explicit actions.
+    *
+    * Encodes objects, facts, goal literal nodes, optional actions, goal-satisfaction nodes, and
+    * optional LGAN edges (depending on `Config`).
+    *
+    * @param state Planning state to encode.
+    * @param goals Goal input groups and (optional) goal levels.
+    * @param actions Actions to encode.
+    * @param builder Output builder to append into.
+    */
    void encode(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -98,7 +178,21 @@ class HGraphEncoderEngine {
       encode_impl(state, goals, actions, builder);
    }
 
-   /// Encode with history-subgoal inputs.
+   /**
+    * @brief Encode a step with optional history subgoals.
+    *
+    * History entries are encoded into a dedicated "history" node type and linked to the referenced
+    * relation nodes via `Config::history_link_relation`.
+    *
+    * @param state Planning state to encode.
+    * @param goals Goal input groups and (optional) goal levels.
+    * @param actions Actions to encode.
+    * @param history_subgoals (dt, literals) pairs; dt must be negative (past steps).
+    * @param history_max_steps Optional limit; entries with |dt| > max are skipped.
+    * @param builder Output builder to append into.
+    *
+    * @throws std::invalid_argument if any dt value is non-negative.
+    */
    void encode(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -111,20 +205,28 @@ class HGraphEncoderEngine {
       encode_impl_core(state, goals, actions, history_subgoals, history_max_steps, builder);
    }
 
-   /// Encode state-only (goals inferred from problem if needed by caller).
+   /// Encode a state-only step (goals inferred from the state's problem).
    void encode(const mimir::search::State& state, BatchBuilder& builder)
    {
       encode_state(state, builder);
    }
 
-   /// Return effective engine config.
+   /// Return the effective runtime configuration.
    const Config& get_config() const { return config_; }
 
   protected:
-   /// Initialize per-graph hetero encoding workspace and node feature defaults.
+   /**
+    * @brief Initialize per-step workspace and ensure feature dimension defaults.
+    *
+    * Called once per encode step. Ensures required node feature dims exist in `builder`.
+    */
    HeteroEncodingWorkspace init_hetero_workspace(BatchBuilder& builder) const;
 
-   /// Add configured goal literal nodes/edges for all goal tags.
+   /**
+    * @brief Encode goal literals for all goal tags.
+    *
+    * Appends literal relation nodes and their symbol-position edges.
+    */
    void encode_goal_inputs(
       const GoalInputs& goals,
       BatchBuilder& builder,
@@ -132,7 +234,12 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Add configured goal satisfaction nodes/edges for all goal tags.
+   /**
+    * @brief Encode goal-satisfaction nodes for all goal tags.
+    *
+    * Uses `fact_keys` to decide satisfied/unsatisfied variants and emits the configured
+    * derivations.
+    */
    void encode_goal_satisfaction_inputs(
       const GoalInputs& goals,
       const hash_set< std::string >& fact_keys,
@@ -142,20 +249,32 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Optionally add LGAN nearest-neighbor edges from accumulated relation-symbol maps.
+   /**
+    * @brief Conditionally add LGAN nearest-neighbor edges.
+    *
+    * Uses `workspace.relation_to_symbols` / `workspace.symbol_to_relations` collected during
+    * encoding.
+    */
    void maybe_add_lgan_edges(BatchBuilder& builder, const HeteroEncodingWorkspace& workspace);
 
-   /// Finalize hetero output node names/object names and empty edge schema.
+   /**
+    * @brief Finalize builder metadata after encoding.
+    *
+    * Exports node names per type, sets object names for the symbol type, and ensures empty edge
+    * types if configured.
+    *
+    * @param object_names_override Optional object-name list to export instead of symbol node names.
+    */
    void finalize_hetero_encoding(
       BatchBuilder& builder,
       const HeteroEncodingWorkspace& workspace,
       const std::vector< std::string >* object_names_override = nullptr
    ) const;
 
-   /// Initialize relation dictionary and precomputed relation metadata from domain config.
+   /// Build the relation dictionary and precompute schema metadata from the configured domain.
    void initialize_from_domain();
 
-   /// Internal typed goal/action encode implementation.
+   /// Internal implementation for typed goals.
    template < typename GoalTag >
    void encode_step_impl(
       const mimir::search::State& state,
@@ -164,10 +283,10 @@ class HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
-   /// Internal state-only encode implementation.
+   /// Internal implementation for state-only encoding.
    void encode_state_impl(const mimir::search::State& state, BatchBuilder& builder);
 
-   /// Internal full encode implementation.
+   /// Internal implementation for full encoding.
    void encode_impl(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -175,7 +294,7 @@ class HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
-   /// Internal encode with history support (shared implementation).
+   /// Shared implementation for full encoding, with optional history support.
    void encode_impl_core(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -185,7 +304,12 @@ class HGraphEncoderEngine {
       BatchBuilder& builder
    );
 
-   /// Encode object/symbol node type and register node indices.
+   /**
+    * @brief Encode symbol/object nodes.
+    *
+    * Emits the configured symbol node type and records indices/names in the workspace tables.
+    * Extra objects are appended as additional symbols.
+    */
    void encode_objects(
       const mimir::search::State& state,
       BatchBuilder& builder,
@@ -194,7 +318,12 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Encode fact atoms and return formatted fact keys.
+   /**
+    * @brief Encode fact atoms and return formatted fact keys.
+    *
+    * Adds relation nodes for all included facts and returns the set of formatted fact keys used for
+    * goal-satisfaction derivations.
+    */
    hash_set< std::string > encode_facts(
       const mimir::search::State& state,
       BatchBuilder& builder,
@@ -205,7 +334,12 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Encode goal literals as nodes and connect relation edges.
+   /**
+    * @brief Encode goal literals as relation nodes.
+    *
+    * Adds literal relation nodes and symbol-position edges; also updates relation/symbol incidence
+    * maps for optional LGAN edge derivation.
+    */
    template < typename GoalTag >
    void encode_literals(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
@@ -218,7 +352,12 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Encode grounded actions as nodes and connect relation edges.
+   /**
+    * @brief Encode grounded actions as relation nodes.
+    *
+    * Adds action relation nodes and symbol-position edges; ignored when `Config::ignore_actions` is
+    * true.
+    */
    void encode_actions(
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder,
@@ -229,7 +368,11 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Encode goal satisfaction derivations (sat/unsat variants).
+   /**
+    * @brief Encode goal-satisfaction derivations.
+    *
+    * Emits satisfied/unsatisfied variants as configured in `RelationDictConfig`.
+    */
    template < typename GoalTag >
    void encode_goal_satisfaction(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
@@ -244,7 +387,14 @@ class HGraphEncoderEngine {
       std::span< const std::string > extra_objects = {}
    );
 
-   /// Add LGAN nearest-neighbor style edges where configured.
+   /**
+    * @brief Add LGAN-style nearest-neighbor edges.
+    *
+    * Uses the relation/symbol incidence maps to connect relation nodes to additional target symbols
+    * whose neighborhood contains all relation arguments.
+    *
+    * Note: This can be O(|relations| * |symbols| * avg_arity) in the worst case.
+    */
    void add_lgan_nn_edges(
       BatchBuilder& builder,
       const hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
@@ -252,7 +402,12 @@ class HGraphEncoderEngine {
       const hash_map< std::string, hash_set< std::string > >& symbol_to_relations
    );
 
-   /// Encode history subgoal nodes and edges.
+   /**
+    * @brief Encode history subgoals.
+    *
+    * Creates "history" nodes with a single feature (dt) and links each referenced literal relation
+    * node bidirectionally via `Config::history_link_relation`.
+    */
    void encode_history(
       std::span< const HistorySubgoal > history_subgoals,
       std::optional< int > history_max_steps,
@@ -263,12 +418,12 @@ class HGraphEncoderEngine {
       hash_map< std::string, hash_set< std::string > >& symbol_to_relations
    );
 
-   /// Ensure configured edge types exist in output even when empty.
+   /// Ensure configured edge types exist in the schema even when no edges were emitted.
    void ensure_empty_edge_types(BatchBuilder& builder) const;
-   /// Ensure node feature dims are present for synthesized empty x tensors.
+   /// Ensure node feature dimensions are set for all configured node types.
    void ensure_node_feature_dims(BatchBuilder& builder) const;
 
-   /// Append one directed edge.
+   /// Append one directed edge (single src/dst index) to the builder.
    static void append_edges(
       BatchBuilder& builder,
       const std::string& src_type,
@@ -277,11 +432,21 @@ class HGraphEncoderEngine {
       int64_t src,
       int64_t dst
    );
-
-   /// Build stable relation-key string from node type and formatted node key.
+   /**
+    * @brief Build the stable relation key used in incidence maps.
+    *
+    * Format is `node_type + "\n" + node_key`.
+    */
    static std::string relation_key(const std::string& node_type, const std::string& node_key);
 
-   /// Get/create one node index and keep names/index map aligned.
+   /**
+    * @brief Get or create a node index for (type,key).
+    *
+    * Ensures `node_indices[type][key]` and `node_names[type]` stay aligned with builder node
+    * counts.
+    *
+    * @return Node index in the given type.
+    */
    static int64_t get_or_add_node(
       const std::string& node_type,
       const std::string& node_key,
@@ -290,15 +455,15 @@ class HGraphEncoderEngine {
       hash_map< std::string, std::vector< std::string > >& node_names
    );
 
-   /// Optional owning domain storage for handle-based construction.
+   /// Optional owning domain storage (used when constructed from a domain handle).
    mimir::formalism::Domain domain_holder_;
-   /// Active domain implementation reference.
+   /// Active domain implementation reference (either borrowed or owned via `domain_holder_`).
    const mimir::formalism::DomainImpl& domain_;
-   /// Effective runtime config.
+   /// Effective runtime configuration.
    Config config_;
-   /// Derived relation arity metadata.
+   /// Derived relation and schema metadata.
    RelationDict relation_dict_;
-   /// Precomputed edge types used when include_empty_edge_types is enabled.
+   /// Precomputed edge types used when `Config::include_empty_edge_types` is enabled.
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
 };
 
@@ -320,7 +485,9 @@ BOOST_DESCRIBE_STRUCT(
 )
 
 /**
- * @brief Payload for one streaming HGraph encode step.
+ * @brief Input payload for one streaming encode step.
+ *
+ * Fields are optional; `state` must be set. When `goals` is null, the engine encodes state-only.
  */
 struct HGraphStepInput {
    const mimir::search::State* state = nullptr;
@@ -331,10 +498,13 @@ struct HGraphStepInput {
 };
 
 /**
- * @brief Streaming HGraph encoder with static dispatch.
+ * @brief Streaming wrapper around `HGraphEncoderEngine`.
+ *
+ * Maintains a stream of step inputs and encodes them into builders via `StreamEncoderBase`.
  */
 class HGraphStreamEncoder: public StreamEncoderBase< HGraphStreamEncoder, HGraphStepInput > {
   public:
+   /// Identifier of the produced graph kind (used by the stream base).
    static constexpr std::string_view graph_kind() { return "hetero"; }
 
    explicit HGraphStreamEncoder(HGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
