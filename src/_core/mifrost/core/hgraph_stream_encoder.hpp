@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/describe.hpp>
+#include <cstdint>
 #include <mimir/formalism/action.hpp>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/ground_action.hpp>
@@ -39,6 +40,7 @@ namespace mifrost {
 class HGraphEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
+   using RelationRef = uint64_t;
 
    /**
     * @brief Per-encode scratch space for heterogeneous graph construction.
@@ -53,7 +55,8 @@ class HGraphEncoderEngine {
     *
     * Invariants:
     *  - `node_indices` stores string-keyed dedup maps (used for literal/history-style keys).
-    *  - `node_indices_i64` stores compact integer-keyed dedup maps (used for facts/actions).
+    *  - `node_indices_i64` stores compact i64-keyed dedup maps.
+    *  - `node_indices_u64` stores packed integer-keyed dedup maps.
     *  - `symbol_indices` maps compact symbol ids to node indices for the symbol node type.
     *  - `node_names[type][idx]` is the exported node name (when metadata export is enabled).
     */
@@ -63,9 +66,11 @@ class HGraphEncoderEngine {
 
       /// Integer-keyed node dedup map per node type.
       hash_map< std::string, hash_map< int64_t, int64_t > > node_indices_i64;
+      hash_map< std::string, hash_map< uint64_t, int64_t > > node_indices_u64;
 
       /// Compact symbol id -> symbol node index (for `Config::symbol_type_id`).
       hash_map< int64_t, int64_t > symbol_indices;
+      hash_map< std::string, int64_t > symbol_key_to_id;
 
       /// Stable ids for non-object symbols (action targets, nullary pseudo-object, extra objects).
       hash_map< std::string, int64_t > special_symbol_ids;
@@ -79,24 +84,24 @@ class HGraphEncoderEngine {
       hash_map< std::string, std::vector< std::string > > node_names;
 
       /**
-       * @brief Relation-node key -> set of symbol ids appearing in that relation.
+       * @brief Relation-ref -> set of symbol ids appearing in that relation.
        *
-       * The map key is a stable composite relation identifier (see
-       * `relation_key(node_type,node_key)` and `relation_key_i64(node_type,key)` helpers). The
-       * value is the set of symbol ids that occur as arguments of that relation node.
-       *
-       * Used to derive LGAN-style nearest-neighbor edges when enabled.
+       * RelationRef packs `(type_id, relation_idx)` into one `uint64_t`.
        */
-      hash_map< std::string, hash_set< int64_t > > relation_to_symbols;
+      hash_map< RelationRef, hash_set< int64_t > > relation_to_symbols;
 
       /**
-       * @brief Symbol id -> set of relation-node keys in which the symbol appears.
+       * @brief Symbol id -> set of relation refs in which the symbol appears.
        *
        * Reverse index of `relation_to_symbols`.
        * This enables fast lookup of all relations that a given symbol participates in, which is
        * used when computing LGAN-style edges.
        */
-      hash_map< int64_t, hash_set< std::string > > symbol_to_relations;
+      hash_map< int64_t, hash_set< RelationRef > > symbol_to_relations;
+
+      /// Per-encode node-type interning used by RelationRef.
+      hash_map< std::string, uint32_t > relation_type_ids;
+      std::vector< std::string > relation_type_names;
    };
 
    /// Runtime configuration controlling which relations/nodes/edges are emitted.
@@ -246,7 +251,7 @@ class HGraphEncoderEngine {
     */
    void encode_goal_satisfaction_inputs(
       const GoalInputs& goals,
-      const hash_set< std::string >& fact_keys,
+      const hash_set< uint64_t >& fact_keys,
       BatchBuilder& builder,
       HeteroEncodingWorkspace& workspace,
       std::string_view suffix = "",
@@ -328,13 +333,13 @@ class HGraphEncoderEngine {
     * Adds relation nodes for all included facts and returns the set of formatted fact keys used for
     * goal-satisfaction derivations.
     */
-   hash_set< std::string > encode_facts(
+   hash_set< uint64_t > encode_facts(
       const mimir::search::State& state,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -351,8 +356,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -367,8 +372,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -381,12 +386,12 @@ class HGraphEncoderEngine {
    void encode_goal_satisfaction(
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
       const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-      const hash_set< std::string >& fact_keys,
+      const hash_set< uint64_t >& fact_keys,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
       std::string_view suffix = "",
       std::span< const std::string > extra_objects = {}
    );
@@ -401,11 +406,10 @@ class HGraphEncoderEngine {
     */
    void add_lgan_nn_edges(
       BatchBuilder& builder,
-      const hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-      const hash_map< std::string, hash_map< int64_t, int64_t > >& node_indices_i64,
       const hash_map< int64_t, int64_t >& symbol_indices,
-      const hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      const hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+      const hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      const hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
+      const std::vector< std::string >& relation_type_names
    );
 
    /**
@@ -420,34 +424,27 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations
    );
 
    /**
     * @brief Track relation-symbol incidence only when LGAN edges are enabled.
     */
    void track_relation_symbols_if_enabled(
-      const std::string& rel_key,
+      RelationRef rel_ref,
       std::span< const int64_t > object_symbol_ids,
       std::span< const int64_t > extra_symbol_ids,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations
    );
    void track_relation_symbols_if_enabled(
-      const std::string& rel_key,
+      RelationRef rel_ref,
       std::span< const std::string > object_keys,
       std::span< const std::string > extra_objects,
-      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+      hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations
    );
-   void track_relation_symbols_if_enabled(
-      const std::string& rel_key,
-      std::span< const std::string > object_keys,
-      std::span< const std::string > extra_objects,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
-   ) const;
 
    /// Ensure configured edge types exist in the schema even when no edges were emitted.
    void ensure_empty_edge_types(BatchBuilder& builder) const;
@@ -463,13 +460,11 @@ class HGraphEncoderEngine {
       int64_t src,
       int64_t dst
    );
-   /**
-    * @brief Build the stable relation key used in incidence maps.
-    *
-    * Format is `node_type + "\n" + node_key`.
-    */
-   static std::string relation_key(const std::string& node_type, const std::string& node_key);
-   static std::string relation_key_i64(const std::string& node_type, int64_t node_key);
+   static uint64_t pack_u32_u32(uint32_t a, uint32_t b);
+   static uint64_t pack_i32_u32(int32_t a, uint32_t b);
+   static RelationRef relation_ref_from_parts(uint32_t type_id, uint32_t relation_idx);
+   uint32_t get_or_assign_relation_type_id(const std::string& node_type);
+   RelationRef relation_ref_for(const std::string& node_type, int64_t relation_idx);
 
    std::string symbol_node_key(const mimir::formalism::Object& obj) const;
 
@@ -495,6 +490,14 @@ class HGraphEncoderEngine {
    int64_t get_or_add_relation_node_i64(
       const std::string& node_type,
       int64_t key,
+      BatchBuilder& builder,
+      hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
+      hash_map< std::string, std::vector< std::string > >& node_names,
+      std::string_view node_name
+   );
+   int64_t get_or_add_relation_node_u64(
+      const std::string& node_type,
+      uint64_t key,
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
@@ -795,8 +798,8 @@ void HGraphEncoderEngine::encode_literals(
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
-   hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-   hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+   hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+   hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
    std::span< const std::string > extra_objects
 )
 {
@@ -808,18 +811,22 @@ void HGraphEncoderEngine::encode_literals(
                                                  : std::nullopt;
 
       std::string node_type;
-      std::string node_key;
+      std::string node_name;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
             predicate, level, std::nullopt, literal->get_polarity()
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(literal, level);
+         if(config_.export_node_names) {
+            node_name = RelationFormatter::format_literal< GoalTag >(literal, level);
+         }
       } else {
          node_type = RelationFormatter::format_predicate(
             predicate, std::nullopt, std::nullopt, literal->get_polarity()
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
+         if(config_.export_node_names) {
+            node_name = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
+         }
       }
 
       std::vector< int64_t > object_symbol_ids;
@@ -841,8 +848,13 @@ void HGraphEncoderEngine::encode_literals(
             object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
-      const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+      const auto relation_idx = get_or_add_relation_node_i64(
+         node_type,
+         static_cast< int64_t >(atom->get_index()),
+         builder,
+         node_indices,
+         node_names,
+         node_name
       );
 
       for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
@@ -866,9 +878,9 @@ void HGraphEncoderEngine::encode_literals(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      const std::string rel_key = relation_key(node_type, node_key);
+      const auto rel_ref = relation_ref_for(node_type, relation_idx);
       track_relation_symbols_if_enabled(
-         rel_key,
+         rel_ref,
          std::span{object_symbol_ids},
          std::span{extra_symbol_ids},
          relation_to_symbols,
@@ -881,12 +893,12 @@ template < typename GoalTag >
 void HGraphEncoderEngine::encode_goal_satisfaction(
    std::span< const mimir::formalism::GroundLiteral< GoalTag > > goals,
    const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-   const hash_set< std::string >& fact_keys,
+   const hash_set< uint64_t >& fact_keys,
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
-   hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
-   hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
+   hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
+   hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
    std::string_view suffix,
    std::span< const std::string > extra_objects
 )
@@ -894,7 +906,12 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
    for(const auto& goal : goals) {
       const auto atom = goal->get_atom();
       const auto predicate = atom->get_predicate();
-      const auto fact_key = RelationFormatter::format_atom< GoalTag >(atom);
+      const auto fact_key = pack_u32_u32(
+         static_cast< uint32_t >(goal->get_atom()->get_index()),
+         std::is_same_v< GoalTag, mimir::formalism::StaticTag >
+            ? 1U
+            : (std::is_same_v< GoalTag, mimir::formalism::FluentTag > ? 2U : 3U)
+      );
       const bool satisfied = fact_keys.contains(fact_key) == goal->get_polarity();
       const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                              : GoalSatisfaction::unsatisfied;
@@ -907,22 +924,26 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
                                               : std::nullopt;
 
       std::string node_type;
-      std::string node_key;
+      std::string node_name;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
             predicate, level, sat, goal->get_polarity(), suffix
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(
-            goal, level, sat, std::nullopt, suffix
-         );
+         if(config_.export_node_names) {
+            node_name = RelationFormatter::format_literal< GoalTag >(
+               goal, level, sat, std::nullopt, suffix
+            );
+         }
       } else {
          node_type = RelationFormatter::format_predicate(
             predicate, std::nullopt, sat, goal->get_polarity(), suffix
          );
-         node_key = RelationFormatter::format_literal< GoalTag >(
-            goal, std::nullopt, sat, std::nullopt, suffix
-         );
+         if(config_.export_node_names) {
+            node_name = RelationFormatter::format_literal< GoalTag >(
+               goal, std::nullopt, sat, std::nullopt, suffix
+            );
+         }
       }
 
       std::vector< int64_t > object_symbol_ids;
@@ -944,8 +965,13 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
             object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
-      const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+      const auto relation_idx = get_or_add_relation_node_i64(
+         node_type,
+         static_cast< int64_t >(atom->get_index()),
+         builder,
+         node_indices,
+         node_names,
+         node_name
       );
 
       for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
@@ -969,9 +995,9 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      const std::string rel_key = relation_key(node_type, node_key);
+      const auto rel_ref = relation_ref_for(node_type, relation_idx);
       track_relation_symbols_if_enabled(
-         rel_key,
+         rel_ref,
          std::span{object_symbol_ids},
          std::span{extra_symbol_ids},
          relation_to_symbols,

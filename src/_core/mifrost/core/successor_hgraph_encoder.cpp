@@ -84,7 +84,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    );
 
    // 3. Encode successor facts
-   hash_set< std::string > suc_fact_keys;
+   hash_set< uint64_t > suc_fact_keys;
    const auto& problem = successor.get_problem();
    const auto& repos = problem.get_repositories();
 
@@ -104,95 +104,65 @@ void SuccessorHGraphEncoderEngine::encode_impl(
             predicate, std::nullopt, std::nullopt, std::nullopt, successor_config_.successor_suffix
          );
       }
-      const std::string atom_str = RelationFormatter::format_atom< Tag >(
-         atom, successor_config_.successor_suffix
-      );
-      const std::string node_key = polarity.has_value()
-                                      ? fmt::format(
-                                           "{}{}",
-                                           RelationFormatter::polarity_prefix(*polarity),
-                                           atom_str
-                                        )
-                                      : atom_str;
-      const auto relation_idx = get_or_add_node(
-         node_type,
-         node_key,
-         builder,
-         workspace.node_indices,
-         workspace.node_names,
-         config_.export_node_names
+      const int64_t relation_key = static_cast< int64_t >(atom->get_index());
+      std::string node_name;
+      if(config_.export_node_names) {
+         const std::string atom_str = RelationFormatter::format_atom< Tag >(
+            atom, successor_config_.successor_suffix
+         );
+         node_name = polarity.has_value()
+                        ? fmt::format(
+                             "{}{}", RelationFormatter::polarity_prefix(*polarity), atom_str
+                          )
+                        : atom_str;
+      }
+      const auto relation_idx = get_or_add_relation_node_i64(
+         node_type, relation_key, builder, workspace.node_indices, workspace.node_names, node_name
       );
 
-      std::vector< std::string > object_keys;
-      std::vector< int64_t > object_node_indices;
-      auto& symbol_node_indices = workspace.node_indices[config_.symbol_type_id];
-      const auto resolve_symbol_idx_from_name =
-         [&](const std::string& key) -> std::optional< int64_t > {
-         auto names_it = workspace.node_names.find(config_.symbol_type_id);
-         if(names_it == workspace.node_names.end()) {
-            return std::nullopt;
-         }
-         const auto& symbol_names = names_it->second;
-         const auto name_it = std::find(symbol_names.begin(), symbol_names.end(), key);
-         if(name_it == symbol_names.end()) {
-            return std::nullopt;
-         }
-         return static_cast< int64_t >(std::distance(symbol_names.begin(), name_it));
-      };
+      std::vector< int64_t > object_symbol_ids;
       if(predicate->get_arity() == 0) {
-         const std::string key = config_.nullary_object_name;
-         int64_t obj_idx = -1;
-         if(const auto resolved = resolve_symbol_idx_from_name(key); resolved.has_value()) {
-            obj_idx = *resolved;
-         } else {
-            const auto it = symbol_node_indices.find(key);
-            if(it != symbol_node_indices.end()) {
-               obj_idx = it->second;
-            } else {
-               obj_idx = get_or_add_symbol_special_node(key, key, builder, workspace.node_names);
-               symbol_node_indices.try_emplace(key, obj_idx);
-            }
-         }
-         object_keys.emplace_back(key);
-         object_node_indices.emplace_back(obj_idx);
+         const auto nullary_idx = get_or_add_symbol_special_node(
+            config_.nullary_object_name, config_.nullary_object_name, builder, workspace.node_names
+         );
+         (void) nullary_idx;
+         object_symbol_ids.emplace_back(
+            get_or_assign_special_symbol_id(config_.nullary_object_name)
+         );
       } else {
          for(const auto& obj : atom->get_objects()) {
-            const std::string key = symbol_node_key(obj);
-            int64_t obj_idx = -1;
-            if(const auto resolved = resolve_symbol_idx_from_name(key); resolved.has_value()) {
-               obj_idx = *resolved;
-            } else {
-               const auto it = symbol_node_indices.find(key);
-               if(it != symbol_node_indices.end()) {
-                  obj_idx = it->second;
-               } else {
-                  obj_idx = get_or_add_symbol_object_node(obj, builder, workspace.node_names);
-                  symbol_node_indices.try_emplace(key, obj_idx);
-               }
-            }
-            object_keys.emplace_back(key);
-            object_node_indices.emplace_back(obj_idx);
+            const auto obj_idx = get_or_add_symbol_object_node(obj, builder, workspace.node_names);
+            (void) obj_idx;
+            object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
 
-      for(size_t pos = 0; pos < object_node_indices.size(); ++pos) {
-         const auto obj_idx = object_node_indices[pos];
+      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
+         const auto obj_idx = workspace.symbol_indices.at(object_symbol_ids[pos]);
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      const std::string rel_key = relation_key(node_type, node_key);
+      const auto rel_ref = relation_ref_for(node_type, relation_idx);
       track_relation_symbols_if_enabled(
-         rel_key,
-         std::span{object_keys},
-         std::span< const std::string >{},
+         rel_ref,
+         std::span{object_symbol_ids},
+         std::span< const int64_t >{},
          workspace.relation_to_symbols,
          workspace.symbol_to_relations
       );
 
       if(not polarity.has_value() || *polarity) {
-         suc_fact_keys.insert(RelationFormatter::format_atom< Tag >(atom));
+         uint32_t tag_id = 0;
+         if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
+            tag_id = 1;
+         } else if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
+            tag_id = 2;
+         } else {
+            tag_id = 3;
+         }
+         suc_fact_keys.insert(pack_u32_u32(static_cast< uint32_t >(atom->get_index()), tag_id));
       }
    };
 

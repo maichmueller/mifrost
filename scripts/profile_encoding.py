@@ -94,13 +94,13 @@ def bench_encode_single_pyg(
         )
 
 
-def bench_encode_single_parts(
+def bench_encode_single_native(
     encoder, states, goals, subgoal_layers, actions, iterations
 ):
     n = len(states)
     for i in range(iterations):
         idx = i % n
-        encoder.encode_parts(
+        encoder.encode(
             states[idx],
             goals=goals,
             actions=actions[idx] if actions is not None else None,
@@ -160,8 +160,8 @@ def bench_encode_batch_no_metadata(encoder, states, goals, subgoal_layers, actio
     )
 
 
-def bench_encode_batch_parts(encoder, states, goals, subgoal_layers, actions):
-    encoder.encode_batch_parts(
+def bench_encode_batch_native(encoder, states, goals, subgoal_layers, actions):
+    encoder.encode_batch(
         states,
         goals=goals,
         actions=actions,
@@ -287,8 +287,8 @@ def main(argv: list[str]) -> int:
     )
     run_profile(
         args.profile,
-        "encode_single_parts",
-        lambda: bench_encode_single_parts(
+        "encode_single_native",
+        lambda: bench_encode_single_native(
             encoder,
             states_single,
             goals,
@@ -324,8 +324,8 @@ def main(argv: list[str]) -> int:
     )
     run_profile(
         args.profile,
-        "encode_batch_parts",
-        lambda: bench_encode_batch_parts(
+        "encode_batch_native",
+        lambda: bench_encode_batch_native(
             encoder,
             states_batch,
             goals,

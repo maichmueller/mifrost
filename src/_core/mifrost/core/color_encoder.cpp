@@ -170,7 +170,7 @@ void ColorEncoderEngine::encode_impl(
       for(const auto& obj : atom->get_objects()) {
          const std::string object_node = RelationFormatter::format_object(*obj);
          const std::string pos_name = fmt::format("{}:{}", base_name, pos);
-         const float color = static_cast< float >(color_for(pos_name));
+         const auto color = static_cast< float >(color_for(pos_name));
 
          if(config_.edge_features) {
             const auto obj_idx = ensure_node(object_node, std::nullopt);
@@ -243,7 +243,7 @@ void ColorEncoderEngine::encode_impl(
       for(const auto& obj : atom->get_objects()) {
          const std::string object_node = RelationFormatter::format_object(*obj);
          const std::string pos_name = fmt::format("{}:{}", base_name, pos);
-         const float color = static_cast< float >(color_for(pos_name));
+         const auto color = static_cast< float >(color_for(pos_name));
 
          if(config_.edge_features) {
             const auto obj_idx = ensure_node(object_node, std::nullopt);

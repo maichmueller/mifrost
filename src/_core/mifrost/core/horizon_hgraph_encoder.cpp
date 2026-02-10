@@ -92,40 +92,53 @@ void HorizonHGraphEncoderEngine::encode_impl(
    // Helpers for horizon-specific encoding (extra_objects first, prefixed node keys)
    auto encode_atoms_with_prefix = [&](
                                       auto atoms,
+                                      int target_idx,
                                       const std::string& prefix,
                                       std::span< const std::string > extra_objects
                                    ) {
-      hash_set< std::string > fact_keys;
+      hash_set< uint64_t > fact_keys;
       for(const auto& atom : atoms) {
          const auto predicate = atom->get_predicate();
          if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
             continue;
          }
          const std::string node_type = RelationFormatter::format_predicate(predicate);
-         const std::string node_key = prefix + RelationFormatter::format_atom(atom);
-         const auto relation_idx = get_or_add_node(
-            node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+         const uint64_t node_key = pack_u32_u32(
+            static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
+         );
+         const std::string node_name = config_.export_node_names
+                                          ? (prefix + RelationFormatter::format_atom(atom))
+                                          : "";
+         const auto relation_idx = get_or_add_relation_node_u64(
+            node_type, node_key, builder, node_indices, node_names, node_name
          );
 
-         std::vector< std::string > object_keys;
+         std::vector< int64_t > object_symbol_ids;
          if(predicate->get_arity() == 0) {
-            object_keys.emplace_back(config_.nullary_object_name);
+            const auto nullary_idx = get_or_add_symbol_special_node(
+               config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+            );
+            (void) nullary_idx;
+            object_symbol_ids.emplace_back(
+               get_or_assign_special_symbol_id(config_.nullary_object_name)
+            );
          } else {
             for(const auto& obj : atom->get_objects()) {
-               object_keys.emplace_back(symbol_node_key(obj));
+               const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+               (void) obj_idx;
+               object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
             }
          }
 
          size_t pos = 0;
+         std::vector< int64_t > extra_symbol_ids;
+         extra_symbol_ids.reserve(extra_objects.size());
          for(const auto& obj_key : extra_objects) {
-            const auto obj_idx = get_or_add_node(
-               config_.symbol_type_id,
-               obj_key,
-               builder,
-               node_indices,
-               node_names,
-               config_.export_node_names
+            const auto obj_idx = get_or_add_symbol_special_node(
+               obj_key, obj_key, builder, node_names
             );
+            const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
+            extra_symbol_ids.emplace_back(symbol_id);
             const std::string pos_str = std::to_string(pos++);
             append_edges(
                builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -135,15 +148,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
             );
          }
 
-         for(const auto& obj_key : object_keys) {
-            const auto obj_idx = get_or_add_node(
-               config_.symbol_type_id,
-               obj_key,
-               builder,
-               node_indices,
-               node_names,
-               config_.export_node_names
-            );
+         for(const auto symbol_id : object_symbol_ids) {
+            const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
             const std::string pos_str = std::to_string(pos++);
             append_edges(
                builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -153,9 +159,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
             );
          }
 
-         const std::string rel_key = relation_key(node_type, node_key);
+         const auto rel_ref = relation_ref_for(node_type, relation_idx);
          track_relation_symbols_if_enabled(
-            rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+            rel_ref,
+            std::span{object_symbol_ids},
+            std::span{extra_symbol_ids},
+            relation_to_symbols,
+            symbol_to_relations
          );
          fact_keys.insert(node_key);
       }
@@ -164,11 +174,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    auto encode_state_facts_with_prefix = [&](
                                             const mimir::search::State& state,
+                                            int target_idx,
                                             const std::string& prefix,
                                             std::span< const std::string > extra_objects,
                                             bool include_static
                                          ) {
-      hash_set< std::string > fact_keys;
+      hash_set< uint64_t > fact_keys;
       const auto& problem = state.get_problem();
       const auto& repos = problem.get_repositories();
 
@@ -180,7 +191,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
             }
             auto atom = literal->get_atom();
             std::array< decltype(atom), 1 > atoms{atom};
-            auto keys = encode_atoms_with_prefix(std::span{atoms}, prefix, extra_objects);
+            auto keys = encode_atoms_with_prefix(
+               std::span{atoms}, target_idx, prefix, extra_objects
+            );
             for(const auto& key : keys) {
                fact_keys.insert(key);
             }
@@ -190,7 +203,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          state.get_atoms< mimir::formalism::FluentTag >()
       );
-      auto fluent_keys = encode_atoms_with_prefix(std::span{fluent_atoms}, prefix, extra_objects);
+      auto fluent_keys = encode_atoms_with_prefix(
+         std::span{fluent_atoms}, target_idx, prefix, extra_objects
+      );
       for(const auto& key : fluent_keys) {
          fact_keys.insert(key);
       }
@@ -199,7 +214,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                     .get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
                                        state.get_atoms< mimir::formalism::DerivedTag >()
                                     );
-      auto derived_keys = encode_atoms_with_prefix(std::span{derived_atoms}, prefix, extra_objects);
+      auto derived_keys = encode_atoms_with_prefix(
+         std::span{derived_atoms}, target_idx, prefix, extra_objects
+      );
       for(const auto& key : derived_keys) {
          fact_keys.insert(key);
       }
@@ -211,6 +228,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
          const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
+         int target_idx,
          const std::string& prefix,
          std::span< const std::string > extra_objects,
          std::optional< GoalSatisfaction > satisfaction_override = std::nullopt
@@ -229,15 +247,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                                      : GoalSatisfaction::none;
 
             std::string node_type;
-            std::string node_key;
+            std::string literal_name;
             auto format_with = [&](auto level_arg, auto satisfaction_arg) {
                node_type = RelationFormatter::format_predicate(
                   predicate, level_arg, satisfaction_arg, literal->get_polarity()
                );
-               node_key = prefix
-                          + RelationFormatter::format_literal< GoalTag >(
-                             literal, level_arg, satisfaction_arg
-                          );
+               if(config_.export_node_names) {
+                  literal_name = prefix
+                                 + RelationFormatter::format_literal< GoalTag >(
+                                    literal, level_arg, satisfaction_arg
+                                 );
+               }
             };
 
             if(goal_level.has_value()) {
@@ -255,32 +275,42 @@ void HorizonHGraphEncoderEngine::encode_impl(
                }
             }
 
-            const auto relation_idx = get_or_add_node(
-               node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+            const uint64_t relation_key = pack_u32_u32(
+               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
+            );
+            const auto relation_idx = get_or_add_relation_node_u64(
+               node_type, relation_key, builder, node_indices, node_names, literal_name
             );
 
-            std::vector< std::string > object_keys;
+            std::vector< int64_t > object_symbol_ids;
             if(predicate->get_arity() == 0) {
                if(not config_.add_nullary_predicates) {
                   continue;
                }
-               object_keys.emplace_back(config_.nullary_object_name);
+               const auto nullary_idx = get_or_add_symbol_special_node(
+                  config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+               );
+               (void) nullary_idx;
+               object_symbol_ids.emplace_back(
+                  get_or_assign_special_symbol_id(config_.nullary_object_name)
+               );
             } else {
                for(const auto& obj : atom->get_objects()) {
-                  object_keys.emplace_back(symbol_node_key(obj));
+                  const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+                  (void) obj_idx;
+                  object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
                }
             }
 
             size_t pos = 0;
+            std::vector< int64_t > extra_symbol_ids;
+            extra_symbol_ids.reserve(extra_objects.size());
             for(const auto& obj_key : extra_objects) {
-               const auto obj_idx = get_or_add_node(
-                  config_.symbol_type_id,
-                  obj_key,
-                  builder,
-                  node_indices,
-                  node_names,
-                  config_.export_node_names
+               const auto obj_idx = get_or_add_symbol_special_node(
+                  obj_key, obj_key, builder, node_names
                );
+               const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
+               extra_symbol_ids.emplace_back(symbol_id);
                const std::string pos_str = std::to_string(pos++);
                append_edges(
                   builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -289,15 +319,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
                );
             }
-            for(const auto& obj_key : object_keys) {
-               const auto obj_idx = get_or_add_node(
-                  config_.symbol_type_id,
-                  obj_key,
-                  builder,
-                  node_indices,
-                  node_names,
-                  config_.export_node_names
-               );
+            for(const auto symbol_id : object_symbol_ids) {
+               const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
                const std::string pos_str = std::to_string(pos++);
                append_edges(
                   builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -307,11 +330,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
                );
             }
 
-            const std::string rel_key = relation_key(node_type, node_key);
+            const auto rel_ref = relation_ref_for(node_type, relation_idx);
             track_relation_symbols_if_enabled(
-               rel_key,
-               std::span{object_keys},
-               extra_objects,
+               rel_ref,
+               std::span{object_symbol_ids},
+               std::span{extra_symbol_ids},
                relation_to_symbols,
                symbol_to_relations
             );
@@ -321,6 +344,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    auto encode_literal_atom_with_prefix = [&](
                                              auto atom,
                                              bool polarity,
+                                             int target_idx,
                                              const std::string& prefix,
                                              std::span< const std::string > extra_objects
                                           ) {
@@ -336,52 +360,57 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const std::string literal_str = fmt::format(
          "{}{}", RelationFormatter::polarity_prefix(polarity), atom_str
       );
-      const std::string node_key = prefix + literal_str;
+      const std::string node_name = config_.export_node_names ? (prefix + literal_str) : "";
 
-      const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+      const uint64_t relation_key = pack_u32_u32(
+         static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
+      );
+      const auto relation_idx = get_or_add_relation_node_u64(
+         node_type, relation_key, builder, node_indices, node_names, node_name
       );
 
-      std::vector< std::string > object_keys;
+      std::vector< int64_t > object_symbol_ids;
       if(predicate->get_arity() == 0) {
-         object_keys.emplace_back(config_.nullary_object_name);
+         const auto nullary_idx = get_or_add_symbol_special_node(
+            config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+         );
+         (void) nullary_idx;
+         object_symbol_ids.emplace_back(
+            get_or_assign_special_symbol_id(config_.nullary_object_name)
+         );
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(symbol_node_key(obj));
+            const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+            (void) obj_idx;
+            object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
 
       size_t pos = 0;
+      std::vector< int64_t > extra_symbol_ids;
+      extra_symbol_ids.reserve(extra_objects.size());
       for(const auto& obj_key : extra_objects) {
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
-         );
+         const auto obj_idx = get_or_add_symbol_special_node(obj_key, obj_key, builder, node_names);
+         const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
+         extra_symbol_ids.emplace_back(symbol_id);
          const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
-      for(const auto& obj_key : object_keys) {
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
-         );
+      for(const auto symbol_id : object_symbol_ids) {
+         const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
          const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      const std::string rel_key = relation_key(node_type, node_key);
+      const auto rel_ref = relation_ref_for(node_type, relation_idx);
       track_relation_symbols_if_enabled(
-         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+         rel_ref,
+         std::span{object_symbol_ids},
+         std::span{extra_symbol_ids},
+         relation_to_symbols,
+         symbol_to_relations
       );
    };
 
@@ -389,14 +418,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
          const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-         const hash_set< std::string >& fact_keys,
+         const hash_set< uint64_t >& fact_keys,
+         int target_idx,
          const std::string& prefix,
          std::span< const std::string > extra_objects
       ) {
          for(const auto& goal : literals) {
             const auto atom = goal->get_atom();
             const auto predicate = atom->get_predicate();
-            const auto key = prefix + RelationFormatter::format_atom< GoalTag >(atom);
+            const auto key = pack_u32_u32(
+               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
+            );
             const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
             const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                                    : GoalSatisfaction::unsatisfied;
@@ -409,47 +441,64 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                                  : std::nullopt;
 
             std::string node_type;
-            std::string node_key;
+            std::string node_name;
             if(goal_level.has_value()) {
                const GoalLevel level(*goal_level);
                node_type = RelationFormatter::format_predicate(
                   predicate, level, sat, goal->get_polarity()
                );
-               node_key = prefix + RelationFormatter::format_literal< GoalTag >(goal, level, sat);
+               if(config_.export_node_names) {
+                  node_name = prefix
+                              + RelationFormatter::format_literal< GoalTag >(goal, level, sat);
+               }
             } else {
                node_type = RelationFormatter::format_predicate(
                   predicate, std::nullopt, sat, goal->get_polarity()
                );
-               node_key = prefix
-                          + RelationFormatter::format_literal< GoalTag >(goal, std::nullopt, sat);
+               if(config_.export_node_names) {
+                  node_name = prefix
+                              + RelationFormatter::format_literal< GoalTag >(
+                                 goal, std::nullopt, sat
+                              );
+               }
             }
 
-            const auto relation_idx = get_or_add_node(
-               node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+            const uint64_t relation_key = pack_u32_u32(
+               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
+            );
+            const auto relation_idx = get_or_add_relation_node_u64(
+               node_type, relation_key, builder, node_indices, node_names, node_name
             );
 
-            std::vector< std::string > object_keys;
+            std::vector< int64_t > object_symbol_ids;
             if(predicate->get_arity() == 0) {
                if(not config_.add_nullary_predicates) {
                   continue;
                }
-               object_keys.emplace_back(config_.nullary_object_name);
+               const auto nullary_idx = get_or_add_symbol_special_node(
+                  config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+               );
+               (void) nullary_idx;
+               object_symbol_ids.emplace_back(
+                  get_or_assign_special_symbol_id(config_.nullary_object_name)
+               );
             } else {
                for(const auto& obj : atom->get_objects()) {
-                  object_keys.emplace_back(symbol_node_key(obj));
+                  const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+                  (void) obj_idx;
+                  object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
                }
             }
 
             size_t pos = 0;
+            std::vector< int64_t > extra_symbol_ids;
+            extra_symbol_ids.reserve(extra_objects.size());
             for(const auto& obj_key : extra_objects) {
-               const auto obj_idx = get_or_add_node(
-                  config_.symbol_type_id,
-                  obj_key,
-                  builder,
-                  node_indices,
-                  node_names,
-                  config_.export_node_names
+               const auto obj_idx = get_or_add_symbol_special_node(
+                  obj_key, obj_key, builder, node_names
                );
+               const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
+               extra_symbol_ids.emplace_back(symbol_id);
                const std::string pos_str = std::to_string(pos++);
                append_edges(
                   builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -458,15 +507,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
                );
             }
-            for(const auto& obj_key : object_keys) {
-               const auto obj_idx = get_or_add_node(
-                  config_.symbol_type_id,
-                  obj_key,
-                  builder,
-                  node_indices,
-                  node_names,
-                  config_.export_node_names
-               );
+            for(const auto symbol_id : object_symbol_ids) {
+               const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
                const std::string pos_str = std::to_string(pos++);
                append_edges(
                   builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
@@ -476,11 +518,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
                );
             }
 
-            const std::string rel_key = relation_key(node_type, node_key);
+            const auto rel_ref = relation_ref_for(node_type, relation_idx);
             track_relation_symbols_if_enabled(
-               rel_key,
-               std::span{object_keys},
-               extra_objects,
+               rel_ref,
+               std::span{object_symbol_ids},
+               std::span{extra_symbol_ids},
                relation_to_symbols,
                symbol_to_relations
             );
@@ -489,41 +531,47 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    auto encode_action_with_prefix = [&](
                                        const mimir::formalism::GroundAction& action,
+                                       int target_idx,
                                        const std::string& prefix,
                                        std::span< const std::string > extra_objects
                                     ) {
       const std::string node_type = RelationFormatter::format_action_schema(*action->get_action());
-      const std::string node_key = prefix + RelationFormatter::format_action(action);
-      const auto relation_idx = get_or_add_node(
-         node_type, node_key, builder, node_indices, node_names, config_.export_node_names
+      const std::string node_name = config_.export_node_names
+                                       ? (prefix + RelationFormatter::format_action(action))
+                                       : "";
+      const uint64_t relation_key = pack_u32_u32(
+         static_cast< uint32_t >(target_idx), static_cast< uint32_t >(action->get_index())
+      );
+      const auto relation_idx = get_or_add_relation_node_u64(
+         node_type, relation_key, builder, node_indices, node_names, node_name
       );
 
-      std::vector< std::string > object_keys;
+      std::vector< int64_t > object_symbol_ids;
       for(const auto& obj_key : extra_objects) {
-         object_keys.emplace_back(obj_key);
+         const auto obj_idx = get_or_add_symbol_special_node(obj_key, obj_key, builder, node_names);
+         (void) obj_idx;
+         object_symbol_ids.emplace_back(get_or_assign_special_symbol_id(obj_key));
       }
       for(const auto& obj : action->get_objects()) {
-         object_keys.emplace_back(symbol_node_key(obj));
+         const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+         (void) obj_idx;
+         object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
       }
 
-      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
-         const auto& obj_key = object_keys[pos];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
-         );
+      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
+         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      const std::string rel_key = relation_key(node_type, node_key);
+      const auto rel_ref = relation_ref_for(node_type, relation_idx);
       track_relation_symbols_if_enabled(
-         rel_key, std::span{object_keys}, {}, relation_to_symbols, symbol_to_relations
+         rel_ref,
+         std::span{object_symbol_ids},
+         std::span< const int64_t >{},
+         relation_to_symbols,
+         symbol_to_relations
       );
    };
 
@@ -536,9 +584,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
       const std::string key = target_node_key(node.index);
       target_keys[node.index] = key;
-      get_or_add_node(
-         config_.symbol_type_id, key, builder, node_indices, node_names, config_.export_node_names
-      );
+      get_or_add_symbol_special_node(key, key, builder, node_names);
    }
 
    // 2. Encode root state (objects then facts/goals)
@@ -547,17 +593,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
    const std::array< std::string, 1 > root_extra{target_keys[0]};
 
    const auto root_fact_keys = encode_state_facts_with_prefix(
-      root, root_prefix, root_extra, config_.include_static
+      root, 0, root_prefix, root_extra, config_.include_static
    );
 
    encode_literals_with_prefix.template operator()< mimir::formalism::StaticTag >(
-      std::span{goals.static_goals}, goals.static_goal_levels, root_prefix, root_extra
+      std::span{goals.static_goals}, goals.static_goal_levels, 0, root_prefix, root_extra
    );
    encode_literals_with_prefix.template operator()< mimir::formalism::FluentTag >(
-      std::span{goals.fluent_goals}, goals.fluent_goal_levels, root_prefix, root_extra
+      std::span{goals.fluent_goals}, goals.fluent_goal_levels, 0, root_prefix, root_extra
    );
    encode_literals_with_prefix.template operator()< mimir::formalism::DerivedTag >(
-      std::span{goals.derived_goals}, goals.derived_goal_levels, root_prefix, root_extra
+      std::span{goals.derived_goals}, goals.derived_goal_levels, 0, root_prefix, root_extra
    );
 
    if(not goals.static_goals.empty()) {
@@ -565,6 +611,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          std::span{goals.static_goals},
          goals.static_goal_levels,
          root_fact_keys,
+         0,
          root_prefix,
          root_extra
       );
@@ -574,6 +621,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          std::span{goals.fluent_goals},
          goals.fluent_goal_levels,
          root_fact_keys,
+         0,
          root_prefix,
          root_extra
       );
@@ -583,6 +631,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          std::span{goals.derived_goals},
          goals.derived_goal_levels,
          root_fact_keys,
+         0,
          root_prefix,
          root_extra
       );
@@ -620,16 +669,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
       if(horizon_config_.transition_mode == Mode::Full) {
          const auto succ_fact_keys = encode_state_facts_with_prefix(
-            node.state, prefix, succ_extra, false
+            node.state, node.index, prefix, succ_extra, false
          );
          if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, prefix, succ_extra);
+            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
          if(not goals.static_goals.empty()) {
             encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
                std::span{goals.static_goals},
                goals.static_goal_levels,
                succ_fact_keys,
+               node.index,
                prefix,
                succ_extra
             );
@@ -639,6 +689,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                std::span{goals.fluent_goals},
                goals.fluent_goal_levels,
                succ_fact_keys,
+               node.index,
                prefix,
                succ_extra
             );
@@ -649,6 +700,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   std::span{goals.derived_goals},
                   goals.derived_goal_levels,
                   succ_fact_keys,
+                  node.index,
                   prefix,
                   succ_extra
                );
@@ -676,7 +728,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             succ_fluent_indices.insert(atom->get_index());
             if(not root_fluent_indices.contains(atom->get_index())) {
                added_fluents.insert(atom->get_index());
-               encode_literal_atom_with_prefix(atom, true, prefix, succ_extra);
+               encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
             }
          }
          for(const auto& idx : root_fluent_indices) {
@@ -686,7 +738,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               encode_literal_atom_with_prefix(atom, false, prefix, succ_extra);
+               encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
             }
          }
 
@@ -698,7 +750,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             succ_derived_indices.insert(atom->get_index());
             if(not root_derived_indices.contains(atom->get_index())) {
                added_derived.insert(atom->get_index());
-               encode_literal_atom_with_prefix(atom, true, prefix, succ_extra);
+               encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
             }
          }
          for(const auto& idx : root_derived_indices) {
@@ -708,12 +760,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
                if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               encode_literal_atom_with_prefix(atom, false, prefix, succ_extra);
+               encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
             }
          }
 
          if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, prefix, succ_extra);
+            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
 
          if(relation_dict_.goal_satisfaction_derivations.size() > 0) {
@@ -742,7 +794,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                         continue;
                      }
                      encode_literals_with_prefix.template operator()< GoalTag >(
-                        std::span{&goal, 1}, goal_levels, prefix, succ_extra, *sat
+                        std::span{&goal, 1}, goal_levels, node.index, prefix, succ_extra, *sat
                      );
                   }
                };
@@ -768,7 +820,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          }
       } else if(horizon_config_.transition_mode == Mode::Action) {
          if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, prefix, succ_extra);
+            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
       }
    }
@@ -778,32 +830,25 @@ void HorizonHGraphEncoderEngine::encode_impl(
       for(const auto& pair : dag.transitions()) {
          const int parent_idx = pair.first;
          const int child_idx = pair.second;
-         const std::string rel_key = fmt::format(
-            "{}({}->{})", horizon_config_.parent_relation, parent_idx, child_idx
+         const uint64_t rel_key = pack_u32_u32(
+            static_cast< uint32_t >(parent_idx), static_cast< uint32_t >(child_idx)
          );
-         const auto rel_idx = get_or_add_node(
-            horizon_config_.parent_relation,
-            rel_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
+         const std::string rel_name = config_.export_node_names
+                                         ? fmt::format(
+                                              "{}({}->{})",
+                                              horizon_config_.parent_relation,
+                                              parent_idx,
+                                              child_idx
+                                           )
+                                         : "";
+         const auto rel_idx = get_or_add_relation_node_u64(
+            horizon_config_.parent_relation, rel_key, builder, node_indices, node_names, rel_name
          );
-         const auto p_node = get_or_add_node(
-            config_.symbol_type_id,
-            target_keys[parent_idx],
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
+         const auto p_node = get_or_add_symbol_special_node(
+            target_keys[parent_idx], target_keys[parent_idx], builder, node_names
          );
-         const auto c_node = get_or_add_node(
-            config_.symbol_type_id,
-            target_keys[child_idx],
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
+         const auto c_node = get_or_add_symbol_special_node(
+            target_keys[child_idx], target_keys[child_idx], builder, node_names
          );
          append_edges(
             builder, config_.symbol_type_id, "0", horizon_config_.parent_relation, p_node, rel_idx
@@ -831,25 +876,20 @@ void HorizonHGraphEncoderEngine::encode_impl(
          for(int dir = 0; dir < 2; ++dir) {
             int src = dir == 0 ? a : b;
             int dst = dir == 0 ? b : a;
-            const std::string rel_key = fmt::format("{}({}->{})", relation, src, dst);
-            const auto rel_idx = get_or_add_node(
-               relation, rel_key, builder, node_indices, node_names, config_.export_node_names
+            const uint64_t rel_key = pack_u32_u32(
+               static_cast< uint32_t >(src), static_cast< uint32_t >(dst)
             );
-            const auto a_node = get_or_add_node(
-               config_.symbol_type_id,
-               target_keys[src],
-               builder,
-               node_indices,
-               node_names,
-               config_.export_node_names
+            const std::string rel_name = config_.export_node_names
+                                            ? fmt::format("{}({}->{})", relation, src, dst)
+                                            : "";
+            const auto rel_idx = get_or_add_relation_node_u64(
+               relation, rel_key, builder, node_indices, node_names, rel_name
             );
-            const auto b_node = get_or_add_node(
-               config_.symbol_type_id,
-               target_keys[dst],
-               builder,
-               node_indices,
-               node_names,
-               config_.export_node_names
+            const auto a_node = get_or_add_symbol_special_node(
+               target_keys[src], target_keys[src], builder, node_names
+            );
+            const auto b_node = get_or_add_symbol_special_node(
+               target_keys[dst], target_keys[dst], builder, node_names
             );
             append_edges(builder, config_.symbol_type_id, "0", relation, a_node, rel_idx);
             append_edges(builder, relation, "0", config_.symbol_type_id, rel_idx, a_node);
@@ -930,15 +970,18 @@ void HorizonHGraphEncoderEngine::encode_impl(
       target_depths.reserve(candidate_count);
       target_names.reserve(candidate_count);
 
-      const auto& symbol_indices = node_indices[config_.symbol_type_id];
       const int root_index = dag.root_index();
       for(const auto& node : nodes) {
          if(horizon_config_.exclude_root_candidate and node.index == root_index) {
             continue;
          }
          const auto key = target_keys[node.index];
-         const auto it = symbol_indices.find(key);
-         if(it == symbol_indices.end()) {
+         const auto id_it = workspace.symbol_key_to_id.find(key);
+         if(id_it == workspace.symbol_key_to_id.end()) {
+            continue;
+         }
+         const auto it = workspace.symbol_indices.find(id_it->second);
+         if(it == workspace.symbol_indices.end()) {
             continue;
          }
          target_positions.push_back(it->second);
