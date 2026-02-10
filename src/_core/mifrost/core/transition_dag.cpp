@@ -6,19 +6,19 @@
 
 namespace mifrost {
 
-TransitionDAG::TransitionDAG(mimir::search::State root) : root_(root)
+TransitionDAG::TransitionDAG(mimir::search::State root) : root_(std::move(root))
 {
-   // Add root node
-   Node root_node{.state = root, .index = next_index_++, .depth = 0, .action = std::nullopt};
-
-   state_to_index_[root] = root_node.index;
-   nodes_ordered_.push_back(root_node);
+   const auto index = next_index_++;
+   state_to_index_.emplace(root_, index);
+   nodes_ordered_.push_back(
+      Node{.state = root_, .index = index, .depth = 0, .action = std::nullopt}
+   );
 }
 
 std::pair< int, int > TransitionDAG::register_transition(
-   mimir::search::State parent,
-   mimir::search::State child,
-   std::optional< mimir::formalism::GroundAction > action
+   const mimir::search::State& parent,
+   const mimir::search::State& child,
+   const std::optional< mimir::formalism::GroundAction > action
 )
 {
    // Ensure parent exists
@@ -39,8 +39,8 @@ std::pair< int, int > TransitionDAG::register_transition(
          .action = action
       };
 
-      state_to_index_[child] = child_idx;
-      nodes_ordered_.push_back(child_node);
+      state_to_index_.emplace(child, child_idx);
+      nodes_ordered_.push_back(std::move(child_node));
    } else {
       child_idx = state_to_index_.at(child);
       // Update action if not already set
@@ -58,7 +58,7 @@ std::pair< int, int > TransitionDAG::register_transition(
    return {parent_idx, child_idx};
 }
 
-int TransitionDAG::index(mimir::search::State state) const
+int TransitionDAG::index(const mimir::search::State& state) const
 {
    auto it = state_to_index_.find(state);
    if(it == state_to_index_.end()) {
@@ -122,7 +122,7 @@ std::vector< std::pair< int, int > > TransitionDAG::transitions() const
    return result;
 }
 
-bool TransitionDAG::contains(mimir::search::State state) const
+bool TransitionDAG::contains(const mimir::search::State& state) const
 {
    return state_to_index_.contains(state);
 }

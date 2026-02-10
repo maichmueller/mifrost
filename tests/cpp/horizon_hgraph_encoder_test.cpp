@@ -236,6 +236,70 @@ TEST_P(HorizonHGraphEncoderTest, DeltaModeEncodesOnlyChangedLiteralsForSuccessor
    }
 }
 
+TEST_P(HorizonHGraphEncoderTest, ObjectSymbolsParticipateInSymbolToRelationEdges)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, succ_state, succ_action);
+
+   HorizonHGraphEncoderEngine::Config config;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.ignore_actions = false;
+   config.include_lgan_edges = false;
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   engine.encode(ctx.root, dag, goals, builder);
+
+   const auto index_map = mifrost_test::build_index_map(builder);
+   const auto symbol_it = index_map.find(config.symbol_type_id);
+   ASSERT_NE(symbol_it, index_map.end());
+   const auto& symbol_index = symbol_it->second;
+
+   std::unordered_set< int64_t > object_symbol_indices;
+   for(const auto& object_name : builder.object_names) {
+      const auto it = symbol_index.find(object_name);
+      if(it != symbol_index.end()) {
+         object_symbol_indices.insert(it->second);
+      }
+   }
+   ASSERT_FALSE(object_symbol_indices.empty())
+      << "No object symbols were mapped to indices in the symbol type.";
+
+   const std::string symbol_edge_prefix = config.symbol_type_id + "|";
+   const std::string src_suffix = "/edge_index_0";
+   bool found_object_symbol_src_edge = false;
+
+   for(const auto& [key, column] : builder.columns) {
+      if(key.rfind(symbol_edge_prefix, 0) != 0) {
+         continue;
+      }
+      if(key.size() < src_suffix.size()
+         || key.compare(key.size() - src_suffix.size(), src_suffix.size(), src_suffix) != 0) {
+         continue;
+      }
+      const auto& src_col = std::get< BatchBuilder::LongCol >(column.data);
+      for(const auto src_idx : src_col) {
+         if(object_symbol_indices.contains(src_idx)) {
+            found_object_symbol_src_edge = true;
+            break;
+         }
+      }
+      if(found_object_symbol_src_edge) {
+         break;
+      }
+   }
+
+   EXPECT_TRUE(found_object_symbol_src_edge)
+      << "Expected at least one symbol->relation edge whose source is an object symbol node.";
+}
+
 TEST_P(HorizonHGraphEncoderTest, ParentRelationsMatchDagTransitions)
 {
    const auto param = GetParam();

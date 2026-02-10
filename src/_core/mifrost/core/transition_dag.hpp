@@ -65,8 +65,8 @@ class TransitionDAG {
     * @return Pair of (parent_idx, child_idx)
     */
    std::pair< int, int > register_transition(
-      mimir::search::State parent,
-      mimir::search::State child,
+      const mimir::search::State& parent,
+      const mimir::search::State& child,
       std::optional< mimir::formalism::GroundAction > action = std::nullopt
    );
 
@@ -74,7 +74,7 @@ class TransitionDAG {
     * @brief Get the index of a state in the DAG.
     * @throws std::out_of_range if state not in DAG
     */
-   int index(mimir::search::State state) const;
+   int index(const mimir::search::State& state) const;
 
    /**
     * @brief Get the depth of a node by index.
@@ -124,7 +124,7 @@ class TransitionDAG {
    /**
     * @brief Check if a state exists in the DAG.
     */
-   bool contains(mimir::search::State state) const;
+   bool contains(const mimir::search::State& state) const;
 
   private:
    /// Recompute depth labels from current adjacency.

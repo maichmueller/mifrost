@@ -485,6 +485,13 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, std::vector< std::string > >& node_names
    );
+   int64_t get_or_add_symbol_node(
+      int64_t symbol_id,
+      std::string_view symbol_key,
+      std::string_view symbol_name,
+      BatchBuilder& builder,
+      hash_map< std::string, std::vector< std::string > >& node_names
+   );
    int64_t get_or_add_relation_node_i64(
       const std::string& node_type,
       int64_t key,
@@ -502,7 +509,7 @@ class HGraphEncoderEngine {
     *
     * @return Node index in the given type.
     */
-   static int64_t get_or_add_node(
+   int64_t get_or_add_node(
       const std::string& node_type,
       const std::string& node_key,
       BatchBuilder& builder,

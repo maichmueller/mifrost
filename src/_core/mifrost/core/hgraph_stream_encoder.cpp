@@ -921,17 +921,8 @@ int64_t HGraphEncoderEngine::get_or_add_symbol_object_node(
 )
 {
    const int64_t symbol_id = static_cast< int64_t >(obj->get_index());
-   auto it = workspace_.symbol_indices.find(symbol_id);
-   if(it != workspace_.symbol_indices.end()) {
-      return it->second;
-   }
-   const int64_t idx = static_cast< int64_t >(workspace_.symbol_indices.size());
-   workspace_.symbol_indices.emplace(symbol_id, idx);
-   builder.add_nodes(config_.symbol_type_id, idx + 1);
-   if(config_.export_node_names) {
-      node_names[config_.symbol_type_id].emplace_back(RelationFormatter::format_object(*obj));
-   }
-   return idx;
+   const std::string key = symbol_node_key(obj);
+   return get_or_add_symbol_node(symbol_id, key, key, builder, node_names);
 }
 
 int64_t HGraphEncoderEngine::get_or_add_symbol_special_node(
@@ -942,16 +933,32 @@ int64_t HGraphEncoderEngine::get_or_add_symbol_special_node(
 )
 {
    const int64_t symbol_id = get_or_assign_special_symbol_id(symbol_key);
-   auto it = workspace_.symbol_indices.find(symbol_id);
-   if(it != workspace_.symbol_indices.end()) {
-      return it->second;
+   return get_or_add_symbol_node(symbol_id, symbol_key, symbol_name, builder, node_names);
+}
+
+int64_t HGraphEncoderEngine::get_or_add_symbol_node(
+   int64_t symbol_id,
+   std::string_view symbol_key,
+   std::string_view symbol_name,
+   BatchBuilder& builder,
+   hash_map< std::string, std::vector< std::string > >& node_names
+)
+{
+   auto& symbol_nodes = workspace_.node_indices[config_.symbol_type_id];
+   const std::string key(symbol_key);
+   auto key_it = symbol_nodes.find(key);
+   int64_t idx = -1;
+   if(key_it != symbol_nodes.end()) {
+      idx = key_it->second;
+   } else {
+      idx = static_cast< int64_t >(symbol_nodes.size());
+      symbol_nodes.emplace(key, idx);
+      builder.add_nodes(config_.symbol_type_id, idx + 1);
+      if(config_.export_node_names) {
+         node_names[config_.symbol_type_id].emplace_back(symbol_name);
+      }
    }
-   const int64_t idx = static_cast< int64_t >(workspace_.symbol_indices.size());
-   workspace_.symbol_indices.emplace(symbol_id, idx);
-   builder.add_nodes(config_.symbol_type_id, idx + 1);
-   if(config_.export_node_names) {
-      node_names[config_.symbol_type_id].emplace_back(symbol_name);
-   }
+   workspace_.symbol_indices[symbol_id] = idx;
    return idx;
 }
 
@@ -990,6 +997,11 @@ int64_t HGraphEncoderEngine::get_or_add_node(
    bool store_node_name
 )
 {
+   if(node_type == config_.symbol_type_id) {
+      const int64_t symbol_id = get_or_assign_special_symbol_id(node_key);
+      return get_or_add_symbol_node(symbol_id, node_key, node_key, builder, node_names);
+   }
+
    auto& indices = node_indices[node_type];
    auto it = indices.find(node_key);
    if(it != indices.end()) {
