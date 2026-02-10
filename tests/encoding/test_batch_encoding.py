@@ -151,7 +151,7 @@ def test_export_node_names_flag_disables_metadata(small_blocks):
 
     state = problem.get_initial_state()
     encoding = encoder.encode(state)
-    encoding_dict = encoding.to_dict()
+    encoding_dict = encoding.as_dict()
 
     assert encoding_dict.get("node_names", {}) == {}
     assert list(encoding_dict.get("object_names", [])) == []

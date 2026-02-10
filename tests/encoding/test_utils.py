@@ -121,10 +121,10 @@ def hetero_data_equal(data: HeteroData, expected: HeteroData):
 
 
 def keywise_equal(sample_normal, sample_streaming):
-    if hasattr(sample_normal, "to_dict"):
-        sample_normal = sample_normal.to_dict()
-    if hasattr(sample_streaming, "to_dict"):
-        sample_streaming = sample_streaming.to_dict()
+    if hasattr(sample_normal, "as_dict"):
+        sample_normal = sample_normal.as_dict()
+    if hasattr(sample_streaming, "as_dict"):
+        sample_streaming = sample_streaming.as_dict()
     assert sorted(sample_normal.keys()) == sorted(sample_streaming.keys())
     for key in sample_normal.keys():
         if isinstance(sample_normal[key], torch.Tensor) and isinstance(

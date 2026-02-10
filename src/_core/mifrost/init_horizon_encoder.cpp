@@ -95,7 +95,7 @@ void init_horizon_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(root, dag, goals, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "root"_a,
          "dag"_a,

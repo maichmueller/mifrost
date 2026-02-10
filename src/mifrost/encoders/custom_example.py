@@ -85,7 +85,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         builder.add_node_features("node", "x", x)
         builder.set_node_names("node", [str(state)])
         builder.set_object_names([str(state)])
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def _encode_batch(
         self,
@@ -113,7 +113,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
             builder.set_node_names("node", [str(state)])
             builder.set_object_names([str(state)])
             builder.next_graph()
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def stream(self) -> ExampleConstantStreamEncoder:
         """Create a streaming variant of this example encoder."""

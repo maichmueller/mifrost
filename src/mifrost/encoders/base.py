@@ -163,9 +163,9 @@ class EncoderBase(ABC, Generic[PygDataT]):
             uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
             if include_metadata and uses_default_converter:
                 return encoding.as_pyg(as_batch=as_batch)
-            if hasattr(encoding, "to_dict"):
+            if hasattr(encoding, "as_dict"):
                 return self._dict_to_pyg(
-                    encoding.to_dict(),
+                    encoding.as_dict(),
                     as_batch=as_batch,
                     include_metadata=include_metadata,
                 )
@@ -217,8 +217,8 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
             return encoding
 
         builder = getattr(self, "_builder", None)
-        if builder is not None and hasattr(builder, "build_batch_encoding"):
-            encoding = builder.build_batch_encoding()
+        if builder is not None and hasattr(builder, "build"):
+            encoding = builder.build()
             self._reset_builder()
             return encoding
 
@@ -260,14 +260,14 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
                 type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
             )
             if include_metadata and uses_default_converter:
-                return encoding.as_pyg(consume=True, as_batch=as_batch)
-            if hasattr(encoding, "to_dict"):
+                return encoding.as_pyg(as_batch=as_batch)
+            if hasattr(encoding, "as_dict"):
                 return self._dict_to_pyg(
-                    encoding.to_dict(),
+                    encoding.as_dict(),
                     as_batch=as_batch,
                     include_metadata=include_metadata,
                 )
-            return encoding.as_pyg(consume=True, as_batch=as_batch)
+            return encoding.as_pyg(as_batch=as_batch)
         return self._dict_to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )

@@ -45,8 +45,8 @@ def _encoding_dict_to_pyg_homo(
     This adapter expects the standard encoding_dict schema and uses a single node type.
     """
     if not isinstance(encoding_dict, Mapping):
-        if hasattr(encoding_dict, "to_dict"):
-            encoding_dict = encoding_dict.to_dict()
+        if hasattr(encoding_dict, "as_dict"):
+            encoding_dict = encoding_dict.as_dict()
         else:
             raise TypeError(
                 f"Expected encoding_dict mapping or BatchEncoding-like object, got {type(encoding_dict)}"
@@ -316,7 +316,7 @@ class ColorEncoder(EncoderBase[Data]):
                     inputs = shared_inputs
                 self._engine.encode(adv_state, inputs, builder)
             builder.next_graph()
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def encode_batch(
         self,

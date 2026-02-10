@@ -89,7 +89,7 @@ void init_successor_encoders(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(current, successor, goals, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "current"_a,
          "successor"_a,

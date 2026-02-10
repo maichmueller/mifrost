@@ -724,7 +724,7 @@ class HGraphStreamEncoder {
    BatchEncoding flush()
    {
       ensure_valid();
-      auto out = builder_.build_batch_encoding();
+      auto out = builder_.build();
       reset();
       return out;
    }
@@ -732,7 +732,7 @@ class HGraphStreamEncoder {
    nb::object flush_pyg()
    {
       ensure_valid();
-      auto out = builder_.build();
+      auto out = builder_.build_pyg();
       reset();
       return out;
    }

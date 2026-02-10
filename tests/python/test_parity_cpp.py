@@ -22,7 +22,7 @@ def test_batch_builder_parity():
         torch.tensor([0, 1], dtype=torch.int64),
         torch.tensor([0, 1], dtype=torch.int64),
     )
-    cpp_batch = cpp_builder.build()
+    cpp_batch = cpp_builder.build().as_pyg()
     assert set(cpp_batch.node_types) == {symbol_type_id, "atom"}
     symbol_names = list(cpp_batch[symbol_type_id].node_names)
     atom_names = list(cpp_batch["atom"].node_names)
@@ -57,7 +57,7 @@ def test_offset_logic_explicit():
     b.add_edges("atom", "rel", "atom", torch.tensor([0, 1]), torch.tensor([1, 2]))
     b.next_graph()
 
-    out = b.build()
+    out = b.build().as_pyg()
 
     # Check ptr
     ptr = out["atom"].ptr

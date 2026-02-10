@@ -44,6 +44,167 @@ void apply_hgraph_config_kwargs(HGraphEncoderEngine::Config& config, const nb::k
    apply_config_kwargs(config, kwargs, "HGraphEncoderConfig");
 }
 
+template < typename T >
+void vector_owner_deleter(void* p) noexcept
+{
+   delete static_cast< std::vector< T >* >(p);
+}
+
+template < typename T >
+auto vector_to_1d_ndarray_view(std::vector< T >& vec, nb::handle owner)
+{
+   size_t shape[1] = {vec.size()};
+   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(vec.data(), 1, shape, owner);
+}
+
+template < typename T >
+auto vector_to_2d_ndarray_view(std::vector< T >& vec, size_t rows, size_t cols, nb::handle owner)
+{
+   size_t shape[2] = {rows, cols};
+   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(vec.data(), 2, shape, owner);
+}
+
+template < typename T >
+auto vector_to_1d_ndarray_owned(std::vector< T >&& vec)
+{
+   auto* heap_vec = new std::vector< T >(std::move(vec));
+   heap_vec->shrink_to_fit();
+   size_t shape[1] = {heap_vec->size()};
+   nb::capsule owner(heap_vec, vector_owner_deleter< T >);
+   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
+}
+
+std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
+{
+   std::vector< int64_t > batch;
+   if(ptr.size() < 2) {
+      return batch;
+   }
+   batch.reserve(static_cast< size_t >(std::max< int64_t >(0, ptr.back())));
+   for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {
+      const int64_t count = std::max< int64_t >(0, ptr[idx + 1] - ptr[idx]);
+      batch.insert(batch.end(), static_cast< size_t >(count), static_cast< int64_t >(idx));
+   }
+   return batch;
+}
+
+nb::object flatten_single_graph_metadata_list(nb::handle value)
+{
+   if(! nb::isinstance< nb::list >(value)) {
+      return nb::borrow< nb::object >(value);
+   }
+   nb::list outer = nb::borrow< nb::list >(value);
+   if(nb::len(outer) == 1 && nb::isinstance< nb::list >(outer[0])) {
+      return nb::borrow< nb::object >(outer[0]);
+   }
+   return nb::borrow< nb::object >(value);
+}
+
+void copy_store_attrs_without_batch(nb::object& dst_store, nb::object& src_store)
+{
+   for(auto key_obj : src_store.attr("keys")()) {
+      const std::string key = nb::cast< std::string >(key_obj);
+      if(key == "ptr" || key == "batch") {
+         continue;
+      }
+      dst_store.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+   }
+}
+
+void copy_global_attrs_for_single(nb::object& dst, nb::object& src)
+{
+   nb::object global_store = src.attr("_global_store");
+   for(auto key_obj : global_store.attr("keys")()) {
+      const std::string key = nb::cast< std::string >(key_obj);
+      if(key == "_num_graphs") {
+         continue;
+      }
+      nb::object value = global_store.attr("__getitem__")(key_obj);
+      if(key == "object_names") {
+         value = flatten_single_graph_metadata_list(value);
+      }
+      dst.attr(key.c_str()) = value;
+   }
+}
+
+nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
+{
+   nb::object tg_data = nb::module_::import_("torch_geometric.data");
+   nb::object out = tg_data.attr("HeteroData")();
+
+   for(auto node_type_obj : pyg_batch.attr("node_types")) {
+      std::string node_type = nb::cast< std::string >(node_type_obj);
+      nb::object src_store = pyg_batch.attr("__getitem__")(node_type);
+      nb::object dst_store = out.attr("__getitem__")(node_type);
+      copy_store_attrs_without_batch(dst_store, src_store);
+      if(nb::cast< bool >(src_store.attr("__contains__")("node_names"))) {
+         nb::object flat_names = flatten_single_graph_metadata_list(
+            src_store.attr("__getitem__")("node_names")
+         );
+         dst_store.attr("node_names") = flat_names;
+         dst_store.attr("num_nodes") = nb::len(flat_names);
+      }
+   }
+
+   for(auto edge_type_obj : pyg_batch.attr("edge_types")) {
+      nb::object src_store = pyg_batch.attr("__getitem__")(edge_type_obj);
+      nb::object dst_store = out.attr("__getitem__")(edge_type_obj);
+      for(auto key_obj : src_store.attr("keys")()) {
+         dst_store.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+      }
+   }
+
+   copy_global_attrs_for_single(out, pyg_batch);
+   return out;
+}
+
+nb::object batch_to_single_homo_data(nb::object& pyg_batch)
+{
+   nb::object tg_data = nb::module_::import_("torch_geometric.data");
+   nb::object out = tg_data.attr("Data")();
+
+   nb::list node_types = nb::cast< nb::list >(pyg_batch.attr("node_types"));
+   if(nb::len(node_types) > 1) {
+      throw std::invalid_argument(
+         "BatchEncoding.as_pyg(as_batch=False) for homo expects a single node type"
+      );
+   }
+
+   if(nb::len(node_types) == 1) {
+      std::string node_type = nb::cast< std::string >(node_types[0]);
+      nb::object src_store = pyg_batch.attr("__getitem__")(node_type);
+      for(auto key_obj : src_store.attr("keys")()) {
+         const std::string key = nb::cast< std::string >(key_obj);
+         if(key == "ptr" || key == "batch") {
+            continue;
+         }
+         out.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+      }
+      if(nb::cast< bool >(src_store.attr("__contains__")("node_names"))) {
+         nb::object flat_names = flatten_single_graph_metadata_list(
+            src_store.attr("__getitem__")("node_names")
+         );
+         out.attr("node_names") = flat_names;
+      }
+   }
+
+   nb::list edge_types = nb::cast< nb::list >(pyg_batch.attr("edge_types"));
+   if(nb::len(edge_types) > 1) {
+      throw std::invalid_argument(
+         "BatchEncoding.as_pyg(as_batch=False) for homo expects a single edge type"
+      );
+   }
+   if(nb::len(edge_types) == 1) {
+      nb::object src_store = pyg_batch.attr("__getitem__")(edge_types[0]);
+      for(auto key_obj : src_store.attr("keys")()) {
+         out.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+      }
+   }
+
+   copy_global_attrs_for_single(out, pyg_batch);
+   return out;
+}
+
 nb::dict
 batch_encoding_to_state_dict(const BatchBuilder::BatchEncoding& encoding, bool include_metadata)
 {
@@ -172,38 +333,99 @@ uint64_t schema_fingerprint(const BatchBuilder::BatchEncoding& encoding)
    return h;
 }
 
-nb::dict batch_encoding_to_dict(const BatchBuilder::BatchEncoding& encoding)
+nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handle owner)
 {
-   BatchBuilder builder;
-   builder.load_from_batch_encoding(encoding);
-   return builder.build_batch_encoding_dict();
+   nb::dict tensors;
+
+   for(auto& [key, col] : encoding.columns) {
+      const bool is_edge_index = key.find("/edge_index_") != std::string::npos;
+      std::visit(
+         [&]< typename T >(std::vector< T >& data) {
+            if(is_edge_index) {
+               tensors[key.c_str()] = vector_to_1d_ndarray_view(data, owner);
+               return;
+            }
+            const size_t rows = col.dim > 0 ? data.size() / static_cast< size_t >(col.dim) : 0;
+            tensors[key.c_str()] = vector_to_2d_ndarray_view(
+               data, rows, static_cast< size_t >(col.dim), owner
+            );
+         },
+         col.data
+      );
+   }
+
+   bool exported_ptr = false;
+   for(auto& [node_type, ptr] : encoding.ptrs) {
+      if(ptr.size() < 2) {
+         continue;
+      }
+      exported_ptr = true;
+      tensors[(node_type + "/ptr").c_str()] = vector_to_1d_ndarray_view(ptr, owner);
+      tensors[(node_type + "/batch").c_str()] = vector_to_1d_ndarray_owned(ptr_to_batch(ptr));
+   }
+   if(! exported_ptr) {
+      for(const auto& [node_type, count] : encoding.node_counts) {
+         if(count <= 0) {
+            continue;
+         }
+         std::vector< int64_t > ptr{0, count};
+         tensors[(node_type + "/ptr").c_str()] = vector_to_1d_ndarray_owned(std::move(ptr));
+         tensors[(node_type + "/batch").c_str()] = vector_to_1d_ndarray_owned(
+            std::vector< int64_t >(count, 0)
+         );
+      }
+   }
+
+   nb::dict out;
+   out["tensors"] = std::move(tensors);
+   out["schema"] = encoding.schema.to_dict();
+
+   nb::dict node_names_dict;
+   for(const auto& [node_type, names] : encoding.node_names) {
+      node_names_dict[node_type.c_str()] = nb::cast(names);
+   }
+   out["node_names"] = std::move(node_names_dict);
+
+   nb::dict dims_dict;
+   for(const auto& [node_type, dim] : encoding.node_feature_dims) {
+      dims_dict[node_type.c_str()] = dim;
+   }
+   out["node_feature_dims"] = std::move(dims_dict);
+   out["object_names"] = nb::cast(encoding.object_names);
+   out["num_graphs"] = encoding.num_graphs;
+
+   if(! encoding.graph_attrs.empty()) {
+      nb::dict graph_attrs_dict;
+      for(const auto& [key, value] : encoding.graph_attrs) {
+         std::visit([&](const auto& v) { graph_attrs_dict[key.c_str()] = nb::cast(v); }, value);
+      }
+      out["graph_attrs"] = std::move(graph_attrs_dict);
+   }
+
+   return out;
 }
 
-nb::object batch_encoding_as_pyg(
-   BatchBuilder::BatchEncoding& encoding,
-   bool consume,
-   std::optional< bool > as_batch
-)
+nb::object
+batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
 {
+   const bool want_batch = as_batch.value_or(encoding.num_graphs != 1);
    BatchBuilder builder;
-   const auto num_graphs = encoding.num_graphs;
-   if(consume) {
-      builder.load_from_batch_encoding(std::move(encoding));
-      encoding = BatchBuilder::BatchEncoding{};
-   } else {
-      builder.load_from_batch_encoding(encoding);
+   builder.set_graph_kind(encoding.graph_kind);
+   builder.load_from_batch_encoding(encoding);
+   nb::object pyg_batch = builder.build_pyg();
+
+   if(! want_batch && encoding.num_graphs != 1) {
+      throw std::invalid_argument("BatchEncoding.as_pyg(as_batch=False) requires num_graphs == 1");
    }
 
-   const bool want_batch = as_batch.value_or(num_graphs != 1);
-   if(want_batch) {
-      return builder.build();
+   if(! want_batch) {
+      if(encoding.graph_kind == "homo") {
+         return batch_to_single_homo_data(pyg_batch);
+      }
+      return batch_to_single_hetero_data(pyg_batch);
    }
 
-   nb::dict encoding_dict = builder.build_batch_encoding_dict();
-   nb::object common = nb::module_::import_("mifrost.encoders.common");
-   return common.attr("_encoding_dict_to_pyg")(
-      encoding_dict, "as_batch"_a = false, "include_metadata"_a = true
-   );
+   return pyg_batch;
 }
 
 void save_batch_encoding(
@@ -302,8 +524,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def("set_node_names", &BatchBuilder::set_node_names)
       .def("set_object_names", &BatchBuilder::set_object_names)
       .def("build", &BatchBuilder::build)
-      .def("build_batch_encoding_dict", &BatchBuilder::build_batch_encoding_dict)
-      .def("build_batch_encoding", &BatchBuilder::build_batch_encoding)
+      .def("build_pyg", &BatchBuilder::build_pyg)
       .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
       .def(
          "load_from_batch_encoding",
@@ -323,8 +544,27 @@ void init_hgraph_encoder(nb::module_& m)
       .def_ro("schema_flags", &BatchBuilder::BatchEncoding::schema_flags)
       .def_ro("node_feature_dims", &BatchBuilder::BatchEncoding::node_feature_dims)
       .def_ro("graph_attrs", &BatchBuilder::BatchEncoding::graph_attrs)
-      .def("to_dict", &batch_encoding_to_dict)
-      .def("as_pyg", &batch_encoding_as_pyg, "consume"_a = false, "as_batch"_a = nb::none())
+      .def(
+         "as_dict",
+         [](nb::handle self) {
+            auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+            if(encoding == nullptr) {
+               throw std::invalid_argument("BatchEncoding.as_dict called with invalid instance");
+            }
+            return batch_encoding_as_dict(*encoding, self);
+         }
+      )
+      .def(
+         "as_pyg",
+         [](nb::handle self, std::optional< bool > as_batch) {
+            auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+            if(encoding == nullptr) {
+               throw std::invalid_argument("BatchEncoding.as_pyg called with invalid instance");
+            }
+            return batch_encoding_as_pyg(*encoding, as_batch);
+         },
+         "as_batch"_a = nb::none()
+      )
       .def("schema_fingerprint", &schema_fingerprint)
       .def(
          "save",
@@ -354,7 +594,7 @@ void init_hgraph_encoder(nb::module_& m)
             }
             builder.append_batch_encoding(encoding);
          }
-         return builder.build_batch_encoding();
+         return builder.build();
       },
       "encodings"_a
    );
@@ -401,7 +641,7 @@ void init_hgraph_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a
       )
@@ -414,7 +654,7 @@ void init_hgraph_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, goals, actions, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a,
          "goals"_a,
@@ -431,7 +671,7 @@ void init_hgraph_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("hetero");
             encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a,
          "goals"_a,

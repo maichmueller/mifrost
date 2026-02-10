@@ -100,7 +100,7 @@ TEST_P(HGraphStreamCacheTest, RemoveDropsGraph)
    builder.set_graph_kind("hetero");
    engine.encode(succ_state, builder);
    builder.next_graph();
-   const auto expected = builder.build_batch_encoding();
+   const auto expected = builder.build();
 
    expect_parts_equal(actual, expected);
 }
@@ -126,7 +126,7 @@ TEST_P(HGraphStreamCacheTest, UpdateReplacesGraph)
    builder.set_graph_kind("hetero");
    engine.encode(succ_state, builder);
    builder.next_graph();
-   const auto expected = builder.build_batch_encoding();
+   const auto expected = builder.build();
 
    expect_parts_equal(actual, expected);
 }
@@ -158,7 +158,7 @@ TEST_P(HGraphStreamCacheTest, ReuseRemovedSlotReusesIdAndOrder)
    builder.next_graph();
    engine.encode(succ_state, builder);
    builder.next_graph();
-   const auto expected = builder.build_batch_encoding();
+   const auto expected = builder.build();
 
    expect_parts_equal(actual, expected);
 }

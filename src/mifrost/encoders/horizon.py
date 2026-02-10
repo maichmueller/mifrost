@@ -285,7 +285,7 @@ class HorizonEncoder(HGraphEncoder):
                 )
             self._engine.encode(adv_root, dag, inputs, builder)
             builder.next_graph()
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def encode_batch(
         self,

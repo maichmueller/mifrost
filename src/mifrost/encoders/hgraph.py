@@ -785,7 +785,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     self._engine.encode(adv_state, inputs, action_list, builder)
             builder.next_graph()
 
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def encode_batch(
         self,

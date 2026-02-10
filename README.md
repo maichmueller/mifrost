@@ -84,7 +84,7 @@ batch = batch_encoding.as_pyg(as_batch=True)                     # HeteroDataBat
 # explicit PyG convenience helpers
 data2 = encoder.encode_pyg(state)
 batch2 = encoder.encode_batch_pyg([state1, state2, state3])
-encoding_dict = batch_encoding.to_dict()      # dictionary form
+encoding_dict = batch_encoding.as_dict()      # dictionary form
 ```
 
 Example output (trimmed):
@@ -270,9 +270,9 @@ python scripts/profile_encoding.py --benchmark-pyg --no-export-node-names
   - `BatchEncoding.as_pyg(...)` converts to PyG.
 - Convenience:
   - `encode_pyg(...)` / `encode_batch_pyg(...)` return PyG directly.
-- `BatchEncoding` supports `to_dict()`, `schema_fingerprint()`, `save(...)`, `load(...)`.
+- `BatchEncoding` supports `as_dict()`, `schema_fingerprint()`, `save(...)`, `load(...)`.
 - `mifrost.batch_encodings([...])` batches single-graph encodings natively with schema checks.
-- Use `mifrost.encoding_to_tensors(encoding.to_dict())` when feeding a custom downstream pipeline.
+- Use `mifrost.encoding_to_tensors(encoding.as_dict())` when feeding a custom downstream pipeline.
 
 ## Encoder architecture note
 

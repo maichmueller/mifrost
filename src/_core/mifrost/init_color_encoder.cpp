@@ -61,7 +61,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a
       )
@@ -73,7 +73,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a,
          "goals"_a
@@ -87,7 +87,7 @@ void init_color_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("homo");
             encoder.encode(state, goals, actions, builder);
-            return builder.build_batch_encoding();
+            return builder.build();
          },
          "state"_a,
          "goals"_a,

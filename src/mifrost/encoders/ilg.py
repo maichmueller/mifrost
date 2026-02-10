@@ -441,7 +441,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         self._encode_to_builder(
             builder, state, goals=goals, actions=actions, subgoal_layers=subgoal_layers
         )
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def _encode_batch(
         self,
@@ -469,7 +469,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
                 subgoal_layers=subgoal_layers,
             )
             builder.next_graph()
-        return builder.build_batch_encoding()
+        return builder.build()
 
     def stream(self) -> ILGEncoderStream:
         """Create a streaming ILG encoder."""

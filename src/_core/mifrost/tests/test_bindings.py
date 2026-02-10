@@ -26,7 +26,7 @@ def test_batch_builder_basics():
     builder.next_graph()
 
     # 5. Build
-    batch = builder.build()
+    batch = builder.build().as_pyg()
     assert isinstance(batch, Batch)
     assert "atom" in batch.node_types
 

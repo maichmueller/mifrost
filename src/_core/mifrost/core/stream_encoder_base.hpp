@@ -56,10 +56,10 @@ class StreamEncoderBase {
    }
 
    /// Build native batch encoding for the accumulated graphs.
-   BatchEncoding flush() { return build_merged_builder().build_batch_encoding(); }
+   BatchEncoding flush() { return build_merged_builder().build(); }
 
    /// Build a PyG Batch for the accumulated graphs.
-   nb::object flush_pyg() { return build_merged_builder().build(); }
+   nb::object flush_pyg() { return build_merged_builder().build_pyg(); }
 
    /// Reset the stream to an empty cache.
    void reset() { entries_.clear(); }
@@ -94,7 +94,7 @@ class StreamEncoderBase {
       builder.set_graph_kind(std::string(Derived::graph_kind()));
       static_cast< Derived* >(this)->encode_step(step, builder);
       builder.next_graph();
-      return builder.build_batch_encoding();
+      return builder.build();
    }
 
    BatchBuilder build_merged_builder()

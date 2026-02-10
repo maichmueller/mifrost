@@ -160,26 +160,19 @@ class BatchBuilder {
    void next_graph();
 
    /**
-    * @brief Finalize and return a PyG Batch/HeteroData object.
-    *
-    * This call consumes internal tensor buffers (moved into Python-owned ndarrays/tensors).
-    * The builder is reset after export.
-    */
-   nb::object build();
-   /**
-    * @brief Finalize and return normalized batch encoding for Python-side assembly.
-    *
-    * This call consumes internal tensor buffers (moved into Python-owned ndarrays).
-    * The builder is reset after export.
-    */
-   nb::dict build_batch_encoding_dict();
-   /**
     * @brief Finalize and return normalized batch encoding as native C++ data.
     *
     * This consumes the builder state and resets the builder. Use for stream
     * caching or C++ assembly.
     */
-   BatchEncoding build_batch_encoding();
+   BatchEncoding build();
+   /**
+    * @brief Finalize and return a PyG Batch/HeteroData object.
+    *
+    * This call consumes internal tensor buffers (moved into Python-owned ndarrays/tensors).
+    * The builder is reset after export.
+    */
+   nb::object build_pyg();
 
    /**
     * @brief Append one graph worth of batch encoding into the current batch.

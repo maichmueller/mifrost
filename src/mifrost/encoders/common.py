@@ -113,8 +113,8 @@ def _prepare_history_subgoals(
 def _coerce_encoding_dict(encoding: Mapping[str, Any] | Any) -> Mapping[str, Any]:
     if isinstance(encoding, Mapping):
         return encoding
-    if hasattr(encoding, "to_dict"):
-        coerced = encoding.to_dict()
+    if hasattr(encoding, "as_dict"):
+        coerced = encoding.as_dict()
         if isinstance(coerced, Mapping):
             return coerced
     raise TypeError(

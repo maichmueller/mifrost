@@ -27,6 +27,7 @@ BatchBuilder::BatchBuilder()
    node_names.reserve(kSmallReserve);
    ptrs.reserve(kSmallReserve);
    columns.reserve(kColumnReserve);
+   graph_kind = "hetero";
 }
 
 void BatchBuilder::reset()
@@ -49,7 +50,7 @@ void BatchBuilder::reset()
    object_names.clear();
    object_names.reserve(kSmallReserve);
 
-   graph_kind.clear();
+   graph_kind = "hetero";
    schema_flags.clear();
 
    ptrs.clear();
@@ -395,7 +396,7 @@ nb::dict BatchBuilder::build_dict()
    return out;
 }
 
-nb::object BatchBuilder::build()
+nb::object BatchBuilder::build_pyg()
 {
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
@@ -667,262 +668,7 @@ nb::object BatchBuilder::build()
    return batch;
 }
 
-nb::dict BatchBuilder::build_batch_encoding_dict()
-{
-   absl::btree_map< std::string, int64_t > node_counts;
-   for(const auto& [key, col] : columns) {
-      if(key.find('|') != std::string::npos) {
-         continue;
-      }
-      const auto slash = key.find('/');
-      if(slash == std::string::npos) {
-         continue;
-      }
-      const std::string node_type = key.substr(0, slash);
-      std::visit(
-         [&](const auto& items) {
-            const size_t size = items.size();
-            const int dim = col.dim;
-            const int64_t rows = dim > 0 ? static_cast< int64_t >(size / dim) : 0;
-            auto& count = node_counts[node_type];
-            if(rows > count) {
-               count = rows;
-            }
-         },
-         col.data
-      );
-   }
-   for(const auto& [node_type, ptr] : ptrs) {
-      if(not ptr.empty()) {
-         const int64_t count = ptr.back();
-         auto& existing = node_counts[node_type];
-         if(count > existing) {
-            existing = count;
-         }
-      }
-   }
-   for(const auto& [node_type, count] : current_node_counts) {
-      auto& existing = node_counts[node_type];
-      if(count > existing) {
-         existing = count;
-      }
-   }
-   for(const auto& [node_type, names] : node_names) {
-      auto& existing = node_counts[node_type];
-      const int64_t count = static_cast< int64_t >(names.size());
-      if(count > existing) {
-         existing = count;
-      }
-   }
-   for(const auto& [node_type, dim] : node_feature_dims) {
-      (void) dim;
-      if(not node_counts.contains(node_type)) {
-         node_counts[node_type] = 0;
-      }
-   }
-
-   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
-   absl::btree_map< std::string, std::vector< int64_t > > batch_vectors;
-   int64_t graph_count = 0;
-   for(const auto& [node_type, ptr] : ptrs) {
-      if(ptr.size() < 2) {
-         continue;
-      }
-      ptr_vectors[node_type] = ptr;
-      graph_count = std::max< int64_t >(graph_count, ptr.size() - 1);
-      std::vector< int64_t > batch;
-      batch.reserve(ptr.back());
-      for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {
-         const int64_t count = ptr[idx + 1] - ptr[idx];
-         batch.insert(batch.end(), count, static_cast< int64_t >(idx));
-      }
-      batch_vectors[node_type] = std::move(batch);
-   }
-   if(ptr_vectors.empty()) {
-      for(const auto& [node_type, count] : node_counts) {
-         if(count <= 0) {
-            continue;
-         }
-         ptr_vectors[node_type] = {0, count};
-         batch_vectors[node_type] = std::vector< int64_t >(count, 0);
-      }
-      if(not node_counts.empty()) {
-         graph_count = 1;
-      }
-   }
-
-   nb::dict payload = build_dict();
-
-   for(const auto& [node_type, ptr] : ptr_vectors) {
-      auto* heap_ptr = new std::vector< int64_t >(ptr);
-      size_t shape[1] = {heap_ptr->size()};
-      nb::capsule owner(heap_ptr, [](void* p) noexcept {
-         delete static_cast< std::vector< int64_t >* >(p);
-      });
-      auto ptr_array = nb::ndarray< nb::numpy, int64_t, nb::shape< -1 > >(
-         heap_ptr->data(), 1, shape, owner
-      );
-      payload[(node_type + "/ptr").c_str()] = ptr_array;
-
-      auto batch_it = batch_vectors.find(node_type);
-      auto* heap_batch = new std::vector< int64_t >(
-         batch_it != batch_vectors.end() ? batch_it->second : std::vector< int64_t >{}
-      );
-      size_t batch_shape[1] = {heap_batch->size()};
-      nb::capsule batch_owner(heap_batch, [](void* p) noexcept {
-         delete static_cast< std::vector< int64_t >* >(p);
-      });
-      auto batch_array = nb::ndarray< nb::numpy, int64_t, nb::shape< -1 > >(
-         heap_batch->data(), 1, batch_shape, batch_owner
-      );
-      payload[(node_type + "/batch").c_str()] = batch_array;
-   }
-
-   std::vector< NodeTensorSpec > node_specs;
-   struct EdgeTensorKeySpec {
-      EdgeType edge_type;
-      std::string attr;
-      std::string part;
-      std::string key;
-   };
-   std::vector< EdgeTensorKeySpec > edge_specs;
-   std::set< EdgeType > edge_types_set;
-
-   for(const auto& [key, col] : columns) {
-      (void) col;  // silence unused variable warning
-      const auto slash = key.find('/');
-      if(slash == std::string::npos) {
-         continue;
-      }
-      const bool is_edge = key.find('|') != std::string::npos;
-      if(not is_edge) {
-         node_specs.push_back(
-            NodeTensorSpec{
-               key.substr(0, slash),
-               key.substr(slash + 1),
-               key,
-            }
-         );
-         continue;
-      }
-      const std::string base = key.substr(0, slash);
-      const std::string attr = key.substr(slash + 1);
-      const auto first = base.find('|');
-      if(first == std::string::npos) {
-         continue;
-      }
-      const auto second = base.find('|', first + 1);
-      if(second == std::string::npos) {
-         continue;
-      }
-      EdgeType edge_key{
-         base.substr(0, first),
-         base.substr(first + 1, second - first - 1),
-         base.substr(second + 1),
-      };
-      edge_types_set.insert(edge_key);
-
-      std::string part;
-      std::string attr_name = attr;
-      constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
-      if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
-         attr_name = "edge_index";
-         part = attr.substr(kEdgeIndexPrefix.size());
-      }
-      edge_specs.push_back(
-         EdgeTensorKeySpec{
-            edge_key,
-            attr_name,
-            part,
-            key,
-         }
-      );
-   }
-
-   for(const auto& [node_type, ptr] : ptr_vectors) {
-      (void) ptr;
-      node_specs.push_back(NodeTensorSpec{node_type, "ptr", node_type + "/ptr"});
-      node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
-   }
-
-   std::ranges::sort(node_specs, [](const auto& lhs, const auto& rhs) {
-      return lhs.key < rhs.key;
-   });
-   std::ranges::sort(edge_specs, [](const auto& lhs, const auto& rhs) {
-      return lhs.key < rhs.key;
-   });
-
-   std::vector< EdgeType > edge_types;
-   edge_types.reserve(edge_types_set.size());
-   for(const auto& entry : edge_types_set) {
-      edge_types.push_back(entry);
-   }
-   absl::btree_map< EdgeType, int > edge_type_ids;
-   for(size_t idx = 0; idx < edge_types.size(); ++idx) {
-      edge_type_ids[edge_types[idx]] = static_cast< int >(idx);
-   }
-
-   nb::dict out;
-   out["tensors"] = payload;
-   nb::dict names_dict;
-   for(const auto& [node_type, names] : node_names) {
-      names_dict[node_type.c_str()] = nb::cast(names);
-   }
-   out["node_names"] = names_dict;
-   nb::dict dims_dict;
-   for(const auto& [node_type, dim] : node_feature_dims) {
-      dims_dict[node_type.c_str()] = dim;
-   }
-   out["node_feature_dims"] = dims_dict;
-   out["object_names"] = nb::cast(object_names);
-   out["num_graphs"] = graph_count;
-
-   if(not graph_attrs.empty()) {
-      nb::dict graph_attrs_dict;
-      for(const auto& [key, value] : graph_attrs) {
-         std::visit([&](const auto& v) { graph_attrs_dict[key.c_str()] = nb::cast(v); }, value);
-      }
-      out["graph_attrs"] = graph_attrs_dict;
-   }
-
-   std::vector< std::string > node_types;
-   node_types.reserve(node_counts.size());
-   for(const auto& [node_type, count] : node_counts) {
-      (void) count;
-      node_types.push_back(node_type);
-   }
-
-   std::vector< EdgeTensorSpec > edge_tensor_specs;
-   edge_tensor_specs.reserve(edge_specs.size());
-   for(const auto& spec : edge_specs) {
-      const auto it = edge_type_ids.find(spec.edge_type);
-      if(it == edge_type_ids.end()) {
-         throw std::invalid_argument("Edge tensor spec references unknown edge type");
-      }
-      EdgeTensorSpec out_spec;
-      out_spec.edge_type = it->second;
-      out_spec.attr = spec.attr;
-      out_spec.key = spec.key;
-      out_spec.part = spec.part;
-      edge_tensor_specs.push_back(std::move(out_spec));
-   }
-
-   Schema schema;
-   schema.version = 1;
-   schema.graph_kind = graph_kind;
-   schema.node_types = std::move(node_types);
-   schema.edge_types = std::move(edge_types);
-   schema.node_tensors = std::move(node_specs);
-   schema.edge_tensors = std::move(edge_tensor_specs);
-   schema.flags = schema_flags;
-   schema.validate();
-
-   out["schema"] = schema.to_dict();
-   reset();
-   return out;
-}
-
-BatchBuilder::BatchEncoding BatchBuilder::build_batch_encoding()
+BatchBuilder::BatchEncoding BatchBuilder::build()
 {
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
