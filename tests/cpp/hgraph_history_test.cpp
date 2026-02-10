@@ -151,7 +151,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(HGraphHistoryOverrideTest, CustomHistoryRelation)
 {
-   auto ctx = mifrost_test::make_context("blocks", "probBLOCKS-4-0");
+   auto ctx = mifrost_test::make_context("blocks", "smedium");
    auto goals = collect_goals(ctx.problem);
    ASSERT_FALSE(goals.empty());
 

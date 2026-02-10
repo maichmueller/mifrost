@@ -7,7 +7,7 @@ from pymimir.wrapper_formalism import Domain, Problem
 
 
 DOMAIN_CASES = [
-    ("blocks", "probBLOCKS-4-0"),
+    ("blocks", "smedium"),
     ("gripper", "gripper_b-5"),
     ("delivery", "instance_2x2_p-2_0"),
 ]
@@ -62,21 +62,19 @@ def test_horizon_encoder(domain_name: str, problem_name: str):
 
     goals = mifrost.GoalInputs(static_goals + fluent_goals + derived_goals)
 
-    parts = encoder.encode(state._advanced_state, dag, goals)
-
-    print("Encoded Parts Keys:", parts.keys())
+    encoding = encoder.encode(state._advanced_state, dag, goals)
+    data = encoding.as_pyg(as_batch=False)
 
     # Verify we have target nodes
-    node_names = parts.get("node_names", {})
-    symbol_names = node_names.get(enc_config.symbol_type_id, [])
+    symbol_names = list(getattr(data[enc_config.symbol_type_id], "node_names", []))
     target_nodes = [s for s in symbol_names if "target" in s]
     print(f"Target nodes found: {target_nodes}")
     assert len(target_nodes) >= 1  # At least root target
 
-    # Verify edge types
-    edge_index = parts.get("edge_index", {})
-    parent_edges = [k for k in edge_index.keys() if "parent" in k[1]]
-    print(f"Parent edges found: {parent_edges}")
+    # Verify graph connectivity is present.
+    edge_types = list(data.edge_types)
+    print(f"Edge types found: {edge_types}")
+    assert len(edge_types) >= 1
 
     print("Test passed!")
 

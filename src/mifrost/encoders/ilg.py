@@ -28,7 +28,12 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_action, _advanced_literal, _advanced_state, _parts_to_pyg
+from .common import (
+    _advanced_action,
+    _advanced_literal,
+    _advanced_state,
+    _encoding_dict_to_pyg,
+)
 from .types import (
     ATOM_TYPES,
     WRAPPER_STATE_TYPES,
@@ -145,18 +150,15 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        return self._builder.build_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -164,8 +166,8 @@ class ILGEncoder(EncoderBase[HeteroData]):
     """
     Instance‑Learning Graph encoder (ILG) implemented in Python.
 
-    This encoder mirrors the ILG topology/features and emits normalized batch encoding via
-    ``BatchBuilder``, then relies on the shared parts-to-PyG path.
+    This encoder mirrors the ILG topology/features and emits native batch encodings
+    via ``BatchBuilder``.
     """
 
     def __init__(
@@ -424,7 +426,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
             dst_arr = np.asarray(dst_list, dtype=np.int64)
             builder.add_edges(src_type, rel, dst_type, src_arr, dst_arr)
 
-    def encode_parts(
+    def _encode(
         self,
         state: StateInput | Iterable[Any],
         *,
@@ -433,7 +435,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
     ) -> Mapping[str, object]:
-        """Encode one state into ILG parts."""
+        """Encode one state into ILG format."""
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         self._encode_to_builder(
@@ -441,7 +443,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         )
         return builder.build_batch_encoding()
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         states: StateBatchInput,
         *,
@@ -450,7 +452,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
     ) -> Mapping[str, object]:
-        """Encode one or many states into ILG batch parts."""
+        """Encode one or many states into ILG batch format."""
         if isinstance(states, WRAPPER_STATE_TYPES):
             state_list = [states]
         else:

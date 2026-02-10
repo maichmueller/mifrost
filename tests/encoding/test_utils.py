@@ -10,7 +10,7 @@ from torch_geometric.data import HeteroData
 from torch_geometric.data.data import BaseData
 from torch_geometric.utils import to_networkx
 from tests.conftest import load_problem
-from mifrost.encoders import _parts_to_pyg, _split_goals
+from mifrost.encoders import _encoding_dict_to_pyg, _split_goals
 from mifrost import DEFAULT_LGAN_NN_EDGE_POS
 
 
@@ -121,10 +121,10 @@ def hetero_data_equal(data: HeteroData, expected: HeteroData):
 
 
 def keywise_equal(sample_normal, sample_streaming):
-    if hasattr(sample_normal, "to_parts"):
-        sample_normal = sample_normal.to_parts()
-    if hasattr(sample_streaming, "to_parts"):
-        sample_streaming = sample_streaming.to_parts()
+    if hasattr(sample_normal, "to_dict"):
+        sample_normal = sample_normal.to_dict()
+    if hasattr(sample_streaming, "to_dict"):
+        sample_streaming = sample_streaming.to_dict()
     assert sorted(sample_normal.keys()) == sorted(sample_streaming.keys())
     for key in sample_normal.keys():
         if isinstance(sample_normal[key], torch.Tensor) and isinstance(
@@ -152,8 +152,8 @@ def keywise_equal(sample_normal, sample_streaming):
                 )
 
 
-def parts_to_pyg(parts: dict) -> HeteroData:
-    return _parts_to_pyg(parts, as_batch=None)
+def encoding_dict_to_pyg(encoding_dict: dict) -> HeteroData:
+    return _encoding_dict_to_pyg(encoding_dict, as_batch=None)
 
 
 def goal_inputs_from_problem(problem, *, goals=None, subgoal_layers=None):

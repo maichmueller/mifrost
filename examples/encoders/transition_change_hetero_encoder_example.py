@@ -16,7 +16,7 @@ from _helpers import first_transition, load_space
 
 
 def main():
-    space, domain, problem = load_space(domain="blocks", problem="probBLOCKS-4-0")
+    space, domain, problem = load_space(domain="blocks", problem="smedium")
     state = problem.get_initial_state()
     _, successor = first_transition(space, state)
 

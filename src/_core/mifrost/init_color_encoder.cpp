@@ -160,7 +160,6 @@ void init_color_encoder(nb::module_& m)
       )
       .def("remove", &ColorStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &ColorStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &ColorStreamEncoder::flush_batch_encoding_py)
       .def("flush", &ColorStreamEncoder::flush)
       .def("flush_pyg", &ColorStreamEncoder::flush_pyg)
       .def("reset", &ColorStreamEncoder::reset);

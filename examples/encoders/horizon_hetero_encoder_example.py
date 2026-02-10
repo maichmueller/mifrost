@@ -16,7 +16,7 @@ from mifrost.encoders.types import to_advanced_state
 def _load_problem() -> tuple[pymimir.Domain, pymimir.Problem]:
     repo_root = Path(__file__).resolve().parents[2]
     domain_path = repo_root / "data" / "pddl" / "blocks" / "domain.pddl"
-    problem_path = repo_root / "data" / "pddl" / "blocks" / "probBLOCKS-4-0.pddl"
+    problem_path = repo_root / "data" / "pddl" / "blocks" / "small.pddl"
     domain = pymimir.Domain(domain_path)
     problem = pymimir.Problem(domain, problem_path, mode="lifted")
     return domain, problem

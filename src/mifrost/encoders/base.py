@@ -6,7 +6,7 @@ from typing import Generic, Iterable, Mapping, TypeAlias, TypeVar
 
 from torch_geometric.data import Data, HeteroData
 
-from .common import _parts_to_pyg
+from .common import _encoding_dict_to_pyg
 from .types import GoalLiteralInput, GroundActionInput, StateInput
 
 PygDataT = TypeVar("PygDataT", Data, HeteroData)
@@ -24,10 +24,6 @@ class EncoderBase(ABC, Generic[PygDataT]):
     - ``encode(...)`` returns one native batch encoding object.
     - ``encode_batch(...)`` returns one native batch encoding object.
     - ``encode_pyg(...)`` / ``encode_batch_pyg(...)`` return PyG objects.
-    - ``export_encoding(...)`` / ``export_batch_encoding(...)`` return normalized encoding payloads.
-
-    Unknown keyword arguments are ignored by default. Concrete encoders opt into
-    accepted keywords by ``encode`` via ``_accepted_kwargs``.
     """
 
     def _accepted_kwargs(self) -> set[str]:
@@ -49,15 +45,10 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> object:
-        """
-        Encode one input into native batch encoding.
-
-        Parameters mirror the common encoder API. Concrete encoders decide which
-        optional inputs (goals/actions/layers/custom kwargs) are meaningful.
-        """
-        return self.export_encoding(
+        # Native encodings are unchanged by include_metadata; conversion controls metadata.
+        return self._encode(
             state,
             goals=goals,
             actions=actions,
@@ -73,14 +64,10 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> object:
-        """
-        Encode one or many inputs into native batch encoding.
-
-        ``states`` may be a single state-like object or an iterable of states.
-        """
-        return self.export_batch_encoding(
+        # Native encodings are unchanged by include_metadata; conversion controls metadata.
+        return self._encode_batch(
             states,
             goals=goals,
             actions=actions,
@@ -96,7 +83,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> PygDataT:
         encoding = self.encode(
             state,
@@ -106,9 +93,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
             include_metadata=include_metadata,
             **kwargs,
         )
-        return self._encoding_to_pyg(
-            encoding, as_batch=False, include_metadata=include_metadata
-        )
+        return self._to_pyg(encoding, as_batch=False, include_metadata=include_metadata)
 
     def encode_batch_pyg(
         self,
@@ -118,7 +103,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> PygDataT:
         encoding = self.encode_batch(
             states,
@@ -128,83 +113,46 @@ class EncoderBase(ABC, Generic[PygDataT]):
             include_metadata=include_metadata,
             **kwargs,
         )
-        return self._encoding_to_pyg(
-            encoding, as_batch=True, include_metadata=include_metadata
-        )
+        return self._to_pyg(encoding, as_batch=True, include_metadata=include_metadata)
 
-    def export_encoding(
+    @abstractmethod
+    def _encode(
         self,
         state: StateInput,
         *,
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs,
-    ) -> Mapping[str, object] | object:
-        return self.encode_parts(
-            state,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
-            **kwargs,
-        )
+        **kwargs: object,
+    ) -> object:
+        """Encode one input into native batch encoding."""
+        ...
 
-    def export_batch_encoding(
+    @abstractmethod
+    def _encode_batch(
         self,
         states: StateBatchInput,
         *,
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs,
-    ) -> Mapping[str, object] | object:
-        return self.encode_batch_parts(
-            states,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
-            **kwargs,
-        )
-
-    @abstractmethod
-    def encode_parts(
-        self,
-        state: StateInput,
-        *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        **kwargs,
-    ) -> Mapping[str, object]:
-        """Encode one input into the normalized batch encoding payload."""
+        **kwargs: object,
+    ) -> object:
+        """Encode one or many inputs into native batch encoding."""
         ...
 
-    @abstractmethod
-    def encode_batch_parts(
+    def _dict_to_pyg(
         self,
-        states: StateBatchInput,
-        *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        **kwargs,
-    ) -> Mapping[str, object]:
-        """Encode one or many inputs into a batch-oriented parts payload."""
-        ...
-
-    def _parts_to_pyg(
-        self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        """Convert normalized batch encoding into PyG objects."""
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def _encoding_to_pyg(
+    def _to_pyg(
         self,
         encoding: Mapping[str, object] | object,
         *,
@@ -212,27 +160,23 @@ class EncoderBase(ABC, Generic[PygDataT]):
         include_metadata: bool = True,
     ) -> PygDataT:
         if hasattr(encoding, "as_pyg"):
-            if include_metadata:
+            uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
+            if include_metadata and uses_default_converter:
                 return encoding.as_pyg(as_batch=as_batch)
-            if hasattr(encoding, "to_parts"):
-                parts = encoding.to_parts()
-                return self._parts_to_pyg(
-                    parts, as_batch=as_batch, include_metadata=include_metadata
+            if hasattr(encoding, "to_dict"):
+                return self._dict_to_pyg(
+                    encoding.to_dict(),
+                    as_batch=as_batch,
+                    include_metadata=include_metadata,
                 )
             return encoding.as_pyg(as_batch=as_batch)
-        return self._parts_to_pyg(
+        return self._dict_to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
 class StreamEncoderBase(ABC, Generic[PygDataT]):
-    """
-    Base class for stream encoders that accumulate graphs incrementally.
-
-    Stream encoders append inputs into an internal encoder and expose:
-    - ``flush()`` for native encoding
-    - ``flush_pyg()`` for immediate PyG conversion
-    """
+    """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
     def append(self, *args: object, **kwargs: object) -> int:
@@ -284,15 +228,9 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         self, *, as_batch: bool = True, include_metadata: bool = True
     ) -> PygDataT:
         encoding = self.flush()
-        return self._encoding_to_pyg(
+        return self._to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )
-
-    def flush_batch_encoding_py(self) -> Mapping[str, object]:
-        """Flush accumulated items and return normalized batch encoding parts."""
-        parts = self._flush_batch_encoding_py_impl()
-        self._reset_builder()
-        return parts
 
     @abstractmethod
     def _reset_builder(self) -> None:
@@ -300,22 +238,17 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         ...
 
     @abstractmethod
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        """Return normalized batch encoding for the current stream contents."""
-        ...
-
-    @abstractmethod
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        """Convert normalized batch encoding into PyG output for stream flush."""
+        """Convert dictionary encoding into PyG output for stream flush."""
         ...
 
-    def _encoding_to_pyg(
+    def _to_pyg(
         self,
         encoding: Mapping[str, object] | object,
         *,
@@ -323,15 +256,18 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         include_metadata: bool = True,
     ) -> PygDataT:
         if hasattr(encoding, "as_pyg"):
-            if include_metadata:
+            uses_default_converter = (
+                type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
+            )
+            if include_metadata and uses_default_converter:
                 return encoding.as_pyg(consume=True, as_batch=as_batch)
-            if hasattr(encoding, "to_parts"):
-                return self._parts_to_pyg(
-                    encoding.to_parts(),
+            if hasattr(encoding, "to_dict"):
+                return self._dict_to_pyg(
+                    encoding.to_dict(),
                     as_batch=as_batch,
                     include_metadata=include_metadata,
                 )
             return encoding.as_pyg(consume=True, as_batch=as_batch)
-        return self._parts_to_pyg(
+        return self._dict_to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )

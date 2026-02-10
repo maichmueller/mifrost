@@ -10,7 +10,7 @@ from tests.encoding.test_utils import keywise_equal
 
 
 DOMAIN_CASES = [
-    ("blocks", "probBLOCKS-4-0"),
+    ("blocks", "smedium"),
     ("gripper", "gripper_b-5"),
     ("spanner", "medium"),
     ("delivery", "instance_2x2_p-2_0"),
@@ -148,7 +148,7 @@ def test_history_batch_and_stream_parity(domain_name, problem_name):
     goals, history_subgoals = _history_inputs(problem)
     history_per_state = [history_subgoals for _ in states]
 
-    batch_parts = encoder.encode_batch_parts(
+    batch_parts = encoder._encode_batch(
         states,
         goals=goals,
         history_subgoals=history_per_state,
@@ -157,13 +157,13 @@ def test_history_batch_and_stream_parity(domain_name, problem_name):
     stream = encoder.stream()
     for state in states:
         stream.append(state, goals=goals, history_subgoals=history_subgoals)
-    stream_parts = stream.flush_batch_encoding_py()
+    stream_parts = stream.flush()
 
     keywise_equal(batch_parts, stream_parts)
 
 
 def test_history_custom_relation_override():
-    _, domain, problem = problem_setup("blocks", "probBLOCKS-4-0")
+    _, domain, problem = problem_setup("blocks", "smedium")
     encoder = HGraphEncoder(domain, history_link_relation="_custom_history_")
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)

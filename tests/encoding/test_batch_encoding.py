@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch_geometric.data import Batch, HeteroData
 
-from mifrost.encoders import HGraphEncoder, _parts_to_pyg
+from mifrost.encoders import HGraphEncoder, _encoding_dict_to_pyg
 
 
 def _assert_tensor_or_list_equal(actual, expected):
@@ -79,7 +79,7 @@ def test_stream_matches_encode_batch(small_blocks):
     _assert_hetero_batch_equal(actual_batch, expected_batch)
 
 
-def test_encode_batch_parts_roundtrip(small_blocks):
+def test__encode_batch_roundtrip(small_blocks):
     space, domain, problem = small_blocks
     encoder = HGraphEncoder(domain)
 
@@ -87,8 +87,8 @@ def test_encode_batch_parts_roundtrip(small_blocks):
         problem.get_initial_state(),
         space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
     ]
-    parts = encoder.encode_batch_parts(states)
-    actual_batch = _parts_to_pyg(parts, as_batch=True)
+    encoding_dict = encoder._encode_batch(states)
+    actual_batch = _encoding_dict_to_pyg(encoding_dict, as_batch=True)
     expected_batch = encoder.encode_batch(states).as_pyg(as_batch=True)
 
     _assert_hetero_batch_equal(actual_batch, expected_batch)
@@ -151,7 +151,7 @@ def test_export_node_names_flag_disables_metadata(small_blocks):
 
     state = problem.get_initial_state()
     encoding = encoder.encode(state)
-    parts = encoding.to_parts()
+    encoding_dict = encoding.to_dict()
 
-    assert parts.get("node_names", {}) == {}
-    assert list(parts.get("object_names", [])) == []
+    assert encoding_dict.get("node_names", {}) == {}
+    assert list(encoding_dict.get("object_names", [])) == []

@@ -110,53 +110,54 @@ def _prepare_history_subgoals(
     return out
 
 
-def _coerce_parts(parts: Mapping[str, Any] | Any) -> Mapping[str, Any]:
-    if isinstance(parts, Mapping):
-        return parts
-    if hasattr(parts, "to_parts"):
-        coerced = parts.to_parts()
+def _coerce_encoding_dict(encoding: Mapping[str, Any] | Any) -> Mapping[str, Any]:
+    if isinstance(encoding, Mapping):
+        return encoding
+    if hasattr(encoding, "to_dict"):
+        coerced = encoding.to_dict()
         if isinstance(coerced, Mapping):
             return coerced
     raise TypeError(
-        f"Expected parts mapping or BatchEncoding-like object, got {type(parts)}"
+        f"Expected encoding dictionary or BatchEncoding-like object, got {type(encoding)}"
     )
 
 
-def _parts_to_pyg(
-    parts: Mapping[str, Any] | Any,
+def _encoding_dict_to_pyg(
+    encoding: Mapping[str, Any] | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
 ) -> HeteroData:
     """
-    Convert normalized encoder parts into PyG ``HeteroData``/``Batch`` output.
+    Convert normalized encoder dictionaries into PyG ``HeteroData``/``Batch``.
 
-    Expected parts contract:
-    - ``parts["schema"]``: schema descriptor
-    - ``parts["tensors"]``: flat tensor payload keyed by schema keys
+    Expected dictionary contract:
+    - ``encoding["schema"]``: schema descriptor
+    - ``encoding["tensors"]``: flat tensor payload keyed by schema keys
     - optional metadata: ``node_names``, ``object_names``, ``graph_attrs``
     """
-    # Assemble engine "parts" into PyG objects on the Python side only.
-    parts = _coerce_parts(parts)
-    raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
-    schema_obj = parts.get("schema")
+    encoding_dict = _coerce_encoding_dict(encoding)
+    raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
+    schema_obj = encoding_dict.get("schema")
     if schema_obj is None:
-        raise ValueError("parts schema missing; rebuild the extension to emit schema")
+        raise ValueError(
+            "Encoding schema missing; rebuild the extension to emit schema"
+        )
     if hasattr(schema_obj, "to_dict"):
         schema_obj = schema_obj.to_dict()
     if not isinstance(schema_obj, Mapping):
-        raise TypeError(f"parts schema must be a mapping, got {type(schema_obj)}")
+        raise TypeError(f"Encoding schema must be a mapping, got {type(schema_obj)}")
     schema: Mapping[str, Any] = schema_obj
-    node_names: Mapping[str, list[str]] = parts.get("node_names", {})
-    node_feature_dims: Mapping[str, int] = parts.get("node_feature_dims", {})
-    object_names_raw = parts.get("object_names", [])
+    node_names: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
+    node_feature_dims: Mapping[str, int] = encoding_dict.get("node_feature_dims", {})
+    object_names_raw = encoding_dict.get("object_names", [])
     object_names: list[str] = (
         object_names_raw
         if isinstance(object_names_raw, list)
         else list(object_names_raw)
     )
-    graph_attrs = parts.get("graph_attrs", {})
-    num_graphs = int(parts.get("num_graphs", 0))
+    graph_attrs = encoding_dict.get("graph_attrs", {})
+    num_graphs = int(encoding_dict.get("num_graphs", 0))
 
     if as_batch is None:
         as_batch = num_graphs > 1
@@ -167,7 +168,7 @@ def _parts_to_pyg(
     else:
         data = HeteroData()
 
-    edge_parts: dict[tuple[str, str, str], dict[str, torch.Tensor]] = {}
+    edge_components: dict[tuple[str, str, str], dict[str, torch.Tensor]] = {}
     tensors: dict[str, Any] = {}
     tensors_torch: dict[str, torch.Tensor] = {}
     consumed_keys: set[str] = set()
@@ -217,19 +218,19 @@ def _parts_to_pyg(
         edge_type = edge_type_list[edge_type_idx]
         attr = entry["attr"]
         if attr == "edge_index":
-            part = str(entry.get("part", ""))
-            if part == "":
-                raise ValueError(f"Missing edge_index part for key: {key}")
-            edge_entry = edge_parts.setdefault(edge_type, {})
-            edge_entry[part] = get_tensor(key, tensors[key])
+            component = str(entry.get("part", ""))
+            if component == "":
+                raise ValueError(f"Missing edge_index component for key: {key}")
+            edge_entry = edge_components.setdefault(edge_type, {})
+            edge_entry[component] = get_tensor(key, tensors[key])
         else:
             data[edge_type][attr] = get_tensor(key, tensors[key])
         consumed_keys.add(key)
 
-    for (src, rel, dst), parts_map in edge_parts.items():
-        if "0" not in parts_map or "1" not in parts_map:
-            raise ValueError(f"Incomplete edge_index parts for {src}|{rel}|{dst}")
-        edge_index = torch.stack((parts_map["0"], parts_map["1"]), dim=0)
+    for (src, rel, dst), component_map in edge_components.items():
+        if "0" not in component_map or "1" not in component_map:
+            raise ValueError(f"Incomplete edge_index components for {src}|{rel}|{dst}")
+        edge_index = torch.stack((component_map["0"], component_map["1"]), dim=0)
         data[(src, rel, dst)].edge_index = edge_index
 
     node_names_lists: dict[str, list[str]] = {}
@@ -306,8 +307,10 @@ def _parts_to_pyg(
     return data
 
 
-def parts_to_tensors(parts: Mapping[str, Any] | Any) -> Mapping[str, torch.Tensor]:
-    """Return ``parts['tensors']`` as a plain ``str -> torch.Tensor`` mapping."""
-    parts = _coerce_parts(parts)
-    tensors: Mapping[str, Any] = parts.get("tensors", {})
+def encoding_to_tensors(
+    encoding: Mapping[str, Any] | Any,
+) -> Mapping[str, torch.Tensor]:
+    """Return ``encoding['tensors']`` as a plain ``str -> torch.Tensor`` mapping."""
+    encoding_dict = _coerce_encoding_dict(encoding)
+    tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
     return {str(key): _to_tensor(value) for key, value in tensors.items()}

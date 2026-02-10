@@ -11,7 +11,7 @@ from .test_utils import (
     format_literal_with_suffix,
     goal_inputs_from_problem,
     object_names,
-    parts_to_pyg,
+    encoding_dict_to_pyg,
     state_atoms,
     to_named_networkx,
 )
@@ -61,8 +61,8 @@ def _encode_successor_graph(
     config.successor_mode = mode
     config.successor_suffix = successor_suffix
     encoder = mifrost.SuccessorHGraphEncoderEngine(_adv_domain(domain), config)
-    parts = encoder.encode(_adv(current), _adv(successor), goals)
-    data = parts_to_pyg(parts)
+    encoding_dict = encoder.encode(_adv(current), _adv(successor), goals)
+    data = encoding_dict_to_pyg(encoding_dict)
     return to_named_networkx(data)
 
 
@@ -161,8 +161,8 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
     }
 
     encoder = mifrost.SuccessorHGraphEncoderEngine(_adv_domain(domain), config)
-    parts = encoder.encode(_adv(state), _adv(successor_state), goals)
-    graph = to_named_networkx(parts_to_pyg(parts))
+    encoding_dict = encoder.encode(_adv(state), _adv(successor_state), goals)
+    graph = to_named_networkx(encoding_dict_to_pyg(encoding_dict))
 
     successor_atom_keys = {
         str(atom) for atom in state_atoms(successor_state, with_statics=False)

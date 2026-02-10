@@ -209,7 +209,7 @@ def run_profile(profile_kind, label, fn, count=None):
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", default="blocks")
-    parser.add_argument("--problem", default="probBLOCKS-4-0")
+    parser.add_argument("--problem", default="probBLOCKS-8-1")
     parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--stream-size", type=int, default=16)

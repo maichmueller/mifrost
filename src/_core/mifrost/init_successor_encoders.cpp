@@ -133,7 +133,6 @@ void init_successor_encoders(nb::module_& m)
       )
       .def("remove", &TransitionStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &TransitionStreamEncoder::flush_batch_encoding_py)
       .def("flush", &TransitionStreamEncoder::flush)
       .def("flush_pyg", &TransitionStreamEncoder::flush_pyg)
       .def("reset", &TransitionStreamEncoder::reset);

@@ -3,12 +3,10 @@ import os
 import mifrost
 import pymimir
 import pytest
-import torch
-from torch_geometric.data import HeteroData
 
 
 DOMAIN_CASES = [
-    ("blocks", "probBLOCKS-4-0"),
+    ("blocks", "smedium"),
     ("gripper", "gripper_b-5"),
     ("delivery", "instance_2x2_p-2_0"),
 ]
@@ -68,15 +66,11 @@ def test_successor_encoder(domain_name: str, problem_name: str):
     encoder_full = mifrost.SuccessorHGraphEncoderEngine(
         domain._advanced_domain, config_full
     )
-    data_full_parts = encoder_full.encode(
+    data_full = encoder_full.encode(
         state._advanced_state, successor._advanced_state, goal_inputs
-    )
-
-    # Convert data_full_parts to HeteroData (mocking what would be done in Python)
-    # Actually, we can just check the keys in the returned dict
-    node_names = data_full_parts.get("node_names", {})
-    node_types = node_names.keys()
-    print(f"Node types (Full): {list(node_types)}")
+    ).as_pyg(as_batch=False)
+    node_types = list(data_full.node_types)
+    print(f"Node types (Full): {node_types}")
 
     # Check for [suc] nodes
     suc_nodes = [t for t in node_types if "[suc]" in t]
@@ -91,13 +85,11 @@ def test_successor_encoder(domain_name: str, problem_name: str):
     encoder_delta = mifrost.SuccessorHGraphEncoderEngine(
         domain._advanced_domain, config_delta
     )
-    data_delta_parts = encoder_delta.encode(
+    data_delta = encoder_delta.encode(
         state._advanced_state, successor._advanced_state, goal_inputs
-    )
-
-    node_names_delta = data_delta_parts.get("node_names", {})
-    node_types_delta = node_names_delta.keys()
-    print(f"Node types (Delta): {list(node_types_delta)}")
+    ).as_pyg(as_batch=False)
+    node_types_delta = list(data_delta.node_types)
+    print(f"Node types (Delta): {node_types_delta}")
 
     suc_nodes_delta = [t for t in node_types_delta if "[suc]" in t]
     assert len(suc_nodes_delta) > 0, "No successor nodes found in Delta mode"

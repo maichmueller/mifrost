@@ -16,7 +16,7 @@ from _helpers import load_space
 
 def main():
     # Choose a small but meaningful instance
-    _, domain, problem = load_space(domain="blocks", problem="probBLOCKS-8-1")
+    _, domain, problem = load_space(domain="blocks", problem="medium")
     encoder = HGraphEncoder(domain)
 
     # Encode the current state; goals default to the problem goal

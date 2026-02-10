@@ -56,8 +56,8 @@ def _get_mimir_prefix() -> str | None:
 def _set_env_prefix_path(prefix: str) -> None:
     current = os.environ.get("CMAKE_PREFIX_PATH")
     if current:
-        parts = current.split(os.pathsep)
-        if prefix in parts:
+        entries = current.split(os.pathsep)
+        if prefix in entries:
             return
         os.environ["CMAKE_PREFIX_PATH"] = f"{prefix}{os.pathsep}{current}"
     else:

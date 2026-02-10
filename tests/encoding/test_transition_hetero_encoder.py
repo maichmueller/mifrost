@@ -15,7 +15,7 @@ from .test_utils import (
     format_atom_with_suffix,
     goal_inputs_from_problem,
     object_names,
-    parts_to_pyg,
+    encoding_dict_to_pyg,
     predicate,
     predicate_arity,
     state_atoms,
@@ -54,8 +54,8 @@ def _encode_successor_graph(
     config.successor_mode = mode
     config.successor_suffix = successor_suffix
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
-    parts = encoder.encode(adv_state(current), adv_state(successor), goals)
-    return to_named_networkx(parts_to_pyg(parts))
+    encoding_dict = encoder.encode(adv_state(current), adv_state(successor), goals)
+    return to_named_networkx(encoding_dict_to_pyg(encoding_dict))
 
 
 def test_transition_encoder_preserves_state_structure(small_blocks):
@@ -242,8 +242,8 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
     config.add_nullary_predicates = True
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
 
-    parts = encoder.encode(adv_state(state), adv_state(successor_state), goals)
-    data = parts_to_pyg(parts)
+    encoding_dict = encoder.encode(adv_state(state), adv_state(successor_state), goals)
+    data = encoding_dict_to_pyg(encoding_dict)
     graph = to_named_networkx(data)
     placeholder = config.nullary_object_name
     assert graph.has_node(placeholder)

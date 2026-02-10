@@ -7,7 +7,7 @@ from .test_utils import (
     adv_domain,
     adv_state,
     goal_inputs_from_problem,
-    parts_to_pyg,
+    encoding_dict_to_pyg,
 )
 
 
@@ -34,8 +34,8 @@ def test_horizon_encoder_target_mapping_and_order(small_blocks):
     config.ignore_actions = False
     encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
     goals = goal_inputs_from_problem(problem)
-    parts = encoder.encode(adv_state(root), dag, goals)
-    data = parts_to_pyg(parts)
+    encoding_dict = encoder.encode(adv_state(root), dag, goals)
+    data = encoding_dict_to_pyg(encoding_dict)
 
     symbol_type = config.symbol_type_id
     symbol_node_names = list(getattr(data[symbol_type], "node_names", []))

@@ -14,7 +14,7 @@ from _helpers import load_space
 
 
 def main():
-    _, domain, problem = load_space(domain="blocks", problem="probBLOCKS-8-1")
+    _, domain, problem = load_space(domain="blocks", problem="medium")
     encoder = ILGEncoder(domain)
 
     graph = encoder.encode(problem.get_initial_state(), goals=[])

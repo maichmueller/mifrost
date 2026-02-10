@@ -32,38 +32,42 @@ from .types import (
 )
 
 
-def _parts_to_pyg_homo(
-    parts: Mapping[str, Any] | Any,
+def _encoding_dict_to_pyg_homo(
+    encoding_dict: Mapping[str, Any] | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
     undirected: bool = True,
 ) -> Data:
     """
-    Convert color-encoder parts into homogeneous PyG ``Data``/``Batch``.
+    Convert color-encoder encoding_dict into homogeneous PyG ``Data``/``Batch``.
 
-    This adapter expects the standard parts schema and uses a single node type.
+    This adapter expects the standard encoding_dict schema and uses a single node type.
     """
-    if not isinstance(parts, Mapping):
-        if hasattr(parts, "to_parts"):
-            parts = parts.to_parts()
+    if not isinstance(encoding_dict, Mapping):
+        if hasattr(encoding_dict, "to_dict"):
+            encoding_dict = encoding_dict.to_dict()
         else:
             raise TypeError(
-                f"Expected parts mapping or BatchEncoding-like object, got {type(parts)}"
+                f"Expected encoding_dict mapping or BatchEncoding-like object, got {type(encoding_dict)}"
             )
 
-    raw_tensors: Mapping[str, Any] = parts.get("tensors", {})
-    schema_obj = parts.get("schema")
+    raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
+    schema_obj = encoding_dict.get("schema")
     if schema_obj is None:
-        raise ValueError("parts schema missing; rebuild the extension to emit schema")
+        raise ValueError(
+            "encoding_dict schema missing; rebuild the extension to emit schema"
+        )
     if hasattr(schema_obj, "to_dict"):
         schema_obj = schema_obj.to_dict()
     if not isinstance(schema_obj, Mapping):
-        raise TypeError(f"parts schema must be a mapping, got {type(schema_obj)}")
+        raise TypeError(
+            f"encoding_dict schema must be a mapping, got {type(schema_obj)}"
+        )
     schema: Mapping[str, Any] = schema_obj
 
-    node_names_map: Mapping[str, list[str]] = parts.get("node_names", {})
-    num_graphs = int(parts.get("num_graphs", 0))
+    node_names_map: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
+    num_graphs = int(encoding_dict.get("num_graphs", 0))
 
     if as_batch is None:
         as_batch = num_graphs > 1
@@ -102,7 +106,7 @@ def _parts_to_pyg_homo(
         attr = entry["attr"]
         data[attr] = get_tensor(key, tensors[key])
 
-    edge_parts: dict[str, torch.Tensor] = {}
+    edge_components: dict[str, torch.Tensor] = {}
     edge_attr: torch.Tensor | None = None
     for entry in schema.get("edge_tensors", []):
         key = entry["key"]
@@ -110,15 +114,15 @@ def _parts_to_pyg_homo(
             raise KeyError(f"Schema references missing tensor key: {key}")
         attr = entry["attr"]
         if attr == "edge_index":
-            part = str(entry.get("part", ""))
-            if part == "":
-                raise ValueError(f"Missing edge_index part for key: {key}")
-            edge_parts[part] = get_tensor(key, tensors[key])
+            component = str(entry.get("part", ""))
+            if component == "":
+                raise ValueError(f"Missing edge_index component for key: {key}")
+            edge_components[component] = get_tensor(key, tensors[key])
         elif attr == "edge_attr":
             edge_attr = get_tensor(key, tensors[key])
 
-    if "0" in edge_parts and "1" in edge_parts:
-        edge_index = torch.stack((edge_parts["0"], edge_parts["1"]), dim=0)
+    if "0" in edge_components and "1" in edge_components:
+        edge_index = torch.stack((edge_components["0"], edge_components["1"]), dim=0)
         if undirected and edge_index.numel() > 0:
             src = edge_index[0]
             dst = edge_index[1]
@@ -149,24 +153,6 @@ def _parts_to_pyg_homo(
             data.num_nodes = len(data.node_names)
 
     return data
-
-
-def _add_color_extension(parts: Mapping[str, Any]) -> None:
-    """Ensure the schema extensions include color encoding metadata."""
-    schema_obj = parts.get("schema")
-    if schema_obj is None:
-        return
-    if hasattr(schema_obj, "to_dict"):
-        schema_obj = schema_obj.to_dict()
-    if not isinstance(schema_obj, Mapping):
-        return
-    schema = dict(schema_obj)
-    flags = schema.get("flags", {})
-    edge_features = bool(flags.get("edge_features", False))
-    extensions = dict(schema.get("extensions", {}))
-    extensions["color_encoding"] = "edge" if edge_features else "node"
-    schema["extensions"] = extensions
-    parts["schema"] = schema
 
 
 @dataclass
@@ -221,31 +207,15 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        parts = self._stream.flush_batch_encoding_py()
-        _add_color_extension(parts)
-        return parts
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> Data:
-        return _parts_to_pyg_homo(
-            parts, as_batch=as_batch, include_metadata=include_metadata
-        )
-
-    def _encoding_to_pyg(
-        self,
-        encoding: Mapping[str, object] | object,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> Data:
-        return _parts_to_pyg_homo(
-            encoding, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg_homo(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -277,7 +247,7 @@ class ColorEncoder(EncoderBase[Data]):
         """Expose the underlying C++ color engine."""
         return self._engine
 
-    def encode_parts(
+    def _encode(
         self,
         state: StateInput,
         *,
@@ -285,7 +255,7 @@ class ColorEncoder(EncoderBase[Data]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> Mapping[str, object]:
-        """Encode one state into homogeneous parts."""
+        """Encode one state into homogeneous encoding dictionary."""
         adv_state = _advanced_state(state)
         if goals is None and subgoal_layers is None:
             return self._engine.encode(adv_state)
@@ -312,7 +282,7 @@ class ColorEncoder(EncoderBase[Data]):
             **kwargs,
         )
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         states: StateBatchInput,
         *,
@@ -320,7 +290,7 @@ class ColorEncoder(EncoderBase[Data]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> Mapping[str, object]:
-        """Encode one or many states into homogeneous batch parts."""
+        """Encode one or many states into homogeneous batch encoding_dict."""
         if isinstance(states, STATE_TYPES):
             state_list = [states]
         else:
@@ -366,26 +336,15 @@ class ColorEncoder(EncoderBase[Data]):
             **kwargs,
         )
 
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> Data:
-        return _parts_to_pyg_homo(
-            parts, as_batch=as_batch, include_metadata=include_metadata
-        )
-
-    def _encoding_to_pyg(
-        self,
-        encoding: Mapping[str, object] | object,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> Data:
-        return _parts_to_pyg_homo(
-            encoding, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg_homo(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> ColorEncoderStream:

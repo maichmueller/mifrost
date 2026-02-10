@@ -8,7 +8,7 @@ from torch_geometric.data import HeteroData
 
 from .._core import BatchBuilder
 from .base import EncoderBase, StreamEncoderBase
-from .common import _parts_to_pyg
+from .common import _encoding_dict_to_pyg
 
 
 @dataclass
@@ -38,18 +38,15 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, Any]:
-        return self._builder.build_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, Any],
+        encoding_dict: Mapping[str, Any] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -69,7 +66,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         """Allow overriding the scalar value via ``value=...``."""
         return {"value"}
 
-    def encode_parts(
+    def _encode(
         self,
         state: Any,
         *,
@@ -90,7 +87,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         builder.set_object_names([str(state)])
         return builder.build_batch_encoding()
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         states: Iterable[Any] | Any,
         *,

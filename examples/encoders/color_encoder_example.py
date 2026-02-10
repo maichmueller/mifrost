@@ -14,7 +14,7 @@ from _helpers import load_problem
 
 
 def main():
-    domain, problem, state = load_problem(domain="blocks", problem="probBLOCKS-4-0")
+    domain, problem, state = load_problem(domain="blocks", problem="smedium")
     # Demonstrate edge_features=True so positional/color info appears on edges
     encoder = ColorEncoder(
         domain,

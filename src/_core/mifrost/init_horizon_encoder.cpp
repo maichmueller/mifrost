@@ -157,7 +157,6 @@ void init_horizon_encoder(nb::module_& m)
       )
       .def("remove", &HorizonStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HorizonStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &HorizonStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HorizonStreamEncoder::flush)
       .def("flush_pyg", &HorizonStreamEncoder::flush_pyg)
       .def("reset", &HorizonStreamEncoder::reset);

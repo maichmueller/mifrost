@@ -22,14 +22,14 @@ struct DomainCase {
 };
 
 inline constexpr DomainCase kSmallDomains[] = {
-   {"blocks", "probBLOCKS-4-0"},
+   {"blocks", "smedium"},
    {"gripper", "gripper_b-5"},
    {"spanner", "medium"},
    {"delivery", "instance_2x2_p-2_0"},
 };
 
 inline constexpr DomainCase kParityDomains[] = {
-   {"blocks", "probBLOCKS-4-0"},
+   {"blocks", "smedium"},
    {"gripper", "gripper_b-5"},
    {"spanner", "medium"},
    {"delivery", "instance_2x2_p-2_0"},

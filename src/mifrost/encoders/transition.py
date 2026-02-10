@@ -23,7 +23,7 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_state, _parts_to_pyg, _split_goals
+from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -85,7 +85,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         """Accept successor/successors kwargs in generic base API calls."""
         return {"successor", "successors"}
 
-    def encode_parts(
+    def _encode(
         self,
         state: StateInput,
         *,
@@ -95,7 +95,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         successor: StateInput | None = None,
         **kwargs: object,
     ) -> Mapping[str, object]:
-        """Encode one ``state -> successor`` transition into parts."""
+        """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
         adv_state = _advanced_state(state)
@@ -105,7 +105,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         inputs = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, adv_successor, inputs)
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         states: StateBatchInput,
         *,
@@ -115,7 +115,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         successors: StateBatchInput | None = None,
         **kwargs: object,
     ) -> Mapping[str, object]:
-        """Encode many aligned ``states -> successors`` transitions into parts."""
+        """Encode many aligned ``states -> successors`` transitions."""
         if is_state_input(states):
             state_list = [states]
         else:
@@ -150,15 +150,15 @@ class _TransitionEncoderBase(HGraphEncoder):
             builder.next_graph()
         return builder.build_batch_encoding()
 
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> "_TransitionEncoderStream":
@@ -222,18 +222,15 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        return self._stream.flush_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 

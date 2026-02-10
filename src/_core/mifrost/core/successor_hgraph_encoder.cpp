@@ -124,24 +124,59 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       );
 
       std::vector< std::string > object_keys;
+      std::vector< int64_t > object_node_indices;
+      auto& symbol_node_indices = workspace.node_indices[config_.symbol_type_id];
+      const auto resolve_symbol_idx_from_name =
+         [&](const std::string& key) -> std::optional< int64_t > {
+         auto names_it = workspace.node_names.find(config_.symbol_type_id);
+         if(names_it == workspace.node_names.end()) {
+            return std::nullopt;
+         }
+         const auto& symbol_names = names_it->second;
+         const auto name_it = std::find(symbol_names.begin(), symbol_names.end(), key);
+         if(name_it == symbol_names.end()) {
+            return std::nullopt;
+         }
+         return static_cast< int64_t >(std::distance(symbol_names.begin(), name_it));
+      };
       if(predicate->get_arity() == 0) {
-         object_keys.emplace_back(config_.nullary_object_name);
+         const std::string key = config_.nullary_object_name;
+         int64_t obj_idx = -1;
+         if(const auto resolved = resolve_symbol_idx_from_name(key); resolved.has_value()) {
+            obj_idx = *resolved;
+         } else {
+            const auto it = symbol_node_indices.find(key);
+            if(it != symbol_node_indices.end()) {
+               obj_idx = it->second;
+            } else {
+               obj_idx = get_or_add_symbol_special_node(key, key, builder, workspace.node_names);
+               symbol_node_indices.try_emplace(key, obj_idx);
+            }
+         }
+         object_keys.emplace_back(key);
+         object_node_indices.emplace_back(obj_idx);
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(symbol_node_key(obj));
+            const std::string key = symbol_node_key(obj);
+            int64_t obj_idx = -1;
+            if(const auto resolved = resolve_symbol_idx_from_name(key); resolved.has_value()) {
+               obj_idx = *resolved;
+            } else {
+               const auto it = symbol_node_indices.find(key);
+               if(it != symbol_node_indices.end()) {
+                  obj_idx = it->second;
+               } else {
+                  obj_idx = get_or_add_symbol_object_node(obj, builder, workspace.node_names);
+                  symbol_node_indices.try_emplace(key, obj_idx);
+               }
+            }
+            object_keys.emplace_back(key);
+            object_node_indices.emplace_back(obj_idx);
          }
       }
 
-      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
-         const auto& obj_key = object_keys[pos];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            workspace.node_indices,
-            workspace.node_names,
-            config_.export_node_names
-         );
+      for(size_t pos = 0; pos < object_node_indices.size(); ++pos) {
+         const auto obj_idx = object_node_indices[pos];
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
@@ -151,7 +186,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       track_relation_symbols_if_enabled(
          rel_key,
          std::span{object_keys},
-         {},
+         std::span< const std::string >{},
          workspace.relation_to_symbols,
          workspace.symbol_to_relations
       );

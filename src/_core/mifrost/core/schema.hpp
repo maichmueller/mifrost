@@ -23,7 +23,7 @@ struct EdgeType {
 };
 
 /**
- * @brief Mapping entry for one node tensor in the flat parts tensor dict.
+ * @brief Mapping entry for one node tensor in the flat encoding tensor dict.
  */
 struct NodeTensorSpec {
    std::string node_type;
@@ -32,7 +32,7 @@ struct NodeTensorSpec {
 };
 
 /**
- * @brief Mapping entry for one edge tensor in the flat parts tensor dict.
+ * @brief Mapping entry for one edge tensor in the flat encoding tensor dict.
  */
 struct EdgeTensorSpec {
    int edge_type = -1;
@@ -44,7 +44,7 @@ struct EdgeTensorSpec {
 };
 
 /**
- * @brief Versioned schema for normalized encoder parts payloads.
+ * @brief Versioned schema for normalized encoder dictionary payloads.
  *
  * This schema defines how flat tensors map to semantic node and edge stores.
  * Python assembly uses this contract to reconstruct ``Data``/``HeteroData``.

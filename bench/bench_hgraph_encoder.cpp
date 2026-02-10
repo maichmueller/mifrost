@@ -51,7 +51,7 @@ void parse_args(int& argc, char** argv)
 #ifdef MIFROST_BENCH_DEFAULT_PROBLEM
       std::string(MIFROST_BENCH_DEFAULT_PROBLEM);
 #else
-      std::string("probBLOCKS-4-0");
+      std::string("smedium");
 #endif
 
    argparse::ArgumentParser parser("mifrost_bench_hgraph");

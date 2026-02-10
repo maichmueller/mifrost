@@ -55,9 +55,6 @@ class StreamEncoderBase {
       entries_[static_cast< size_t >(id)].batch_encoding = encode_step_to_batch_encoding(step);
    }
 
-   /// Build Python batch encoding for the accumulated graphs.
-   nb::dict flush_batch_encoding_py() { return build_merged_builder().build_batch_encoding_py(); }
-
    /// Build native batch encoding for the accumulated graphs.
    BatchEncoding flush() { return build_merged_builder().build_batch_encoding(); }
 

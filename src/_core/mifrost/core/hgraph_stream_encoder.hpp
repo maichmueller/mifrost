@@ -52,48 +52,51 @@ class HGraphEncoderEngine {
     *  - Read by `finalize_hetero_encoding` and (optionally) `add_lgan_nn_edges`.
     *
     * Invariants:
-    *  - For each node type, `node_indices[type]` maps a stable node key string to the node index
-    *    used in `BatchBuilder`.
-    *  - `node_names[type][idx]` is the key string for the node with index `idx` (aligned with
-    *    `node_indices[type]`).
+    *  - `node_indices` stores string-keyed dedup maps (used for literal/history-style keys).
+    *  - `node_indices_i64` stores compact integer-keyed dedup maps (used for facts/actions).
+    *  - `symbol_indices` maps compact symbol ids to node indices for the symbol node type.
+    *  - `node_names[type][idx]` is the exported node name (when metadata export is enabled).
     */
    struct HeteroEncodingWorkspace {
-      /**
-       * @brief Node key -> node index mapping per node type.
-       *
-       * Used to deduplicate nodes across the encode step and to retrieve indices when adding edges.
-       * Keys are formatted strings (see `RelationFormatter`) and indices correspond to the order in
-       * which nodes are created via `get_or_add_node`.
-       */
+      /// String-keyed node dedup map per node type.
       hash_map< std::string, hash_map< std::string, int64_t > > node_indices;
 
+      /// Integer-keyed node dedup map per node type.
+      hash_map< std::string, hash_map< int64_t, int64_t > > node_indices_i64;
+
+      /// Compact symbol id -> symbol node index (for `Config::symbol_type_id`).
+      hash_map< int64_t, int64_t > symbol_indices;
+
+      /// Stable ids for non-object symbols (action targets, nullary pseudo-object, extra objects).
+      hash_map< std::string, int64_t > special_symbol_ids;
+      int64_t next_special_symbol_id = -1;
+
       /**
-       * @brief Node index -> node key table per node type.
+       * @brief Node index -> node name table per node type.
        *
-       * Maintained in lockstep with `node_indices` so that names can be exported to the builder at
-       * the end of encoding (see `finalize_hetero_encoding`).
+       * Maintained in lockstep with node creation so names can be exported to the builder.
        */
       hash_map< std::string, std::vector< std::string > > node_names;
 
       /**
-       * @brief Relation-node key -> set of symbol keys appearing in that relation.
+       * @brief Relation-node key -> set of symbol ids appearing in that relation.
        *
        * The map key is a stable composite relation identifier (see
-       * `relation_key(node_type,node_key)` and related formatting). The value is the set of symbol
-       * keys (objects) that occur as arguments of that relation node.
+       * `relation_key(node_type,node_key)` and `relation_key_i64(node_type,key)` helpers). The
+       * value is the set of symbol ids that occur as arguments of that relation node.
        *
        * Used to derive LGAN-style nearest-neighbor edges when enabled.
        */
-      hash_map< std::string, hash_set< std::string > > relation_to_symbols;
+      hash_map< std::string, hash_set< int64_t > > relation_to_symbols;
 
       /**
-       * @brief Symbol key -> set of relation-node keys in which the symbol appears.
+       * @brief Symbol id -> set of relation-node keys in which the symbol appears.
        *
        * Reverse index of `relation_to_symbols`.
        * This enables fast lookup of all relations that a given symbol participates in, which is
        * used when computing LGAN-style edges.
        */
-      hash_map< std::string, hash_set< std::string > > symbol_to_relations;
+      hash_map< int64_t, hash_set< std::string > > symbol_to_relations;
    };
 
    /// Runtime configuration controlling which relations/nodes/edges are emitted.
@@ -330,8 +333,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -348,8 +351,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -364,8 +367,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
       std::span< const std::string > extra_objects = {}
    );
 
@@ -382,8 +385,8 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
       std::string_view suffix = "",
       std::span< const std::string > extra_objects = {}
    );
@@ -399,8 +402,10 @@ class HGraphEncoderEngine {
    void add_lgan_nn_edges(
       BatchBuilder& builder,
       const hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
-      const hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      const hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      const hash_map< std::string, hash_map< int64_t, int64_t > >& node_indices_i64,
+      const hash_map< int64_t, int64_t >& symbol_indices,
+      const hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      const hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
    );
 
    /**
@@ -415,13 +420,27 @@ class HGraphEncoderEngine {
       BatchBuilder& builder,
       hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
       hash_map< std::string, std::vector< std::string > >& node_names,
-      hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-      hash_map< std::string, hash_set< std::string > >& symbol_to_relations
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
    );
 
    /**
     * @brief Track relation-symbol incidence only when LGAN edges are enabled.
     */
+   void track_relation_symbols_if_enabled(
+      const std::string& rel_key,
+      std::span< const int64_t > object_symbol_ids,
+      std::span< const int64_t > extra_symbol_ids,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+   );
+   void track_relation_symbols_if_enabled(
+      const std::string& rel_key,
+      std::span< const std::string > object_keys,
+      std::span< const std::string > extra_objects,
+      hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+      hash_map< int64_t, hash_set< std::string > >& symbol_to_relations
+   );
    void track_relation_symbols_if_enabled(
       const std::string& rel_key,
       std::span< const std::string > object_keys,
@@ -450,14 +469,30 @@ class HGraphEncoderEngine {
     * Format is `node_type + "\n" + node_key`.
     */
    static std::string relation_key(const std::string& node_type, const std::string& node_key);
+   static std::string relation_key_i64(const std::string& node_type, int64_t node_key);
 
-   /**
-    * @brief Return the internal key used for one symbol/object node.
-    *
-    * Uses stable object names when metadata export is enabled, and compact
-    * object indices when metadata export is disabled.
-    */
    std::string symbol_node_key(const mimir::formalism::Object& obj) const;
+
+   int64_t get_or_assign_special_symbol_id(std::string_view symbol_name);
+   int64_t get_or_add_symbol_object_node(
+      const mimir::formalism::Object& obj,
+      BatchBuilder& builder,
+      hash_map< std::string, std::vector< std::string > >& node_names
+   );
+   int64_t get_or_add_symbol_special_node(
+      std::string_view symbol_key,
+      std::string_view symbol_name,
+      BatchBuilder& builder,
+      hash_map< std::string, std::vector< std::string > >& node_names
+   );
+   int64_t get_or_add_relation_node_i64(
+      const std::string& node_type,
+      int64_t key,
+      BatchBuilder& builder,
+      hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
+      hash_map< std::string, std::vector< std::string > >& node_names,
+      std::string_view node_name
+   );
 
    /**
     * @brief Get or create a node index for (type,key).
@@ -686,14 +721,6 @@ class HGraphStreamEncoder {
       return next_id_++;
    }
 
-   nb::dict flush_batch_encoding_py()
-   {
-      ensure_valid();
-      auto out = builder_.build_batch_encoding_py();
-      reset();
-      return out;
-   }
-
    BatchEncoding flush()
    {
       ensure_valid();
@@ -761,8 +788,8 @@ void HGraphEncoderEngine::encode_literals(
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
-   hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+   hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
    std::span< const std::string > extra_objects
 )
 {
@@ -788,54 +815,57 @@ void HGraphEncoderEngine::encode_literals(
          node_key = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
       }
 
-      std::vector< std::string > object_keys;
+      std::vector< int64_t > object_symbol_ids;
       if(predicate->get_arity() == 0) {
          if(not config_.add_nullary_predicates) {
             continue;
          }
-         object_keys.emplace_back(config_.nullary_object_name);
+         const auto nullary_idx = get_or_add_symbol_special_node(
+            config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+         );
+         (void) nullary_idx;
+         object_symbol_ids.emplace_back(
+            get_or_assign_special_symbol_id(config_.nullary_object_name)
+         );
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(symbol_node_key(obj));
+            const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+            (void) obj_idx;
+            object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
-      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
-         const auto& obj_key = object_keys[pos];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
-         );
+      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
+         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      std::vector< int64_t > extra_symbol_ids;
+      extra_symbol_ids.reserve(extra_objects.size());
       for(size_t i = 0; i < extra_objects.size(); ++i) {
-         const auto& obj_key = extra_objects[i];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
+         const auto& symbol_name = extra_objects[i];
+         const auto obj_idx = get_or_add_symbol_special_node(
+            symbol_name, symbol_name, builder, node_names
          );
-         const std::string pos_str = std::to_string(object_keys.size() + i);
+         const auto symbol_id = get_or_assign_special_symbol_id(symbol_name);
+         extra_symbol_ids.emplace_back(symbol_id);
+         const std::string pos_str = std::to_string(object_symbol_ids.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
       track_relation_symbols_if_enabled(
-         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+         rel_key,
+         std::span{object_symbol_ids},
+         std::span{extra_symbol_ids},
+         relation_to_symbols,
+         symbol_to_relations
       );
    }
 }
@@ -848,8 +878,8 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
    BatchBuilder& builder,
    hash_map< std::string, hash_map< std::string, int64_t > >& node_indices,
    hash_map< std::string, std::vector< std::string > >& node_names,
-   hash_map< std::string, hash_set< std::string > >& relation_to_symbols,
-   hash_map< std::string, hash_set< std::string > >& symbol_to_relations,
+   hash_map< std::string, hash_set< int64_t > >& relation_to_symbols,
+   hash_map< int64_t, hash_set< std::string > >& symbol_to_relations,
    std::string_view suffix,
    std::span< const std::string > extra_objects
 )
@@ -857,8 +887,8 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
    for(const auto& goal : goals) {
       const auto atom = goal->get_atom();
       const auto predicate = atom->get_predicate();
-      const auto key = RelationFormatter::format_atom< GoalTag >(atom);
-      const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
+      const auto fact_key = RelationFormatter::format_atom< GoalTag >(atom);
+      const bool satisfied = fact_keys.contains(fact_key) == goal->get_polarity();
       const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                              : GoalSatisfaction::unsatisfied;
       if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
@@ -888,54 +918,57 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          );
       }
 
-      std::vector< std::string > object_keys;
+      std::vector< int64_t > object_symbol_ids;
       if(predicate->get_arity() == 0) {
          if(not config_.add_nullary_predicates) {
             continue;
          }
-         object_keys.emplace_back(config_.nullary_object_name);
+         const auto nullary_idx = get_or_add_symbol_special_node(
+            config_.nullary_object_name, config_.nullary_object_name, builder, node_names
+         );
+         (void) nullary_idx;
+         object_symbol_ids.emplace_back(
+            get_or_assign_special_symbol_id(config_.nullary_object_name)
+         );
       } else {
          for(const auto& obj : atom->get_objects()) {
-            object_keys.emplace_back(symbol_node_key(obj));
+            const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
+            (void) obj_idx;
+            object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
          }
       }
       const auto relation_idx = get_or_add_node(
          node_type, node_key, builder, node_indices, node_names, config_.export_node_names
       );
 
-      for(size_t pos = 0; pos < object_keys.size(); ++pos) {
-         const auto& obj_key = object_keys[pos];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
-         );
+      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
+         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
          const std::string pos_str = std::to_string(pos);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
+      std::vector< int64_t > extra_symbol_ids;
+      extra_symbol_ids.reserve(extra_objects.size());
       for(size_t i = 0; i < extra_objects.size(); ++i) {
-         const auto& obj_key = extra_objects[i];
-         const auto obj_idx = get_or_add_node(
-            config_.symbol_type_id,
-            obj_key,
-            builder,
-            node_indices,
-            node_names,
-            config_.export_node_names
+         const auto& symbol_name = extra_objects[i];
+         const auto obj_idx = get_or_add_symbol_special_node(
+            symbol_name, symbol_name, builder, node_names
          );
-         const std::string pos_str = std::to_string(object_keys.size() + i);
+         const auto symbol_id = get_or_assign_special_symbol_id(symbol_name);
+         extra_symbol_ids.emplace_back(symbol_id);
+         const std::string pos_str = std::to_string(object_symbol_ids.size() + i);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
       const std::string rel_key = relation_key(node_type, node_key);
       track_relation_symbols_if_enabled(
-         rel_key, std::span{object_keys}, extra_objects, relation_to_symbols, symbol_to_relations
+         rel_key,
+         std::span{object_symbol_ids},
+         std::span{extra_symbol_ids},
+         relation_to_symbols,
+         symbol_to_relations
       );
    }
 }

@@ -283,7 +283,7 @@ if (MIFROST_BUILD_BENCHMARKS)
             MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
     )
     target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
-    target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="probBLOCKS-4-0")
+    target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
 endif ()
 
 # --- Tests ---

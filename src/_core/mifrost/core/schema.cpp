@@ -19,7 +19,7 @@ void Schema::validate_base() const
    if(graph_kind.empty()) {
       throw std::invalid_argument("Schema graph_kind must be set");
    }
-   absl::btree_map< int, std::set< std::string > > edge_index_parts;
+   absl::btree_map< int, std::set< std::string > > edge_index_components;
    for(const auto& spec : node_tensors) {
       if(spec.node_type.empty() || spec.attr.empty() || spec.key.empty()) {
          throw std::invalid_argument("Schema node_tensors contain empty fields");
@@ -37,14 +37,14 @@ void Schema::validate_base() const
             throw std::invalid_argument("Schema edge_index tensors must define part");
          }
          if(spec.part != "0" and spec.part != "1") {
-            throw std::invalid_argument("Schema edge_index parts must be '0' or '1'");
+            throw std::invalid_argument("Schema edge_index components must be '0' or '1'");
          }
-         edge_index_parts[spec.edge_type].insert(spec.part);
+         edge_index_components[spec.edge_type].insert(spec.part);
       }
    }
-   for(const auto& [edge_type, parts] : edge_index_parts) {
-      if(parts.count("0") == 0 || parts.count("1") == 0) {
-         throw std::invalid_argument("Schema edge_index must include both parts '0' and '1'");
+   for(const auto& [edge_type, components] : edge_index_components) {
+      if(components.count("0") == 0 || components.count("1") == 0) {
+         throw std::invalid_argument("Schema edge_index must include both components '0' and '1'");
       }
    }
 }
@@ -126,7 +126,7 @@ void Schema::validate_history() const
       const auto it = parts_by_edge.find(edge_id);
       if(it == parts_by_edge.end() or it->second.count("0") == 0 or it->second.count("1") == 0) {
          throw std::invalid_argument(
-            "History encoding requires edge_index parts for history link edges"
+            "History encoding requires edge_index components for history link edges"
          );
       }
    }

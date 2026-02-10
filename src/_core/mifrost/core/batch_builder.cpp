@@ -486,11 +486,11 @@ nb::object BatchBuilder::build()
    nb::object batch = tg_data.attr("Batch")(nb::arg("_base_cls") = tg_data.attr("HeteroData"));
 
    using EdgeKey = std::tuple< std::string, std::string, std::string >;
-   struct EdgeParts {
+   struct EdgeComponents {
       nb::object src;
       nb::object dst;
    };
-   absl::btree_map< EdgeKey, EdgeParts > edge_parts;
+   absl::btree_map< EdgeKey, EdgeComponents > edge_components;
 
    auto to_tensor = [&](const nb::object& array) { return torch.attr("as_tensor")(array); };
 
@@ -514,12 +514,12 @@ nb::object BatchBuilder::build()
          const std::string dst = base.substr(second + 1);
 
          EdgeKey edge_key{src, rel, dst};
-         auto& parts = edge_parts[edge_key];
+         auto& components = edge_components[edge_key];
          nb::object tensor = to_tensor(nb::borrow< nb::object >(value_handle));
          if(suffix == "0") {
-            parts.src = tensor;
+            components.src = tensor;
          } else if(suffix == "1") {
-            parts.dst = tensor;
+            components.dst = tensor;
          } else {
             throw std::invalid_argument(fmt::format("Unexpected edge index suffix '{}'", key));
          }
@@ -537,12 +537,12 @@ nb::object BatchBuilder::build()
       store.attr("__setitem__")(attr, tensor);
    }
 
-   for(const auto& [edge_key, parts] : edge_parts) {
-      if(not parts.src.is_valid() || not parts.dst.is_valid()) {
-         throw std::invalid_argument("Incomplete edge_index parts for edge type");
+   for(const auto& [edge_key, components] : edge_components) {
+      if(not components.src.is_valid() || not components.dst.is_valid()) {
+         throw std::invalid_argument("Incomplete edge_index components for edge type");
       }
       nb::object edge_index = torch.attr("stack")(
-         nb::make_tuple(parts.src, parts.dst), nb::arg("dim") = 0
+         nb::make_tuple(components.src, components.dst), nb::arg("dim") = 0
       );
       nb::object store = batch.attr("__getitem__")(
          nb::make_tuple(std::get< 0 >(edge_key), std::get< 1 >(edge_key), std::get< 2 >(edge_key))
@@ -667,7 +667,7 @@ nb::object BatchBuilder::build()
    return batch;
 }
 
-nb::dict BatchBuilder::build_batch_encoding_py()
+nb::dict BatchBuilder::build_batch_encoding_dict()
 {
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {

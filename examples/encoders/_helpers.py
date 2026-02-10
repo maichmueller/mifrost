@@ -12,7 +12,7 @@ def repo_root() -> Path:
 
 
 def load_problem(
-    *, domain: str = "blocks", problem: str = "probBLOCKS-4-0"
+    *, domain: str = "blocks", problem: str = "smedium"
 ) -> tuple[pymimir.Domain, pymimir.Problem, pymimir.State]:
     root = repo_root()
     domain_path = root / "data" / "pddl" / domain / "domain.pddl"
@@ -23,7 +23,7 @@ def load_problem(
 
 
 def load_space(
-    *, domain: str = "blocks", problem: str = "probBLOCKS-4-0"
+    *, domain: str = "blocks", problem: str = "smedium"
 ) -> tuple[pymimir.wrapper_datasets.StateSpaceSampler, pymimir.Domain, pymimir.Problem]:
     domain_obj, problem_obj, _ = load_problem(domain=domain, problem=problem)
     state_space, _ = pymimir.advanced.datasets.StateSpace.create(

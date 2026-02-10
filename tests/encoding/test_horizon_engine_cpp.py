@@ -4,7 +4,11 @@ from collections import deque
 
 import mifrost
 
-from .test_utils import goal_inputs_from_problem, parts_to_pyg, to_named_networkx
+from .test_utils import (
+    goal_inputs_from_problem,
+    encoding_dict_to_pyg,
+    to_named_networkx,
+)
 
 
 def _adv(obj):
@@ -44,8 +48,8 @@ def test_horizon_encoder_parent_relations(horizon_cases):
     encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
 
     goals = goal_inputs_from_problem(problem)
-    parts = encoder.encode(_adv(root), dag, goals)
-    graph = to_named_networkx(parts_to_pyg(parts))
+    encoding_dict = encoder.encode(_adv(root), dag, goals)
+    graph = to_named_networkx(encoding_dict_to_pyg(encoding_dict))
 
     prefix = config.target_symbol_prefix
     target_nodes = {
@@ -87,7 +91,9 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     excluded = mifrost.HorizonEncoderConfig()
     excluded.exclude_root_candidate = True
     encoder_excluded = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), excluded)
-    data_excluded = parts_to_pyg(encoder_excluded.encode(_adv(root), dag, goals))
+    data_excluded = encoding_dict_to_pyg(
+        encoder_excluded.encode(_adv(root), dag, goals)
+    )
     indices_excluded = list(getattr(data_excluded, "target_indices", []))
     assert 0 not in indices_excluded
     assert len(indices_excluded) == len(dag.nodes()) - 1
@@ -95,7 +101,9 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     included = mifrost.HorizonEncoderConfig()
     included.exclude_root_candidate = False
     encoder_included = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), included)
-    data_included = parts_to_pyg(encoder_included.encode(_adv(root), dag, goals))
+    data_included = encoding_dict_to_pyg(
+        encoder_included.encode(_adv(root), dag, goals)
+    )
     indices_included = list(getattr(data_included, "target_indices", []))
     assert 0 in indices_included
     assert len(indices_included) == len(dag.nodes())

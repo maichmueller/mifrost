@@ -25,7 +25,7 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_state, _parts_to_pyg, _split_goals
+from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -108,18 +108,15 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        return self._stream.flush_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -195,7 +192,7 @@ class HorizonEncoder(HGraphEncoder):
         """Expose the underlying C++ horizon engine."""
         return self._engine
 
-    def encode_parts(
+    def _encode(
         self,
         root: StateInput,
         dag: TransitionDAG | None = None,
@@ -205,7 +202,7 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         **_: object,
     ) -> Mapping[str, object]:
-        """Encode one root/DAG pair into parts."""
+        """Encode one root/DAG pair."""
         if actions is not None:
             # Horizon encoding does not consume actions directly.
             _ = actions
@@ -234,7 +231,7 @@ class HorizonEncoder(HGraphEncoder):
             **kwargs,
         )
 
-    def _encode_batch_parts(
+    def __encode_batch(
         self,
         roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
@@ -314,18 +311,18 @@ class HorizonEncoder(HGraphEncoder):
         """Accept transition DAG kwargs in the generic base API."""
         return {"dag", "dags"}
 
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object] | object,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
@@ -333,8 +330,8 @@ class HorizonEncoder(HGraphEncoder):
         goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> Mapping[str, object]:
-        """Encode one or many root/DAG pairs into batch parts."""
-        return self._encode_batch_parts(
+        """Encode one or many root/DAG pairs into one batch encoding."""
+        return self.__encode_batch(
             roots, dags, goals=goals, subgoal_layers=subgoal_layers
         )
 

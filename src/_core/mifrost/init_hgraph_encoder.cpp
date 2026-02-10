@@ -172,11 +172,11 @@ uint64_t schema_fingerprint(const BatchBuilder::BatchEncoding& encoding)
    return h;
 }
 
-nb::dict batch_encoding_to_parts(const BatchBuilder::BatchEncoding& encoding)
+nb::dict batch_encoding_to_dict(const BatchBuilder::BatchEncoding& encoding)
 {
    BatchBuilder builder;
    builder.load_from_batch_encoding(encoding);
-   return builder.build_batch_encoding_py();
+   return builder.build_batch_encoding_dict();
 }
 
 nb::object batch_encoding_as_pyg(
@@ -199,9 +199,11 @@ nb::object batch_encoding_as_pyg(
       return builder.build();
    }
 
-   nb::dict parts = builder.build_batch_encoding_py();
+   nb::dict encoding_dict = builder.build_batch_encoding_dict();
    nb::object common = nb::module_::import_("mifrost.encoders.common");
-   return common.attr("_parts_to_pyg")(parts, "as_batch"_a = false, "include_metadata"_a = true);
+   return common.attr("_encoding_dict_to_pyg")(
+      encoding_dict, "as_batch"_a = false, "include_metadata"_a = true
+   );
 }
 
 void save_batch_encoding(
@@ -300,7 +302,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def("set_node_names", &BatchBuilder::set_node_names)
       .def("set_object_names", &BatchBuilder::set_object_names)
       .def("build", &BatchBuilder::build)
-      .def("build_batch_encoding_py", &BatchBuilder::build_batch_encoding_py)
+      .def("build_batch_encoding_dict", &BatchBuilder::build_batch_encoding_dict)
       .def("build_batch_encoding", &BatchBuilder::build_batch_encoding)
       .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
       .def(
@@ -321,7 +323,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def_ro("schema_flags", &BatchBuilder::BatchEncoding::schema_flags)
       .def_ro("node_feature_dims", &BatchBuilder::BatchEncoding::node_feature_dims)
       .def_ro("graph_attrs", &BatchBuilder::BatchEncoding::graph_attrs)
-      .def("to_parts", &batch_encoding_to_parts)
+      .def("to_dict", &batch_encoding_to_dict)
       .def("as_pyg", &batch_encoding_as_pyg, "consume"_a = false, "as_batch"_a = nb::none())
       .def("schema_fingerprint", &schema_fingerprint)
       .def(
@@ -555,7 +557,6 @@ void init_hgraph_encoder(nb::module_& m)
       )
       .def("remove", &HGraphMutableStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HGraphMutableStreamEncoder::set_reuse_removed, "value"_a)
-      .def("flush_batch_encoding_py", &HGraphMutableStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HGraphMutableStreamEncoder::flush)
       .def("flush_pyg", &HGraphMutableStreamEncoder::flush_pyg)
       .def("reset", &HGraphMutableStreamEncoder::reset);
@@ -594,7 +595,6 @@ void init_hgraph_encoder(nb::module_& m)
          "history_max_steps"_a = std::nullopt,
          nb::call_guard< nb::gil_scoped_release >()
       )
-      .def("flush_batch_encoding_py", &HGraphStreamEncoder::flush_batch_encoding_py)
       .def("flush", &HGraphStreamEncoder::flush)
       .def("flush_pyg", &HGraphStreamEncoder::flush_pyg)
       .def("reset", &HGraphStreamEncoder::reset);

@@ -4,13 +4,13 @@ from mifrost.encoders import ColorEncoder, HGraphEncoder
 
 
 SMALL_DOMAIN_CASES = [
-    ("blocks", "probBLOCKS-4-0"),
+    ("blocks", "smedium"),
     ("gripper", "gripper_b-5"),
     ("delivery", "instance_2x2_p-2_0"),
 ]
 
 MEDIUM_DOMAIN_CASES = [
-    ("blocks", "probBLOCKS-8-1"),
+    ("blocks", "medium"),
     ("spanner", "medium"),
     ("reward", "instance_3x3_0"),
 ]

@@ -31,7 +31,7 @@ from .base import (
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _parts_to_pyg,
+    _encoding_dict_to_pyg,
     _prepare_actions,
     _prepare_history_subgoals,
     _split_goals,
@@ -452,18 +452,15 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        return self._stream.flush_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -517,18 +514,15 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
     def _reset_builder(self) -> None:
         self._stream.reset()
 
-    def _flush_batch_encoding_py_impl(self) -> Mapping[str, object]:
-        return self._stream.flush_batch_encoding_py()
-
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
@@ -613,7 +607,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}
 
-    def encode_parts(
+    def _encode(
         self,
         state: StateInput,
         *,
@@ -668,7 +662,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             **kwargs,
         )
 
-    def encode_batch_parts(
+    def _encode_batch(
         self,
         states: StateBatchInput,
         *,
@@ -685,7 +679,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> Mapping[str, object]:
         """
-        Encode one or many states to batch parts.
+        Encode one or many states to one native batch encoding.
 
         Supports either shared actions or per-state action sequences.
         """
@@ -823,15 +817,15 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             **kwargs,
         )
 
-    def _parts_to_pyg(
+    def _dict_to_pyg(
         self,
-        parts: Mapping[str, object],
+        encoding_dict: Mapping[str, object],
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> HeteroData:
-        return _parts_to_pyg(
-            parts, as_batch=as_batch, include_metadata=include_metadata
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> HGraphEncoderStream:

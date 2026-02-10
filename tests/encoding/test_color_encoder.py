@@ -49,25 +49,25 @@ def _advanced_atom(atom):
     [
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": False, "edge_features": False},
         ],
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": True, "edge_features": False},
         ],
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": False, "edge_features": True},
         ],
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": True, "edge_features": True},
         ],
@@ -124,7 +124,7 @@ def test_color_encoding_initial(color_encoded_state):
     [
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "goal",
             {"enable_global_predicate_nodes": False, "edge_features": False},
         ]
@@ -157,20 +157,20 @@ def test_color_encoding_goal(color_encoded_state):
     [
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": True, "edge_features": False},
         ],
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "goal",
             {"enable_global_predicate_nodes": False, "edge_features": True},
         ],
     ],
     indirect=True,
 )
-def test_color_encoding_to_pyg(color_encoded_state):
+def test_color_encoding_dict_to_pyg(color_encoded_state):
     data, encoder, _state = color_encoded_state
     graph = encoder.to_networkx(data)
     assert data.num_nodes == graph.number_of_nodes()
@@ -195,7 +195,7 @@ def test_color_encoding_to_pyg(color_encoded_state):
     [
         [
             "blocks",
-            "probBLOCKS-4-0",
+            "smedium",
             "initial",
             {"enable_global_predicate_nodes": False, "edge_features": False},
         ]

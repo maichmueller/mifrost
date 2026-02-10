@@ -37,7 +37,7 @@ def problem_setup(
 
 
 def load_problem(
-    domain: str = "blocks", problem: str = "probBLOCKS-4-0"
+    domain: str = "blocks", problem: str = "smedium"
 ) -> tuple[pymimir.Domain, pymimir.Problem, pymimir.State, Path, Path]:
     root = Path(__file__).resolve().parents[1]
     domain_path = root / "data" / "pddl" / domain / "domain.pddl"

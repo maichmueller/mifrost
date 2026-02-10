@@ -16,7 +16,7 @@ from tests.conftest import load_problem
 
 
 SMALL_CASES = [
-    ("blocks", "probBLOCKS-4-0"),
+    ("blocks", "smedium"),
     ("gripper", "gripper_b-5"),
     ("spanner", "medium"),
     ("delivery", "instance_2x2_p-2_0"),
@@ -34,7 +34,7 @@ def test_ilg_encoder_parity(domain: str, problem: str) -> None:
     )
     goals = list(problem_obj.get_goal_condition().get_literals())
     cpp_encoder = mifrost.ILGEncoder(domain_obj, include_lgan_edges=False)
-    cpp_data = cpp_encoder.encode(state, goals=goals)
+    cpp_data = cpp_encoder.encode(state, goals=goals).as_pyg()
 
     symbol_type_id = cpp_encoder.symbol_type_id
     assert symbol_type_id in cpp_data.node_types

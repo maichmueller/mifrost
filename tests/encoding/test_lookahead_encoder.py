@@ -13,7 +13,7 @@ from .test_utils import (
     adv_domain,
     adv_state,
     goal_inputs_from_problem,
-    parts_to_pyg,
+    encoding_dict_to_pyg,
     to_named_networkx,
 )
 
@@ -56,8 +56,10 @@ def _encode_graph(
         for key, value in config_override.items():
             setattr(config, key, value)
     encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
-    parts = encoder.encode(adv_state(root), dag, goals)
-    return config, to_named_networkx(parts_to_pyg(parts), drop_lgan=drop_lgan)
+    encoding_dict = encoder.encode(adv_state(root), dag, goals)
+    return config, to_named_networkx(
+        encoding_dict_to_pyg(encoding_dict), drop_lgan=drop_lgan
+    )
 
 
 def _target_nodes(graph, config):

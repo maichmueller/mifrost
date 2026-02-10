@@ -13,7 +13,7 @@ from .test_utils import (
     format_literal_with_suffix,
     goal_inputs_from_problem,
     object_names,
-    parts_to_pyg,
+    encoding_dict_to_pyg,
     predicate,
     predicate_arity,
     state_atoms,
@@ -27,8 +27,8 @@ def _encode_delta_graph(domain, current, successor, goals, suffix="[suc]"):
     config.successor_suffix = suffix
     config.add_nullary_predicates = False
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
-    parts = encoder.encode(adv_state(current), adv_state(successor), goals)
-    data = parts_to_pyg(parts)
+    encoding_dict = encoder.encode(adv_state(current), adv_state(successor), goals)
+    data = encoding_dict_to_pyg(encoding_dict)
     return to_named_networkx(data), data
 
 
@@ -146,8 +146,8 @@ def test_transition_change_encoder_nullary_placeholder(small_blocks):
     config.successor_suffix = "[suc]"
     config.add_nullary_predicates = True
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
-    parts = encoder.encode(adv_state(state), adv_state(successor), goals)
-    data = parts_to_pyg(parts)
+    encoding_dict = encoder.encode(adv_state(state), adv_state(successor), goals)
+    data = encoding_dict_to_pyg(encoding_dict)
     graph = to_named_networkx(data)
     placeholder = config.nullary_object_name
     assert graph.has_node(placeholder), "Placeholder object node missing"
