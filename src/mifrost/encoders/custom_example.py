@@ -9,10 +9,11 @@ from torch_geometric.data import HeteroData
 from .._core import BatchBuilder
 from .base import EncoderBase, StreamEncoderBase
 from .common import _encoding_dict_to_pyg
+from .types import HeteroEncoding, NativeEncodingInput
 
 
 @dataclass
-class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
+class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData, HeteroEncoding]):
     """Minimal stream encoder example built fully in Python."""
 
     _default_value: float = 1.0
@@ -40,7 +41,7 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, Any] | object,
+        encoding_dict: NativeEncodingInput | Mapping[str, Any],
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -50,7 +51,7 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
         )
 
 
-class ExampleConstantEncoder(EncoderBase[HeteroData]):
+class ExampleConstantEncoder(EncoderBase[HeteroData, HeteroEncoding]):
     """
     Minimal pure-Python encoder example.
 
@@ -75,7 +76,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         value: float | None = None,
         **_: Any,
-    ) -> Mapping[str, Any]:
+    ) -> HeteroEncoding:
         """Encode one input into a one-node hetero graph payload."""
         del goals, actions, subgoal_layers
         node_value = self._default_value if value is None else float(value)
@@ -96,7 +97,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[Any]] | None = None,
         value: float | None = None,
         **_: Any,
-    ) -> Mapping[str, Any]:
+    ) -> HeteroEncoding:
         """Encode one or many inputs into one-node-per-sample payloads."""
         del goals, actions, subgoal_layers
         if hasattr(states, "__iter__") and not isinstance(states, (str, bytes)):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from typing import Any, Mapping
 
 from torch_geometric.data import HeteroData
 
@@ -27,6 +27,8 @@ from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
+    HeteroEncoding,
+    NativeEncodingInput,
     StateInput,
     default_goals_from_state,
     is_state_input,
@@ -94,7 +96,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         successor: StateInput | None = None,
         **kwargs: object,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
@@ -114,7 +116,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         successors: StateBatchInput | None = None,
         **kwargs: object,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
         if is_state_input(states):
             state_list = [states]
@@ -152,7 +154,7 @@ class _TransitionEncoderBase(HGraphEncoder):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -165,13 +167,13 @@ class _TransitionEncoderBase(HGraphEncoder):
         """Create a stream wrapper for transition encoding."""
         return _TransitionEncoderStream(self)
 
-    def draw(self, data: HeteroData, **kwargs: object) -> object:
+    def draw(self, data: HeteroData, **kwargs: object) -> Any:
         """Reuse generic heterogeneous graph drawing from ``HGraphEncoder``."""
         return HGraphEncoder.draw(self, data, **kwargs)
 
 
 @dataclass
-class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
+class _TransitionEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
     """Shared stream implementation for transition encoders."""
 
     _encoder: _TransitionEncoderBase
@@ -224,7 +226,7 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,

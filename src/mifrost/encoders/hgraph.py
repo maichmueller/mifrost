@@ -37,9 +37,11 @@ from .common import (
     _split_goals,
 )
 from .types import (
+    EncodingDict,
     GroundActionInput,
     GoalLiteralInput,
     DomainInput,
+    HeteroEncoding,
     HistorySubgoalInput,
     StateInput,
     is_action_input,
@@ -350,7 +352,7 @@ def _draw_hgraph_graph(
 
 
 @dataclass
-class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
+class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
     """Mutable streaming wrapper (append/update/remove) for ``HGraphEncoderEngine``."""
 
     _engine: HGraphEncoderEngine
@@ -465,7 +467,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
 
 
 @dataclass
-class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
+class HGraphEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
     """Append-only streaming wrapper for ``HGraphEncoderEngine``."""
 
     _engine: HGraphEncoderEngine
@@ -526,7 +528,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         )
 
 
-class HGraphEncoder(EncoderBase[HeteroData]):
+class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
     """
     General heterogeneous graph encoder backed by ``HGraphEncoderEngine``.
 
@@ -616,7 +618,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         subgoal_layers: SubgoalLayersInput = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Encode one state to normalized batch encoding."""
         adv_state = _advanced_state(state)
         action_list = _prepare_actions(actions)
@@ -649,7 +651,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HeteroEncoding:
         """Encode one state into native ``BatchEncoding``."""
         return super().encode(
             state,
@@ -677,7 +679,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             HistorySubgoalInput | Sequence[HistorySubgoalInput] | None
         ) = None,
         history_max_steps: int | None = None,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """
         Encode one or many states to one native batch encoding.
 
@@ -804,7 +806,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HeteroEncoding:
         """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(
             states,
@@ -819,7 +821,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object],
+        encoding_dict: EncodingDict,
         *,
         as_batch: bool,
         include_metadata: bool = True,

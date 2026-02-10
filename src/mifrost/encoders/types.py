@@ -1,11 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Callable, TypeAlias
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Mapping,
+    Protocol,
+    Sequence,
+    TYPE_CHECKING,
+    TypeAlias,
+    runtime_checkable,
+)
 
 import pymimir.advanced.formalism as af
 import pymimir.advanced.search as ase
 import pymimir.wrapper_formalism as wf
+
+if TYPE_CHECKING:
+    from torch_geometric.data import Data, HeteroData
 
 # Canonical input types supported by mifrost encoders.
 DomainInput: TypeAlias = wf.Domain | af.Domain
@@ -63,6 +76,55 @@ _STATE_ADAPTERS: dict[type[object], StateAdapter] = {}
 _DOMAIN_ADAPTERS: dict[type[object], DomainAdapter] = {}
 _LITERAL_ADAPTERS: dict[type[object], LiteralAdapter] = {}
 _ACTION_ADAPTERS: dict[type[object], ActionAdapter] = {}
+
+EncodingDict: TypeAlias = Mapping[str, Any]
+
+
+@runtime_checkable
+class NativeEncoding(Protocol):
+    """
+    Structural type for native C++ ``BatchEncoding``-like objects.
+
+    Concrete bindings expose this shape from C++ while Python code can
+    type against the protocol without importing binding internals.
+    The protocol mirrors PyG-level structural metadata (graph/node/edge
+    counts and type lists) but intentionally does not model dynamic node
+    storage attributes like ``data["atom"].x``.
+    """
+
+    num_graphs: int
+    num_nodes: int
+    num_edges: int
+    graph_kind: str
+    node_types: Sequence[str]
+    edge_types: Sequence[tuple[str, str, str]]
+
+    def as_dict(self) -> EncodingDict: ...
+
+    def as_pyg(self, *, as_batch: bool | None = None) -> Any: ...
+
+    def schema_fingerprint(self) -> int: ...
+
+
+@runtime_checkable
+class HeteroEncoding(NativeEncoding, Protocol):
+    """Refined protocol for hetero native encodings."""
+
+    graph_kind: Literal["hetero"]
+
+    def as_pyg(self, *, as_batch: bool | None = None) -> "HeteroData": ...
+
+
+@runtime_checkable
+class HomoEncoding(NativeEncoding, Protocol):
+    """Refined protocol for homo native encodings."""
+
+    graph_kind: Literal["homo"]
+
+    def as_pyg(self, *, as_batch: bool | None = None) -> "Data": ...
+
+
+NativeEncodingInput: TypeAlias = NativeEncoding | EncodingDict
 
 
 def register_state_adapter(state_type: type[object], adapter: StateAdapter) -> None:

@@ -28,6 +28,8 @@ from .base import (
 from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
 from .types import (
+    HeteroEncoding,
+    NativeEncodingInput,
     DomainInput,
     GoalLiteralInput,
     StateInput,
@@ -63,7 +65,7 @@ def _is_literal(value: object) -> bool:
 
 
 @dataclass
-class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
+class HorizonEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
     """Streaming wrapper for ``HorizonHGraphEncoderEngine``."""
 
     _engine: HorizonHGraphEncoderEngine
@@ -110,7 +112,7 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -201,7 +203,7 @@ class HorizonEncoder(HGraphEncoder):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **_: object,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Encode one root/DAG pair."""
         if actions is not None:
             # Horizon encoding does not consume actions directly.
@@ -220,7 +222,7 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HeteroEncoding:
         """Encode one root/DAG pair into native ``BatchEncoding``."""
         return super().encode(
             root,
@@ -238,7 +240,7 @@ class HorizonEncoder(HGraphEncoder):
         *,
         goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Internal batch implementation shared by public batch APIs."""
         if is_state_input(roots):
             root_list = [roots]
@@ -296,7 +298,7 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into native ``BatchEncoding``."""
         return super().encode_batch(
             roots,
@@ -313,7 +315,7 @@ class HorizonEncoder(HGraphEncoder):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -329,7 +331,7 @@ class HorizonEncoder(HGraphEncoder):
         *,
         goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> Mapping[str, object]:
+    ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
         return self.__encode_batch(
             roots, dags, goals=goals, subgoal_layers=subgoal_layers

@@ -2,21 +2,33 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from numbers import Integral
-from typing import Generic, Iterable, Mapping, TypeAlias, TypeVar
+from typing import Generic, Iterable, Mapping, TypeAlias, TypeGuard, TypeVar
 
 from torch_geometric.data import Data, HeteroData
 
 from .common import _encoding_dict_to_pyg
-from .types import GoalLiteralInput, GroundActionInput, StateInput
+from .types import (
+    EncodingDict,
+    GoalLiteralInput,
+    GroundActionInput,
+    NativeEncoding,
+    NativeEncodingInput,
+    StateInput,
+)
 
 PygDataT = TypeVar("PygDataT", Data, HeteroData)
+EncodingT = TypeVar("EncodingT", bound=NativeEncoding)
 StateBatchInput: TypeAlias = Iterable[StateInput] | StateInput
 GoalBatchInput: TypeAlias = Iterable[GoalLiteralInput] | None
 SubgoalLayersInput: TypeAlias = Iterable[Iterable[GoalLiteralInput]] | None
 ActionBatchInput: TypeAlias = Iterable[GroundActionInput] | None
 
 
-class EncoderBase(ABC, Generic[PygDataT]):
+def _is_native_encoding(value: object) -> TypeGuard[NativeEncoding]:
+    return hasattr(value, "as_dict") and hasattr(value, "as_pyg")
+
+
+class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
     """
     Base class for all non-stream encoders.
 
@@ -46,7 +58,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> EncodingT:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode(
             state,
@@ -65,7 +77,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> EncodingT:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode_batch(
             states,
@@ -124,7 +136,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
-    ) -> object:
+    ) -> EncodingT:
         """Encode one input into native batch encoding."""
         ...
 
@@ -137,13 +149,13 @@ class EncoderBase(ABC, Generic[PygDataT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
-    ) -> object:
+    ) -> EncodingT:
         """Encode one or many inputs into native batch encoding."""
         ...
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object],
+        encoding_dict: EncodingDict,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -154,28 +166,26 @@ class EncoderBase(ABC, Generic[PygDataT]):
 
     def _to_pyg(
         self,
-        encoding: Mapping[str, object] | object,
+        encoding: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        if hasattr(encoding, "as_pyg"):
+        if _is_native_encoding(encoding):
             uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
             if include_metadata and uses_default_converter:
                 return encoding.as_pyg(as_batch=as_batch)
-            if hasattr(encoding, "as_dict"):
-                return self._dict_to_pyg(
-                    encoding.as_dict(),
-                    as_batch=as_batch,
-                    include_metadata=include_metadata,
-                )
-            return encoding.as_pyg(as_batch=as_batch)
+            return self._dict_to_pyg(
+                encoding.as_dict(),
+                as_batch=as_batch,
+                include_metadata=include_metadata,
+            )
         return self._dict_to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )
 
 
-class StreamEncoderBase(ABC, Generic[PygDataT]):
+class StreamEncoderBase(ABC, Generic[PygDataT, EncodingT]):
     """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
@@ -208,7 +218,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         """Re-encode and replace a previously appended item in the stream."""
         raise NotImplementedError("update is not implemented for this stream")
 
-    def flush(self) -> Mapping[str, object] | object:
+    def flush(self) -> EncodingT:
         """Flush accumulated items and return native batch encoding."""
         stream = getattr(self, "_stream", None)
         if stream is not None and hasattr(stream, "flush"):
@@ -240,7 +250,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
     @abstractmethod
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object],
+        encoding_dict: EncodingDict,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -250,24 +260,22 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
 
     def _to_pyg(
         self,
-        encoding: Mapping[str, object] | object,
+        encoding: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        if hasattr(encoding, "as_pyg"):
+        if _is_native_encoding(encoding):
             uses_default_converter = (
                 type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
             )
             if include_metadata and uses_default_converter:
                 return encoding.as_pyg(as_batch=as_batch)
-            if hasattr(encoding, "as_dict"):
-                return self._dict_to_pyg(
-                    encoding.as_dict(),
-                    as_batch=as_batch,
-                    include_metadata=include_metadata,
-                )
-            return encoding.as_pyg(as_batch=as_batch)
+            return self._dict_to_pyg(
+                encoding.as_dict(),
+                as_batch=as_batch,
+                include_metadata=include_metadata,
+            )
         return self._dict_to_pyg(
             encoding, as_batch=as_batch, include_metadata=include_metadata
         )

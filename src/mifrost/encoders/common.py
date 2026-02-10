@@ -8,10 +8,12 @@ import torch
 from torch_geometric.data import Batch, HeteroData
 
 from .types import (
+    EncodingDict,
     DomainInput,
     GoalLiteralInput,
     HistorySubgoalInput,
     GroundActionInput,
+    NativeEncodingInput,
     StateInput,
     to_advanced_action,
     to_advanced_domain,
@@ -110,7 +112,7 @@ def _prepare_history_subgoals(
     return out
 
 
-def _coerce_encoding_dict(encoding: Mapping[str, Any] | Any) -> Mapping[str, Any]:
+def _coerce_encoding_dict(encoding: NativeEncodingInput | Any) -> EncodingDict:
     if isinstance(encoding, Mapping):
         return encoding
     if hasattr(encoding, "as_dict"):
@@ -123,7 +125,7 @@ def _coerce_encoding_dict(encoding: Mapping[str, Any] | Any) -> Mapping[str, Any
 
 
 def _encoding_dict_to_pyg(
-    encoding: Mapping[str, Any] | Any,
+    encoding: NativeEncodingInput | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,

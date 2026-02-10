@@ -24,6 +24,9 @@ from .base import (
 )
 from .common import _advanced_domain, _advanced_state, _split_goals
 from .types import (
+    EncodingDict,
+    HomoEncoding,
+    NativeEncodingInput,
     STATE_TYPES,
     DomainInput,
     GoalLiteralInput,
@@ -33,7 +36,7 @@ from .types import (
 
 
 def _encoding_dict_to_pyg_homo(
-    encoding_dict: Mapping[str, Any] | Any,
+    encoding_dict: NativeEncodingInput | Any,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -156,7 +159,7 @@ def _encoding_dict_to_pyg_homo(
 
 
 @dataclass
-class ColorEncoderStream(StreamEncoderBase[Data]):
+class ColorEncoderStream(StreamEncoderBase[Data, HomoEncoding]):
     """Streaming wrapper for ``ColorEncoder``."""
 
     _encoder: "ColorEncoder"
@@ -209,7 +212,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
@@ -219,7 +222,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         )
 
 
-class ColorEncoder(EncoderBase[Data]):
+class ColorEncoder(EncoderBase[Data, HomoEncoding]):
     """
     Homogeneous color encoder backed by ``ColorEncoderEngine``.
 
@@ -254,7 +257,7 @@ class ColorEncoder(EncoderBase[Data]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> Mapping[str, object]:
+    ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
         adv_state = _advanced_state(state)
         if goals is None and subgoal_layers is None:
@@ -272,7 +275,7 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HomoEncoding:
         """Encode one state into native ``BatchEncoding``."""
         return super().encode(
             state,
@@ -289,7 +292,7 @@ class ColorEncoder(EncoderBase[Data]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-    ) -> Mapping[str, object]:
+    ) -> HomoEncoding:
         """Encode one or many states into homogeneous batch encoding_dict."""
         if isinstance(states, STATE_TYPES):
             state_list = [states]
@@ -326,7 +329,7 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> HomoEncoding:
         """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(
             states,
@@ -338,7 +341,7 @@ class ColorEncoder(EncoderBase[Data]):
 
     def _dict_to_pyg(
         self,
-        encoding_dict: Mapping[str, object] | object,
+        encoding_dict: NativeEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,

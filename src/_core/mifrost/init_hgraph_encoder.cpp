@@ -333,6 +333,41 @@ uint64_t schema_fingerprint(const BatchBuilder::BatchEncoding& encoding)
    return h;
 }
 
+int64_t batch_encoding_num_nodes(const BatchBuilder::BatchEncoding& encoding)
+{
+   int64_t total = 0;
+   for(const auto& count : std::views::values(encoding.node_counts)) {
+      total += count;
+   }
+   return total;
+}
+
+int64_t batch_encoding_num_edges(const BatchBuilder::BatchEncoding& encoding)
+{
+   int64_t total = 0;
+   for(const auto& [key, col] : encoding.columns) {
+      if(key.find("/edge_index_0") == std::string::npos) {
+         continue;
+      }
+      std::visit([&](const auto& data) { total += static_cast< int64_t >(data.size()); }, col.data);
+   }
+   return total;
+}
+
+std::vector< std::string > batch_encoding_node_types(const BatchBuilder::BatchEncoding& encoding)
+{
+   return encoding.schema.node_types;
+}
+
+nb::list batch_encoding_edge_types(const BatchBuilder::BatchEncoding& encoding)
+{
+   nb::list out;
+   for(const auto& edge_type : encoding.schema.edge_types) {
+      out.append(nb::make_tuple(edge_type.src, edge_type.rel, edge_type.dst));
+   }
+   return out;
+}
+
 nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handle owner)
 {
    nb::dict tensors;
@@ -406,7 +441,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
 }
 
 nb::object
-batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
+batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
 {
    const bool want_batch = as_batch.value_or(encoding.num_graphs != 1);
    BatchBuilder builder;
@@ -539,6 +574,10 @@ void init_hgraph_encoder(nb::module_& m)
    nb::class_< BatchBuilder::BatchEncoding >(m, "BatchEncoding")
       .def(nb::init<>())
       .def_ro("num_graphs", &BatchBuilder::BatchEncoding::num_graphs)
+      .def_prop_ro("num_nodes", &batch_encoding_num_nodes)
+      .def_prop_ro("num_edges", &batch_encoding_num_edges)
+      .def_prop_ro("node_types", &batch_encoding_node_types)
+      .def_prop_ro("edge_types", &batch_encoding_edge_types)
       .def_ro("graph_kind", &BatchBuilder::BatchEncoding::graph_kind)
       .def_ro("schema", &BatchBuilder::BatchEncoding::schema)
       .def_ro("schema_flags", &BatchBuilder::BatchEncoding::schema_flags)
