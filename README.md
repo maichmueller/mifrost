@@ -263,6 +263,29 @@ python scripts/profile_encoding.py --profile cprofile --include-goals
 python scripts/profile_encoding.py --benchmark-pyg --no-export-node-names
 ```
 
+Comprehensive scaling benchmark suite (diverse state batches, goals/actions combinations,
+transition encoders, horizon DAG-size sweeps):
+
+```bash
+python scripts/benchmark_encoder_suite.py \
+  --domain blocks \
+  --problem smedium \
+  --max-states 256 \
+  --batch-sizes 8,32,128 \
+  --horizon-dag-sizes 8,32,64 \
+  --horizon-batch-sizes 4,16 \
+  --include-lgan-values false,true \
+  --repeats 5 \
+  --warmup 1 \
+  --output-json /tmp/encoder_bench_suite.json
+```
+
+Include PyG conversion paths in the same run:
+
+```bash
+python scripts/benchmark_encoder_suite.py --benchmark-pyg
+```
+
 ## Output assembly notes
 
 - Native-first:
