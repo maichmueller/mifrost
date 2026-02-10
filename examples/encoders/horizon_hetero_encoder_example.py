@@ -16,7 +16,7 @@ from mifrost.encoders.types import to_advanced_state
 def _load_problem() -> tuple[pymimir.Domain, pymimir.Problem]:
     repo_root = Path(__file__).resolve().parents[2]
     domain_path = repo_root / "data" / "pddl" / "blocks" / "domain.pddl"
-    problem_path = repo_root / "data" / "pddl" / "blocks" / "small.pddl"
+    problem_path = repo_root / "data" / "pddl" / "blocks" / "medium.pddl"
     domain = pymimir.Domain(domain_path)
     problem = pymimir.Problem(domain, problem_path, mode="lifted")
     return domain, problem
@@ -84,7 +84,7 @@ def main() -> None:
                 enable_sibling_relation=use_sibling,
                 enable_cousin_relation=use_cousin,
             )
-            data = encoder.encode(root, dag, goals=goals)
+            data = encoder.encode_pyg(root, dag=dag, goals=goals)
             label = (
                 f"P={'on' if use_parent else 'off'} "
                 f"S={'on' if use_sibling else 'off'} "

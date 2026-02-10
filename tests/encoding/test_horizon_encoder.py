@@ -81,3 +81,38 @@ def test_horizon_encoder_target_mapping_and_order(small_blocks):
         assert (target_symbol_idx, action_idx) in zip(src_indices, dst_indices), (
             f"No ({target_name} -> {action_node_name}) edge at position 0."
         )
+
+
+def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))[:2]
+    if not transitions:
+        import pytest
+
+        pytest.skip("Fixture should yield at least 1 transition")
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    for action, target in transitions:
+        dag.register_transition(
+            adv_state(root),
+            adv_state(target),
+            adv_action(action),
+        )
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+    data = encoder.encode_pyg(root, dag=dag, goals=goals)
+    graph = encoder.to_networkx(data)
+
+    object_names = [str(name) for name in getattr(data, "object_names", [])]
+    symbol_nodes = {
+        str(node)
+        for node, attrs in graph.nodes(data=True)
+        if attrs.get("type") == encoder.symbol_type_id
+        and attrs.get("target_index") is None
+    }
+    for name in object_names:
+        assert name in symbol_nodes, (
+            f"Missing object symbol node in networkx graph: {name}"
+        )

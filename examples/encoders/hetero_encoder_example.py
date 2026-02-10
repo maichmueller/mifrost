@@ -20,7 +20,7 @@ def main():
     encoder = HGraphEncoder(domain)
 
     # Encode the current state; goals default to the problem goal
-    graph = encoder.encode(problem.get_initial_state())
+    graph = encoder.encode_pyg(problem.get_initial_state())
 
     # Plot the produced heterogeneous graph
     encoder.draw(

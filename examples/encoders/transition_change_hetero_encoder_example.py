@@ -21,7 +21,7 @@ def main():
     _, successor = first_transition(space, state)
 
     encoder = TransitionEffectsHGraphEncoder(domain)
-    graph = encoder.encode(state=state, successor=successor)
+    graph = encoder.encode_pyg(state=state, successor=successor)
 
     # Plot the transition-delta heterogeneous graph
     encoder.draw(

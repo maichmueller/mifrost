@@ -359,8 +359,11 @@ class HorizonEncoder(HGraphEncoder):
         target_indices = list(getattr(data, "target_indices", []))
         target_positions = list(getattr(data, "target_positions", []))
         object_names = list(getattr(data, "object_names", []))
+        object_name_set = {str(name) for name in object_names}
 
         target_info: dict[int, tuple[str, int | None, int | None]] = {}
+        target_name_by_index: dict[int, str] = {}
+        target_depth_by_index: dict[int, int] = {}
         for pos, sym_idx in enumerate(target_positions):
             if sym_idx < 0 or sym_idx >= len(symbol_nodes):
                 continue
@@ -370,11 +373,27 @@ class HorizonEncoder(HGraphEncoder):
             depth = target_depths[pos] if pos < len(target_depths) else None
             index = target_indices[pos] if pos < len(target_indices) else None
             target_info[sym_idx] = (target_name, depth, index)
+            if index is not None:
+                target_name_by_index[index] = target_name
+                if depth is not None:
+                    target_depth_by_index[index] = depth
 
         object_iter = iter(object_names)
         for idx, node_key in enumerate(symbol_nodes):
+            target_name = None
+            depth = None
+            index = None
             if idx in target_info:
                 target_name, depth, index = target_info[idx]
+            else:
+                key_index = self._target_index_from_name(node_key)
+                if key_index >= 0 and str(node_key) not in object_name_set:
+                    index = key_index
+                    target_name = target_name_by_index.get(key_index, node_key)
+                    depth = target_depth_by_index.get(
+                        key_index, 0 if key_index == 0 else None
+                    )
+            if index is not None:
                 graph.add_node(
                     node_key,
                     type=symbol_type,
@@ -415,7 +434,10 @@ class HorizonEncoder(HGraphEncoder):
 
         if parent_type in node_names_by_type:
             target_name_to_idx = {
-                name: idx for idx, name in enumerate(target_names or symbol_nodes)
+                name: int(attrs["target_index"])
+                for name, attrs in graph.nodes(data=True)
+                if attrs.get("type") == symbol_type
+                and attrs.get("target_index") is not None
             }
             for transition_name in node_names_by_type[parent_type]:
                 parent_idx = None

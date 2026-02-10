@@ -22,7 +22,7 @@ def main():
         enable_global_predicate_nodes=True,
     )
 
-    graph = encoder.encode(state)
+    graph = encoder.encode_pyg(state)
 
     # Plot the produced colored graph
     encoder.draw(

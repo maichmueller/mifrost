@@ -17,7 +17,7 @@ def main():
     _, domain, problem = load_space(domain="blocks", problem="medium")
     encoder = ILGEncoder(domain)
 
-    graph = encoder.encode(problem.get_initial_state(), goals=[])
+    graph = encoder.encode_pyg(problem.get_initial_state(), goals=[])
     drawer = HGraphEncoder(domain)
 
     # Plot the ILG heterogeneous graph

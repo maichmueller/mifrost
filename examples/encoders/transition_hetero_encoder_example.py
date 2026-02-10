@@ -15,13 +15,13 @@ from _helpers import first_transition, load_space
 
 
 def main():
-    space, domain, problem = load_space(domain="gripper", problem="gripper_b-1")
+    space, domain, problem = load_space(domain="gripper", problem="gripper_b-5")
     state = problem.get_initial_state()
     # pick a meaningful single successor via a greedy step
     _, successor = first_transition(space, state)
 
     encoder = TransitionHGraphEncoder(domain)
-    graph = encoder.encode(state=state, successor=successor)
+    graph = encoder.encode_pyg(state=state, successor=successor)
 
     # Plot the transition-augmented heterogeneous graph
     encoder.draw(
