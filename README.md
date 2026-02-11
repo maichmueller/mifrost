@@ -5,6 +5,15 @@ It combines C++ encoder engines (via nanobind) with Python-facing APIs.
 The API is native-first: encoders return `BatchEncoding` by default, and PyTorch Geometric
 (`Data` / `HeteroData`) objects are built on demand.
 
+[![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
+
+## Documentation
+
+- Website: https://maichmueller.github.io/mifrost/
+- Tutorials: https://maichmueller.github.io/mifrost/tutorials/first-encoding/
+- Encoder selection guide: https://maichmueller.github.io/mifrost/how-to/choose-an-encoder/
+- API reference: https://maichmueller.github.io/mifrost/reference/api/
+
 ## What it does
 
 - Encodes planning states into graph structures for GNN pipelines.

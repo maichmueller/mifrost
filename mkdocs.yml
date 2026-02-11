@@ -1,0 +1,85 @@
+site_name: mifrost
+site_url: https://maichmueller.github.io/mifrost/
+site_description: High-performance graph encoders for planning states and transitions.
+repo_url: https://github.com/maichmueller/mifrost
+repo_name: maichmueller/mifrost
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: blue
+      accent: cyan
+
+extra:
+  version:
+    provider: mike
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/_scripts/gen_ref_pages.py
+  - literate-nav
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            allow_inspection: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: true
+            members_order: source
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/installation.md
+      - tutorials/first-encoding.md
+      - tutorials/batching-and-streaming.md
+  - How-To:
+      - how-to/choose-an-encoder.md
+      - how-to/encode-goals-actions-history.md
+      - how-to/dynamic-graph-fields.md
+      - how-to/adapters.md
+      - how-to/performance.md
+  - Reference:
+      - reference/native.md
+      - reference/api/index.md
+  - Explanation:
+      - explanation/native-first.md
+      - explanation/schema-and-tensors.md
+      - explanation/streaming-model.md
+      - explanation/encoder-coverage.md
+  - Development:
+      - development/build-and-test.md
+      - development/architecture.md

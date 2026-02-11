@@ -8,6 +8,6 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND NOT DEFINED SKBUILD)
     set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/conan_provider.cmake")
 endif()
 
-project(bifrost_root LANGUAGES CXX)
+project(mifrost_root LANGUAGES CXX)
 
 add_subdirectory(src)
