@@ -1,3 +1,5 @@
+import gc
+
 import pytest
 import numpy as np
 import torch
@@ -45,6 +47,162 @@ def test_batch_builder_basics():
 
     ptr = batch["atom"].ptr
     assert torch.equal(ptr, torch.tensor([0, 10, 20], dtype=torch.int64))
+
+
+def test_batch_builder_exposes_registered_graph_field_specs():
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.register_graph_field(
+        "a",
+        {"dtype": "f32", "mode": "stack", "dim": 1, "inc": {"kind": "none"}},
+    )
+    builder.register_graph_field(
+        "m",
+        {
+            "dtype": "i64",
+            "mode": "cat",
+            "dim": 2,
+            "cat_dim": -1,
+            "inc": {"kind": "none"},
+        },
+    )
+
+    assert builder.graph_field_keys() == ["a", "m"]
+    specs = builder.graph_field_specs()
+    assert specs["a"]["dtype"] == "f32"
+    assert specs["a"]["mode"] == "stack"
+    assert specs["m"]["dtype"] == "i64"
+    assert specs["m"]["mode"] == "cat"
+    assert specs["m"]["dim"] == 2
+    assert specs["m"]["cat_dim"] == 1  # -1 normalized to 1
+
+
+def test_batch_builder_map_views_are_read_only_and_dict_like():
+    builder = mifrost.BatchBuilder()
+    builder.set_schema_flag("edge_features", True)
+    builder.add_node_features("atom", "x", torch.zeros(2, 3))
+
+    flags_view = builder.schema_flags_view()
+    dims_view = builder.node_feature_dims_view()
+
+    assert isinstance(flags_view, mifrost.MapView)
+    assert isinstance(flags_view, mifrost.MapView[str, bool])
+    assert isinstance(dims_view, mifrost.MapView[str, int])
+    assert flags_view.key_type is str
+    assert flags_view.value_type is bool
+    assert dims_view.key_type is str
+    assert dims_view.value_type is int
+    assert len(flags_view) == 1
+    assert bool(flags_view)
+    assert "edge_features" in flags_view
+    assert flags_view["edge_features"] is True
+    assert list(flags_view) == ["edge_features"]
+    assert list(flags_view.keys()) == ["edge_features"]
+    assert list(flags_view.values()) == [True]
+    assert list(flags_view.items()) == [("edge_features", True)]
+
+    # Base map-view API should expose type-erased helpers beyond len/bool/as_dict.
+    flags_impl = flags_view._impl
+    assert isinstance(flags_impl, mifrost._core.MapViewBase)
+    assert hasattr(mifrost._core.MapViewBase, "__getitem__")
+    assert hasattr(mifrost._core.MapViewBase, "__contains__")
+    assert "edge_features" in flags_impl
+    assert flags_impl["edge_features"] is True
+    assert flags_impl.contains("edge_features")
+    assert flags_impl.contains("missing") is False
+    assert flags_impl.contains(1) is False
+    assert flags_impl.at("edge_features") is True
+    with pytest.raises(KeyError):
+        flags_impl.at("missing")
+    missing = object()
+    assert flags_impl.get("edge_features", False) is True
+    assert flags_impl.get("missing", missing) is missing
+    assert flags_impl.keys_list() == ["edge_features"]
+    assert flags_impl.values_list() == [True]
+    assert flags_impl.items_list() == [("edge_features", True)]
+
+    assert len(dims_view) == 1
+    assert dims_view["atom"] == 3
+    assert list(dims_view.keys()) == ["atom"]
+    assert list(dims_view.values()) == [3]
+    assert list(dims_view.items()) == [("atom", 3)]
+
+    with pytest.raises(TypeError):
+        flags_view["edge_features"] = False
+    with pytest.raises(TypeError):
+        del flags_view["edge_features"]
+
+    copied = flags_view.as_dict()
+    copied["edge_features"] = False
+    assert flags_view["edge_features"] is True
+
+
+def test_map_views_keep_owner_alive():
+    builder = mifrost.BatchBuilder()
+    builder.set_schema_flag("predicate_nodes", False)
+    builder.add_node_features("atom", "x", torch.zeros(2, 4))
+    builder.next_graph()
+    encoding = builder.build()
+
+    dims_view = encoding.node_feature_dims_view()
+    flags_view = encoding.schema_flags_view()
+    del encoding
+    gc.collect()
+
+    assert dims_view["atom"] == 4
+    assert flags_view["predicate_nodes"] is False
+
+
+def test_schema_flags_view_is_read_only():
+    schema_dict = mifrost.Schema().to_dict()
+    schema_dict["graph_kind"] = "hetero"
+    schema_dict["flags"] = {"supports_literals": True}
+    schema = mifrost.Schema.from_dict(schema_dict)
+
+    flags_view = schema.flags_view()
+    assert isinstance(flags_view, mifrost.MapView)
+    assert isinstance(flags_view, mifrost.MapView[str, bool])
+    assert flags_view["supports_literals"] is True
+    assert list(flags_view.items()) == [("supports_literals", True)]
+
+    with pytest.raises(TypeError):
+        flags_view["supports_literals"] = False
+
+
+def test_map_view_methods_marked_in_core_are_wrapped():
+    found_marked = set()
+    found_wrapped = set()
+
+    for attr_name in dir(mifrost._core):
+        cls = getattr(mifrost._core, attr_name, None)
+        if not isinstance(cls, type):
+            continue
+
+        marker = getattr(cls, "__mifrost_map_view_methods__", ())
+        if isinstance(marker, str):
+            marker = (marker,)
+
+        for method_name in marker:
+            if not isinstance(method_name, str):
+                continue
+            method = getattr(cls, method_name, None)
+            if not callable(method):
+                continue
+
+            key = (cls.__name__, method_name)
+            found_marked.add(key)
+            if getattr(method, "__mifrost_map_view_wrapped__", False):
+                found_wrapped.add(key)
+
+    expected = {
+        ("BatchBuilder", "schema_flags_view"),
+        ("BatchBuilder", "node_feature_dims_view"),
+        ("BatchEncoding", "schema_flags_view"),
+        ("BatchEncoding", "node_feature_dims_view"),
+        ("Schema", "flags_view"),
+    }
+    assert expected.issubset(found_marked)
+    assert expected.issubset(found_wrapped)
 
 
 def test_hgraph_encoder_instantiation():

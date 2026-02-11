@@ -176,6 +176,7 @@ nanobind_add_module(mifrost_core_module
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/init_common.cpp"
+        "_core/mifrost/init_map_view.cpp"
         "_core/mifrost/init_relation_formatter.cpp"
         "_core/mifrost/init_color_encoder.cpp"
         "_core/mifrost/init_schema.cpp"

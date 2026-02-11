@@ -222,6 +222,10 @@ class BatchBuilder {
    void set_graph_field(const std::string& key, std::span< const float > values);
    /// Set int64 dynamic graph field value for the current graph.
    void set_graph_field(const std::string& key, std::span< const int64_t > values);
+   /// Return registered dynamic graph-field keys (sorted).
+   [[nodiscard]] std::vector< std::string > graph_field_keys() const;
+   /// Return registered dynamic graph-field specs keyed by name.
+   [[nodiscard]] absl::btree_map< std::string, GraphFieldSpec > graph_field_specs() const;
 
   private:
    /// Get or create a typed column with the requested feature dimension.

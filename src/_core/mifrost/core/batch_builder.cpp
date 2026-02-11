@@ -381,6 +381,33 @@ void BatchBuilder::register_graph_field(const std::string& key, const GraphField
    }
 }
 
+std::vector< std::string > BatchBuilder::graph_field_keys() const
+{
+   std::vector< std::string > out;
+   if(! graph_fields) {
+      return out;
+   }
+   out.reserve(graph_fields->size());
+   for(const auto& [key, field] : *graph_fields) {
+      (void) field;
+      out.push_back(key);
+   }
+   std::ranges::sort(out);
+   return out;
+}
+
+absl::btree_map< std::string, GraphFieldSpec > BatchBuilder::graph_field_specs() const
+{
+   absl::btree_map< std::string, GraphFieldSpec > out;
+   if(! graph_fields) {
+      return out;
+   }
+   for(const auto& [key, field] : *graph_fields) {
+      out.emplace(key, field.spec);
+   }
+   return out;
+}
+
 GraphFieldSpec BatchBuilder::get_graph_field_spec(const std::string& key) const
 {
    if(not graph_fields) {

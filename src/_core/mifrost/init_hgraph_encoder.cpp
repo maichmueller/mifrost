@@ -30,6 +30,7 @@
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/horizon_hgraph_encoder.hpp"
+#include "mifrost/core/map_view.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/core/successor_hgraph_encoder.hpp"
 #include "mifrost/core/transition_dag.hpp"
@@ -804,178 +805,257 @@ BatchBuilder::BatchEncoding load_batch_encoding(const std::string& path)
 
 void init_hgraph_encoder(nb::module_& m)
 {
-   nb::class_< BatchBuilder >(m, "BatchBuilder")
-      .def(nb::init<>())
-      .def(
-         "add_node_features",
-         [](BatchBuilder& builder,
-            const std::string& node_type,
-            const std::string& attr_name,
-            nb::ndarray< nb::numpy, float > data) {
-            if(data.ndim() != 1 and data.ndim() != 2) {
-               throw std::invalid_argument("add_node_features expects a 1D/2D array");
-            }
-            const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
-            const auto count = static_cast< size_t >(data.size());
-            builder.add_node_features(
-               node_type, attr_name, std::span< const float >(data.data(), count), feature_dim
-            );
-         }
-      )
-      .def(
-         "add_edges",
-         [](BatchBuilder& builder,
-            const std::string& src_type,
-            const std::string& rel_type,
-            const std::string& dst_type,
-            nb::ndarray< nb::numpy, int64_t > src,
-            nb::ndarray< nb::numpy, int64_t > dst) {
-            if(src.ndim() != 1 || dst.ndim() != 1) {
-               throw std::invalid_argument("add_edges expects 1D arrays for src/dst indices");
-            }
-            if(src.size() != dst.size()) {
-               throw std::invalid_argument("add_edges expects src/dst arrays of equal length");
-            }
-            builder.add_edges(
-               src_type,
-               rel_type,
-               dst_type,
-               std::span< const int64_t >(src.data(), src.size()),
-               std::span< const int64_t >(dst.data(), dst.size())
-            );
-         }
-      )
-      .def(
-         "add_edge_features",
-         [](BatchBuilder& builder,
-            const std::string& src_type,
-            const std::string& rel_type,
-            const std::string& dst_type,
-            const std::string& attr_name,
-            nb::ndarray< nb::numpy, float > data) {
-            if(data.ndim() != 1 and data.ndim() != 2) {
-               throw std::invalid_argument("add_edge_features expects a 1D/2D array");
-            }
-            const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
-            const auto count = static_cast< size_t >(data.size());
-            builder.add_edge_features(
-               src_type,
-               rel_type,
-               dst_type,
-               attr_name,
-               std::span< const float >(data.data(), count),
-               feature_dim
-            );
-         }
-      )
-      .def("add_nodes", &BatchBuilder::add_nodes)
-      .def("add_edge", &BatchBuilder::add_edge)
-      .def("set_node_names", &BatchBuilder::set_node_names)
-      .def("set_object_names", &BatchBuilder::set_object_names)
-      .def("build", &BatchBuilder::build)
-      .def("build_pyg", &BatchBuilder::build_pyg)
-      .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
-      .def(
-         "load_from_batch_encoding",
-         nb::overload_cast< const BatchBuilder::BatchEncoding& >(
-            &BatchBuilder::load_from_batch_encoding
-         )
-      )
-      .def("next_graph", &BatchBuilder::next_graph)
-      .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
-      .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
-      .def(
-         "register_graph_field",
-         [](BatchBuilder& builder, const std::string& key, const nb::dict& spec) {
-            builder.register_graph_field(key, graph_field_spec_from_dict(spec));
-         },
-         "key"_a,
-         "spec"_a
-      )
-      .def(
-         "set_graph_field",
-         [](BatchBuilder& builder, const std::string& key, nb::handle value) {
-            const auto spec = builder.get_graph_field_spec(key);
-            if(spec.dtype == GraphFieldDType::F32) {
-               auto input = coerce_numeric_values< float >(value);
-               auto values = normalize_graph_field_input(key, spec, std::move(input));
-               builder.set_graph_field(key, std::span< const float >(values.data(), values.size()));
-            } else {
-               auto input = coerce_numeric_values< int64_t >(value);
-               auto values = normalize_graph_field_input(key, spec, std::move(input));
-               builder.set_graph_field(
-                  key, std::span< const int64_t >(values.data(), values.size())
+   register_mapview_maybe< absl::btree_map< std::string, bool > >(m);
+   register_mapview_maybe< hash_map< std::string, int > >(m);
+
+   auto batch_builder_cls =
+      nb::class_< BatchBuilder >(m, "BatchBuilder")
+         .def(nb::init<>())
+         .def(
+            "add_node_features",
+            [](BatchBuilder& builder,
+               const std::string& node_type,
+               const std::string& attr_name,
+               nb::ndarray< nb::numpy, float > data) {
+               if(data.ndim() != 1 and data.ndim() != 2) {
+                  throw std::invalid_argument("add_node_features expects a 1D/2D array");
+               }
+               const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+               const auto count = static_cast< size_t >(data.size());
+               builder.add_node_features(
+                  node_type, attr_name, std::span< const float >(data.data(), count), feature_dim
                );
             }
-         },
-         "key"_a,
-         "value"_a
-      )
-      .def(
-         "set_graph_fields",
-         [](BatchBuilder& builder, const nb::dict& values) {
-            for(auto [key_obj, value_obj] : values) {
-               const std::string key = nb::cast< std::string >(key_obj);
-               const auto spec = builder.get_graph_field_spec(key);
-               if(spec.dtype == GraphFieldDType::F32) {
-                  auto input = coerce_numeric_values< float >(value_obj);
-                  auto data = normalize_graph_field_input(key, spec, std::move(input));
-                  builder.set_graph_field(key, std::span< const float >(data.data(), data.size()));
-               } else {
-                  auto input = coerce_numeric_values< int64_t >(value_obj);
-                  auto data = normalize_graph_field_input(key, spec, std::move(input));
-                  builder.set_graph_field(
-                     key, std::span< const int64_t >(data.data(), data.size())
+         )
+         .def(
+            "add_edges",
+            [](BatchBuilder& builder,
+               const std::string& src_type,
+               const std::string& rel_type,
+               const std::string& dst_type,
+               nb::ndarray< nb::numpy, int64_t > src,
+               nb::ndarray< nb::numpy, int64_t > dst) {
+               if(src.ndim() != 1 || dst.ndim() != 1) {
+                  throw std::invalid_argument("add_edges expects 1D arrays for src/dst indices");
+               }
+               if(src.size() != dst.size()) {
+                  throw std::invalid_argument("add_edges expects src/dst arrays of equal length");
+               }
+               builder.add_edges(
+                  src_type,
+                  rel_type,
+                  dst_type,
+                  std::span< const int64_t >(src.data(), src.size()),
+                  std::span< const int64_t >(dst.data(), dst.size())
+               );
+            }
+         )
+         .def(
+            "add_edge_features",
+            [](BatchBuilder& builder,
+               const std::string& src_type,
+               const std::string& rel_type,
+               const std::string& dst_type,
+               const std::string& attr_name,
+               nb::ndarray< nb::numpy, float > data) {
+               if(data.ndim() != 1 and data.ndim() != 2) {
+                  throw std::invalid_argument("add_edge_features expects a 1D/2D array");
+               }
+               const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+               const auto count = static_cast< size_t >(data.size());
+               builder.add_edge_features(
+                  src_type,
+                  rel_type,
+                  dst_type,
+                  attr_name,
+                  std::span< const float >(data.data(), count),
+                  feature_dim
+               );
+            }
+         )
+         .def("add_nodes", &BatchBuilder::add_nodes)
+         .def("add_edge", &BatchBuilder::add_edge)
+         .def("set_node_names", &BatchBuilder::set_node_names)
+         .def("set_object_names", &BatchBuilder::set_object_names)
+         .def("build", &BatchBuilder::build)
+         .def("build_pyg", &BatchBuilder::build_pyg)
+         .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
+         .def(
+            "load_from_batch_encoding",
+            nb::overload_cast< const BatchBuilder::BatchEncoding& >(
+               &BatchBuilder::load_from_batch_encoding
+            )
+         )
+         .def("next_graph", &BatchBuilder::next_graph)
+         .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
+         .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
+         .def(
+            "schema_flags_view",
+            [](nb::handle self) {
+               auto* builder = nb::inst_ptr< BatchBuilder >(self);
+               if(builder == nullptr) {
+                  throw std::invalid_argument(
+                     "BatchBuilder.schema_flags_view called with invalid instance"
                   );
                }
+               return make_map_view(builder->schema_flags, self);
+            },
+            nb::rv_policy::move
+         )
+         .def(
+            "node_feature_dims_view",
+            [](nb::handle self) {
+               auto* builder = nb::inst_ptr< BatchBuilder >(self);
+               if(builder == nullptr) {
+                  throw std::invalid_argument(
+                     "BatchBuilder.node_feature_dims_view called with invalid instance"
+                  );
+               }
+               return make_map_view(builder->node_feature_dims, self);
+            },
+            nb::rv_policy::move
+         )
+         .def("graph_field_keys", &BatchBuilder::graph_field_keys)
+         .def(
+            "graph_field_specs",
+            [](const BatchBuilder& builder) {
+               nb::dict out;
+               for(const auto& [key, spec] : builder.graph_field_specs()) {
+                  out[key.c_str()] = graph_field_spec_to_dict(spec);
+               }
+               return out;
             }
-         },
-         "values"_a
-      );
+         )
+         .def(
+            "register_graph_field",
+            [](BatchBuilder& builder, const std::string& key, const nb::dict& spec) {
+               builder.register_graph_field(key, graph_field_spec_from_dict(spec));
+            },
+            "key"_a,
+            "spec"_a
+         )
+         .def(
+            "set_graph_field",
+            [](BatchBuilder& builder, const std::string& key, nb::handle value) {
+               const auto spec = builder.get_graph_field_spec(key);
+               if(spec.dtype == GraphFieldDType::F32) {
+                  auto input = coerce_numeric_values< float >(value);
+                  auto values = normalize_graph_field_input(key, spec, std::move(input));
+                  builder.set_graph_field(
+                     key, std::span< const float >(values.data(), values.size())
+                  );
+               } else {
+                  auto input = coerce_numeric_values< int64_t >(value);
+                  auto values = normalize_graph_field_input(key, spec, std::move(input));
+                  builder.set_graph_field(
+                     key, std::span< const int64_t >(values.data(), values.size())
+                  );
+               }
+            },
+            "key"_a,
+            "value"_a
+         )
+         .def(
+            "set_graph_fields",
+            [](BatchBuilder& builder, const nb::dict& values) {
+               for(auto [key_obj, value_obj] : values) {
+                  const std::string key = nb::cast< std::string >(key_obj);
+                  const auto spec = builder.get_graph_field_spec(key);
+                  if(spec.dtype == GraphFieldDType::F32) {
+                     auto input = coerce_numeric_values< float >(value_obj);
+                     auto data = normalize_graph_field_input(key, spec, std::move(input));
+                     builder.set_graph_field(
+                        key, std::span< const float >(data.data(), data.size())
+                     );
+                  } else {
+                     auto input = coerce_numeric_values< int64_t >(value_obj);
+                     auto data = normalize_graph_field_input(key, spec, std::move(input));
+                     builder.set_graph_field(
+                        key, std::span< const int64_t >(data.data(), data.size())
+                     );
+                  }
+               }
+            },
+            "values"_a
+         );
 
-   nb::class_< BatchBuilder::BatchEncoding >(m, "BatchEncoding")
-      .def(nb::init<>())
-      .def_ro("num_graphs", &BatchBuilder::BatchEncoding::num_graphs)
-      .def_prop_ro("num_nodes", &batch_encoding_num_nodes)
-      .def_prop_ro("num_edges", &batch_encoding_num_edges)
-      .def_prop_ro("node_types", &batch_encoding_node_types)
-      .def_prop_ro("edge_types", &batch_encoding_edge_types)
-      .def_ro("graph_kind", &BatchBuilder::BatchEncoding::graph_kind)
-      .def_ro("schema", &BatchBuilder::BatchEncoding::schema)
-      .def_ro("schema_flags", &BatchBuilder::BatchEncoding::schema_flags)
-      .def_ro("node_feature_dims", &BatchBuilder::BatchEncoding::node_feature_dims)
-      .def_ro("graph_attrs", &BatchBuilder::BatchEncoding::graph_attrs)
-      .def(
-         "as_dict",
-         [](nb::handle self) {
-            auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
-            if(encoding == nullptr) {
-               throw std::invalid_argument("BatchEncoding.as_dict called with invalid instance");
+   auto batch_encoding_cls =
+      nb::class_< BatchBuilder::BatchEncoding >(m, "BatchEncoding")
+         .def(nb::init<>())
+         .def_ro("num_graphs", &BatchBuilder::BatchEncoding::num_graphs)
+         .def_prop_ro("num_nodes", &batch_encoding_num_nodes)
+         .def_prop_ro("num_edges", &batch_encoding_num_edges)
+         .def_prop_ro("node_types", &batch_encoding_node_types)
+         .def_prop_ro("edge_types", &batch_encoding_edge_types)
+         .def_ro("graph_kind", &BatchBuilder::BatchEncoding::graph_kind)
+         .def_ro("schema", &BatchBuilder::BatchEncoding::schema)
+         .def_ro("schema_flags", &BatchBuilder::BatchEncoding::schema_flags)
+         .def_ro("node_feature_dims", &BatchBuilder::BatchEncoding::node_feature_dims)
+         .def_ro("graph_attrs", &BatchBuilder::BatchEncoding::graph_attrs)
+         .def(
+            "schema_flags_view",
+            [](nb::handle self) {
+               auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+               if(encoding == nullptr) {
+                  throw std::invalid_argument(
+                     "BatchEncoding.schema_flags_view called with invalid instance"
+                  );
+               }
+               return make_map_view(encoding->schema_flags, self);
+            },
+            nb::rv_policy::move
+         )
+         .def(
+            "node_feature_dims_view",
+            [](nb::handle self) {
+               auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+               if(encoding == nullptr) {
+                  throw std::invalid_argument(
+                     "BatchEncoding.node_feature_dims_view called with invalid instance"
+                  );
+               }
+               return make_map_view(encoding->node_feature_dims, self);
+            },
+            nb::rv_policy::move
+         )
+         .def(
+            "as_dict",
+            [](nb::handle self) {
+               auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+               if(encoding == nullptr) {
+                  throw std::invalid_argument("BatchEncoding.as_dict called with invalid instance");
+               }
+               return batch_encoding_as_dict(*encoding, self);
             }
-            return batch_encoding_as_dict(*encoding, self);
-         }
-      )
-      .def(
-         "as_pyg",
-         [](nb::handle self, std::optional< bool > as_batch) {
-            auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
-            if(encoding == nullptr) {
-               throw std::invalid_argument("BatchEncoding.as_pyg called with invalid instance");
-            }
-            return batch_encoding_as_pyg(*encoding, as_batch);
-         },
-         "as_batch"_a = nb::none()
-      )
-      .def("schema_fingerprint", &schema_fingerprint)
-      .def(
-         "save",
-         [](const BatchBuilder::BatchEncoding& encoding,
-            const std::string& path,
-            bool include_metadata) { save_batch_encoding(encoding, path, include_metadata); },
-         "path"_a,
-         "include_metadata"_a = false
-      )
-      .def_static("load", [](const std::string& path) { return load_batch_encoding(path); });
+         )
+         .def(
+            "as_pyg",
+            [](nb::handle self, std::optional< bool > as_batch) {
+               auto* encoding = nb::inst_ptr< BatchBuilder::BatchEncoding >(self);
+               if(encoding == nullptr) {
+                  throw std::invalid_argument("BatchEncoding.as_pyg called with invalid instance");
+               }
+               return batch_encoding_as_pyg(*encoding, as_batch);
+            },
+            "as_batch"_a = nb::none()
+         )
+         .def("schema_fingerprint", &schema_fingerprint)
+         .def(
+            "save",
+            [](const BatchBuilder::BatchEncoding& encoding,
+               const std::string& path,
+               bool include_metadata) { save_batch_encoding(encoding, path, include_metadata); },
+            "path"_a,
+            "include_metadata"_a = false
+         )
+         .def_static("load", [](const std::string& path) { return load_batch_encoding(path); });
+
+   batch_builder_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple(
+      "schema_flags_view", "node_feature_dims_view"
+   );
+   batch_encoding_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple(
+      "schema_flags_view", "node_feature_dims_view"
+   );
 
    m.def(
       "batch_encodings",

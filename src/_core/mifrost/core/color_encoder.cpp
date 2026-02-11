@@ -305,7 +305,7 @@ void ColorEncoderEngine::encode_impl(
       encode_literal(literal, level);
    }
 
-   const std::string node_type = "node";
+   constexpr std::string node_type = "node";
    builder.add_nodes(node_type, static_cast< int64_t >(buffers.node_names.size()));
    builder.set_node_names(node_type, buffers.node_names);
 

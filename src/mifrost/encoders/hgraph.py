@@ -654,6 +654,16 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
             normalized[str(key)] = spec
         self._graph_field_specs = normalized
 
+    @property
+    def graph_field_specs(self) -> Mapping[str, GraphFieldSpec]:
+        """Return registered dynamic graph-field specs (copy)."""
+        return dict(self._graph_field_specs)
+
+    @property
+    def graph_field_keys(self) -> list[str]:
+        """Return registered dynamic graph-field keys (sorted)."""
+        return sorted(self._graph_field_specs.keys())
+
     def _encode_one_into_builder(
         self,
         state: StateInput,

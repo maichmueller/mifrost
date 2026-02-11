@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include "mifrost/core/map_view.hpp"
 #include "mifrost/core/schema.hpp"
 
 namespace nb = nanobind;
@@ -11,6 +12,8 @@ namespace mifrost {
 
 void init_schema(nb::module_& m)
 {
+   register_mapview_maybe< absl::btree_map< std::string, bool > >(m);
+
    nb::enum_< GraphFieldDType >(m, "GraphFieldDType")
       .value("F32", GraphFieldDType::F32)
       .value("I64", GraphFieldDType::I64);
@@ -60,19 +63,34 @@ void init_schema(nb::module_& m)
       .def_rw("cat_dim", &GraphTensorSpec::cat_dim)
       .def_rw("inc", &GraphTensorSpec::inc);
 
-   nb::class_< Schema >(m, "Schema")
-      .def(nb::init<>())
-      .def_rw("version", &Schema::version)
-      .def_rw("graph_kind", &Schema::graph_kind)
-      .def_rw("node_types", &Schema::node_types)
-      .def_rw("edge_types", &Schema::edge_types)
-      .def_rw("node_tensors", &Schema::node_tensors)
-      .def_rw("edge_tensors", &Schema::edge_tensors)
-      .def_rw("graph_tensors", &Schema::graph_tensors)
-      .def_rw("flags", &Schema::flags)
-      .def("validate", &Schema::validate)
-      .def("to_dict", &Schema::to_dict)
-      .def_static("from_dict", &Schema::from_dict);
+   auto schema_cls = nb::class_< Schema >(m, "Schema")
+                        .def(nb::init<>())
+                        .def_rw("version", &Schema::version)
+                        .def_rw("graph_kind", &Schema::graph_kind)
+                        .def_rw("node_types", &Schema::node_types)
+                        .def_rw("edge_types", &Schema::edge_types)
+                        .def_rw("node_tensors", &Schema::node_tensors)
+                        .def_rw("edge_tensors", &Schema::edge_tensors)
+                        .def_rw("graph_tensors", &Schema::graph_tensors)
+                        .def_rw("flags", &Schema::flags)
+                        .def(
+                           "flags_view",
+                           [](nb::handle self) {
+                              auto* schema = nb::inst_ptr< Schema >(self);
+                              if(schema == nullptr) {
+                                 throw std::invalid_argument(
+                                    "Schema.flags_view called with invalid instance"
+                                 );
+                              }
+                              return make_map_view(schema->flags, self);
+                           },
+                           nb::rv_policy::move
+                        )
+                        .def("validate", &Schema::validate)
+                        .def("to_dict", &Schema::to_dict)
+                        .def_static("from_dict", &Schema::from_dict);
+
+   schema_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple("flags_view");
 }
 
 }  // namespace mifrost

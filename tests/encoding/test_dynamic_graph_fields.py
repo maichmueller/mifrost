@@ -106,3 +106,21 @@ def test_encoded_graph_cat_dim1_for_matrix_field(small_blocks):
         data.target_matrix,
         torch.tensor([[10, 20, 50], [30, 40, 60]], dtype=torch.int64),
     )
+
+
+def test_encoder_exposes_registered_graph_field_specs(small_blocks):
+    _, domain, _ = small_blocks
+    encoder = mifrost.HGraphEncoder(domain)
+    encoder.register_graph_fields(
+        {
+            "goal_distance": GraphFieldSpec(mode=Mode.STACK, dtype=DType.F32),
+            "target_matrix": GraphFieldSpec(
+                mode=Mode.CAT, dtype=DType.I64, dim=2, cat_dim=1
+            ),
+        }
+    )
+
+    assert encoder.graph_field_keys == ["goal_distance", "target_matrix"]
+    specs = encoder.graph_field_specs
+    assert specs["goal_distance"].mode is Mode.STACK
+    assert specs["target_matrix"].cat_dim == 1

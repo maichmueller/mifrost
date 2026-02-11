@@ -9,6 +9,7 @@ namespace mifrost {
 NB_MODULE(_core, m)
 {
    init_common(m);
+   init_map_view(m);
    init_relation_formatter(m);
    init_schema(m);
    init_color_encoder(m);
