@@ -46,24 +46,26 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       builder.set_graph_kind("hetero");
       auto goals = mifrost_test::make_goal_inputs(ctx.problem);
       engine.encode(ctx.root, dag, goals, builder);
+      builder.next_graph();
 
       EXPECT_EQ(builder.graph_kind, "hetero");
 
-      EXPECT_TRUE(builder.graph_attrs.contains("target_positions"));
-      EXPECT_TRUE(builder.graph_attrs.contains("target_indices"));
-      EXPECT_TRUE(builder.graph_attrs.contains("target_depths"));
+      ASSERT_NE(builder.graph_fields, nullptr);
+      EXPECT_TRUE(builder.graph_fields->contains("target_positions"));
+      EXPECT_TRUE(builder.graph_fields->contains("target_indices"));
+      EXPECT_TRUE(builder.graph_fields->contains("target_depths"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_names"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_symbol_prefix"));
       EXPECT_TRUE(builder.graph_attrs.contains("parent_relation"));
 
       const auto& positions = std::get< std::vector< int64_t > >(
-         builder.graph_attrs.at("target_positions")
+         builder.graph_fields->at("target_positions").values
       );
       const auto& indices = std::get< std::vector< int64_t > >(
-         builder.graph_attrs.at("target_indices")
+         builder.graph_fields->at("target_indices").values
       );
       const auto& depths = std::get< std::vector< int64_t > >(
-         builder.graph_attrs.at("target_depths")
+         builder.graph_fields->at("target_depths").values
       );
       const auto& names = std::get< std::vector< std::string > >(
          builder.graph_attrs.at("target_names")

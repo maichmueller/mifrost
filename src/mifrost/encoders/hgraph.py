@@ -3,19 +3,19 @@ from __future__ import annotations
 import numbers
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import networkx as nx
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
 
 from .. import _core
+from ..graph_fields import GraphFieldSpec
 from .._core import (
     BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    GoalInputs,
     HGraphEncoderConfig,
     HGraphEncoderEngine,
     HGraphStreamEncoder as _HGraphStreamEncoder,
@@ -52,6 +52,54 @@ from .types import (
 _HGraphMutableStreamEncoder = getattr(
     _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
 )
+
+
+class EncodedGraph:
+    """Lazy single-graph wrapper with dynamic graph-field assignment."""
+
+    def __init__(
+        self,
+        encoder: "HGraphEncoder",
+        state: StateInput,
+        *,
+        encode_kwargs: Mapping[str, Any] | None = None,
+    ) -> None:
+        object.__setattr__(self, "_encoder", encoder)
+        object.__setattr__(self, "_state", state)
+        object.__setattr__(self, "_encode_kwargs", dict(encode_kwargs or {}))
+        object.__setattr__(self, "_dynamic_values", {})
+        object.__setattr__(self, "_cached_encoding", None)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+            return
+        specs = self._encoder._graph_field_specs
+        if name in specs:
+            self._dynamic_values[name] = value
+            self._cached_encoding = None
+            return
+        object.__setattr__(self, name, value)
+
+    def __getattr__(self, name: str) -> Any:
+        specs = self._encoder._graph_field_specs
+        if name in specs and name in self._dynamic_values:
+            return self._dynamic_values[name]
+        raise AttributeError(name)
+
+    def finalize(self):
+        cached = self._cached_encoding
+        if cached is not None:
+            return cached
+        encoding = self._encoder._finalize_encoded_graph(self)
+        self._cached_encoding = encoding
+        return encoding
+
+    def as_dict(self) -> Mapping[str, Any]:
+        return self.finalize().as_dict()
+
+    def as_pyg(self, *, as_batch: bool | None = None) -> HeteroData:
+        return self.finalize().as_pyg(as_batch=as_batch)
 
 
 def _build_config(config_cls, **kwargs: object):
@@ -578,6 +626,7 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         **extra_config_kwargs: object,
     ) -> None:
         """Create an HGraph encoder for one domain."""
+        self._graph_field_specs: dict[str, GraphFieldSpec] = {}
         config = self._make_config(
             _config_cls,
             symbol_type_id=symbol_type_id,
@@ -595,6 +644,95 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
             **extra_config_kwargs,
         )
         self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
+
+    def register_graph_fields(self, specs: Mapping[str, GraphFieldSpec]) -> None:
+        """Register strict dynamic graph-field specs used by ``encode_graph`` wrappers."""
+        normalized: dict[str, GraphFieldSpec] = {}
+        for key, spec in specs.items():
+            if not isinstance(spec, GraphFieldSpec):
+                raise TypeError(f"Graph field spec for '{key}' must be GraphFieldSpec")
+            normalized[str(key)] = spec
+        self._graph_field_specs = normalized
+
+    def _encode_one_into_builder(
+        self,
+        state: StateInput,
+        builder: BatchBuilder,
+        *,
+        goals: GoalBatchInput = None,
+        actions: Iterable[GroundActionInput] | None = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        adv_state = _advanced_state(state)
+        action_list = _prepare_actions(actions)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if (
+            goals is None
+            and subgoal_layers is None
+            and not action_list
+            and not history_list
+        ):
+            self._engine.encode(adv_state, builder)
+            return
+
+        goals_input = goals if goals is not None else default_goals_from_state(state)
+        inputs = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            self._engine.encode(
+                adv_state, inputs, action_list, history_list, history_max_steps, builder
+            )
+            return
+        self._engine.encode(adv_state, inputs, action_list, builder)
+
+    def encode_graph(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: Iterable[GroundActionInput] | None = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> EncodedGraph:
+        return EncodedGraph(
+            self,
+            state,
+            encode_kwargs={
+                "goals": goals,
+                "actions": actions,
+                "subgoal_layers": subgoal_layers,
+                "history_subgoals": history_subgoals,
+                "history_max_steps": history_max_steps,
+            },
+        )
+
+    def _finalize_encoded_graph(self, graph: EncodedGraph) -> HeteroEncoding:
+        builder = BatchBuilder()
+        builder.set_graph_kind("hetero")
+        for key, spec in self._graph_field_specs.items():
+            builder.register_graph_field(key, spec.to_core_dict())
+
+        self._encode_one_into_builder(graph._state, builder, **graph._encode_kwargs)
+        if graph._dynamic_values:
+            builder.set_graph_fields(graph._dynamic_values)
+        builder.next_graph()
+        return builder.build()
+
+    def batch_graphs(self, graphs: Sequence[EncodedGraph]) -> HeteroEncoding:
+        encodings = []
+        for idx, graph in enumerate(graphs):
+            if not isinstance(graph, EncodedGraph):
+                raise TypeError(
+                    f"batch_graphs expects EncodedGraph entries, got {type(graph)} at {idx}"
+                )
+            if graph._encoder is not self:
+                raise ValueError(
+                    "batch_graphs received EncodedGraph from a different encoder"
+                )
+            encodings.append(graph.finalize())
+        return _core.batch_encodings(encodings)
 
     @property
     def engine(self) -> HGraphEncoderEngine:
@@ -620,25 +758,19 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> HeteroEncoding:
         """Encode one state to normalized batch encoding."""
-        adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if (
-            goals is None
-            and subgoal_layers is None
-            and not action_list
-            and not history_list
-        ):
-            return self._engine.encode(adv_state)
-        if goals is None:
-            goals = default_goals_from_state(state)
-        inputs = _split_goals(goals, subgoal_layers)
-        if history_list:
-            return self._engine.encode(
-                adv_state, inputs, action_list, history_list, history_max_steps
-            )
-        # Explicitly pass goals/actions across the strict C++ boundary.
-        return self._engine.encode(adv_state, inputs, action_list)
+        builder = BatchBuilder()
+        builder.set_graph_kind("hetero")
+        self._encode_one_into_builder(
+            state,
+            builder,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        builder.next_graph()
+        return builder.build()
 
     def encode(
         self,
@@ -711,10 +843,6 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
                 shared_actions = list(actions)
                 shared_action_list = _prepare_actions(shared_actions)
 
-        shared_inputs: GoalInputs | None = None
-        if goals is not None:
-            shared_inputs = _split_goals(goals, subgoal_layers)
-
         history_per_state: list[list[tuple[int, list[object]]]] | None = None
         if history_subgoals is not None:
 
@@ -745,46 +873,45 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
-            adv_state = _advanced_state(state)
             if per_state_actions is not None:
                 actions_for_state = per_state_actions[idx]
-                action_list = (
-                    _prepare_actions(actions_for_state)
-                    if actions_for_state is not None
-                    else []
+                actions_for_builder = (
+                    actions_for_state if actions_for_state is not None else []
                 )
             else:
-                action_list = shared_action_list
+                actions_for_builder = shared_action_list
 
-            history_list: list[tuple[int, list[object]]] = []
+            history_for_builder: HistorySubgoalInput | None = None
             if history_per_state is not None:
-                history_list = history_per_state[idx]
+                history_for_builder = history_per_state[idx]
+
+            goals_for_builder: GoalBatchInput = goals
+            if goals is None and subgoal_layers is not None:
+                goals_for_builder = default_goals_from_state(state)
+            elif goals is None and history_for_builder:
+                goals_for_builder = default_goals_from_state(state)
+            elif goals is None and (
+                per_state_actions is not None or shared_action_list
+            ):
+                goals_for_builder = default_goals_from_state(state)
 
             if (
                 goals is None
                 and subgoal_layers is None
-                and not action_list
-                and not history_list
+                and not actions_for_builder
+                and not history_for_builder
             ):
-                # Fast path: let the engine derive goals from the state/problem.
-                self._engine.encode(adv_state, builder)
-            else:
-                if goals is None:
-                    goals_for_state = default_goals_from_state(state)
-                    inputs = _split_goals(goals_for_state, subgoal_layers)
-                else:
-                    inputs = shared_inputs
-                if history_list:
-                    self._engine.encode(
-                        adv_state,
-                        inputs,
-                        action_list,
-                        history_list,
-                        history_max_steps,
-                        builder,
-                    )
-                else:
-                    self._engine.encode(adv_state, inputs, action_list, builder)
+                goals_for_builder = None
+
+            self._encode_one_into_builder(
+                state,
+                builder,
+                goals=goals_for_builder,
+                actions=actions_for_builder,
+                subgoal_layers=subgoal_layers,
+                history_subgoals=history_for_builder,
+                history_max_steps=history_max_steps,
+            )
             builder.next_graph()
 
         return builder.build()

@@ -28,6 +28,7 @@ from .encoders import (  # noqa: F401
     unregister_literal_adapter,
     unregister_state_adapter,
 )
+from .graph_fields import DType, GraphFieldSpec, Inc, Mode
 
 __all__ = list(getattr(_core, "__all__", [])) + [
     "HGraphEncoder",
@@ -54,4 +55,8 @@ __all__ = list(getattr(_core, "__all__", [])) + [
     "unregister_literal_adapter",
     "register_action_adapter",
     "unregister_action_adapter",
+    "Mode",
+    "DType",
+    "Inc",
+    "GraphFieldSpec",
 ]

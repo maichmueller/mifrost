@@ -47,6 +47,30 @@ void Schema::validate_base() const
          throw std::invalid_argument("Schema edge_index must include both components '0' and '1'");
       }
    }
+   for(const auto& spec : graph_tensors) {
+      if(spec.attr.empty() || spec.key.empty()) {
+         throw std::invalid_argument("Schema graph_tensors contain empty fields");
+      }
+      if(spec.mode == GraphFieldMode::RAGGED_CAT && spec.ptr_key.empty()) {
+         throw std::invalid_argument("Schema ragged graph_tensors require ptr_key");
+      }
+      if(spec.mode != GraphFieldMode::RAGGED_CAT && ! spec.ptr_key.empty()) {
+         throw std::invalid_argument("Schema non-ragged graph_tensors must not define ptr_key");
+      }
+      if(spec.dim <= 0) {
+         throw std::invalid_argument("Schema graph_tensors require dim > 0");
+      }
+      validate_graph_field_spec(
+         spec.attr,
+         GraphFieldSpec{
+            .dtype = spec.dtype,
+            .mode = spec.mode,
+            .dim = spec.dim,
+            .cat_dim = spec.cat_dim,
+            .inc = spec.inc,
+         }
+      );
+   }
 }
 
 void Schema::validate() const
@@ -177,6 +201,30 @@ nb::dict Schema::to_dict() const
    }
    out["edge_tensors"] = edge_tensor_list;
 
+   nb::list graph_tensor_list;
+   for(const auto& spec : graph_tensors) {
+      nb::dict entry;
+      entry["attr"] = spec.attr;
+      entry["key"] = spec.key;
+      if(not spec.ptr_key.empty()) {
+         entry["ptr_key"] = spec.ptr_key;
+      }
+      entry["mode"] = graph_field_mode_name(spec.mode);
+      entry["dtype"] = graph_field_dtype_name(spec.dtype);
+      entry["dim"] = spec.dim;
+      entry["cat_dim"] = spec.cat_dim;
+      nb::dict inc;
+      inc["kind"] = graph_field_inc_kind_name(spec.inc.kind);
+      if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
+         inc["node_type"] = spec.inc.node_type;
+      }
+      entry["inc"] = std::move(inc);
+      graph_tensor_list.append(entry);
+   }
+   if(not graph_tensors.empty()) {
+      out["graph_tensors"] = std::move(graph_tensor_list);
+   }
+
    nb::dict flags_dict{};
    for(const auto& [key, value] : flags) {
       flags_dict[key.c_str()] = value;
@@ -238,6 +286,36 @@ Schema Schema::from_dict(const nb::dict& schema)
                .attr = nb::cast< std::string >(entry["attr"]),
                .key = nb::cast< std::string >(entry["key"]),
                .part = entry.contains("part") ? nb::cast< std::string >(entry["part"]) : ""
+            }
+         );
+      }
+   }
+   if(schema.contains("graph_tensors")) {
+      auto graph_tensor_list = nb::cast< nb::list >(schema["graph_tensors"]);
+      out.graph_tensors.reserve(graph_tensor_list.size());
+      for(nb::handle entry_handle : graph_tensor_list) {
+         auto entry = nb::cast< nb::dict >(entry_handle);
+         GraphFieldInc inc{};
+         if(entry.contains("inc")) {
+            auto inc_entry = nb::cast< nb::dict >(entry["inc"]);
+            inc.kind = graph_field_inc_kind_from_name(nb::cast< std::string >(inc_entry["kind"]));
+            if(inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
+               inc.node_type = nb::cast< std::string >(inc_entry["node_type"]);
+            }
+         }
+         out.graph_tensors.emplace_back(
+            GraphTensorSpec{
+               .attr = nb::cast< std::string >(entry["attr"]),
+               .key = nb::cast< std::string >(entry["key"]),
+               .ptr_key = entry.contains("ptr_key") ? nb::cast< std::string >(entry["ptr_key"])
+                                                    : "",
+               .mode = graph_field_mode_from_name(nb::cast< std::string >(entry["mode"])),
+               .dtype = graph_field_dtype_from_name(nb::cast< std::string >(entry["dtype"])),
+               .dim = entry.contains("dim") ? nb::cast< int >(entry["dim"]) : 1,
+               .cat_dim = entry.contains("cat_dim")
+                             ? normalize_graph_field_cat_dim(nb::cast< int >(entry["cat_dim"]))
+                             : 0,
+               .inc = std::move(inc),
             }
          );
       }

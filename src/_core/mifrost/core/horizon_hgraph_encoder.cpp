@@ -957,6 +957,40 @@ void HorizonHGraphEncoderEngine::encode_impl(
    // 6. LGAN edges
    maybe_add_lgan_edges(builder, workspace);
 
+   builder.register_graph_field(
+      "target_positions",
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::RAGGED_CAT,
+         .dim = 1,
+         .cat_dim = 0,
+         .inc = GraphFieldInc{
+            .kind = GraphFieldInc::Kind::NODE_OFFSET,
+            .node_type = config_.symbol_type_id,
+         },
+      }
+   );
+   builder.register_graph_field(
+      "target_indices",
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::RAGGED_CAT,
+         .dim = 1,
+         .cat_dim = 0,
+         .inc = GraphFieldInc{},
+      }
+   );
+   builder.register_graph_field(
+      "target_depths",
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::RAGGED_CAT,
+         .dim = 1,
+         .cat_dim = 0,
+         .inc = GraphFieldInc{},
+      }
+   );
+
    if(not nodes.empty()) {
       std::vector< int64_t > target_positions;
       std::vector< int64_t > target_indices;
@@ -993,9 +1027,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
          target_names.emplace_back(stream.str());
       }
 
-      builder.set_graph_attr("target_positions", std::move(target_positions));
-      builder.set_graph_attr("target_indices", std::move(target_indices));
-      builder.set_graph_attr("target_depths", std::move(target_depths));
+      builder.set_graph_field("target_positions", std::span< const int64_t >(target_positions));
+      builder.set_graph_field("target_indices", std::span< const int64_t >(target_indices));
+      builder.set_graph_field("target_depths", std::span< const int64_t >(target_depths));
       builder.set_graph_attr("target_names", std::move(target_names));
       builder.set_graph_attr("target_symbol_prefix", horizon_config_.target_symbol_prefix);
       builder.set_graph_attr("parent_relation", horizon_config_.parent_relation);

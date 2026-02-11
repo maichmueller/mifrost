@@ -229,6 +229,23 @@ def _encoding_dict_to_pyg(
             data[edge_type][attr] = get_tensor(key, tensors[key])
         consumed_keys.add(key)
 
+    for entry in schema.get("graph_tensors", []):
+        key = entry["key"]
+        if key not in tensors:
+            raise KeyError(f"Schema references missing graph tensor key: {key}")
+        attr = str(entry["attr"])
+        setattr(data, attr, get_tensor(key, tensors[key]))
+        consumed_keys.add(key)
+
+        ptr_key = str(entry.get("ptr_key", ""))
+        if ptr_key:
+            if ptr_key not in tensors:
+                raise KeyError(
+                    f"Schema references missing graph tensor ptr key: {ptr_key}"
+                )
+            setattr(data, f"{attr}_ptr", get_tensor(ptr_key, tensors[ptr_key]))
+            consumed_keys.add(ptr_key)
+
     for (src, rel, dst), component_map in edge_components.items():
         if "0" not in component_map or "1" not in component_map:
             raise ValueError(f"Incomplete edge_index components for {src}|{rel}|{dst}")

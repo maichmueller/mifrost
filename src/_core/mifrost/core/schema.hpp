@@ -7,6 +7,8 @@
 #include <tuple>
 #include <vector>
 
+#include "graph_fields.hpp"
+
 namespace mifrost {
 
 namespace nb = nanobind;
@@ -44,6 +46,22 @@ struct EdgeTensorSpec {
 };
 
 /**
+ * @brief Mapping entry for one graph-level tensor in the flat encoding tensor dict.
+ */
+struct GraphTensorSpec {
+   std::string attr;
+   std::string key;
+   std::string ptr_key;
+   GraphFieldMode mode = GraphFieldMode::STACK;
+   GraphFieldDType dtype = GraphFieldDType::F32;
+   int dim = 1;
+   int cat_dim = 0;
+   GraphFieldInc inc{};
+
+   auto operator<=>(const GraphTensorSpec&) const noexcept = default;
+};
+
+/**
  * @brief Versioned schema for normalized encoder dictionary payloads.
  *
  * This schema defines how flat tensors map to semantic node and edge stores.
@@ -56,6 +74,7 @@ struct Schema {
    std::vector< EdgeType > edge_types;
    std::vector< NodeTensorSpec > node_tensors;
    std::vector< EdgeTensorSpec > edge_tensors;
+   std::vector< GraphTensorSpec > graph_tensors;
    absl::btree_map< std::string, bool > flags;
 
    Schema() = default;

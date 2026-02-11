@@ -107,3 +107,38 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     indices_included = list(getattr(data_included, "target_indices", []))
     assert 0 in indices_included
     assert len(indices_included) == len(dag.nodes())
+
+
+def test_horizon_encoder_batch_collates_target_fields_with_ptrs(horizon_cases):
+    space, domain, problem = horizon_cases
+    root = problem.get_initial_state()
+    dag = _build_dag(space, root)
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+    batch_enc = encoder.encode_batch([root, root], dags=[dag, dag], goals=goals)
+    data = batch_enc.as_pyg(as_batch=True)
+
+    target_indices = getattr(data, "target_indices", None)
+    target_indices_ptr = getattr(data, "target_indices_ptr", None)
+    target_positions = getattr(data, "target_positions", None)
+    target_positions_ptr = getattr(data, "target_positions_ptr", None)
+
+    assert target_indices is not None
+    assert target_indices_ptr is not None
+    assert target_positions is not None
+    assert target_positions_ptr is not None
+
+    ptr = target_indices_ptr.tolist()
+    assert ptr[0] == 0
+    assert len(ptr) == 3
+    assert ptr[1] > ptr[0]
+    assert ptr[2] > ptr[1]
+
+    symbol_ptr = data[encoder.symbol_type_id].ptr.tolist()
+    symbol_n0 = symbol_ptr[1] - symbol_ptr[0]
+
+    pos_ptr = target_positions_ptr.tolist()
+    batched_positions = target_positions.tolist()
+    second_graph_positions = batched_positions[pos_ptr[1] : pos_ptr[2]]
+    assert all(int(value) >= int(symbol_n0) for value in second_graph_positions)

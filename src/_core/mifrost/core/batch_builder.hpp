@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "common_types.hpp"
+#include "graph_fields.hpp"
 #include "schema.hpp"
 
 namespace mifrost {
@@ -35,7 +36,7 @@ class BatchBuilder {
    /// Integer tensor column storage.
    using LongCol = std::vector< int64_t >;
    /// Variant over supported tensor scalar storage backends.
-   using ColumnData = std::variant< FloatCol, LongCol >;
+   using ColumnData = NumericColumnData;
 
    /// One logical tensor column.
    struct Column {
@@ -81,6 +82,8 @@ class BatchBuilder {
       variant< int64_t, std::string, std::vector< int64_t >, std::vector< std::string > >;
    /// Graph-level attributes forwarded to Python metadata.
    hash_map< std::string, GraphAttrValue > graph_attrs;
+   /// Optional dynamic graph field store. Lazily allocated when used.
+   std::unique_ptr< hash_map< std::string, GraphField > > graph_fields;
 
    /// Flat tensor column storage keyed by schema keys.
    hash_map< std::string, Column > columns;
@@ -211,6 +214,14 @@ class BatchBuilder {
    void set_graph_attr(const std::string& key, int64_t value);
    /// Set string graph attribute.
    void set_graph_attr(const std::string& key, std::string value);
+   /// Register one dynamic graph field with strict typed collation spec.
+   void register_graph_field(const std::string& key, const GraphFieldSpec& spec);
+   /// Get dynamic graph field spec for one registered key.
+   [[nodiscard]] GraphFieldSpec get_graph_field_spec(const std::string& key) const;
+   /// Set float dynamic graph field value for the current graph.
+   void set_graph_field(const std::string& key, std::span< const float > values);
+   /// Set int64 dynamic graph field value for the current graph.
+   void set_graph_field(const std::string& key, std::span< const int64_t > values);
 
   private:
    /// Get or create a typed column with the requested feature dimension.
@@ -224,6 +235,7 @@ class BatchBuilder {
     * ndarray capsules for zero-copy transfer.
     */
    nb::dict build_dict();
+   void commit_graph_fields();
 };
 
 template < typename T >
@@ -262,6 +274,7 @@ struct BatchBuilder::BatchEncoding {
    std::vector< std::string > object_names;
    hash_map< std::string, int > node_feature_dims;
    hash_map< std::string, GraphAttrValue > graph_attrs;
+   hash_map< std::string, GraphField > graph_fields;
    hash_map< std::string, std::vector< int64_t > > ptrs;
    absl::btree_map< std::string, bool > schema_flags;
    std::string graph_kind;

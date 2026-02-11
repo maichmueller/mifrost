@@ -11,6 +11,25 @@ namespace mifrost {
 
 void init_schema(nb::module_& m)
 {
+   nb::enum_< GraphFieldDType >(m, "GraphFieldDType")
+      .value("F32", GraphFieldDType::F32)
+      .value("I64", GraphFieldDType::I64);
+
+   nb::enum_< GraphFieldMode >(m, "GraphFieldMode")
+      .value("STACK", GraphFieldMode::STACK)
+      .value("CAT", GraphFieldMode::CAT)
+      .value("RAGGED_CAT", GraphFieldMode::RAGGED_CAT)
+      .value("CONST", GraphFieldMode::CONST);
+
+   nb::enum_< GraphFieldInc::Kind >(m, "GraphFieldIncKind")
+      .value("NONE", GraphFieldInc::Kind::NONE)
+      .value("NODE_OFFSET", GraphFieldInc::Kind::NODE_OFFSET);
+
+   nb::class_< GraphFieldInc >(m, "GraphFieldInc")
+      .def(nb::init<>())
+      .def_rw("kind", &GraphFieldInc::kind)
+      .def_rw("node_type", &GraphFieldInc::node_type);
+
    nb::class_< EdgeType >(m, "EdgeType")
       .def(nb::init<>())
       .def_rw("src", &EdgeType::src)
@@ -30,6 +49,17 @@ void init_schema(nb::module_& m)
       .def_rw("key", &EdgeTensorSpec::key)
       .def_rw("part", &EdgeTensorSpec::part);
 
+   nb::class_< GraphTensorSpec >(m, "GraphTensorSpec")
+      .def(nb::init<>())
+      .def_rw("attr", &GraphTensorSpec::attr)
+      .def_rw("key", &GraphTensorSpec::key)
+      .def_rw("ptr_key", &GraphTensorSpec::ptr_key)
+      .def_rw("mode", &GraphTensorSpec::mode)
+      .def_rw("dtype", &GraphTensorSpec::dtype)
+      .def_rw("dim", &GraphTensorSpec::dim)
+      .def_rw("cat_dim", &GraphTensorSpec::cat_dim)
+      .def_rw("inc", &GraphTensorSpec::inc);
+
    nb::class_< Schema >(m, "Schema")
       .def(nb::init<>())
       .def_rw("version", &Schema::version)
@@ -38,6 +68,7 @@ void init_schema(nb::module_& m)
       .def_rw("edge_types", &Schema::edge_types)
       .def_rw("node_tensors", &Schema::node_tensors)
       .def_rw("edge_tensors", &Schema::edge_tensors)
+      .def_rw("graph_tensors", &Schema::graph_tensors)
       .def_rw("flags", &Schema::flags)
       .def("validate", &Schema::validate)
       .def("to_dict", &Schema::to_dict)

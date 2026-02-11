@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
 import networkx as nx
+import torch
 from torch_geometric.data import HeteroData
 
 from .._core import (
@@ -331,8 +332,17 @@ class HorizonEncoder(HGraphEncoder):
         *,
         goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
         subgoal_layers: SubgoalLayersInput = None,
+        actions=None,
+        history_subgoals=None,
+        history_max_steps: int | None = None,
     ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
+        if actions is not None:
+            raise ValueError("HorizonEncoder does not accept actions in encode_batch")
+        if history_subgoals is not None or history_max_steps is not None:
+            raise ValueError(
+                "HorizonEncoder does not accept history_subgoals/history_max_steps in encode_batch"
+            )
         return self.__encode_batch(
             roots, dags, goals=goals, subgoal_layers=subgoal_layers
         )
@@ -347,6 +357,13 @@ class HorizonEncoder(HGraphEncoder):
         symbol_type = self.symbol_type_id
         parent_type = getattr(data, "parent_relation", self.parent_relation)
 
+        def _to_list(value):
+            if value is None:
+                return []
+            if torch.is_tensor(value):
+                return value.tolist()
+            return list(value)
+
         node_names_by_type: dict[str, list[str]] = {}
         for node_type in data.node_types:
             storage = data[node_type]
@@ -355,9 +372,9 @@ class HorizonEncoder(HGraphEncoder):
 
         symbol_nodes = node_names_by_type.get(symbol_type, [])
         target_names = list(getattr(data, "target_names", []))
-        target_depths = list(getattr(data, "target_depths", []))
-        target_indices = list(getattr(data, "target_indices", []))
-        target_positions = list(getattr(data, "target_positions", []))
+        target_depths = _to_list(getattr(data, "target_depths", []))
+        target_indices = _to_list(getattr(data, "target_indices", []))
+        target_positions = _to_list(getattr(data, "target_positions", []))
         object_names = list(getattr(data, "object_names", []))
         object_name_set = {str(name) for name in object_names}
 
