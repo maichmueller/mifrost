@@ -10,6 +10,9 @@ on:
     types:
       - published
 
+env:
+  MIFROST_MACOSX_DEPLOYMENT_TARGET: "11.0"
+
 jobs:
   build_sdist:
     name: Build SDist
@@ -44,7 +47,58 @@ jobs:
       with:
         submodules: true
 
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Set cache dirs (non-Windows)
+      if: runner.os != 'Windows'
+      run: |
+        echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2" >> $GITHUB_ENV
+        echo "CIBW_CACHE_PATH=$GITHUB_WORKSPACE/.cibuildwheel_cache" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Set cache dirs (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        "CONAN_HOME=$env:GITHUB_WORKSPACE\\.conan2" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "CIBW_CACHE_PATH=$env:GITHUB_WORKSPACE\\.cibuildwheel_cache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      shell: pwsh
+
+    - name: Cache cibuildwheel
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.CIBW_CACHE_PATH }}
+        key: cibw-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pyproject.toml') }}
+        restore-keys: |
+          cibw-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Cache Conan
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.CONAN_HOME }}
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+        restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-
+
+    - name: Install build tools
+      run: python -m pip install --upgrade pip conan
+
+    - name: Configure Conan macOS deployment target
+      if: runner.os == 'macOS'
+      run: |
+        echo "MACOSX_DEPLOYMENT_TARGET=${MIFROST_MACOSX_DEPLOYMENT_TARGET}" >> $GITHUB_ENV
+        conan profile detect --force
+        conan profile update settings.os.version=${MIFROST_MACOSX_DEPLOYMENT_TARGET} default
+        conan profile update conf.tools.apple:deployment_target=${MIFROST_MACOSX_DEPLOYMENT_TARGET} default
+
     - uses: pypa/cibuildwheel@v3.3
+      env:
+        CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
+        CIBW_BEFORE_BUILD: python -m pip install conan
+        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/project/.conan2
+        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }}
+        CIBW_ENVIRONMENT_WINDOWS: CONAN_HOME=${{ env.CONAN_HOME }}
 
     - name: Verify clean directory
       run: git diff --exit-code

@@ -29,5 +29,8 @@ jobs:
             exit 1
           fi
 
+      - name: Generate snippet includes (no-exec)
+        run: python docs/_scripts/generate_snippet_includes.py --no-exec
+
       - name: Build docs strictly
         run: mkdocs build --strict

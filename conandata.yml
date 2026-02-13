@@ -1,5 +1,5 @@
 requirements:
-  - "loki/f86e5e10f685a77897269742c84c9d780237084a"
+  - "loki/02880ea1d4ce4ca11deca188050ea6cc83f88dbb"
   - "nauty/2.8.8"
   - "gtest/1.14.0"
   - "unordered_dense/4.8.1"
