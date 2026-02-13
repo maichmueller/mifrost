@@ -35,6 +35,9 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.details
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: docs
+      check_paths: true
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -59,6 +62,9 @@ plugins:
 
 extra_css:
   - stylesheets/extra.css
+
+exclude_docs: |
+  _includes/**
 
 nav:
   - Home: index.md
