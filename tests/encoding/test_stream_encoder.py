@@ -24,6 +24,14 @@ def _first_successor(space, state):
     pytest.skip("No successor state available for stream tests.")
 
 
+def _first_actions(space, state, count: int = 2):
+    transitions = list(space.get_forward_transitions(state))
+    actions = [act for act, _ in transitions if act is not None]
+    if len(actions) < count:
+        pytest.skip("Fixture does not provide enough actions for stream tests.")
+    return actions[:count]
+
+
 def _horizon_dags(space, root):
     transitions = list(space.get_forward_transitions(root))
     for action, target in transitions:
@@ -163,3 +171,33 @@ def test_hgraph_append_only_stream_has_no_update_remove(small_blocks):
         stream.remove(0)
     with pytest.raises(NotImplementedError):
         stream.update(0, object())
+
+
+def test_hgraph_stream_append_rejects_nested_actions_with_horizon_guidance(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    action0, action1 = _first_actions(space, root, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    stream = HGraphEncoderStream(encoder.engine)
+
+    with pytest.raises(ValueError, match="use HorizonEncoder for IW lookahead"):
+        stream.append(root, actions=[(action0, action1)])
+
+
+def test_hgraph_mutable_stream_update_rejects_nested_actions_with_horizon_guidance(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    succ = _first_successor(space, root)
+    action0, action1 = _first_actions(space, root, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    stream = HGraphMutableEncoderStream(encoder.engine)
+    stream_id = stream.append(root)
+
+    with pytest.raises(ValueError, match="use HorizonEncoder for IW lookahead"):
+        stream.update(stream_id, succ, actions=[(action0, action1)])

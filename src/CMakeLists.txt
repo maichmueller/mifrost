@@ -175,11 +175,14 @@ conan_add_package_include_fallback(mifrost_core onetbb)
 nanobind_add_module(mifrost_core_module
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
+        "_core/mifrost/batch_encoding_graph_field_access.cpp"
+        "_core/mifrost/batch_encoding_python_collation.cpp"
         "_core/mifrost/init_common.cpp"
         "_core/mifrost/init_map_view.cpp"
         "_core/mifrost/init_relation_formatter.cpp"
         "_core/mifrost/init_color_encoder.cpp"
         "_core/mifrost/init_schema.cpp"
+        "_core/mifrost/init_batch_encoding.cpp"
         "_core/mifrost/init_hgraph_encoder.cpp"
         "_core/mifrost/init_horizon_encoder.cpp"
         "_core/mifrost/init_successor_encoders.cpp"

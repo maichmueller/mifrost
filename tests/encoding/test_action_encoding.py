@@ -1,9 +1,30 @@
 from __future__ import annotations
 
+import pytest
+
 import mifrost
 from mifrost.encoders import HGraphEncoder
 
 from .test_utils import adv_action
+
+
+def _first_actions(space, state, count: int = 2):
+    transitions = list(space.get_forward_transitions(state))
+    actions = [act for act, _ in transitions if act is not None]
+    if len(actions) < count:
+        import pytest
+
+        pytest.skip("Fixture does not provide enough applicable actions.")
+    return actions[:count]
+
+
+def _has_action_node(data, action) -> bool:
+    formatter = mifrost.RelationFormatter
+    adv = adv_action(action)
+    action_node = formatter.format_action(adv)
+    action_type = formatter.format_action_schema(adv.get_action())
+    node_names = list(getattr(data[action_type], "node_names", []))
+    return action_node in node_names
 
 
 def test_action_encoding_includes_all_applicable_actions(small_blocks):
@@ -60,3 +81,88 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
                 s == src_idx and d == dst_idx
                 for s, d in zip(src_indices.tolist(), dst_indices.tolist())
             ), f"Missing edge {obj_name} -> {action_node} at position {pos}."
+
+
+def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    with pytest.raises(ValueError, match="use HorizonEncoder for IW lookahead"):
+        encoder.encode(state, actions=[(action0, action1)])
+
+
+def test_hgraph_encode_batch_rejects_nested_per_state_actions_with_guidance(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    with pytest.raises(ValueError, match="use HorizonEncoder for IW lookahead"):
+        encoder.encode_batch(
+            [state, state],
+            actions=[[(action0,)], [(action1,)]],
+        )
+
+
+def test_hgraph_encode_batch_accepts_flat_per_state_actions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    encoding = encoder.encode_batch([state, state], actions=[[action0], [action1]])
+
+    assert encoding.num_graphs == 2
+
+
+def test_hgraph_encode_batch_accepts_per_state_none_action_entries(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+    formatter = mifrost.RelationFormatter
+    action_type = formatter.format_action_schema(adv_action(action0).get_action())
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    expected = encoder.encode_batch([state, state], actions=[[], [action0]])
+    actual = encoder.encode_batch([state, state], actions=[None, [action0]])
+
+    expected_pyg = expected.as_pyg(as_batch=True)
+    actual_pyg = actual.as_pyg(as_batch=True)
+    assert expected_pyg[action_type].num_nodes == actual_pyg[action_type].num_nodes
+    assert list(expected_pyg[action_type].node_names) == list(
+        actual_pyg[action_type].node_names
+    )
+
+
+def test_hgraph_encode_batch_preserves_per_state_generator_actions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    generated = encoder.encode_batch(
+        [state], actions=[(item for item in [action0])]
+    ).as_pyg(as_batch=False)
+    listed = encoder.encode_batch([state], actions=[[action0]]).as_pyg(as_batch=False)
+
+    assert _has_action_node(generated, action0)
+    assert _has_action_node(listed, action0)
+
+
+def test_hgraph_encode_batch_accepts_shared_generator_actions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    generated = encoder.encode_batch(
+        [state], actions=(item for item in [action0])
+    ).as_pyg(as_batch=False)
+    listed = encoder.encode_batch([state], actions=[action0]).as_pyg(as_batch=False)
+
+    assert _has_action_node(generated, action0)
+    assert _has_action_node(listed, action0)

@@ -36,6 +36,10 @@ from .common import (
     _prepare_history_subgoals,
     _split_goals,
 )
+from ._action_contract import (
+    normalize_batch_actions,
+    normalize_flat_actions,
+)
 from .types import (
     EncodingDict,
     GroundActionInput,
@@ -44,7 +48,6 @@ from .types import (
     HeteroEncoding,
     HistorySubgoalInput,
     StateInput,
-    is_action_input,
     default_goals_from_state,
     is_state_input,
 )
@@ -425,7 +428,8 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         If goals/actions are omitted, the engine uses the state's problem goals.
         """
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
+        action_inputs = normalize_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -468,7 +472,8 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
+        action_inputs = normalize_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -535,7 +540,8 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> int:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
+        action_inputs = normalize_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -645,13 +651,13 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         )
         self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
 
-    def register_graph_fields(self, specs: Mapping[str, GraphFieldSpec]) -> None:
+    def register_graph_fields(
+        self, specs: Mapping[str, GraphFieldSpec | Mapping[str, object]]
+    ) -> None:
         """Register strict dynamic graph-field specs used by ``encode_graph`` wrappers."""
         normalized: dict[str, GraphFieldSpec] = {}
         for key, spec in specs.items():
-            if not isinstance(spec, GraphFieldSpec):
-                raise TypeError(f"Graph field spec for '{key}' must be GraphFieldSpec")
-            normalized[str(key)] = spec
+            normalized[str(key)] = GraphFieldSpec.from_spec(spec)
         self._graph_field_specs = normalized
 
     @property
@@ -676,7 +682,8 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
+        action_inputs = normalize_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -834,24 +841,13 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
                 raise TypeError("encode_batch expects a state or an iterable of states")
             state_list = list(states)
 
-        shared_actions: list[GroundActionInput]
         shared_action_list: list[object] = []
-        per_state_actions: list[Iterable[GroundActionInput] | None] | None = None
-        if actions is not None:
-            if isinstance(actions, Sequence) and actions:
-                first = actions[0]
-                if first is not None and not is_action_input(first):
-                    if len(actions) != len(state_list):
-                        raise ValueError(
-                            "actions length must match states when providing per-state actions"
-                        )
-                    per_state_actions = list(actions)
-                else:
-                    shared_actions = list(actions)
-                    shared_action_list = _prepare_actions(shared_actions)
-            else:
-                shared_actions = list(actions)
-                shared_action_list = _prepare_actions(shared_actions)
+        per_state_actions: list[list[GroundActionInput] | None] | None = None
+        action_plan = normalize_batch_actions(actions, state_count=len(state_list))
+        if action_plan.per_state_actions is not None:
+            per_state_actions = action_plan.per_state_actions
+        else:
+            shared_action_list = _prepare_actions(action_plan.shared_actions)
 
         history_per_state: list[list[tuple[int, list[object]]]] | None = None
         if history_subgoals is not None:

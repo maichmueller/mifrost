@@ -212,6 +212,24 @@ def test_batch_encoding_dumps_loads_roundtrip():
     _assert_tensor_payload_equal(loaded, encoding)
 
 
+def test_batch_encoding_dumps_default_includes_metadata_and_python_attrs():
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.add_node_features("atom", "x", torch.zeros(2, 1))
+    builder.set_node_names("atom", ["o0", "o1"])
+    builder.set_object_names(["o0", "o1"])
+    builder.next_graph()
+    encoding = builder.build()
+    encoding.transition_info = {"depth": 1}
+
+    payload = encoding.dumps()
+    loaded = mifrost.BatchEncoding.loads(payload)
+    loaded_dict = loaded.as_dict()
+    assert loaded_dict["node_names"]["atom"] == ["o0", "o1"]
+    assert loaded_dict["object_names"] == ["o0", "o1"]
+    assert loaded.transition_info == {"depth": 1}
+
+
 def test_batch_encoding_pickle_and_torch_pickle_roundtrip():
     script = """
 import inspect
@@ -367,6 +385,57 @@ def test_batch_encodings_without_python_attrs_keeps_python_specs_empty():
     assert "__mifrost_graph_field_specs__" not in batched.__dict__
 
 
+def test_batch_encodings_mixed_python_attrs_infers_stack_and_pads_missing():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.transition_label = "left"
+
+    batched = mifrost.batch_encodings([enc0, enc1])
+    assert batched.transition_label == ["left", None]
+    assert batched.graph_field_specs()["transition_label"]["mode"] == "stack"
+
+
+def test_batch_encodings_mixed_registered_ragged_spec_handles_missing_values():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.targets = ["a0", "a1"]
+    enc0.register_graph_field_specs(
+        {"targets": {"dtype": "pyobj", "mode": "ragged_cat"}}
+    )
+
+    batched = mifrost.batch_encodings([enc0, enc1])
+    assert batched.targets == ["a0", "a1"]
+    assert batched.targets_ptr == [0, 2, 2]
+    assert batched.graph_field_specs()["targets"]["mode"] == "ragged_cat"
+
+
+def test_batch_encodings_mixed_explicit_specs_collate_per_mode():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.targets = [10, 11]
+    enc0.transition_label = "left"
+    enc1.transition_label = "right"
+    enc0.domain_path = "domain.pddl"
+    enc1.domain_path = "domain.pddl"
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        graph_field_specs={
+            "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
+            "transition_label": {"dtype": "pyobj", "mode": "stack"},
+            "domain_path": {"dtype": "pyobj", "mode": "const"},
+        },
+    )
+
+    assert batched.targets == [10, 11]
+    assert batched.targets_ptr == [0, 2, 2]
+    assert batched.transition_label == ["left", "right"]
+    assert batched.domain_path == "domain.pddl"
+
+
 def test_batch_encodings_const_python_field_requires_presence_on_all_inputs():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
@@ -438,6 +507,133 @@ def test_batch_encoding_as_pyg_copies_python_attrs():
     assert as_batch.sample_labels == ["label-0"]
     assert not hasattr(as_single, "__mifrost_graph_field_specs__")
     assert not hasattr(as_batch, "__mifrost_graph_field_specs__")
+
+
+def test_batch_encoding_graph_field_accessors_and_introspection():
+    encoding = _single_graph_with_ragged_i64_field([5, 6])
+    encoding.label = "demo"
+    encoding.register_graph_field_specs({"label": {"dtype": "pyobj", "mode": "stack"}})
+
+    assert encoding.has_graph_field("target_indices")
+    assert encoding.has_graph_field("target_indices_ptr")
+    assert not encoding.has_graph_field("missing")
+
+    assert torch.equal(
+        encoding.get_graph_field("target_indices"),
+        torch.tensor([5, 6], dtype=torch.int64),
+    )
+    assert torch.equal(
+        encoding.get_graph_field("target_indices_ptr"),
+        torch.tensor([0, 2], dtype=torch.int64),
+    )
+
+    keys = encoding.keys()
+    assert "target_indices" in keys
+    assert "target_indices_ptr" in keys
+    assert "label" in keys
+    assert "__mifrost_graph_field_specs__" not in keys
+
+    items = dict(encoding.items())
+    assert torch.equal(items["target_indices"], torch.tensor([5, 6], dtype=torch.int64))
+    assert torch.equal(
+        items["target_indices_ptr"], torch.tensor([0, 2], dtype=torch.int64)
+    )
+    assert items["label"] == "demo"
+
+
+def test_batch_encoding_get_graph_field_supports_stack_cat_const_ragged():
+    stack = _single_graph_with_stack_field(1.5)
+    cat = _single_graph_with_cat_i64_field([2, 4])
+    const = _single_graph_with_const_i64_field(42)
+    ragged = _single_graph_with_ragged_i64_field([7, 8, 9])
+
+    assert torch.allclose(
+        stack.get_graph_field("goal_distance"), torch.tensor([1.5], dtype=torch.float32)
+    )
+    assert torch.equal(
+        cat.get_graph_field("target_concat"), torch.tensor([2, 4], dtype=torch.int64)
+    )
+    assert torch.equal(
+        const.get_graph_field("problem_id"), torch.tensor([42], dtype=torch.int64)
+    )
+    assert torch.equal(
+        ragged.get_graph_field("target_indices"),
+        torch.tensor([7, 8, 9], dtype=torch.int64),
+    )
+    assert torch.equal(
+        ragged.get_graph_field("target_indices_ptr"),
+        torch.tensor([0, 3], dtype=torch.int64),
+    )
+
+
+def test_batch_encoding_graph_field_introspection_is_stable_across_as_pyg_calls():
+    encoding = _single_graph_with_ragged_i64_field([4, 5, 6])
+
+    keys_before = set(encoding.keys())
+    items_before = dict(encoding.items())
+    assert torch.equal(
+        encoding.get_graph_field("target_indices"), items_before["target_indices"]
+    )
+    assert torch.equal(
+        encoding.get_graph_field("target_indices_ptr"),
+        items_before["target_indices_ptr"],
+    )
+
+    _ = encoding.as_pyg(as_batch=True)
+    _ = encoding.as_pyg(as_batch=False)
+
+    keys_after = set(encoding.keys())
+    items_after = dict(encoding.items())
+    assert keys_after == keys_before
+    assert torch.equal(items_after["target_indices"], items_before["target_indices"])
+    assert torch.equal(
+        items_after["target_indices_ptr"], items_before["target_indices_ptr"]
+    )
+
+
+def test_batch_encoding_as_pyg_native_graph_fields_win_on_python_attr_collision():
+    encoding = _single_graph_with_ragged_i64_field([5, 6])
+    encoding.target_indices = ["shadowed"]
+    encoding.target_indices_ptr = [99]
+
+    as_batch = encoding.as_pyg(as_batch=True)
+    as_single = encoding.as_pyg(as_batch=False)
+    expected_values = torch.tensor([5, 6], dtype=torch.int64)
+    expected_ptr = torch.tensor([0, 2], dtype=torch.int64)
+
+    assert torch.equal(as_batch.target_indices, expected_values)
+    assert torch.equal(as_batch.target_indices_ptr, expected_ptr)
+    assert torch.equal(as_single.target_indices, expected_values)
+    assert torch.equal(as_single.target_indices_ptr, expected_ptr)
+
+
+def test_batch_encodings_ignores_python_specs_colliding_with_native_graph_fields():
+    enc0 = _single_graph_with_ragged_i64_field([1])
+    enc1 = _single_graph_with_ragged_i64_field([2, 3])
+    enc0.target_indices = ["shadow-a"]
+    enc1.target_indices = ["shadow-b"]
+    enc0.tag = "a"
+    enc1.tag = "b"
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        graph_field_specs={
+            "target_indices": {"dtype": "pyobj", "mode": "ragged_cat"},
+            "tag": {"dtype": "pyobj", "mode": "stack"},
+        },
+    )
+
+    assert batched.has_graph_field("target_indices")
+    assert batched.graph_field_specs() == {"tag": {"dtype": "pyobj", "mode": "stack"}}
+    assert batched.tag == ["a", "b"]
+
+    as_batch = batched.as_pyg(as_batch=True)
+    assert torch.equal(
+        as_batch.target_indices, torch.tensor([1, 2, 3], dtype=torch.int64)
+    )
+    assert torch.equal(
+        as_batch.target_indices_ptr, torch.tensor([0, 1, 3], dtype=torch.int64)
+    )
 
 
 def test_map_view_methods_marked_in_core_are_wrapped():

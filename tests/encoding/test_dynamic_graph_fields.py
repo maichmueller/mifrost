@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 import mifrost
 from mifrost.encoders import _encoding_dict_to_pyg
 from mifrost.graph_fields import DType, GraphFieldSpec, Mode
+
+
+def test_dtype_enum_exposes_pyobj_member():
+    assert "PYOBJ" in DType.__members__
+    assert DType("pyobj") is DType.PYOBJ
+
+
+def test_graph_field_spec_rejects_pyobj_dtype_for_native_fields():
+    with pytest.raises(ValueError, match="dtype='pyobj'"):
+        GraphFieldSpec(mode=Mode.STACK, dtype=DType.PYOBJ)
 
 
 def test_encoded_graph_assignment_batch_graphs_and_as_pyg(small_blocks):
@@ -124,3 +135,71 @@ def test_encoder_exposes_registered_graph_field_specs(small_blocks):
     specs = encoder.graph_field_specs
     assert specs["goal_distance"].mode is Mode.STACK
     assert specs["target_matrix"].cat_dim == 1
+
+
+def test_encoder_register_graph_fields_accepts_dict_specs(small_blocks):
+    _, domain, problem = small_blocks
+    encoder = mifrost.HGraphEncoder(domain)
+    encoder.register_graph_fields(
+        {
+            "goal_distance": {
+                "mode": "stack",
+                "dtype": "f32",
+                "dim": 1,
+                "inc": {"kind": "none"},
+            }
+        }
+    )
+
+    specs = encoder.graph_field_specs
+    assert specs["goal_distance"].mode is Mode.STACK
+    assert specs["goal_distance"].dtype is DType.F32
+
+    graph = encoder.encode_graph(problem.get_initial_state())
+    graph.goal_distance = 7
+    data = encoder.batch_graphs([graph]).as_pyg(as_batch=False)
+    assert torch.equal(data.goal_distance, torch.tensor([7.0], dtype=torch.float32))
+
+
+def test_encoded_graph_accepts_zero_dim_tensors_for_graph_fields(small_blocks):
+    _, domain, problem = small_blocks
+    encoder = mifrost.HGraphEncoder(domain)
+    encoder.register_graph_fields(
+        {
+            "reward": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.F32),
+            "done": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.I64),
+        }
+    )
+
+    graph = encoder.encode_graph(problem.get_initial_state())
+    graph.reward = torch.tensor(0.0)
+    graph.done = torch.tensor(0)
+    data = encoder.batch_graphs([graph]).as_pyg(as_batch=False)
+
+    assert torch.equal(data.reward, torch.tensor([0.0], dtype=torch.float32))
+    assert torch.equal(data.done, torch.tensor([0], dtype=torch.int64))
+
+
+def test_dynamic_graph_field_batch_encoding_dumps_loads_roundtrip(small_blocks):
+    _, domain, problem = small_blocks
+    encoder = mifrost.HGraphEncoder(domain)
+    encoder.register_graph_fields(
+        {
+            "idx": {
+                "mode": "stack",
+                "dtype": "i64",
+                "dim": 1,
+                "cat_dim": 0,
+                "inc": {"kind": "none"},
+            }
+        }
+    )
+
+    graph = encoder.encode_graph(problem.get_initial_state())
+    graph.idx = 0
+    sample = graph.finalize()
+
+    loaded = mifrost.BatchEncoding.loads(sample.dumps(include_metadata=True))
+    assert torch.equal(
+        loaded.get_graph_field("idx"), torch.tensor([0], dtype=torch.int64)
+    )

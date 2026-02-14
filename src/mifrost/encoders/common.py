@@ -79,7 +79,12 @@ def _split_goals(
 def _prepare_actions(
     actions: Iterable[GroundActionInput] | None,
 ) -> list[af.GroundAction]:
-    """Convert action wrappers to advanced pymimir ``GroundAction`` objects."""
+    """Convert flat action wrappers to advanced ``GroundAction`` objects.
+
+    This path intentionally does not flatten nested action payloads. Callers
+    must provide flat action sequences, or use ``HorizonEncoder`` for
+    IW/lookahead DAG workflows.
+    """
     if actions is None:
         return []
     return [_advanced_action(action) for action in actions]

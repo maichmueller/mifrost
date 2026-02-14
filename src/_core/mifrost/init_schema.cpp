@@ -4,6 +4,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "mifrost/core/map_view.hpp"
+#include "mifrost/core/nb_instance.hpp"
 #include "mifrost/core/schema.hpp"
 
 namespace nb = nanobind;
@@ -76,12 +77,9 @@ void init_schema(nb::module_& m)
                         .def(
                            "flags_view",
                            [](nb::handle self) {
-                              auto* schema = nb::inst_ptr< Schema >(self);
-                              if(schema == nullptr) {
-                                 throw std::invalid_argument(
-                                    "Schema.flags_view called with invalid instance"
-                                 );
-                              }
+                              auto* schema = require_instance_ptr< Schema >(
+                                 self, "Schema.flags_view called with invalid instance"
+                              );
                               return make_map_view(schema->flags, self);
                            },
                            nb::rv_policy::move
