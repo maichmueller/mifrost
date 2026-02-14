@@ -11,6 +11,18 @@
 | Build compact homogeneous baselines | `ColorEncoder` | Lower-dimensional homogeneous encoding for simple baselines |
 | Use ILG topology/features from Python | `ILGEncoder` | Pure-Python implementation with ILG atom/action/object construction |
 
+## Minimal Runnable Examples
+
+--8<-- "_includes/snippets/hgraph_basic.md"
+
+--8<-- "_includes/snippets/horizon_basic.md"
+
+--8<-- "_includes/snippets/transition_full_vs_delta.md"
+
+--8<-- "_includes/snippets/color_basic.md"
+
+--8<-- "_includes/snippets/ilg_basic.md"
+
 ## Stream Support
 
 - `HGraphEncoder`, `HorizonEncoder`, transition encoders, and `ColorEncoder` provide stream wrappers.

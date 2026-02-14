@@ -4,33 +4,19 @@
 
 Use `encode_batch` when all states are available in memory.
 
-```python
-enc = encoder.encode_batch(states)
-pyg_batch = enc.as_pyg(as_batch=True)
-```
+--8<-- "_includes/snippets/hgraph_batch.md"
 
 ## Append-Only Stream
 
 Use `stream()` when samples arrive incrementally and only append semantics are needed.
 
-```python
-stream = encoder.stream()
-stream.append(state1)
-stream.append(state2)
-enc = stream.flush()
-```
+--8<-- "_includes/snippets/hgraph_stream_append_only.md"
 
 ## Mutable Stream
 
 Use `mutable_stream()` when you need stable IDs and update/remove semantics.
 
-```python
-mstream = encoder.mutable_stream()
-sid = mstream.append(state1)
-mstream.update(sid, state2)
-mstream.remove(sid)
-enc = mstream.flush()
-```
+--8<-- "_includes/snippets/hgraph_stream_mutable.md"
 
 ## Semantics
 

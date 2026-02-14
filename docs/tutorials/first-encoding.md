@@ -2,27 +2,20 @@
 
 This walkthrough uses `HGraphEncoder`, the default heterogeneous state encoder.
 
-```python
-import mifrost
+The following is a standalone program and its captured output for this version:
 
-encoder = mifrost.HGraphEncoder(domain)
-encoding = encoder.encode(state)      # native BatchEncoding
-data = encoding.as_pyg()              # HeteroData
-```
+--8<-- "_includes/snippets/hgraph_basic.md"
 
 ## Batch Workflow
 
-```python
-batch_encoding = encoder.encode_batch([state1, state2, state3])
-batch = batch_encoding.as_pyg(as_batch=True)
-```
+--8<-- "_includes/snippets/hgraph_batch.md"
 
 ## Direct PyG Convenience
 
-```python
-data = encoder.encode_pyg(state)
-batch = encoder.encode_batch_pyg([state1, state2])
-```
+The native-first examples above are intentionally stable and compact. For PyG conversion convenience helpers, see:
+
+- `HGraphEncoder.encode_pyg(...)`
+- `HGraphEncoder.encode_batch_pyg(...)`
 
 ## Native-First Recommendation
 
