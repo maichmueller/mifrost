@@ -1,4 +1,11 @@
 import gc
+import inspect
+import io
+import os
+import pickle
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 import numpy as np
@@ -153,6 +160,20 @@ def test_map_views_keep_owner_alive():
     assert flags_view["predicate_nodes"] is False
 
 
+def test_batch_encoding_schema_flags_property_uses_map_view():
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.set_schema_flag("supports_literals", True)
+    builder.add_node_features("atom", "x", torch.zeros(2, 3))
+    builder.next_graph()
+    encoding = builder.build()
+
+    flags = encoding.schema_flags
+    assert isinstance(flags, mifrost._core.MapViewBase)
+    assert flags["supports_literals"] is True
+    assert flags.as_dict() == {"supports_literals": True}
+
+
 def test_schema_flags_view_is_read_only():
     schema_dict = mifrost.Schema().to_dict()
     schema_dict["graph_kind"] = "hetero"
@@ -167,6 +188,256 @@ def test_schema_flags_view_is_read_only():
 
     with pytest.raises(TypeError):
         flags_view["supports_literals"] = False
+
+
+def test_batch_encoding_save_load_roundtrip(tmp_path):
+    encoding = _single_graph_with_stack_field(3.5)
+    path = tmp_path / "encoding.pkl"
+    encoding.save(str(path), include_metadata=True)
+
+    loaded = mifrost.BatchEncoding.load(str(path))
+    assert loaded.num_graphs == encoding.num_graphs
+    assert loaded.graph_kind == encoding.graph_kind
+    assert loaded.schema_fingerprint() == encoding.schema_fingerprint()
+    _assert_tensor_payload_equal(loaded, encoding)
+
+
+def test_batch_encoding_dumps_loads_roundtrip():
+    encoding = _single_graph_with_stack_field(2.0)
+    payload = encoding.dumps(include_metadata=True)
+    assert isinstance(payload, bytes)
+
+    loaded = mifrost.BatchEncoding.loads(payload)
+    assert loaded.schema_fingerprint() == encoding.schema_fingerprint()
+    _assert_tensor_payload_equal(loaded, encoding)
+
+
+def test_batch_encoding_pickle_and_torch_pickle_roundtrip():
+    script = """
+import inspect
+import io
+import pickle
+import torch
+import mifrost
+
+b = mifrost.BatchBuilder()
+b.set_graph_kind("hetero")
+b.register_graph_field(
+    "goal_distance",
+    {"dtype": "f32", "mode": "stack", "dim": 1, "inc": {"kind": "none"}},
+)
+b.add_node_features("atom", "x", torch.zeros(1, 1))
+b.set_graph_field("goal_distance", 7.0)
+b.next_graph()
+encoding = b.build()
+
+restored = pickle.loads(pickle.dumps(encoding))
+assert isinstance(restored, mifrost.BatchEncoding)
+assert restored.schema_fingerprint() == encoding.schema_fingerprint()
+
+buffer = io.BytesIO()
+torch.save(encoding, buffer)
+buffer.seek(0)
+load_kwargs = {}
+if "weights_only" in inspect.signature(torch.load).parameters:
+    load_kwargs["weights_only"] = False
+restored_torch = torch.load(buffer, **load_kwargs)
+assert isinstance(restored_torch, mifrost.BatchEncoding)
+assert restored_torch.schema_fingerprint() == encoding.schema_fingerprint()
+print("ok")
+"""
+
+    env = os.environ.copy()
+    source_root = Path(__file__).resolve().parents[3]
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{source_root}:{existing}" if existing else str(source_root)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+
+def test_batch_encoding_dynamic_python_attrs_roundtrip(tmp_path):
+    encoding = _single_graph_with_stack_field(4.0)
+    encoding.targets = ["s0", "s1"]
+    encoding.transition_info = {"depth": 2, "source": "demo"}
+
+    payload = encoding.dumps(include_metadata=True)
+    loaded = mifrost.BatchEncoding.loads(payload)
+    assert loaded.targets == ["s0", "s1"]
+    assert loaded.transition_info == {"depth": 2, "source": "demo"}
+
+    path = tmp_path / "encoding_with_python_attrs.pkl"
+    encoding.save(str(path), include_metadata=True)
+    loaded_from_file = mifrost.BatchEncoding.load(str(path))
+    assert loaded_from_file.targets == ["s0", "s1"]
+    assert loaded_from_file.transition_info == {"depth": 2, "source": "demo"}
+
+    restored_pickle = pickle.loads(pickle.dumps(encoding))
+    assert restored_pickle.targets == ["s0", "s1"]
+    assert restored_pickle.transition_info == {"depth": 2, "source": "demo"}
+
+    buffer = io.BytesIO()
+    torch.save(encoding, buffer)
+    buffer.seek(0)
+    load_kwargs = {}
+    if "weights_only" in inspect.signature(torch.load).parameters:
+        load_kwargs["weights_only"] = False
+    restored_torch = torch.load(buffer, **load_kwargs)
+    assert restored_torch.targets == ["s0", "s1"]
+    assert restored_torch.transition_info == {"depth": 2, "source": "demo"}
+
+
+def test_batch_encodings_collates_python_fields_with_specs():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.targets = [10, 11]
+    enc1.targets = [12]
+    enc0.transition_label = "left"
+    enc1.transition_label = "right"
+    enc0.domain_path = "domain.pddl"
+    enc1.domain_path = "domain.pddl"
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        graph_field_specs={
+            "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
+            "transition_label": {"dtype": "pyobj", "mode": "stack"},
+            "domain_path": {"dtype": "pyobj", "mode": "const"},
+        },
+    )
+
+    assert batched.targets == [10, 11, 12]
+    assert batched.targets_ptr == [0, 2, 3]
+    assert batched.transition_label == ["left", "right"]
+    assert batched.domain_path == "domain.pddl"
+    assert batched.graph_field_specs()["targets"]["mode"] == "ragged_cat"
+    assert batched.graph_field_specs()["domain_path"]["dtype"] == "pyobj"
+
+
+def test_batch_encodings_collates_registered_python_graph_field_specs():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.targets = ["a0", "a1"]
+    enc1.targets = ["b0"]
+    enc0.returns = 3.0
+    enc1.returns = 4.0
+
+    specs = {
+        "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
+        "returns": {"mode": "stack"},
+    }
+    enc0.register_graph_field_specs(specs)
+    enc1.register_graph_field_specs(specs)
+
+    batched = mifrost.batch_encodings([enc0, enc1])
+    assert batched.targets == ["a0", "a1", "b0"]
+    assert batched.targets_ptr == [0, 2, 3]
+    assert batched.returns == [3.0, 4.0]
+    assert batched.graph_field_specs()["targets"]["dtype"] == "pyobj"
+    assert batched.graph_field_specs()["returns"]["mode"] == "stack"
+
+
+def test_batch_encodings_accepts_legacy_py_field_specs_alias():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.targets = ["a0"]
+    enc1.targets = ["b0", "b1"]
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        py_field_specs={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
+    )
+    assert batched.targets == ["a0", "b0", "b1"]
+    assert batched.targets_ptr == [0, 1, 3]
+
+
+def test_batch_encodings_without_python_attrs_keeps_python_specs_empty():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    batched = mifrost.batch_encodings([enc0, enc1])
+    assert batched.graph_field_specs() == {}
+    assert "__mifrost_graph_field_specs__" not in batched.__dict__
+
+
+def test_batch_encodings_const_python_field_requires_presence_on_all_inputs():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.domain_path = "domain.pddl"
+
+    with pytest.raises(ValueError, match="missing value for encoding index 1"):
+        mifrost.batch_encodings(
+            [enc0, enc1],
+            graph_field_specs={"domain_path": {"dtype": "pyobj", "mode": "const"}},
+        )
+
+
+def test_batch_encodings_collates_const_tensor_python_field():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.reward_signature = torch.tensor([1, 2, 3], dtype=torch.int64)
+    enc1.reward_signature = torch.tensor([1, 2, 3], dtype=torch.int64)
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+    )
+
+    assert torch.equal(
+        batched.reward_signature, torch.tensor([1, 2, 3], dtype=torch.int64)
+    )
+
+
+def test_batch_encodings_const_tensor_field_requires_exact_structure():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.reward_signature = torch.tensor([1, 2, 3], dtype=torch.int64)
+    enc1.reward_signature = torch.tensor([1, 2, 3], dtype=torch.float32)
+
+    with pytest.raises(ValueError, match="non-constant values"):
+        mifrost.batch_encodings(
+            [enc0, enc1],
+            graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+        )
+
+
+def test_batch_encodings_const_numpy_field_requires_exact_structure():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+
+    enc0.reward_signature = np.array([1, 2, 3], dtype=np.int64)
+    enc1.reward_signature = np.array([1, 2, 3], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="non-constant values"):
+        mifrost.batch_encodings(
+            [enc0, enc1],
+            graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+        )
+
+
+def test_batch_encoding_as_pyg_copies_python_attrs():
+    encoding = _single_graph_with_stack_field(3.0)
+    encoding.sample_labels = ["label-0"]
+    encoding.register_graph_field_specs(
+        {"sample_labels": {"dtype": "pyobj", "mode": "stack"}}
+    )
+
+    as_single = encoding.as_pyg(as_batch=False)
+    as_batch = encoding.as_pyg(as_batch=True)
+
+    assert as_single.sample_labels == "label-0"
+    assert as_batch.sample_labels == ["label-0"]
+    assert not hasattr(as_single, "__mifrost_graph_field_specs__")
+    assert not hasattr(as_batch, "__mifrost_graph_field_specs__")
 
 
 def test_map_view_methods_marked_in_core_are_wrapped():
@@ -203,6 +474,16 @@ def test_map_view_methods_marked_in_core_are_wrapped():
     }
     assert expected.issubset(found_marked)
     assert expected.issubset(found_wrapped)
+
+
+def _assert_tensor_payload_equal(
+    lhs: mifrost.BatchEncoding, rhs: mifrost.BatchEncoding
+) -> None:
+    lhs_tensors = lhs.as_dict()["tensors"]
+    rhs_tensors = rhs.as_dict()["tensors"]
+    assert lhs_tensors.keys() == rhs_tensors.keys()
+    for key in lhs_tensors:
+        assert np.array_equal(lhs_tensors[key], rhs_tensors[key]), key
 
 
 def test_hgraph_encoder_instantiation():
@@ -515,3 +796,32 @@ def test_batch_encodings_schema_fingerprint_mismatch_on_cat_dim():
 
     with pytest.raises(ValueError, match="schema_fingerprint mismatch"):
         mifrost.batch_encodings([enc0, enc1])
+
+
+def test_append_batch_encoding_legacy_edge_index_schema_fallback():
+    src = torch.tensor([0], dtype=torch.int64)
+    dst = torch.tensor([1], dtype=torch.int64)
+
+    single = mifrost.BatchBuilder()
+    single.set_graph_kind("hetero")
+    single.add_node_features("atom", "x", torch.zeros(2, 1))
+    single.add_edges("atom", "rel", "atom", src, dst)
+    single.next_graph()
+    encoding = single.build()
+
+    state = encoding.__getstate__()
+    state["schema"]["edge_tensors"] = []
+
+    legacy = mifrost.BatchEncoding()
+    legacy.__setstate__(state)
+
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.append_batch_encoding(legacy)
+    builder.append_batch_encoding(legacy)
+    tensors = builder.build().as_dict()["tensors"]
+
+    out_src = torch.as_tensor(tensors["atom|rel|atom/edge_index_0"])
+    out_dst = torch.as_tensor(tensors["atom|rel|atom/edge_index_1"])
+    assert torch.equal(out_src, torch.tensor([0, 2], dtype=torch.int64))
+    assert torch.equal(out_dst, torch.tensor([1, 3], dtype=torch.int64))

@@ -49,6 +49,9 @@ else:
     )
     from .graph_fields import DType, GraphFieldSpec, Inc, Mode
 
+    def _batch_encoding_from_payload(payload: bytes):
+        return _core.BatchEncoding.loads(payload)
+
     __all__ = [
         name
         for name in list(getattr(_core, "__all__", []))

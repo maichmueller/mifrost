@@ -298,19 +298,22 @@ Schema Schema::from_dict(const nb::dict& schema)
          GraphFieldInc inc{};
          if(entry.contains("inc")) {
             auto inc_entry = nb::cast< nb::dict >(entry["inc"]);
-            inc.kind = graph_field_inc_kind_from_name(nb::cast< std::string >(inc_entry["kind"]));
+            const auto inc_kind = nb::cast< nb::str >(inc_entry["kind"]);
+            inc.kind = graph_field_inc_kind_from_name(inc_kind.c_str());
             if(inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
                inc.node_type = nb::cast< std::string >(inc_entry["node_type"]);
             }
          }
+         const auto mode = nb::cast< nb::str >(entry["mode"]);
+         const auto dtype = nb::cast< nb::str >(entry["dtype"]);
          out.graph_tensors.emplace_back(
             GraphTensorSpec{
                .attr = nb::cast< std::string >(entry["attr"]),
                .key = nb::cast< std::string >(entry["key"]),
                .ptr_key = entry.contains("ptr_key") ? nb::cast< std::string >(entry["ptr_key"])
                                                     : "",
-               .mode = graph_field_mode_from_name(nb::cast< std::string >(entry["mode"])),
-               .dtype = graph_field_dtype_from_name(nb::cast< std::string >(entry["dtype"])),
+               .mode = graph_field_mode_from_name(mode.c_str()),
+               .dtype = graph_field_dtype_from_name(dtype.c_str()),
                .dim = entry.contains("dim") ? nb::cast< int >(entry["dim"]) : 1,
                .cat_dim = entry.contains("cat_dim")
                              ? normalize_graph_field_cat_dim(nb::cast< int >(entry["cat_dim"]))

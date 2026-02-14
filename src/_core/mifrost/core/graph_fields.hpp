@@ -4,6 +4,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -76,43 +77,64 @@ inline const char* graph_field_inc_kind_name(GraphFieldInc::Kind kind)
    throw std::logic_error("Unknown GraphFieldInc::Kind");
 }
 
-inline GraphFieldDType graph_field_dtype_from_name(const std::string& value)
+inline char ascii_lower(char c)
 {
-   if(value == "f32" || value == "F32") {
+   if(c >= 'A' && c <= 'Z') {
+      return static_cast< char >(c - 'A' + 'a');
+   }
+   return c;
+}
+
+inline bool ascii_iequals(const std::string_view lhs, const std::string_view rhs)
+{
+   if(lhs.size() != rhs.size()) {
+      return false;
+   }
+   for(size_t i = 0; i < lhs.size(); ++i) {
+      if(ascii_lower(lhs[i]) != ascii_lower(rhs[i])) {
+         return false;
+      }
+   }
+   return true;
+}
+
+inline GraphFieldDType graph_field_dtype_from_name(const std::string_view value)
+{
+   if(ascii_iequals(value, "f32")) {
       return GraphFieldDType::F32;
    }
-   if(value == "i64" || value == "I64") {
+   if(ascii_iequals(value, "i64")) {
       return GraphFieldDType::I64;
    }
-   throw std::invalid_argument("Unknown graph field dtype: " + value);
+   throw std::invalid_argument("Unknown graph field dtype: " + std::string(value));
 }
 
-inline GraphFieldMode graph_field_mode_from_name(const std::string& value)
+inline GraphFieldMode graph_field_mode_from_name(const std::string_view value)
 {
-   if(value == "stack" || value == "STACK") {
+   if(ascii_iequals(value, "stack")) {
       return GraphFieldMode::STACK;
    }
-   if(value == "cat" || value == "CAT") {
+   if(ascii_iequals(value, "cat")) {
       return GraphFieldMode::CAT;
    }
-   if(value == "ragged_cat" || value == "RAGGED_CAT") {
+   if(ascii_iequals(value, "ragged_cat")) {
       return GraphFieldMode::RAGGED_CAT;
    }
-   if(value == "const" || value == "CONST") {
+   if(ascii_iequals(value, "const")) {
       return GraphFieldMode::CONST;
    }
-   throw std::invalid_argument("Unknown graph field mode: " + value);
+   throw std::invalid_argument("Unknown graph field mode: " + std::string(value));
 }
 
-inline GraphFieldInc::Kind graph_field_inc_kind_from_name(const std::string& value)
+inline GraphFieldInc::Kind graph_field_inc_kind_from_name(const std::string_view value)
 {
-   if(value == "none" || value == "NONE") {
+   if(ascii_iequals(value, "none")) {
       return GraphFieldInc::Kind::NONE;
    }
-   if(value == "node_offset" || value == "NODE_OFFSET") {
+   if(ascii_iequals(value, "node_offset")) {
       return GraphFieldInc::Kind::NODE_OFFSET;
    }
-   throw std::invalid_argument("Unknown graph field inc kind: " + value);
+   throw std::invalid_argument("Unknown graph field inc kind: " + std::string(value));
 }
 
 inline int normalize_graph_field_cat_dim(int cat_dim)
@@ -129,31 +151,32 @@ inline bool graph_field_cat_dim_is_one(int cat_dim)
    return normalized == 1;
 }
 
-inline void validate_graph_field_spec(const std::string& key, const GraphFieldSpec& spec)
+inline void validate_graph_field_spec(const std::string_view key, const GraphFieldSpec& spec)
 {
+   const std::string key_str(key);
    if(spec.dim <= 0) {
-      throw std::invalid_argument("Graph field '" + key + "' requires dim > 0");
+      throw std::invalid_argument("Graph field '" + key_str + "' requires dim > 0");
    }
    const int cat_dim = normalize_graph_field_cat_dim(spec.cat_dim);
    if(spec.mode == GraphFieldMode::CAT || spec.mode == GraphFieldMode::RAGGED_CAT) {
       if(cat_dim != 0 && cat_dim != 1) {
          throw std::invalid_argument(
-            "Graph field '" + key + "' CAT/RAGGED_CAT requires cat_dim in {0, 1, -1}"
+            "Graph field '" + key_str + "' CAT/RAGGED_CAT requires cat_dim in {0, 1, -1}"
          );
       }
    } else if(cat_dim != 0) {
       throw std::invalid_argument(
-         "Graph field '" + key + "' non-concat modes require cat_dim == 0"
+         "Graph field '" + key_str + "' non-concat modes require cat_dim == 0"
       );
    }
    if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET && spec.dtype != GraphFieldDType::I64) {
       throw std::invalid_argument(
-         "Graph field '" + key + "' NODE_OFFSET increment requires dtype=i64"
+         "Graph field '" + key_str + "' NODE_OFFSET increment requires dtype=i64"
       );
    }
    if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET && spec.inc.node_type.empty()) {
       throw std::invalid_argument(
-         "Graph field '" + key + "' NODE_OFFSET increment requires non-empty node_type"
+         "Graph field '" + key_str + "' NODE_OFFSET increment requires non-empty node_type"
       );
    }
 }

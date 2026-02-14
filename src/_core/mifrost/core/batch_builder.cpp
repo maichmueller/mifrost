@@ -7,9 +7,11 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <optional>
 #include <range/v3/view/enumerate.hpp>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <tuple>
 
 #include "schema.hpp"
@@ -160,6 +162,52 @@ int64_t rows_for_pending(const std::string& key, const GraphField& field)
       throw std::invalid_argument("Graph field '" + key + "' invalid dim");
    }
    return total_size / static_cast< int64_t >(field.spec.dim);
+}
+
+hash_map< std::string, std::string > build_edge_index_offset_node_types(
+   const BatchBuilder::BatchEncoding& batch_encoding
+)
+{
+   hash_map< std::string, std::string > node_type_by_key;
+   node_type_by_key.reserve(batch_encoding.schema.edge_tensors.size());
+
+   for(const auto& edge_spec : batch_encoding.schema.edge_tensors) {
+      if(edge_spec.attr != "edge_index") {
+         continue;
+      }
+      const int edge_type_idx = edge_spec.edge_type;
+      if(edge_type_idx < 0
+         || static_cast< size_t >(edge_type_idx) >= batch_encoding.schema.edge_types.size()) {
+         throw std::invalid_argument(
+            "append_batch_encoding encountered invalid schema edge_type index for edge_index key '"
+            + edge_spec.key + "'"
+         );
+      }
+
+      const auto& edge_type = batch_encoding.schema
+                                 .edge_types[static_cast< size_t >(edge_type_idx)];
+      std::string_view node_type;
+      if(edge_spec.part == "0") {
+         node_type = edge_type.src;
+      } else if(edge_spec.part == "1") {
+         node_type = edge_type.dst;
+      } else {
+         throw std::invalid_argument(
+            "append_batch_encoding encountered unsupported edge_index part '" + edge_spec.part
+            + "' in schema"
+         );
+      }
+
+      auto [it, inserted] = node_type_by_key.try_emplace(edge_spec.key, std::string(node_type));
+      if(! inserted && it->second != node_type) {
+         throw std::invalid_argument(
+            "append_batch_encoding schema maps edge_index key to conflicting node types for key '"
+            + edge_spec.key + "'"
+         );
+      }
+   }
+
+   return node_type_by_key;
 }
 
 }  // namespace
@@ -1421,13 +1469,15 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
       add_nodes(node_type, count);
    }
 
-   auto offset_for = [&](const std::string& node_type) -> int64_t {
+   auto offset_for = [&](std::string_view node_type) -> int64_t {
       auto it = node_offsets.find(node_type);
       if(it == node_offsets.end()) {
          return 0;
       }
       return it->second;
    };
+
+   const auto edge_index_offset_node_types = build_edge_index_offset_node_types(batch_encoding);
 
    if(graph_fields || not batch_encoding.graph_fields.empty()) {
       if(not graph_fields) {
@@ -1510,44 +1560,54 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
          continue;
       }
 
-      const auto slash = key.find('/');
-      if(slash == std::string::npos) {
-         continue;
+      int64_t edge_index_offset = 0;
+      bool has_edge_index_offset = false;
+      if(const auto it = edge_index_offset_node_types.find(key);
+         it != edge_index_offset_node_types.end()) {
+         edge_index_offset = offset_for(it->second);
+         has_edge_index_offset = true;
+      } else {
+         // Compatibility fallback for legacy encodings that do not provide edge_tensors schema.
+         const std::string_view key_view = key;
+         const auto slash = key_view.find('/');
+         if(slash != std::string_view::npos) {
+            const std::string_view attr = key_view.substr(slash + 1);
+            constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
+            if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+               const std::string_view base = key_view.substr(0, slash);
+               const auto first = base.find('|');
+               const auto second = base.find('|', first + 1);
+               if(first == std::string_view::npos || second == std::string_view::npos) {
+                  throw std::invalid_argument("Malformed edge key in append_batch_encoding");
+               }
+               const std::string_view src_type = base.substr(0, first);
+               const std::string_view dst_type = base.substr(second + 1);
+               const std::string_view part = attr.substr(kEdgeIndexPrefix.size());
+               if(part == "0") {
+                  edge_index_offset = offset_for(src_type);
+               } else if(part == "1") {
+                  edge_index_offset = offset_for(dst_type);
+               } else {
+                  throw std::invalid_argument(
+                     "Unexpected edge_index part in append_batch_encoding"
+                  );
+               }
+               has_edge_index_offset = true;
+            }
+         }
       }
-      const bool is_edge = key.find('|') != std::string::npos;
-      if(is_edge) {
-         const std::string base = key.substr(0, slash);
-         const std::string attr = key.substr(slash + 1);
-         const auto first = base.find('|');
-         const auto second = base.find('|', first + 1);
-         if(first == std::string::npos or second == std::string::npos) {
-            throw std::invalid_argument("Malformed edge key in append_batch_encoding");
-         }
-         const std::string src_type = base.substr(0, first);
-         const std::string dst_type = base.substr(second + 1);
 
-         constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
-         if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
-            if(not std::holds_alternative< LongCol >(col.data)) {
-               throw std::invalid_argument("edge_index column must be int64");
-            }
-            const std::string part = attr.substr(kEdgeIndexPrefix.size());
-            int64_t offset = 0;
-            if(part == "0") {
-               offset = offset_for(src_type);
-            } else if(part == "1") {
-               offset = offset_for(dst_type);
-            } else {
-               throw std::invalid_argument("Unexpected edge_index part in append_batch_encoding");
-            }
-            auto& dest = get_column< int64_t >(key, 1);
-            const auto& src = std::get< LongCol >(col.data);
-            dest.reserve(dest.size() + src.size());
-            for(const auto value : src) {
-               dest.push_back(value + offset);
-            }
-            continue;
+      if(has_edge_index_offset) {
+         if(not std::holds_alternative< LongCol >(col.data)) {
+            throw std::invalid_argument("edge_index column must be int64");
          }
+         auto& dest = get_column< int64_t >(key, 1);
+         const auto& src = std::get< LongCol >(col.data);
+         dest.reserve(dest.size() + src.size());
+         for(const auto value : src) {
+            dest.push_back(value + edge_index_offset);
+         }
+         continue;
       }
 
       std::visit(
