@@ -27,3 +27,9 @@
 
 - `HGraphEncoder`, `HorizonEncoder`, transition encoders, and `ColorEncoder` provide stream wrappers.
 - `HGraphEncoder` also exposes a mutable stream with `update/remove`.
+
+## Action Contract
+
+- `HGraphEncoder` expects flat action inputs (single action list or per-state flat lists).
+- Nested/tuple action payloads are rejected by design.
+- For IW lookahead/macro-transition outputs, use `HorizonEncoder` with `TransitionDAG`.

@@ -20,6 +20,10 @@ Action inputs are supported in `HGraphEncoder` state-step workflows:
 enc = encoder.encode(state, goals=goals, actions=actions)
 ```
 
+`HGraphEncoder` action inputs must be flat. Nested or tuple/macro action payloads are rejected.
+If your planner emits lookahead or macro-transition structures (for example from IW), use
+`HorizonEncoder` with a `TransitionDAG` instead of passing nested action payloads to `HGraphEncoder`.
+
 ## History Subgoals
 
 `HGraphEncoder` also supports history-aware subgoals:
