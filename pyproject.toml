@@ -2,9 +2,10 @@
 requires = [
     "scikit-build-core>=0.10",
     "nanobind>=1.3.2",
+    "conan>=2.4",
     "delocate>=0.12; sys_platform == 'darwin'",
 ]
-build-backend = "mifrost_build_backend"
+build-backend = "build_backend"
 backend-path = ["."]
 
 [project]
