@@ -1,0 +1,45 @@
+name: Perf BatchEncodings
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  perf-batch-encodings:
+    name: batch_encodings perf gate (macOS)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build/runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install conan pymimir torch
+
+      - name: Build and install mifrost
+        env:
+          CONAN_COMMAND: conan
+        run: |
+          export MIFROST_MIMIR_CMAKE_DIR="$(python -c "import pymimir; print(pymimir.get_cmake_dir())")"
+          python -m pip install --verbose .
+
+      - name: Run batch_encodings benchmark gate
+        run: |
+          python scripts/benchmark_batch_encodings.py \
+            --scenarios plain,typed,pyobj \
+            --import-mode installed \
+            --batch-size 64 \
+            --warmup 30 \
+            --repeats 120 \
+            --max-plain-mean-ms 0.40 \
+            --max-overhead-typed 1.55 \
+            --max-overhead-pyobj 2.35

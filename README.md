@@ -250,6 +250,12 @@ python configure.py --config Release --build_dir build_bench --with_benchmarks
 python build.py build_bench --bench
 ```
 
+Batch collation microbenchmark (`batch_encodings`, including `pyobj` collation):
+
+```bash
+python scripts/benchmark_batch_encodings.py --repeats 400 --warmup 50
+```
+
 ### Tests
 
 Python tests:
