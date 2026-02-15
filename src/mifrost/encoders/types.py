@@ -18,7 +18,9 @@ import pymimir.advanced.search as ase
 import pymimir.wrapper_formalism as wf
 
 if TYPE_CHECKING:
+    import torch
     from torch_geometric.data import Data, HeteroData
+    from mifrost._core import HeteroBatchEncodingView, HomoBatchEncodingView
 
 # Canonical input types supported by mifrost encoders.
 DomainInput: TypeAlias = wf.Domain | af.Domain
@@ -78,6 +80,27 @@ _LITERAL_ADAPTERS: dict[type[object], LiteralAdapter] = {}
 _ACTION_ADAPTERS: dict[type[object], ActionAdapter] = {}
 
 EncodingDict: TypeAlias = Mapping[str, Any]
+EdgeType: TypeAlias = tuple[str, str, str]
+
+
+@runtime_checkable
+class HeteroBatchEncodingViewLike(Protocol):
+    object_names: Sequence[str]
+    x_dict: Mapping[str, "torch.Tensor"]
+    edge_index_dict: Mapping[EdgeType, "torch.Tensor"]
+    batch_dict: Mapping[str, "torch.Tensor"]
+    ptr_dict: Mapping[str, "torch.Tensor"]
+    edge_attr_dict: Mapping[EdgeType, "torch.Tensor"]
+
+
+@runtime_checkable
+class HomoBatchEncodingViewLike(Protocol):
+    object_names: Sequence[str]
+    x: "torch.Tensor | None"
+    edge_index: "torch.Tensor | None"
+    batch: "torch.Tensor | None"
+    ptr: "torch.Tensor | None"
+    edge_attr: "torch.Tensor | None"
 
 
 @runtime_checkable
@@ -102,6 +125,10 @@ class NativeEncoding(Protocol):
     def as_dict(self) -> EncodingDict: ...
 
     def as_pyg(self, *, as_batch: bool | None = None) -> Any: ...
+
+    def as_hetero(self) -> "HeteroBatchEncodingView": ...
+
+    def as_homo(self) -> "HomoBatchEncodingView": ...
 
     def schema_fingerprint(self) -> int: ...
 

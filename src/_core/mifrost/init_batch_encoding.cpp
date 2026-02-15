@@ -865,6 +865,394 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
    return pyg_batch;
 }
 
+nb::object to_torch_tensor(nb::handle value)
+{
+   nb::object torch = nb::module_::import_("torch");
+   return torch.attr("as_tensor")(value);
+}
+
+nb::object to_mapping_proxy(const nb::dict& mapping)
+{
+   nb::object types = nb::module_::import_("types");
+   return types.attr("MappingProxyType")(mapping);
+}
+
+std::optional< std::string >
+find_node_attr_key(const Schema& schema, std::string_view node_type, std::string_view attr)
+{
+   for(const auto& spec : schema.node_tensors) {
+      if(spec.node_type == node_type && spec.attr == attr) {
+         return spec.key;
+      }
+   }
+   return std::nullopt;
+}
+
+std::pair< std::optional< std::string >, std::optional< std::string > >
+find_edge_index_keys(const Schema& schema, int edge_type_idx)
+{
+   std::optional< std::string > key0;
+   std::optional< std::string > key1;
+   for(const auto& spec : schema.edge_tensors) {
+      if(spec.edge_type != edge_type_idx || spec.attr != "edge_index") {
+         continue;
+      }
+      if(spec.part == "0") {
+         key0 = spec.key;
+      } else if(spec.part == "1") {
+         key1 = spec.key;
+      }
+   }
+   return {key0, key1};
+}
+
+std::optional< std::string > find_edge_attr_key(const Schema& schema, int edge_type_idx)
+{
+   for(const auto& spec : schema.edge_tensors) {
+      if(spec.edge_type == edge_type_idx && spec.attr == "edge_attr") {
+         return spec.key;
+      }
+   }
+   return std::nullopt;
+}
+
+nb::tuple edge_type_to_tuple(const EdgeType& edge_type)
+{
+   return nb::make_tuple(edge_type.src, edge_type.rel, edge_type.dst);
+}
+
+class HeteroBatchEncodingView {
+  public:
+   explicit HeteroBatchEncodingView(nb::object owner) : owner_(std::move(owner))
+   {
+      encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
+         owner_, "HeteroBatchEncodingView created with invalid BatchEncoding instance"
+      );
+   }
+
+   int64_t num_graphs() const { return encoding_->num_graphs; }
+   int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
+   int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
+   std::string graph_kind() const { return encoding_->graph_kind; }
+
+   std::vector< std::string > node_types() const { return encoding_->schema.node_types; }
+
+   nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
+   std::vector< std::string > object_names() const { return encoding_->object_names; }
+
+   nb::object x_dict()
+   {
+      if(x_dict_cache_.is_valid()) {
+         return x_dict_cache_;
+      }
+
+      nb::dict out;
+      for(const auto& node_type : encoding_->schema.node_types) {
+         if(const auto key = find_node_attr_key(encoding_->schema, node_type, "x");
+            key.has_value() && has_tensor(*key)) {
+            out[node_type.c_str()] = tensor(*key);
+            continue;
+         }
+         if(const auto it = encoding_->node_feature_dims.find(node_type);
+            it != encoding_->node_feature_dims.end()) {
+            int64_t count = 0;
+            if(const auto count_it = encoding_->node_counts.find(node_type);
+               count_it != encoding_->node_counts.end()) {
+               count = std::max< int64_t >(0, count_it->second);
+            }
+            nb::object torch = nb::module_::import_("torch");
+            out[node_type.c_str()] = torch.attr("zeros")(
+               nb::make_tuple(count, it->second), "dtype"_a = torch.attr("float32")
+            );
+         }
+      }
+      x_dict_cache_ = to_mapping_proxy(out);
+      return x_dict_cache_;
+   }
+
+   nb::object edge_index_dict()
+   {
+      if(edge_index_dict_cache_.is_valid()) {
+         return edge_index_dict_cache_;
+      }
+
+      nb::dict out;
+      for(size_t idx = 0; idx < encoding_->schema.edge_types.size(); ++idx) {
+         const auto [key0, key1] = find_edge_index_keys(encoding_->schema, static_cast< int >(idx));
+         if(! key0.has_value() || ! key1.has_value()) {
+            continue;
+         }
+         if(! has_tensor(*key0) || ! has_tensor(*key1)) {
+            continue;
+         }
+         nb::list pair;
+         pair.append(tensor(*key0));
+         pair.append(tensor(*key1));
+         nb::object torch = nb::module_::import_("torch");
+         out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = torch.attr("stack")(
+            pair, "dim"_a = 0
+         );
+      }
+      edge_index_dict_cache_ = to_mapping_proxy(out);
+      return edge_index_dict_cache_;
+   }
+
+   nb::object batch_dict()
+   {
+      if(batch_dict_cache_.is_valid()) {
+         return batch_dict_cache_;
+      }
+
+      nb::dict out;
+      for(const auto& node_type : encoding_->schema.node_types) {
+         const std::string key = node_type + "/batch";
+         if(has_tensor(key)) {
+            out[node_type.c_str()] = tensor(key);
+         }
+      }
+      batch_dict_cache_ = to_mapping_proxy(out);
+      return batch_dict_cache_;
+   }
+
+   nb::object ptr_dict()
+   {
+      if(ptr_dict_cache_.is_valid()) {
+         return ptr_dict_cache_;
+      }
+
+      nb::dict out;
+      for(const auto& node_type : encoding_->schema.node_types) {
+         const std::string key = node_type + "/ptr";
+         if(has_tensor(key)) {
+            out[node_type.c_str()] = tensor(key);
+         }
+      }
+      ptr_dict_cache_ = to_mapping_proxy(out);
+      return ptr_dict_cache_;
+   }
+
+   nb::object edge_attr_dict()
+   {
+      if(edge_attr_dict_cache_.is_valid()) {
+         return edge_attr_dict_cache_;
+      }
+
+      nb::dict out;
+      for(size_t idx = 0; idx < encoding_->schema.edge_types.size(); ++idx) {
+         const auto key = find_edge_attr_key(encoding_->schema, static_cast< int >(idx));
+         if(! key.has_value() || ! has_tensor(*key)) {
+            continue;
+         }
+         out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = tensor(*key);
+      }
+      edge_attr_dict_cache_ = to_mapping_proxy(out);
+      return edge_attr_dict_cache_;
+   }
+
+  private:
+   void ensure_as_dict_cache()
+   {
+      if(as_dict_cache_.is_valid()) {
+         return;
+      }
+      as_dict_cache_ = batch_encoding_as_dict(*encoding_, owner_);
+      tensors_cache_ = nb::cast< nb::dict >(as_dict_cache_.attr("__getitem__")("tensors"));
+   }
+
+   bool has_tensor(const std::string& key)
+   {
+      ensure_as_dict_cache();
+      return tensors_cache_.contains(key.c_str());
+   }
+
+   nb::object tensor(const std::string& key)
+   {
+      if(tensor_cache_.contains(key.c_str())) {
+         return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
+      }
+      ensure_as_dict_cache();
+      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()]);
+      tensor_cache_[key.c_str()] = value;
+      return value;
+   }
+
+   nb::object owner_;
+   BatchBuilder::BatchEncoding* encoding_ = nullptr;
+   nb::object as_dict_cache_;
+   nb::dict tensors_cache_;
+   nb::dict tensor_cache_;
+   nb::object x_dict_cache_;
+   nb::object edge_index_dict_cache_;
+   nb::object batch_dict_cache_;
+   nb::object ptr_dict_cache_;
+   nb::object edge_attr_dict_cache_;
+};
+
+class HomoBatchEncodingView {
+  public:
+   explicit HomoBatchEncodingView(nb::object owner) : owner_(std::move(owner))
+   {
+      encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
+         owner_, "HomoBatchEncodingView created with invalid BatchEncoding instance"
+      );
+   }
+
+   int64_t num_graphs() const { return encoding_->num_graphs; }
+   int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
+   int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
+   std::string graph_kind() const { return encoding_->graph_kind; }
+   std::vector< std::string > node_types() const { return encoding_->schema.node_types; }
+   nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
+   std::vector< std::string > object_names() const { return encoding_->object_names; }
+
+   nb::object x()
+   {
+      if(x_ready_) {
+         return x_cache_;
+      }
+      x_ready_ = true;
+      x_cache_ = nb::none();
+      if(encoding_->schema.node_types.empty()) {
+         return x_cache_;
+      }
+      const std::string& node_type = encoding_->schema.node_types.front();
+      if(const auto key = find_node_attr_key(encoding_->schema, node_type, "x");
+         key.has_value() && has_tensor(*key)) {
+         x_cache_ = tensor(*key);
+         return x_cache_;
+      }
+      if(const auto it = encoding_->node_feature_dims.find(node_type);
+         it != encoding_->node_feature_dims.end()) {
+         int64_t count = 0;
+         if(const auto count_it = encoding_->node_counts.find(node_type);
+            count_it != encoding_->node_counts.end()) {
+            count = std::max< int64_t >(0, count_it->second);
+         }
+         nb::object torch = nb::module_::import_("torch");
+         x_cache_ = torch.attr("zeros")(
+            nb::make_tuple(count, it->second), "dtype"_a = torch.attr("float32")
+         );
+      }
+      return x_cache_;
+   }
+
+   nb::object edge_index()
+   {
+      if(edge_index_ready_) {
+         return edge_index_cache_;
+      }
+      edge_index_ready_ = true;
+      edge_index_cache_ = nb::none();
+      if(encoding_->schema.edge_types.empty()) {
+         return edge_index_cache_;
+      }
+      const auto [key0, key1] = find_edge_index_keys(encoding_->schema, 0);
+      if(! key0.has_value() || ! key1.has_value() || ! has_tensor(*key0) || ! has_tensor(*key1)) {
+         return edge_index_cache_;
+      }
+      nb::list pair;
+      pair.append(tensor(*key0));
+      pair.append(tensor(*key1));
+      nb::object torch = nb::module_::import_("torch");
+      edge_index_cache_ = torch.attr("stack")(pair, "dim"_a = 0);
+      return edge_index_cache_;
+   }
+
+   nb::object batch()
+   {
+      if(batch_ready_) {
+         return batch_cache_;
+      }
+      batch_ready_ = true;
+      batch_cache_ = nb::none();
+      if(encoding_->schema.node_types.empty()) {
+         return batch_cache_;
+      }
+      const std::string key = encoding_->schema.node_types.front() + "/batch";
+      if(has_tensor(key)) {
+         batch_cache_ = tensor(key);
+      }
+      return batch_cache_;
+   }
+
+   nb::object ptr()
+   {
+      if(ptr_ready_) {
+         return ptr_cache_;
+      }
+      ptr_ready_ = true;
+      ptr_cache_ = nb::none();
+      if(encoding_->schema.node_types.empty()) {
+         return ptr_cache_;
+      }
+      const std::string key = encoding_->schema.node_types.front() + "/ptr";
+      if(has_tensor(key)) {
+         ptr_cache_ = tensor(key);
+      }
+      return ptr_cache_;
+   }
+
+   nb::object edge_attr()
+   {
+      if(edge_attr_ready_) {
+         return edge_attr_cache_;
+      }
+      edge_attr_ready_ = true;
+      edge_attr_cache_ = nb::none();
+      if(encoding_->schema.edge_types.empty()) {
+         return edge_attr_cache_;
+      }
+      const auto key = find_edge_attr_key(encoding_->schema, 0);
+      if(key.has_value() && has_tensor(*key)) {
+         edge_attr_cache_ = tensor(*key);
+      }
+      return edge_attr_cache_;
+   }
+
+  private:
+   void ensure_as_dict_cache()
+   {
+      if(as_dict_cache_.is_valid()) {
+         return;
+      }
+      as_dict_cache_ = batch_encoding_as_dict(*encoding_, owner_);
+      tensors_cache_ = nb::cast< nb::dict >(as_dict_cache_.attr("__getitem__")("tensors"));
+   }
+
+   bool has_tensor(const std::string& key)
+   {
+      ensure_as_dict_cache();
+      return tensors_cache_.contains(key.c_str());
+   }
+
+   nb::object tensor(const std::string& key)
+   {
+      if(tensor_cache_.contains(key.c_str())) {
+         return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
+      }
+      ensure_as_dict_cache();
+      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()]);
+      tensor_cache_[key.c_str()] = value;
+      return value;
+   }
+
+   nb::object owner_;
+   BatchBuilder::BatchEncoding* encoding_ = nullptr;
+   nb::object as_dict_cache_;
+   nb::dict tensors_cache_;
+   nb::dict tensor_cache_;
+   bool x_ready_ = false;
+   bool edge_index_ready_ = false;
+   bool batch_ready_ = false;
+   bool ptr_ready_ = false;
+   bool edge_attr_ready_ = false;
+   nb::object x_cache_;
+   nb::object edge_index_cache_;
+   nb::object batch_cache_;
+   nb::object ptr_cache_;
+   nb::object edge_attr_cache_;
+};
+
 }  // namespace
 
 void init_batch_encoding(nb::module_& m)
@@ -1037,6 +1425,72 @@ void init_batch_encoding(nb::module_& m)
             "values"_a
          );
 
+   nb::class_< HeteroBatchEncodingView >(m, "HeteroBatchEncodingView")
+      .def_prop_ro("num_graphs", &HeteroBatchEncodingView::num_graphs)
+      .def_prop_ro("num_nodes", &HeteroBatchEncodingView::num_nodes)
+      .def_prop_ro("num_edges", &HeteroBatchEncodingView::num_edges)
+      .def_prop_ro("graph_kind", &HeteroBatchEncodingView::graph_kind)
+      .def_prop_ro("node_types", &HeteroBatchEncodingView::node_types)
+      .def_prop_ro("edge_types", &HeteroBatchEncodingView::edge_types)
+      .def_prop_ro("object_names", &HeteroBatchEncodingView::object_names)
+      .def_prop_ro(
+         "x_dict",
+         &HeteroBatchEncodingView::x_dict,
+         nb::sig("def x_dict(self) -> collections.abc.Mapping[str, torch.Tensor]")
+      )
+      .def_prop_ro(
+         "edge_index_dict",
+         &HeteroBatchEncodingView::edge_index_dict,
+         nb::sig(
+            "def edge_index_dict(self) -> collections.abc.Mapping[tuple[str, str, str], "
+            "torch.Tensor]"
+         )
+      )
+      .def_prop_ro(
+         "batch_dict",
+         &HeteroBatchEncodingView::batch_dict,
+         nb::sig("def batch_dict(self) -> collections.abc.Mapping[str, torch.Tensor]")
+      )
+      .def_prop_ro(
+         "ptr_dict",
+         &HeteroBatchEncodingView::ptr_dict,
+         nb::sig("def ptr_dict(self) -> collections.abc.Mapping[str, torch.Tensor]")
+      )
+      .def_prop_ro(
+         "edge_attr_dict",
+         &HeteroBatchEncodingView::edge_attr_dict,
+         nb::sig(
+            "def edge_attr_dict(self) -> collections.abc.Mapping[tuple[str, str, str], "
+            "torch.Tensor]"
+         )
+      );
+
+   nb::class_< HomoBatchEncodingView >(m, "HomoBatchEncodingView")
+      .def_prop_ro("num_graphs", &HomoBatchEncodingView::num_graphs)
+      .def_prop_ro("num_nodes", &HomoBatchEncodingView::num_nodes)
+      .def_prop_ro("num_edges", &HomoBatchEncodingView::num_edges)
+      .def_prop_ro("graph_kind", &HomoBatchEncodingView::graph_kind)
+      .def_prop_ro("node_types", &HomoBatchEncodingView::node_types)
+      .def_prop_ro("edge_types", &HomoBatchEncodingView::edge_types)
+      .def_prop_ro("object_names", &HomoBatchEncodingView::object_names)
+      .def_prop_ro("x", &HomoBatchEncodingView::x, nb::sig("def x(self) -> torch.Tensor | None"))
+      .def_prop_ro(
+         "edge_index",
+         &HomoBatchEncodingView::edge_index,
+         nb::sig("def edge_index(self) -> torch.Tensor | None")
+      )
+      .def_prop_ro(
+         "batch", &HomoBatchEncodingView::batch, nb::sig("def batch(self) -> torch.Tensor | None")
+      )
+      .def_prop_ro(
+         "ptr", &HomoBatchEncodingView::ptr, nb::sig("def ptr(self) -> torch.Tensor | None")
+      )
+      .def_prop_ro(
+         "edge_attr",
+         &HomoBatchEncodingView::edge_attr,
+         nb::sig("def edge_attr(self) -> torch.Tensor | None")
+      );
+
    auto batch_encoding_cls =
       nb::class_< BatchBuilder::BatchEncoding >(m, "BatchEncoding", nb::dynamic_attr())
          .def(nb::init<>())
@@ -1186,6 +1640,39 @@ void init_batch_encoding(nb::module_& m)
             },
             "as_batch"_a = nb::none(),
             "include_python_attrs"_a = true
+         )
+         .def(
+            "as_hetero",
+            [](nb::handle self) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.as_hetero called with invalid instance"
+               );
+               if(encoding->graph_kind != "hetero") {
+                  throw std::invalid_argument(
+                     "BatchEncoding graph_kind mismatch: expected 'hetero'"
+                  );
+               }
+               return HeteroBatchEncodingView(nb::borrow< nb::object >(self));
+            }
+         )
+         .def(
+            "as_homo",
+            [](nb::handle self) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.as_homo called with invalid instance"
+               );
+               if(encoding->graph_kind != "homo") {
+                  throw std::invalid_argument("BatchEncoding graph_kind mismatch: expected 'homo'");
+               }
+               if(encoding->schema.node_types.size() > 1
+                  || encoding->schema.edge_types.size() > 1) {
+                  throw std::invalid_argument(
+                     "BatchEncoding.as_homo() expects schema with at most one node type and one "
+                     "edge type"
+                  );
+               }
+               return HomoBatchEncodingView(nb::borrow< nb::object >(self));
+            }
          )
          .def("schema_fingerprint", &schema_fingerprint)
          .def(
