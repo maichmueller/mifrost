@@ -70,7 +70,7 @@ class LokiRecipe(ConanFile):
     exports_sources = "fix_includes.patch", "disable_exe.patch"
 
     def requirements(self):
-        self.requires("boost/1.86.0")
+        self.requires("boost/[>=1.86.0]")
         self.requires("abseil/20230125.3")
         self.requires("fmt/11.2.0")
 
