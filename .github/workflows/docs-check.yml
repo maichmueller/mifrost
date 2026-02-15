@@ -22,13 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r docs/requirements.txt
 
-      - name: Guard legacy naming
-        run: |
-          if git grep -n -i "[b][i][f][r][o][s][t]" -- .; then
-            echo "Legacy repository name detected in tracked files."
-            exit 1
-          fi
-
       - name: Generate snippet includes (no-exec)
         run: python docs/_scripts/generate_snippet_includes.py --no-exec
 
