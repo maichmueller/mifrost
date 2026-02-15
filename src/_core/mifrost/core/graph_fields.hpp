@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -178,6 +179,117 @@ inline void validate_graph_field_spec(const std::string_view key, const GraphFie
       throw std::invalid_argument(
          "Graph field '" + key_str + "' NODE_OFFSET increment requires non-empty node_type"
       );
+   }
+}
+
+inline int64_t graph_field_total_values(const GraphField& field)
+{
+   const size_t total = std::visit([](const auto& values) { return values.size(); }, field.values);
+   if(total > static_cast< size_t >(std::numeric_limits< int64_t >::max())) {
+      throw std::invalid_argument("Graph field value count exceeds int64 range");
+   }
+   return static_cast< int64_t >(total);
+}
+
+inline int64_t graph_field_rows(const std::string_view key, const GraphField& field)
+{
+   if(field.spec.dim <= 0) {
+      throw std::invalid_argument("Graph field '" + std::string(key) + "' requires dim > 0");
+   }
+   const int64_t total = graph_field_total_values(field);
+   if(total % field.spec.dim != 0) {
+      throw std::invalid_argument(
+         "Graph field '" + std::string(key) + "' values size must be divisible by dim"
+      );
+   }
+   return total / field.spec.dim;
+}
+
+inline void validate_graph_field_storage(
+   const std::string_view key,
+   const GraphField& field,
+   int64_t num_graphs
+)
+{
+   const std::string key_str(key);
+   if(num_graphs < 0) {
+      throw std::invalid_argument("Graph field '" + key_str + "' num_graphs must be non-negative");
+   }
+   validate_graph_field_spec(key, field.spec);
+   if(field.spec.dtype == GraphFieldDType::F32) {
+      if(! std::holds_alternative< std::vector< float > >(field.values)) {
+         throw std::invalid_argument(
+            "Graph field '" + key_str + "' storage dtype mismatch: expected f32"
+         );
+      }
+   } else {
+      if(! std::holds_alternative< std::vector< int64_t > >(field.values)) {
+         throw std::invalid_argument(
+            "Graph field '" + key_str + "' storage dtype mismatch: expected i64"
+         );
+      }
+   }
+
+   const int64_t rows = graph_field_rows(key, field);
+   const bool is_ragged = field.spec.mode == GraphFieldMode::RAGGED_CAT;
+   if(! is_ragged && ! field.ptr.empty()) {
+      throw std::invalid_argument(
+         "Graph field '" + key_str + "' non-ragged mode must not store ptr values"
+      );
+   }
+
+   switch(field.spec.mode) {
+      case GraphFieldMode::STACK: {
+         if(rows != num_graphs) {
+            throw std::invalid_argument(
+               "Graph field '" + key_str + "' STACK expects rows == num_graphs"
+            );
+         }
+         break;
+      }
+      case GraphFieldMode::CONST: {
+         if(num_graphs == 0) {
+            if(rows != 0) {
+               throw std::invalid_argument(
+                  "Graph field '" + key_str + "' CONST with num_graphs==0 must be empty"
+               );
+            }
+         } else if(rows != 1) {
+            throw std::invalid_argument(
+               "Graph field '" + key_str + "' CONST expects exactly one row"
+            );
+         }
+         break;
+      }
+      case GraphFieldMode::CAT: {
+         break;
+      }
+      case GraphFieldMode::RAGGED_CAT: {
+         const auto expected_size = static_cast< size_t >(num_graphs + 1);
+         if(field.ptr.size() != expected_size) {
+            throw std::invalid_argument(
+               "Graph field '" + key_str + "' RAGGED_CAT expects ptr size == num_graphs + 1"
+            );
+         }
+         if(field.ptr.empty() || field.ptr.front() != 0) {
+            throw std::invalid_argument(
+               "Graph field '" + key_str + "' RAGGED_CAT ptr must start with 0"
+            );
+         }
+         for(size_t i = 1; i < field.ptr.size(); ++i) {
+            if(field.ptr[i] < field.ptr[i - 1]) {
+               throw std::invalid_argument(
+                  "Graph field '" + key_str + "' RAGGED_CAT ptr must be monotonic"
+               );
+            }
+         }
+         if(field.ptr.back() != rows) {
+            throw std::invalid_argument(
+               "Graph field '" + key_str + "' RAGGED_CAT ptr[-1] must equal value rows"
+            );
+         }
+         break;
+      }
    }
 }
 

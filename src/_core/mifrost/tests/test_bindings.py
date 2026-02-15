@@ -593,8 +593,8 @@ def test_batch_encoding_graph_field_introspection_is_stable_across_as_pyg_calls(
 
 def test_batch_encoding_as_pyg_native_graph_fields_win_on_python_attr_collision():
     encoding = _single_graph_with_ragged_i64_field([5, 6])
-    encoding.target_indices = ["shadowed"]
-    encoding.target_indices_ptr = [99]
+    encoding.__dict__["target_indices"] = ["shadowed"]
+    encoding.__dict__["target_indices_ptr"] = [99]
 
     as_batch = encoding.as_pyg(as_batch=True)
     as_single = encoding.as_pyg(as_batch=False)
@@ -607,33 +607,81 @@ def test_batch_encoding_as_pyg_native_graph_fields_win_on_python_attr_collision(
     assert torch.equal(as_single.target_indices_ptr, expected_ptr)
 
 
-def test_batch_encodings_ignores_python_specs_colliding_with_native_graph_fields():
+def test_batch_encoding_native_graph_field_attr_access_and_write_through():
+    enc0 = _single_graph_with_ragged_i64_field([1, 2])
+    enc1 = _single_graph_with_ragged_i64_field([3])
+    batched = mifrost.batch_encodings([enc0, enc1])
+
+    assert hasattr(batched, "target_indices")
+    values = batched.target_indices
+    assert torch.equal(values, torch.tensor([1, 2, 3], dtype=torch.int64))
+
+    values[0] = 99
+    roundtrip = batched.get_graph_field("target_indices")
+    assert torch.equal(roundtrip, torch.tensor([99, 2, 3], dtype=torch.int64))
+
+
+def test_batch_encoding_ragged_ptr_attr_is_read_only_snapshot():
     enc0 = _single_graph_with_ragged_i64_field([1])
     enc1 = _single_graph_with_ragged_i64_field([2, 3])
-    enc0.target_indices = ["shadow-a"]
-    enc1.target_indices = ["shadow-b"]
+    batched = mifrost.batch_encodings([enc0, enc1])
+
+    ptr = batched.target_indices_ptr
+    ptr[0] = 123
+    assert torch.equal(
+        batched.get_graph_field("target_indices_ptr"),
+        torch.tensor([0, 1, 3], dtype=torch.int64),
+    )
+
+    with pytest.raises(ValueError, match="Direct assignment to ragged ptr key"):
+        batched.target_indices_ptr = [0, 1, 3]
+
+
+def test_register_graph_field_specs_raises_on_native_key_collision():
+    encoding = _single_graph_with_stack_field(1.0)
+    with pytest.raises(ValueError, match="collides with native graph field key"):
+        encoding.register_graph_field_specs(
+            {"goal_distance": {"dtype": "pyobj", "mode": "stack"}}
+        )
+
+
+def test_batch_encodings_raises_on_python_specs_colliding_with_native_graph_fields():
+    enc0 = _single_graph_with_ragged_i64_field([1])
+    enc1 = _single_graph_with_ragged_i64_field([2, 3])
+    enc0.__dict__["target_indices"] = ["shadow-a"]
+    enc1.__dict__["target_indices"] = ["shadow-b"]
     enc0.tag = "a"
     enc1.tag = "b"
 
-    batched = mifrost.batch_encodings(
-        [enc0, enc1],
-        graph_field_specs={
-            "target_indices": {"dtype": "pyobj", "mode": "ragged_cat"},
-            "tag": {"dtype": "pyobj", "mode": "stack"},
-        },
-    )
+    with pytest.raises(ValueError, match="collides with native graph field key"):
+        mifrost.batch_encodings(
+            [enc0, enc1],
+            graph_field_specs={
+                "target_indices": {"dtype": "pyobj", "mode": "ragged_cat"},
+                "tag": {"dtype": "pyobj", "mode": "stack"},
+            },
+        )
 
-    assert batched.has_graph_field("target_indices")
-    assert batched.graph_field_specs() == {"tag": {"dtype": "pyobj", "mode": "stack"}}
-    assert batched.tag == ["a", "b"]
 
-    as_batch = batched.as_pyg(as_batch=True)
-    assert torch.equal(
-        as_batch.target_indices, torch.tensor([1, 2, 3], dtype=torch.int64)
-    )
-    assert torch.equal(
-        as_batch.target_indices_ptr, torch.tensor([0, 1, 3], dtype=torch.int64)
-    )
+def test_batch_encoding_consumption_validates_malformed_graph_field_state():
+    encoding = _single_graph_with_ragged_i64_field([4, 5])
+    state = encoding.__getstate__()
+    state["graph_fields"]["target_indices"]["ptr"] = [0]
+
+    malformed = mifrost.BatchEncoding()
+    malformed.__setstate__(state)
+
+    with pytest.raises(ValueError, match="Invalid graph field 'target_indices'"):
+        malformed.as_pyg(as_batch=True)
+    with pytest.raises(ValueError, match="Invalid graph field 'target_indices'"):
+        malformed.dumps()
+    with pytest.raises(ValueError, match="Invalid graph field 'target_indices'"):
+        mifrost.batch_encodings([malformed])
+
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    with pytest.raises(ValueError, match="append_batch_encoding invalid graph field"):
+        builder.append_batch_encoding(malformed)
 
 
 def test_map_view_methods_marked_in_core_are_wrapped():

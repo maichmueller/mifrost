@@ -305,6 +305,124 @@ std::vector< T > normalize_graph_field_input(
    return std::move(input.values);
 }
 
+bool is_native_graph_field_ptr_key(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+)
+{
+   constexpr std::string_view kPtrSuffix = "_ptr";
+   if(key.size() <= kPtrSuffix.size()
+      || key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
+      return false;
+   }
+   std::string base(key.substr(0, key.size() - kPtrSuffix.size()));
+   if(const auto it = encoding.graph_fields.find(base); it != encoding.graph_fields.end()) {
+      return it->second.spec.mode == GraphFieldMode::RAGGED_CAT;
+   }
+   return false;
+}
+
+template < typename T >
+void assign_batch_encoding_graph_field_values(
+   BatchBuilder::BatchEncoding& encoding,
+   const std::string& key,
+   std::vector< T > values
+)
+{
+   auto it = encoding.graph_fields.find(key);
+   if(it == encoding.graph_fields.end()) {
+      throw std::invalid_argument("Graph field '" + key + "' is not registered");
+   }
+   auto& field = it->second;
+   if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
+      throw std::invalid_argument(
+         "Graph field '" + key + "' in RAGGED_CAT mode expects assignment as (values, ptr)"
+      );
+   }
+   field.ptr.clear();
+   field.values = NumericColumnData{std::move(values)};
+   validate_graph_field_storage(key, field, encoding.num_graphs);
+}
+
+void set_batch_encoding_graph_field(
+   BatchBuilder::BatchEncoding& encoding,
+   const std::string& key,
+   nb::handle value
+)
+{
+   if(encoding.graph_fields.find(key) == encoding.graph_fields.end()) {
+      throw std::invalid_argument("Graph field '" + key + "' is not registered");
+   }
+   if(is_native_graph_field_ptr_key(encoding, key)) {
+      throw std::invalid_argument(
+         "Direct assignment to ragged ptr key '" + key
+         + "' is not supported; assign the base field as (values, ptr)"
+      );
+   }
+   auto& field = encoding.graph_fields.at(key);
+   const auto spec = field.spec;
+
+   if(spec.mode == GraphFieldMode::RAGGED_CAT) {
+      if(! nb::isinstance< nb::tuple >(value)) {
+         throw std::invalid_argument(
+            "Graph field '" + key + "' in RAGGED_CAT mode expects assignment as (values, ptr)"
+         );
+      }
+      const nb::tuple payload = nb::cast< nb::tuple >(value);
+      if(nb::len(payload) != 2) {
+         throw std::invalid_argument(
+            "Graph field '" + key + "' in RAGGED_CAT mode expects exactly 2 elements: (values, ptr)"
+         );
+      }
+      const nb::handle values_obj = payload[0];
+      const nb::handle ptr_obj = payload[1];
+      auto ptr_input = coerce_numeric_values< int64_t >(ptr_obj);
+      if(ptr_input.ndim != 1) {
+         throw std::invalid_argument(
+            "Graph field '" + key + "' RAGGED_CAT ptr must be a 1D iterable of int64 values"
+         );
+      }
+      field.ptr = std::move(ptr_input.values);
+
+      if(spec.dtype == GraphFieldDType::F32) {
+         auto input = coerce_numeric_values< float >(values_obj);
+         auto values = normalize_graph_field_input(key, spec, std::move(input));
+         field.values = NumericColumnData{std::move(values)};
+      } else {
+         auto input = coerce_numeric_values< int64_t >(values_obj);
+         auto values = normalize_graph_field_input(key, spec, std::move(input));
+         field.values = NumericColumnData{std::move(values)};
+      }
+      validate_graph_field_storage(key, field, encoding.num_graphs);
+      return;
+   }
+
+   if(spec.dtype == GraphFieldDType::F32) {
+      auto input = coerce_numeric_values< float >(value);
+      auto values = normalize_graph_field_input(key, spec, std::move(input));
+      assign_batch_encoding_graph_field_values(encoding, key, std::move(values));
+      return;
+   }
+   auto input = coerce_numeric_values< int64_t >(value);
+   auto values = normalize_graph_field_input(key, spec, std::move(input));
+   assign_batch_encoding_graph_field_values(encoding, key, std::move(values));
+}
+
+void set_batch_encoding_graph_fields(BatchBuilder::BatchEncoding& encoding, const nb::dict& values)
+{
+   for(auto [key_obj, value_obj] : values) {
+      set_batch_encoding_graph_field(
+         encoding, nb::cast< std::string >(key_obj), nb::borrow< nb::object >(value_obj)
+      );
+   }
+}
+
+void set_python_attribute(nb::handle self, const std::string& key, nb::handle value)
+{
+   nb::object object_setattr = nb::module_::import_("builtins").attr("object").attr("__setattr__");
+   object_setattr(self, key, value);
+}
+
 template < typename T >
 void vector_owner_deleter(void* p) noexcept
 {
@@ -610,6 +728,7 @@ nb::dict batch_encoding_state_from_instance(nb::handle self, bool include_metada
    auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
       self, "BatchEncoding state extraction called with invalid instance"
    );
+   validate_batch_encoding_graph_fields(*encoding, "BatchEncoding state extraction");
    nb::dict state = batch_encoding_to_state_dict(*encoding, include_metadata);
    nb::dict py_attrs = batch_encoding_python_attrs_copy(self);
    if(nb::len(py_attrs) > 0) {
@@ -845,6 +964,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
 nb::object
 batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
 {
+   validate_batch_encoding_graph_fields(encoding, "BatchEncoding.as_pyg");
    const bool want_batch = as_batch.value_or(encoding.num_graphs != 1);
    BatchBuilder builder;
    builder.set_graph_kind(encoding.graph_kind);
@@ -1550,6 +1670,27 @@ void init_batch_encoding(nb::module_& m)
             "specs"_a
          )
          .def(
+            "set_graph_field",
+            [](nb::handle self, const std::string& key, nb::handle value) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.set_graph_field called with invalid instance"
+               );
+               set_batch_encoding_graph_field(*encoding, key, value);
+            },
+            "key"_a,
+            "value"_a
+         )
+         .def(
+            "set_graph_fields",
+            [](nb::handle self, const nb::dict& values) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.set_graph_fields called with invalid instance"
+               );
+               set_batch_encoding_graph_fields(*encoding, values);
+            },
+            "values"_a
+         )
+         .def(
             "graph_field_specs",
             [](nb::handle self) { return batch_encoding_graph_field_specs(self); }
          )
@@ -1569,9 +1710,42 @@ void init_batch_encoding(nb::module_& m)
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
                   self, "BatchEncoding.get_graph_field called with invalid instance"
                );
-               return batch_encoding_get_graph_field(*encoding, key);
+               return batch_encoding_get_graph_field(*encoding, key, self);
             },
             "key"_a
+         )
+         .def(
+            "__getattr__",
+            [](nb::handle self, const std::string& key) -> nb::object {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.__getattr__ called with invalid instance"
+               );
+               if(batch_encoding_has_graph_field(*encoding, key)) {
+                  return batch_encoding_get_graph_field(*encoding, key, self);
+               }
+               const std::string message = "'BatchEncoding' object has no attribute '" + key + "'";
+               PyErr_SetString(PyExc_AttributeError, message.c_str());
+               throw nb::python_error();
+            }
+         )
+         .def(
+            "__setattr__",
+            [](nb::handle self, const std::string& key, nb::handle value) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.__setattr__ called with invalid instance"
+               );
+               if(batch_encoding_has_graph_field(*encoding, key)) {
+                  if(is_native_graph_field_ptr_key(*encoding, key)) {
+                     throw std::invalid_argument(
+                        "Direct assignment to ragged ptr key '" + key
+                        + "' is not supported; assign the base field as (values, ptr)"
+                     );
+                  }
+                  set_batch_encoding_graph_field(*encoding, key, value);
+                  return;
+               }
+               set_python_attribute(self, key, value);
+            }
          )
          .def(
             "keys",
@@ -1617,7 +1791,7 @@ void init_batch_encoding(nb::module_& m)
                for(const auto& key : key_set) {
                   nb::object value;
                   if(batch_encoding_has_graph_field(*encoding, key)) {
-                     value = batch_encoding_get_graph_field(*encoding, key);
+                     value = batch_encoding_get_graph_field(*encoding, key, self);
                   } else {
                      value = nb::borrow< nb::object >(attrs[key.c_str()]);
                   }
@@ -1795,6 +1969,7 @@ void init_batch_encoding(nb::module_& m)
             if(encoding->num_graphs != 1) {
                throw std::invalid_argument("batch_encodings expects inputs with num_graphs == 1");
             }
+            validate_batch_encoding_graph_fields(*encoding, "batch_encodings input validation");
             if(schema_fingerprint(*encoding) != expected_fp) {
                throw std::invalid_argument("batch_encodings schema_fingerprint mismatch");
             }
@@ -1813,6 +1988,24 @@ void init_batch_encoding(nb::module_& m)
             out, "batch_encodings failed to materialize BatchEncoding output instance"
          );
          const auto reserved_native_keys = batch_encoding_native_graph_field_keys(*out_encoding);
+         for(const auto& [key, mode] : collation_inputs.field_specs) {
+            if(reserved_native_keys.contains(key)) {
+               throw std::invalid_argument(
+                  "Python graph field spec key '" + key
+                  + "' collides with native graph field key during batch_encodings"
+               );
+            }
+            if(mode == PythonFieldMode::RAGGED_CAT) {
+               const std::string ptr_key = key + "_ptr";
+               if(reserved_native_keys.contains(ptr_key)) {
+                  throw std::invalid_argument(
+                     "Python graph field spec key '" + key
+                     + "' collides with native graph field ptr key '" + ptr_key
+                     + "' during batch_encodings"
+                  );
+               }
+            }
+         }
          auto filtered_specs = filter_python_field_specs_for_native_collisions(
             collation_inputs.field_specs, reserved_native_keys
          );

@@ -8,6 +8,7 @@
 
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 #include "mifrost/core/graph_fields.hpp"
+#include "mifrost/core/nb_instance.hpp"
 
 namespace nb = nanobind;
 
@@ -594,6 +595,26 @@ void apply_python_collation_to_output(
 void register_batch_encoding_graph_field_specs(nb::handle self, const nb::dict& specs)
 {
    auto normalized = canonicalize_python_graph_field_specs(specs);
+   auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+      self, "BatchEncoding.register_graph_field_specs called with invalid instance"
+   );
+   const auto native_keys = batch_encoding_native_graph_field_keys(*encoding);
+   for(const auto& [key, mode] : normalized) {
+      if(native_keys.contains(key)) {
+         throw std::invalid_argument(
+            "Python graph field spec key '" + key + "' collides with native graph field key"
+         );
+      }
+      if(mode == PythonFieldMode::RAGGED_CAT) {
+         const std::string ptr_key = key + "_ptr";
+         if(native_keys.contains(ptr_key)) {
+            throw std::invalid_argument(
+               "Python graph field spec key '" + key
+               + "' collides with native graph field ptr key '" + ptr_key + "'"
+            );
+         }
+      }
+   }
    auto existing = canonicalize_python_graph_field_specs(batch_encoding_graph_field_specs(self));
    merge_python_graph_field_specs(existing, normalized);
    nb::dict attrs = nb::cast< nb::dict >(self.attr("__dict__"));

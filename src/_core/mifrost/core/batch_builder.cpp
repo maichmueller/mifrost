@@ -1390,6 +1390,15 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
    if(batch_encoding.num_graphs != 1) {
       throw std::invalid_argument("append_batch_encoding expects num_graphs == 1");
    }
+   for(const auto& [key, field] : batch_encoding.graph_fields) {
+      try {
+         validate_graph_field_storage(key, field, batch_encoding.num_graphs);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "append_batch_encoding invalid graph field '" + key + "': " + ex.what()
+         );
+      }
+   }
 
    if(graph_kind.empty()) {
       graph_kind = batch_encoding.graph_kind;
