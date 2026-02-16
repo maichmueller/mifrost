@@ -23,6 +23,7 @@ See [How to Choose an Encoder](how-to/choose-an-encoder.md) for scenario-specifi
 ## What Is Covered
 
 - Native-first API and conversion model
+- Native hetero/homo tensor facades (`as_hetero`, `as_homo`) for model-boundary use
 - Single, batch, append-only stream, and mutable stream workflows
 - Dynamic graph fields (`GraphFieldSpec`) and batching semantics
 - Adapter registration for custom wrapper types

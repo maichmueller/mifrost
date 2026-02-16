@@ -44,6 +44,18 @@ def main() -> None:
     print("target_indices_head:", to_py_list(target_indices, max_items=10))
     print("target_indices_ptr:", to_py_list(target_ptr, max_items=10))
 
+    # Native graph fields are also available as attributes on BatchEncoding.
+    values_view = batch_enc.target_indices
+    if hasattr(values_view, "__setitem__"):
+        values_view[0] = 99
+    print("target_indices_after_write_through:", to_py_list(batch_enc.target_indices))
+
+    # Ragged ptr is exposed but assignment to *_ptr is not supported.
+    try:
+        batch_enc.target_indices_ptr = [0, 1, 4]
+    except Exception as ex:
+        print("target_indices_ptr_assignment_error:", type(ex).__name__, str(ex))
+
 
 if __name__ == "__main__":
     main()

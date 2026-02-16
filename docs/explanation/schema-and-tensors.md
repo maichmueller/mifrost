@@ -13,3 +13,10 @@ Dynamic graph fields appear under schema `graph_tensors` and are attached as roo
 If a python attr and a native graph field share the same key during `as_pyg()`,
 the native graph field value is kept and the python attr is skipped. For ragged
 native fields, `<attr>_ptr` is reserved by the native field as well.
+
+For native `BatchEncoding` access (without PyG conversion), native graph fields are
+also reachable as attributes and through `get_graph_field(key)`. The attribute path
+is routed to native storage for known keys.
+
+Python graph-field collation specs (`dtype="pyobj"`) are now validated against native
+graph-field keys. Collisions are rejected explicitly instead of being silently shadowed.
