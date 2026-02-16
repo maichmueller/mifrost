@@ -66,7 +66,7 @@ jobs:
       shell: pwsh
 
     - name: Cache cibuildwheel
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.CIBW_CACHE_PATH }}
         key: cibw-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pyproject.toml') }}
@@ -74,7 +74,7 @@ jobs:
           cibw-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Cache Conan
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.CONAN_HOME }}
         key: conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}

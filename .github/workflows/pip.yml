@@ -34,7 +34,7 @@ jobs:
 
     - name: Cache Conan (macOS)
       if: runner.os == 'macOS'
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.CONAN_HOME }}
         key: conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
