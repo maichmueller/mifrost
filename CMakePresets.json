@@ -1,0 +1,54 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MIFROST_RPATH_MODE": "dev",
+        "MIFROST_BUILD_BENCHMARKS": "OFF",
+        "MIFROST_GENERATE_STUBS": "ON"
+      }
+    },
+    {
+      "name": "dev-release",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "dev-debug",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "dev-bench-release",
+      "hidden": true,
+      "inherits": "dev-release",
+      "cacheVariables": {
+        "MIFROST_BUILD_BENCHMARKS": "ON"
+      }
+    },
+    {
+      "name": "wheel-release",
+      "hidden": true,
+      "inherits": "dev-release",
+      "cacheVariables": {
+        "MIFROST_RPATH_MODE": "wheel"
+      }
+    }
+  ]
+}

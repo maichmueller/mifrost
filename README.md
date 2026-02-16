@@ -31,7 +31,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 
 - Python `>= 3.10`
 - A working C++ toolchain
-- `pymimir` available in the Python environment used for build/runtime
+- `pymimir>=0.13.60` available in the Python environment used for build/runtime
 - For Python-side graph assembly: `torch` and `torch-geometric`
 - For source builds: Conan (or `CONAN_COMMAND`/`CONAN_CMD` pointing to it)
 
@@ -240,14 +240,21 @@ Adapters are matched by **exact concrete type**.
 
 ```bash
 python configure.py --config Release --build_dir build
-python build.py build
+python cbuild.py build
+```
+
+Or use CMake presets:
+
+```bash
+cmake --preset local-release
+cmake --build build/local-release
 ```
 
 Build benchmarks:
 
 ```bash
 python configure.py --config Release --build_dir build_bench --with_benchmarks
-python build.py build_bench --bench
+python cbuild.py build_bench --bench
 ```
 
 Batch collation microbenchmark (`batch_encodings`, including `pyobj` collation):

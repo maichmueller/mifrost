@@ -85,13 +85,36 @@ def _set_default_rpath_mode(mode: str) -> None:
         os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", "11.0")
 
 
+def _prepare_common_cmake_env() -> None:
+    rpath_mode = os.environ.get("MIFROST_RPATH_MODE", "dev")
+    _ensure_cmake_arg("MIFROST_RPATH_MODE", rpath_mode)
+    mimir_prefix = _get_mimir_prefix()
+    if mimir_prefix:
+        _set_env_prefix_path(mimir_prefix)
+
+
+def _get_conan_mode() -> str:
+    return os.environ.get("MIFROST_CONAN_MODE", "provider").strip().lower()
+
+
+def _maybe_prepare_conan(config_settings: dict[str, Any] | None) -> None:
+    _prepare_common_cmake_env()
+    mode = _get_conan_mode()
+    if mode == "provider":
+        return
+    if mode == "toolchain":
+        _prepare_conan(config_settings)
+        return
+    raise RuntimeError(
+        "Unsupported MIFROST_CONAN_MODE. Use 'provider' (default) or 'toolchain'."
+    )
+
+
 def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
     if os.environ.get("MIFROST_SKIP_CONAN_PREP") == "1":
         return
 
     build_type = _get_build_type(config_settings)
-    rpath_mode = os.environ.get("MIFROST_RPATH_MODE", "dev")
-    _ensure_cmake_arg("MIFROST_RPATH_MODE", rpath_mode)
     repo_root = Path(__file__).resolve().parent
     toolchain_override = os.environ.get("MIFROST_CONAN_TOOLCHAIN")
     if toolchain_override:
@@ -261,7 +284,7 @@ def prepare_metadata_for_build_wheel(
     metadata_directory: str, config_settings: dict[str, Any] | None = None
 ):
     _set_default_rpath_mode("wheel")
-    _prepare_conan(config_settings)
+    _maybe_prepare_conan(config_settings)
     return _sbc.prepare_metadata_for_build_wheel(metadata_directory, config_settings)
 
 
@@ -269,7 +292,7 @@ def prepare_metadata_for_build_editable(
     metadata_directory: str, config_settings: dict[str, Any] | None = None
 ):
     _set_default_rpath_mode("dev")
-    _prepare_conan(config_settings)
+    _maybe_prepare_conan(config_settings)
     return _sbc.prepare_metadata_for_build_editable(metadata_directory, config_settings)
 
 
@@ -279,7 +302,7 @@ def build_wheel(
     metadata_directory: str | None = None,
 ):
     _set_default_rpath_mode("wheel")
-    _prepare_conan(config_settings)
+    _maybe_prepare_conan(config_settings)
     wheel_name = _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
     wheel_dir = Path(wheel_directory)
     wheel_path = wheel_name
@@ -308,7 +331,7 @@ def build_editable(
     metadata_directory: str | None = None,
 ):
     _set_default_rpath_mode("dev")
-    _prepare_conan(config_settings)
+    _maybe_prepare_conan(config_settings)
     return _sbc.build_editable(wheel_directory, config_settings, metadata_directory)
 
 

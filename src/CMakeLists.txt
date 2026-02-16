@@ -30,7 +30,7 @@ option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
 #unset(_conan_generators)
 
 # Nanobind requires finding Python first.
-# Prefer the active conda env if present to avoid ABI mismatches.
+# Prefer the active conda env when no explicit Python is configured.
 if (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
     set(Python_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
     set(Python_ROOT_DIR "$ENV{CONDA_PREFIX}")
@@ -102,8 +102,35 @@ if (NOT NAUTY_LIBRARY)
     endif ()
 endif ()
 
-# Mimir Extended Linkage (Found via CMAKE_PREFIX_PATH pointing to wheel contents)
-find_package(mimir REQUIRED)
+# Resolve mimir CMake package from explicit env override or Python runtime.
+if (NOT DEFINED mimir_DIR)
+    if (DEFINED ENV{MIMIR_CMAKE_DIR} AND NOT "$ENV{MIMIR_CMAKE_DIR}" STREQUAL "")
+        set(mimir_DIR "$ENV{MIMIR_CMAKE_DIR}" CACHE PATH "Path to mimir CMake package")
+    else ()
+        execute_process(
+                COMMAND "${Python_EXECUTABLE}" "-c" "import pymimir; print(pymimir.get_cmake_dir())"
+                RESULT_VARIABLE _mifrost_mimir_result
+                OUTPUT_VARIABLE _mifrost_mimir_dir
+                ERROR_QUIET
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if (_mifrost_mimir_result EQUAL 0 AND
+                (EXISTS "${_mifrost_mimir_dir}/mimir-config.cmake" OR EXISTS "${_mifrost_mimir_dir}/mimirConfig.cmake"))
+            set(mimir_DIR "${_mifrost_mimir_dir}" CACHE PATH "Path to mimir CMake package")
+        else ()
+            message(STATUS "mimir auto-detect failed with Python_EXECUTABLE=${Python_EXECUTABLE}; set MIMIR_CMAKE_DIR or mimir_DIR.")
+        endif ()
+        unset(_mifrost_mimir_result)
+        unset(_mifrost_mimir_dir)
+    endif ()
+endif ()
+
+if (DEFINED mimir_DIR AND NOT mimir_DIR STREQUAL "")
+    message(STATUS "Using mimir_DIR=${mimir_DIR}")
+endif ()
+
+# Mimir Extended Linkage (Found via CMAKE_PREFIX_PATH or pymimir.get_cmake_dir()).
+find_package(mimir 0.13.60 REQUIRED)
 
 # --- RPATH mode (dev vs wheel) ---
 set(MIFROST_RPATH_MODE "dev" CACHE STRING "RPATH mode: dev or wheel")

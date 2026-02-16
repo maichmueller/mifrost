@@ -96,7 +96,9 @@ jobs:
       env:
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BEFORE_BUILD: python -m pip install conan
-        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/project/.conan2
+        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install conan
+        CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
+        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1
         CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }}
         CIBW_ENVIRONMENT_WINDOWS: CONAN_HOME=${{ env.CONAN_HOME }}
 
