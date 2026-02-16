@@ -3,6 +3,7 @@
 import argparse
 import os
 import subprocess
+import sys
 
 # Parse arguments
 parser = argparse.ArgumentParser(description="Export dependencies using Conan.")
@@ -62,6 +63,7 @@ valla
 
 
 # export dependencies
+had_errors = False
 for dep in (dep.strip() for dep in dependencies.splitlines() if dep):
     version = dependency_versions.get(dep)
     if not version:
@@ -76,3 +78,7 @@ for dep in (dep.strip() for dep in dependencies.splitlines() if dep):
         print(f"Successfully exported {dep} version {version}.")
     except subprocess.CalledProcessError as e:
         print(f"Error exporting {dep} version {version}: {e}")
+        had_errors = True
+
+if had_errors:
+    sys.exit(1)

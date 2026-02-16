@@ -9,6 +9,44 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
 option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
+option(MIFROST_EXPORT_LOCAL_CONAN_RECIPES "Export local Conan recipes before Conan provider install." ON)
+
+# In provider mode, export local recipes (loki/nauty/valla, etc.) before the
+# first find_package() triggers Conan resolution on clean machines/CI runners.
+if (MIFROST_EXPORT_LOCAL_CONAN_RECIPES AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(_mifrost_repo_root "${CMAKE_CURRENT_LIST_DIR}/..")
+    if (DEFINED Python_EXECUTABLE AND EXISTS "${Python_EXECUTABLE}")
+        set(_mifrost_python "${Python_EXECUTABLE}")
+    else ()
+        find_program(_mifrost_python NAMES python3 python)
+    endif ()
+
+    if (NOT _mifrost_python)
+        message(FATAL_ERROR "Could not locate Python to run conan_export.py. Set Python_EXECUTABLE.")
+    endif ()
+
+    set(_mifrost_conan_cmd "$ENV{CONAN_COMMAND}")
+    if (_mifrost_conan_cmd STREQUAL "")
+        set(_mifrost_conan_cmd "$ENV{CONAN_CMD}")
+    endif ()
+    if (_mifrost_conan_cmd STREQUAL "")
+        set(_mifrost_conan_cmd "conan")
+    endif ()
+
+    execute_process(
+            COMMAND "${_mifrost_python}" "${_mifrost_repo_root}/conan_export.py" "--conan_cmd" "${_mifrost_conan_cmd}"
+            WORKING_DIRECTORY "${_mifrost_repo_root}"
+            RESULT_VARIABLE _mifrost_export_result
+    )
+    if (NOT _mifrost_export_result EQUAL 0)
+        message(FATAL_ERROR "Failed to export local Conan recipes with ${_mifrost_conan_cmd}.")
+    endif ()
+
+    unset(_mifrost_repo_root)
+    unset(_mifrost_python)
+    unset(_mifrost_conan_cmd)
+    unset(_mifrost_export_result)
+endif ()
 
 # --- Dependencies ---
 # Ensure Conan's CMakeDeps generator folder is on the prefix path (helps CLion).
