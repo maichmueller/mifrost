@@ -1,9 +1,11 @@
 [build-system]
+# Build-time requirements used by isolated PEP 517 builds.
 requires = [
     "scikit-build-core>=0.10",
-    "conan>=2.4",
+    "cmake>=3.24,<4",
+    "conan>=2.4,<3",
     "pymimir>=0.13.60",
-    "delocate>=0.12; sys_platform == 'darwin'",
+    "ninja>=1.11,<2",
 ]
 build-backend = "build_backend"
 backend-path = ["."]
@@ -25,6 +27,24 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0,<9",
+    "torch>=2.2,<3",
+    "torch-geometric>=2.7",
+    "numpy",
+]
+perf = [
+    "torch>=2.2,<3",
+]
+dev = [
+    "conan>=2.4,<3",
+    "cmake>=3.27,<5",
+    "ninja>=1.11,<2",
+    "pytest>=8.0,<9",
+    "torch>=2.2,<3",
+]
+
 [project.urls]
 Homepage = "https://github.com/maichmueller/mifrost"
 
@@ -42,12 +62,13 @@ wheel.packages = ["src/mifrost"]
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
 
-# Run pytest to ensure that the package was correctly built
-test-command = "pytest {project}/tests"
-test-requires = "pytest"
+# Smoke-test that the built wheel can be imported in an isolated venv.
+# Full test coverage is provided by the separate CI test workflows, which install
+# heavy dependencies (torch, torch_geometric, etc.).
+test-command = "python -c \"import pymimir, mifrost; print('pymimir', getattr(pymimir, '__version__', 'unknown')); print('mifrost', mifrost.__file__)\""
 
 # Don't test Python 3.8 wheels on macOS/arm64
-test-skip="cp38-macosx_*:arm64"
+test-skip = "cp38-macosx_*:arm64"
 
 # Needed for full C++17 support
 [tool.cibuildwheel.macos.environment]

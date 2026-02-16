@@ -21,42 +21,12 @@ else:
 
     install_map_view_wrappers(_core)
     from ._core import *  # noqa: F401,F403
-    from .encoders import (  # noqa: F401
-        ColorEncoder,
-        ColorEncoderStream,
-        EncoderBase,
-        HGraphEncoder,
-        HGraphEncoderStream,
-        HGraphMutableEncoderStream,
-        HorizonEncoder,
-        HorizonEncoderStream,
-        ILGEncoder,
-        ILGEncoderStream,
-        StreamEncoderBase,
-        TransitionEffectsHGraphEncoder,
-        TransitionEffectsHGraphEncoderStream,
-        TransitionHGraphEncoder,
-        TransitionHGraphEncoderStream,
-        encoding_to_tensors,
-        register_action_adapter,
-        register_domain_adapter,
-        register_literal_adapter,
-        register_state_adapter,
-        unregister_action_adapter,
-        unregister_domain_adapter,
-        unregister_literal_adapter,
-        unregister_state_adapter,
-    )
     from .graph_fields import DType, GraphFieldSpec, Inc, Mode
 
     def _batch_encoding_from_payload(payload: bytes):
         return _core.BatchEncoding.loads(payload)
 
-    __all__ = [
-        name
-        for name in list(getattr(_core, "__all__", []))
-        if not name.startswith("MapView[")
-    ] + [
+    _encoder_exports = [
         "HGraphEncoder",
         "HGraphEncoderStream",
         "HGraphMutableEncoderStream",
@@ -81,9 +51,62 @@ else:
         "unregister_literal_adapter",
         "register_action_adapter",
         "unregister_action_adapter",
+    ]
+
+    _encoders_import_error: Exception | None = None
+    try:
+        from .encoders import (  # noqa: F401
+            ColorEncoder,
+            ColorEncoderStream,
+            EncoderBase,
+            HGraphEncoder,
+            HGraphEncoderStream,
+            HGraphMutableEncoderStream,
+            HorizonEncoder,
+            HorizonEncoderStream,
+            ILGEncoder,
+            ILGEncoderStream,
+            StreamEncoderBase,
+            TransitionEffectsHGraphEncoder,
+            TransitionEffectsHGraphEncoderStream,
+            TransitionHGraphEncoder,
+            TransitionHGraphEncoderStream,
+            encoding_to_tensors,
+            register_action_adapter,
+            register_domain_adapter,
+            register_literal_adapter,
+            register_state_adapter,
+            unregister_action_adapter,
+            unregister_domain_adapter,
+            unregister_literal_adapter,
+            unregister_state_adapter,
+        )
+    except Exception as e:  # pragma: no cover - exercised in minimal wheel tests
+        # Keep `import mifrost` working for core-only consumers and for wheel
+        # smoke tests. Encoder wrappers depend on optional heavy deps
+        # (torch/torch_geometric).
+        _encoders_import_error = e
+
+        def __getattr__(name: str):
+            if name in _encoder_exports:
+                raise ModuleNotFoundError(
+                    "mifrost encoder wrappers require optional dependencies. "
+                    "Install with `pip install mifrost[test]` (for tests) or "
+                    "`pip install mifrost[perf]` / `pip install torch torch-geometric`."
+                ) from _encoders_import_error
+            raise AttributeError(name)
+
+    __all__ = [
+        name
+        for name in list(getattr(_core, "__all__", []))
+        if not name.startswith("MapView[")
+    ] + [
         "Mode",
         "DType",
         "Inc",
         "GraphFieldSpec",
         "MapView",
     ]
+
+    if _encoders_import_error is None:
+        __all__ += _encoder_exports

@@ -1,0 +1,4 @@
+# Runtime dependencies for mifrost users.
+# This file mirrors [project.dependencies] in pyproject.toml.
+
+pymimir>=0.13.60

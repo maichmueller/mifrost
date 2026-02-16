@@ -1,0 +1,5 @@
+-c constraints-ci.txt
+pytest>=8.0,<9
+torch>=2.2,<3
+torch-geometric>=2.7
+numpy

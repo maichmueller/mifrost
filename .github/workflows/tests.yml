@@ -1,22 +1,51 @@
-name: Tests (disabled)
+name: Unit & C++ Tests
 
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
-      - main
-      - master
+      - "**"
 
 jobs:
   test:
-    name: pytest + C++ (macOS)
-    runs-on: ${{ matrix.platform }}
+    name: Tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [ macos-latest, ubuntu-latest ]
-        python-version: [ "3.10", "3.11", "3.12", "3.13",  "3.14"]
+        include:
+          - os: macos-latest
+            python-version: "3.10"
+            allow_failure: false
+          - os: macos-latest
+            python-version: "3.11"
+            allow_failure: false
+          - os: macos-latest
+            python-version: "3.12"
+            allow_failure: false
+          - os: macos-latest
+            python-version: "3.13"
+            allow_failure: false
+          - os: macos-latest
+            python-version: "3.14"
+            allow_failure: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            allow_failure: false
+          - os: ubuntu-latest
+            python-version: "3.11"
+            allow_failure: false
+          - os: ubuntu-latest
+            python-version: "3.12"
+            allow_failure: false
+          - os: ubuntu-latest
+            python-version: "3.13"
+            allow_failure: false
+          - os: ubuntu-latest
+            python-version: "3.14"
+            allow_failure: true
 
     steps:
       - uses: actions/checkout@v6
@@ -25,25 +54,44 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install build/test dependencies
+      - name: Set Conan cache dir
+        run: |
+          echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2" >> $GITHUB_ENV
+
+      - name: Restore Conan cache
+        id: conan_cache_restore
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.CONAN_HOME }}
+          key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+          restore-keys: |
+            conan-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install test dependency
         run: |
           python -m pip install --upgrade pip
-          python -m pip install conan pytest pymimir
+          python -m pip install -r requirements/build.txt -r requirements/test.txt -r requirements.txt
 
       - name: Build and install
-        env:
-          CONAN_COMMAND: conan
+        id: build_install
         run: |
-          export MIFROST_MIMIR_CMAKE_DIR="$(python -c "import pymimir; print(pymimir.get_cmake_dir())")"
-          python -m pip install --no-build-isolation --verbose .
+          python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
       - name: Run Python tests
         run: python -m pytest -q
 
       - name: Build C++ tests
+        id: build_cpp_tests
         run: |
           python configure.py --build_dir build_ci --config Release
           cmake --build build_ci --target mifrost_tests
 
       - name: Run C++ tests
         run: ctest --test-dir build_ci -R mifrost_tests --output-on-failure
+
+      - name: Save Conan cache
+        if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_install.outcome == 'success' && steps.build_cpp_tests.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CONAN_HOME }}
+          key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}

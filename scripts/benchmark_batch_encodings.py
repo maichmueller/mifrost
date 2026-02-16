@@ -25,15 +25,28 @@ class ScenarioResult:
     max_ms: float
 
 
-def _bench(fn: Callable[[], Any], *, warmup: int, repeats: int) -> list[float]:
+def _bench(
+    fn: Callable[[], Any],
+    *,
+    warmup: int,
+    repeats: int,
+    timer_ns: Callable[[], int],
+    inner_iters: int,
+) -> list[float]:
+    inner_iters = max(1, int(inner_iters))
+
     for _ in range(max(0, warmup)):
-        fn()
+        for __ in range(inner_iters):
+            fn()
 
     durations_ms: list[float] = []
     for _ in range(max(1, repeats)):
-        t0 = time.perf_counter()
-        fn()
-        durations_ms.append((time.perf_counter() - t0) * 1e3)
+        t0 = timer_ns()
+        last = None
+        for __ in range(inner_iters):
+            last = fn()
+        _ = last  # keep the result alive until after timing ends
+        durations_ms.append(((timer_ns() - t0) / 1e6) / inner_iters)
     return durations_ms
 
 
@@ -126,16 +139,23 @@ def _make_pyobj_encoding(
     return enc
 
 
-def _print_table(results: list[ScenarioResult]) -> None:
+def _print_table(results: list[ScenarioResult], *, gate_stat: str) -> None:
     if not results:
         return
 
     baseline = next((r for r in results if r.scenario == "plain"), results[0])
-    print("scenario                mean_ms   median_ms  stdev_ms  overhead_vs_plain")
+    if gate_stat == "median":
+        baseline_gate_ms = baseline.median_ms
+    else:
+        baseline_gate_ms = baseline.mean_ms
+
+    print(
+        "scenario                mean_ms   median_ms  stdev_ms  "
+        f"overhead_vs_plain({gate_stat})"
+    )
     for r in results:
-        overhead = (
-            r.mean_ms / baseline.mean_ms if baseline.mean_ms > 0 else float("inf")
-        )
+        gate_ms = r.median_ms if gate_stat == "median" else r.mean_ms
+        overhead = gate_ms / baseline_gate_ms if baseline_gate_ms > 0 else float("inf")
         print(
             f"{r.scenario:<22} {r.mean_ms:>8.4f}  {r.median_ms:>9.4f}  {r.stdev_ms:>8.4f}  {overhead:>16.3f}"
         )
@@ -160,6 +180,34 @@ def main() -> None:
         description="Microbenchmark for mifrost.batch_encodings across plain, typed, and pyobj collation paths."
     )
     parser.add_argument(
+        "--clock",
+        choices=("wall", "cpu"),
+        default="wall",
+        help=(
+            "Timer source. 'wall' uses perf_counter (subject to noisy neighbors). "
+            "'cpu' uses process_time (reduces scheduler interference; best when torch is single-threaded)."
+        ),
+    )
+    parser.add_argument(
+        "--gate-stat",
+        choices=("mean", "median"),
+        default="mean",
+        help=(
+            "Statistic used for perf gating thresholds. "
+            "'median' is more robust to sporadic host interference than 'mean'."
+        ),
+    )
+    parser.add_argument(
+        "--inner-iters",
+        type=int,
+        default=1,
+        help=(
+            "Number of consecutive batch_encodings() calls per timed iteration. "
+            "Reported durations are normalized back to per-call ms. "
+            "Increasing this reduces CI noise."
+        ),
+    )
+    parser.add_argument(
         "--scenarios",
         default="plain,typed,pyobj",
         help="Comma-separated scenarios from: plain,typed,pyobj",
@@ -181,22 +229,37 @@ def main() -> None:
         "--max-overhead-typed",
         type=float,
         default=None,
-        help="Fail if typed.mean_ms / plain.mean_ms exceeds this value.",
+        help="Fail if typed.(gate_stat) / plain.(gate_stat) exceeds this value.",
     )
     parser.add_argument(
         "--max-overhead-pyobj",
         type=float,
         default=None,
-        help="Fail if pyobj.mean_ms / plain.mean_ms exceeds this value.",
+        help="Fail if pyobj.(gate_stat) / plain.(gate_stat) exceeds this value.",
     )
     parser.add_argument(
         "--max-plain-mean-ms",
         type=float,
         default=None,
-        help="Fail if plain.mean_ms exceeds this value.",
+        help="Fail if plain.(gate_stat) exceeds this value.",
     )
     args = parser.parse_args()
     mifrost_module = _import_mifrost(args.import_mode)
+
+    # Keep the benchmark as single-threaded as possible; otherwise CPU-time based
+    # measurement can become misleading and wall-time becomes much noisier across
+    # CI runners.
+    try:
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+    except Exception:
+        # Older torch builds may not support all knobs; don't fail the benchmark.
+        pass
+
+    if args.clock == "wall":
+        timer_ns: Callable[[], int] = time.perf_counter_ns
+    else:
+        timer_ns = time.process_time_ns
 
     requested = [s.strip().lower() for s in args.scenarios.split(",") if s.strip()]
     valid = {"plain", "typed", "pyobj"}
@@ -253,7 +316,13 @@ def main() -> None:
         if fn is None:
             skipped.append(scenario)
             continue
-        durations_ms = _bench(fn, warmup=args.warmup, repeats=args.repeats)
+        durations_ms = _bench(
+            fn,
+            warmup=args.warmup,
+            repeats=args.repeats,
+            timer_ns=timer_ns,
+            inner_iters=args.inner_iters,
+        )
         results.append(
             _summary(
                 scenario=scenario,
@@ -274,11 +343,14 @@ def main() -> None:
             "warmup": args.warmup,
             "repeats": args.repeats,
             "pyobj_supported": pyobj_supported,
+            "clock": args.clock,
+            "gate_stat": args.gate_stat,
+            "inner_iters": args.inner_iters,
         },
     }
 
     if not args.quiet:
-        _print_table(results)
+        _print_table(results, gate_stat=args.gate_stat)
         if skipped:
             print(f"skipped: {', '.join(skipped)}")
         print(json.dumps(payload, indent=2))
@@ -293,18 +365,22 @@ def main() -> None:
     failures: list[str] = []
 
     if plain is not None:
+        plain_gate_ms = plain.mean_ms if args.gate_stat == "mean" else plain.median_ms
         if (
             args.max_plain_mean_ms is not None
-            and plain.mean_ms > args.max_plain_mean_ms
+            and plain_gate_ms > args.max_plain_mean_ms
         ):
             failures.append(
-                f"plain mean {plain.mean_ms:.4f}ms > max {args.max_plain_mean_ms:.4f}ms"
+                f"plain {args.gate_stat} {plain_gate_ms:.4f}ms > max {args.max_plain_mean_ms:.4f}ms"
             )
 
         typed = by_name.get("typed")
         if typed is not None and args.max_overhead_typed is not None:
+            typed_gate_ms = (
+                typed.mean_ms if args.gate_stat == "mean" else typed.median_ms
+            )
             typed_overhead = (
-                typed.mean_ms / plain.mean_ms if plain.mean_ms > 0 else float("inf")
+                typed_gate_ms / plain_gate_ms if plain_gate_ms > 0 else float("inf")
             )
             if typed_overhead > args.max_overhead_typed:
                 failures.append(
@@ -313,8 +389,11 @@ def main() -> None:
 
         pyobj = by_name.get("pyobj")
         if pyobj is not None and args.max_overhead_pyobj is not None:
+            pyobj_gate_ms = (
+                pyobj.mean_ms if args.gate_stat == "mean" else pyobj.median_ms
+            )
             pyobj_overhead = (
-                pyobj.mean_ms / plain.mean_ms if plain.mean_ms > 0 else float("inf")
+                pyobj_gate_ms / plain_gate_ms if plain_gate_ms > 0 else float("inf")
             )
             if pyobj_overhead > args.max_overhead_pyobj:
                 failures.append(

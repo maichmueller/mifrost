@@ -10,6 +10,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
 option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
 option(MIFROST_EXPORT_LOCAL_CONAN_RECIPES "Export local Conan recipes before Conan provider install." ON)
+option(MIFROST_FREE_THREADED "Enable nanobind FREE_THREADED mode (if compatible python version)." ON)
+
 
 # In provider mode, export local recipes (loki/nauty/valla, etc.) before the
 # first find_package() triggers Conan resolution on clean machines/CI runners.
@@ -73,7 +75,13 @@ if (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
     set(Python_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
     set(Python_ROOT_DIR "$ENV{CONDA_PREFIX}")
 endif ()
-find_package(Python 3.8 COMPONENTS Interpreter Development.Module Development.Embed REQUIRED)
+find_package(
+        Python 3.10
+        REQUIRED
+        COMPONENTS Interpreter Development.Module
+        OPTIONAL_COMPONENTS Development.Embed
+)
+
 find_package(nanobind CONFIG REQUIRED)
 if (NOT COMMAND nanobind_build_library)
     if (DEFINED nanobind_BUILD_DIRS_RELEASE AND EXISTS "${nanobind_BUILD_DIRS_RELEASE}/nanobind-config.cmake")
@@ -93,7 +101,6 @@ find_package(absl CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 find_package(phmap CONFIG REQUIRED)
 find_package(unordered_dense CONFIG REQUIRED)
-find_package(GTest REQUIRED)
 find_package(strong_type REQUIRED)
 find_package(range-v3 REQUIRED)
 if (MIFROST_BUILD_BENCHMARKS)
@@ -153,7 +160,7 @@ if (NOT DEFINED mimir_DIR)
                 OUTPUT_STRIP_TRAILING_WHITESPACE
         )
         if (_mifrost_mimir_result EQUAL 0 AND
-                (EXISTS "${_mifrost_mimir_dir}/mimir-config.cmake" OR EXISTS "${_mifrost_mimir_dir}/mimirConfig.cmake"))
+        (EXISTS "${_mifrost_mimir_dir}/mimir-config.cmake" OR EXISTS "${_mifrost_mimir_dir}/mimirConfig.cmake"))
             set(mimir_DIR "${_mifrost_mimir_dir}" CACHE PATH "Path to mimir CMake package")
         else ()
             message(STATUS "mimir auto-detect failed with Python_EXECUTABLE=${Python_EXECUTABLE}; set MIMIR_CMAKE_DIR or mimir_DIR.")
@@ -179,11 +186,24 @@ function(_mifrost_append_rpath_from_target out_var target_name)
     if (NOT TARGET "${target_name}")
         return()
     endif ()
-    foreach (prop IMPORTED_LOCATION IMPORTED_LOCATION_RELEASE IMPORTED_LOCATION_DEBUG)
+    foreach (prop
+            IMPORTED_LOCATION
+            IMPORTED_LOCATION_RELEASE
+            IMPORTED_LOCATION_DEBUG
+            INTERFACE_LINK_DIRECTORIES)
         get_target_property(_loc "${target_name}" "${prop}")
-        if (_loc AND EXISTS "${_loc}")
-            get_filename_component(_dir "${_loc}" DIRECTORY)
-            list(APPEND "${out_var}" "${_dir}")
+        if (_loc)
+            foreach (_entry IN LISTS _loc)
+                if (_entry MATCHES "\\$<")
+                    # Keep generator expressions (e.g. config-specific Conan dirs).
+                    list(APPEND "${out_var}" "${_entry}")
+                elseif (IS_DIRECTORY "${_entry}")
+                    list(APPEND "${out_var}" "${_entry}")
+                elseif (EXISTS "${_entry}")
+                    get_filename_component(_dir "${_entry}" DIRECTORY)
+                    list(APPEND "${out_var}" "${_dir}")
+                endif ()
+            endforeach ()
         endif ()
     endforeach ()
     set("${out_var}" "${${out_var}}" PARENT_SCOPE)
@@ -201,6 +221,7 @@ add_library(
         "_core/mifrost/core/horizon_hgraph_encoder.cpp"
         "_core/mifrost/core/successor_hgraph_encoder.cpp"
 )
+set_target_properties(mifrost_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
 target_include_directories(mifrost_core PUBLIC
@@ -221,7 +242,8 @@ target_link_libraries(
         # Ensure absl headers are available to Loki/Mimir
         absl::node_hash_set
         # Ensure TBB headers are available to Valla/Mimir
-        TBB::tbb
+        # (do NOT link to TBB: it is a transitive build dependency, not a
+        # runtime dependency of this extension).
         # Ensure parallel-hashmap headers are available for valla's gtl wrapper
         phmap
         # Use unordered_dense for our internal maps
@@ -237,7 +259,14 @@ target_link_libraries(
 conan_add_package_include_fallback(mifrost_core abseil)
 conan_add_package_include_fallback(mifrost_core onetbb)
 
+if(MIFROST_FREE_THREADED)
+    set(_mifrost_freethreading "FREE_THREADED")  # automatically ignored if python is not built for free-threading
+endif ()
+
+
 nanobind_add_module(mifrost_core_module
+        ${_mifrost_freethreading}
+        STABLE_ABI  # free-threading does not have stable api, but nanobind handles this.
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/batch_encoding_graph_field_access.cpp"
@@ -270,10 +299,40 @@ if (APPLE)
 elseif (UNIX)
     list(APPEND _mifrost_rpaths "$ORIGIN")
 endif ()
+if (MIFROST_RPATH_MODE STREQUAL "wheel")
+    if (APPLE)
+        list(APPEND _mifrost_rpaths "@loader_path/../pymimir/lib")
+    elseif (UNIX)
+        list(APPEND _mifrost_rpaths "$ORIGIN/../pymimir/lib")
+    endif ()
+endif ()
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     _mifrost_append_rpath_from_target(_mifrost_rpaths mimir::core)
-    _mifrost_append_rpath_from_target(_mifrost_rpaths TBB::tbb)
     _mifrost_append_rpath_from_target(_mifrost_rpaths nanobind)
+
+    # Fallback: if Conan is used to provide runtime libraries, bake the Conan cache
+    # lib dirs into the RPATH. This avoids relying on imported-target properties
+    # (which vary across CMake package configs) and makes CI source installs
+    # deterministic.
+    set(_mifrost_conan_home "")
+    if (DEFINED ENV{CONAN_HOME} AND NOT "$ENV{CONAN_HOME}" STREQUAL "")
+        set(_mifrost_conan_home "$ENV{CONAN_HOME}")
+    elseif (DEFINED ENV{HOME} AND EXISTS "$ENV{HOME}/.conan2")
+        set(_mifrost_conan_home "$ENV{HOME}/.conan2")
+    endif ()
+    if (NOT _mifrost_conan_home STREQUAL "" AND IS_DIRECTORY "${_mifrost_conan_home}")
+        file(GLOB _mifrost_conan_lib_dirs LIST_DIRECTORIES true
+                "${_mifrost_conan_home}/p/*/p/lib"
+                "${_mifrost_conan_home}/p/b/*/p/lib"
+        )
+        foreach (_dir IN LISTS _mifrost_conan_lib_dirs)
+            if (IS_DIRECTORY "${_dir}")
+                list(APPEND _mifrost_rpaths "${_dir}")
+            endif ()
+        endforeach ()
+        unset(_mifrost_conan_lib_dirs)
+    endif ()
+    unset(_mifrost_conan_home)
 endif ()
 list(REMOVE_DUPLICATES _mifrost_rpaths)
 
@@ -283,7 +342,8 @@ set_target_properties(
         BUILD_RPATH "${_mifrost_rpaths}"
         BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH "${_mifrost_rpaths}"
-        INSTALL_RPATH_USE_LINK_PATH TRUE
+        # Avoid embedding transient link directories (e.g. pip-build-env overlays).
+        INSTALL_RPATH_USE_LINK_PATH FALSE
 )
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_core_module PROPERTIES
@@ -358,6 +418,7 @@ endif ()
 # --- Tests ---
 include(CTest)
 if (BUILD_TESTING)
+    find_package(GTest REQUIRED)
     add_executable(
             mifrost_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"

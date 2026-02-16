@@ -1,11 +1,11 @@
-name: Wheels
+name: Wheel Builds
 
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
-     - master
+      - "**"
   release:
     types:
       - published
@@ -15,12 +15,22 @@ env:
 
 jobs:
   build_sdist:
-    name: Build SDist
+    name: Build Source Distribution
+    needs: [generate_stubs]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: true
+
+    - name: Download generated stubs
+      uses: actions/download-artifact@v7
+      with:
+        name: mifrost-stubs
+        path: src/mifrost
+
+    - name: Verify stub file
+      run: test -s src/mifrost/_core.pyi
 
     - name: Build SDist
       run: pipx run build --sdist
@@ -33,14 +43,90 @@ jobs:
         name: dist-sdist
         path: dist/*.tar.gz
 
+  generate_stubs:
+    name: Generate Stubs
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Set Conan cache dir
+      run: echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2_stubs" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Restore Conan cache
+      id: conan_cache_restore
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.CONAN_HOME }}
+        key: conan-stubs-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py', 'dependencies/**/conanfile.py', '.github/workflows/wheels.yml') }}
+        restore-keys: |
+          conan-stubs-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-
+
+    - name: Install build deps
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements/build.txt -r requirements.txt
+
+    - name: Initialize Conan profile
+      run: |
+        conan profile detect --force
+
+    - name: Configure build
+      id: configure_stubs
+      run: |
+        python configure.py --build_dir build_stubs --config Release
+
+    - name: Generate nanobind stubs
+      run: |
+        cmake --build build_stubs --target mifrost_core_module_stubs
+
+    - name: Verify generated stub exists
+      run: |
+        test -s src/mifrost/_core.pyi
+
+    - name: Upload generated stubs
+      uses: actions/upload-artifact@v6
+      with:
+        name: mifrost-stubs
+        path: src/mifrost/_core.pyi
+        if-no-files-found: error
+
+    - name: Save Conan cache
+      if: always() && steps.conan_cache_restore.outcome == 'success' && steps.configure_stubs.outcome == 'success'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CONAN_HOME }}
+        key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
+
 
   build_wheels:
-    name: Wheels on ${{ matrix.os }}
+    name: Build Wheels (${{ matrix.os }} / ${{ matrix.flavor }})
+    needs: [generate_stubs]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15-intel, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            flavor: manylinux
+            conan_home_dir: .conan2_wheels_manylinux
+            cibw_build: "cp3*-manylinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: musllinux
+            conan_home_dir: .conan2_wheels_musllinux
+            cibw_build: "cp3*-musllinux_*"
+            cibw_skip: ""
+          - os: macos-latest
+            flavor: macos
+            conan_home_dir: .conan2_wheels_macos
+            cibw_build: "*"
 
     steps:
     - uses: actions/checkout@v6
@@ -51,19 +137,20 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Set cache dirs (non-Windows)
-      if: runner.os != 'Windows'
+    - name: Download generated stubs
+      uses: actions/download-artifact@v7
+      with:
+        name: mifrost-stubs
+        path: src/mifrost
+
+    - name: Verify stub file
+      run: test -s src/mifrost/_core.pyi
+
+    - name: Set cache dirs
       run: |
-        echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2" >> $GITHUB_ENV
+        echo "CONAN_HOME=$GITHUB_WORKSPACE/${{ matrix.conan_home_dir }}" >> $GITHUB_ENV
         echo "CIBW_CACHE_PATH=$GITHUB_WORKSPACE/.cibuildwheel_cache" >> $GITHUB_ENV
       shell: bash
-
-    - name: Set cache dirs (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        "CONAN_HOME=$env:GITHUB_WORKSPACE\\.conan2" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        "CIBW_CACHE_PATH=$env:GITHUB_WORKSPACE\\.cibuildwheel_cache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      shell: pwsh
 
     - name: Cache cibuildwheel
       uses: actions/cache@v5
@@ -73,47 +160,49 @@ jobs:
         restore-keys: |
           cibw-${{ runner.os }}-${{ runner.arch }}-
 
-    - name: Cache Conan
-      uses: actions/cache@v5
+    - name: Restore Conan cache
+      id: conan_cache_restore
+      uses: actions/cache/restore@v5
+
       with:
         path: ${{ env.CONAN_HOME }}
-        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+        key: conan-wheel-${{ matrix.flavor }}-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py', '.github/workflows/wheels.yml') }}
         restore-keys: |
-          conan-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-
-
-    - name: Install build tools
-      run: python -m pip install --upgrade pip conan
-
-    - name: Configure Conan macOS deployment target
-      if: runner.os == 'macOS'
-      run: |
-        echo "MACOSX_DEPLOYMENT_TARGET=${MIFROST_MACOSX_DEPLOYMENT_TARGET}" >> $GITHUB_ENV
-        conan profile detect --force
-        conan profile update settings.os.version=${MIFROST_MACOSX_DEPLOYMENT_TARGET} default
-        conan profile update conf.tools.apple:deployment_target=${MIFROST_MACOSX_DEPLOYMENT_TARGET} default
+          conan-wheel-${{ matrix.flavor }}-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-
 
     - uses: pypa/cibuildwheel@v3.3
+      id: build_wheels_step
       env:
+        CIBW_BUILD: ${{ matrix.cibw_build }}
+        CIBW_SKIP: ${{ matrix.cibw_skip }}
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
-        CIBW_BEFORE_BUILD: python -m pip install conan
-        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install conan
+        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -c /project/requirements/constraints-ci.txt -r /project/requirements.txt
+        CIBW_BEFORE_BUILD_MACOS: python -m pip install -c {project}/requirements/constraints-ci.txt -r {project}/requirements.txt && python -m pip install delocate
+        CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
+        CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
-        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1
-        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }}
-        CIBW_ENVIRONMENT_WINDOWS: CONAN_HOME=${{ env.CONAN_HOME }}
+        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1 CMAKE_ARGS=-DCONAN_INSTALL_ARGS=--build=missing\;--build=b2/*
+        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1
 
     - name: Verify clean directory
-      run: git diff --exit-code
+      run: git diff --exit-code -- . ':(exclude)src/mifrost/_core.pyi'
       shell: bash
+
+    - name: Save Conan cache
+      if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_wheels_step.outcome == 'success'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CONAN_HOME }}
+        key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
 
     - name: Upload wheels
       uses: actions/upload-artifact@v6
       with:
         path: wheelhouse/*.whl
-        name: dist-${{ matrix.os }}
+        name: dist-${{ matrix.os }}-${{ matrix.flavor }}
 
   upload_all:
-    name: Upload if release
+    name: Publish Wheels (Release)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'

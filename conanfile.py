@@ -71,6 +71,7 @@ class MifrostRecipe(ConanFile):
     def requirements(self):
         # Public dependencies from Mimir
         self.requires("boost/[>=1.74.0]")
+        self.requires("abseil/20240116.2", override=True)
         self.requires("fmt/11.2.0")
         self.requires("range-v3/0.12.0")
         self.requires("nanobind/2.9.2")

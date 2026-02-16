@@ -60,6 +60,14 @@ def main():
     cmake_toolchain_file = args.toolchain_file
 
     if use_conan:
+        # Conan 2 does not guarantee a default profile exists. Create one if needed.
+        conan_home = Path(
+            os.environ.get("CONAN_HOME", Path.home() / ".conan2")
+        ).resolve()
+        default_profile = conan_home / "profiles" / "default"
+        if not default_profile.exists():
+            subprocess.run([args.conan_cmd, "profile", "detect", "--force"], check=True)
+
         # Check custom deps (cista/loki/nauty) are exported?
         # conan_export.py logic
         conan_export_script = script_dir / "conan_export.py"

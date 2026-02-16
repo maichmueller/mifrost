@@ -37,81 +37,105 @@ nb::object try_import_module(const char* module_name)
    }
 }
 
-const nb::object& torch_module()
+nb::handle torch_module()
 {
-   static const nb::object module = try_import_module("torch");
-   return module;
+   // NOTE: Avoid function-local `static nb::object`: its destructor may run after
+   // Python interpreter finalization and crash. Cache a borrowed handle instead.
+   //
+   // Assumption: The imported module object stays alive for the remainder of the
+   // interpreter lifetime (normally true because `sys.modules` holds a strong
+   // reference). We intentionally do not support exotic patterns like deleting
+   // `sys.modules["torch"]` / `sys.modules["numpy"]` or reloading modules in a
+   // way that invalidates cached objects.
+   static PyObject* module = []() -> PyObject* {
+      nb::object imported = try_import_module("torch");
+      return imported.ptr();
+   }();
+   return nb::handle(module);
 }
 
-const nb::object& numpy_module()
+nb::handle numpy_module()
 {
-   static const nb::object module = try_import_module("numpy");
-   return module;
+   static PyObject* module = []() -> PyObject* {
+      nb::object imported = try_import_module("numpy");
+      return imported.ptr();
+   }();
+   return nb::handle(module);
 }
 
-const nb::object& torch_tensor_type()
+nb::handle torch_tensor_type()
 {
-   static const nb::object type = []() -> nb::object {
-      const nb::object& torch = torch_module();
+   static PyObject* type = []() -> PyObject* {
+      const nb::handle torch = torch_module();
       if(torch.is_none()) {
-         return nb::none();
+         return nb::none().ptr();
       }
-      return torch.attr("Tensor");
+      nb::object obj = nb::borrow< nb::object >(torch).attr("Tensor");
+      return obj.ptr();
    }();
-   return type;
+   return nb::handle(type);
 }
 
-const nb::object& numpy_array_type()
+nb::handle numpy_array_type()
 {
-   static const nb::object type = []() -> nb::object {
-      const nb::object& np = numpy_module();
+   static PyObject* type = []() -> PyObject* {
+      const nb::handle np = numpy_module();
       if(np.is_none()) {
-         return nb::none();
+         return nb::none().ptr();
       }
-      return np.attr("ndarray");
+      nb::object obj = nb::borrow< nb::object >(np).attr("ndarray");
+      return obj.ptr();
    }();
-   return type;
+   return nb::handle(type);
 }
 
-const nb::object& operator_module()
+nb::handle operator_module()
 {
-   static const nb::object module = nb::module_::import_("operator");
-   return module;
+   static PyObject* module = []() -> PyObject* {
+      nb::object obj = nb::module_::import_("operator");
+      return obj.ptr();
+   }();
+   return nb::handle(module);
 }
 
-const nb::object& operator_eq_fn()
+nb::handle operator_eq_fn()
 {
-   static const nb::object eq_fn = operator_module().attr("eq");
-   return eq_fn;
+   static PyObject* eq_fn = []() -> PyObject* {
+      nb::object obj = nb::borrow< nb::object >(operator_module()).attr("eq");
+      return obj.ptr();
+   }();
+   return nb::handle(eq_fn);
 }
 
-const nb::object& torch_equal_fn()
+nb::handle torch_equal_fn()
 {
-   static const nb::object fn = []() -> nb::object {
-      const nb::object& torch = torch_module();
+   static PyObject* fn = []() -> PyObject* {
+      const nb::handle torch = torch_module();
       if(torch.is_none()) {
-         return nb::none();
+         return nb::none().ptr();
       }
-      return torch.attr("equal");
+      nb::object obj = nb::borrow< nb::object >(torch).attr("equal");
+      return obj.ptr();
    }();
-   return fn;
+   return nb::handle(fn);
 }
 
-const nb::object& numpy_array_equal_fn()
+nb::handle numpy_array_equal_fn()
 {
-   static const nb::object fn = []() -> nb::object {
-      const nb::object& np = numpy_module();
+   static PyObject* fn = []() -> PyObject* {
+      const nb::handle np = numpy_module();
       if(np.is_none()) {
-         return nb::none();
+         return nb::none().ptr();
       }
-      return np.attr("array_equal");
+      nb::object obj = nb::borrow< nb::object >(np).attr("array_equal");
+      return obj.ptr();
    }();
-   return fn;
+   return nb::handle(fn);
 }
 
 bool is_torch_tensor(nb::handle value)
 {
-   const nb::object& type = torch_tensor_type();
+   const nb::handle type = torch_tensor_type();
    if(type.is_none()) {
       return false;
    }
@@ -120,7 +144,7 @@ bool is_torch_tensor(nb::handle value)
 
 bool is_numpy_array(nb::handle value)
 {
-   const nb::object& type = numpy_array_type();
+   const nb::handle type = numpy_array_type();
    if(type.is_none()) {
       return false;
    }
@@ -130,7 +154,8 @@ bool is_numpy_array(nb::handle value)
 bool python_eq_returns_true(nb::handle lhs, nb::handle rhs)
 {
    bool result = false;
-   if(! try_cast_python_bool(operator_eq_fn()(lhs, rhs), result)) {
+   nb::object eq = nb::borrow< nb::object >(operator_eq_fn());
+   if(! try_cast_python_bool(eq(lhs, rhs), result)) {
       throw std::invalid_argument("Python const field comparison produced a non-boolean result");
    }
    return result;
@@ -154,11 +179,11 @@ bool torch_tensors_equal_exact(const nb::object& lhs, const nb::object& rhs)
       return false;
    }
 
-   const nb::object& equal = torch_equal_fn();
+   const nb::handle equal = torch_equal_fn();
    if(equal.is_none()) {
       throw std::invalid_argument("Torch tensor comparison requested but torch is unavailable");
    }
-   return nb::cast< bool >(equal(lhs, rhs));
+   return nb::cast< bool >(nb::borrow< nb::object >(equal)(lhs, rhs));
 }
 
 bool numpy_arrays_equal_exact(const nb::object& lhs, const nb::object& rhs)
@@ -173,11 +198,11 @@ bool numpy_arrays_equal_exact(const nb::object& lhs, const nb::object& rhs)
       return false;
    }
 
-   const nb::object& array_equal = numpy_array_equal_fn();
+   const nb::handle array_equal = numpy_array_equal_fn();
    if(array_equal.is_none()) {
       throw std::invalid_argument("NumPy array comparison requested but numpy is unavailable");
    }
-   return nb::cast< bool >(array_equal(lhs, rhs));
+   return nb::cast< bool >(nb::borrow< nb::object >(array_equal)(lhs, rhs));
 }
 
 bool python_objects_equal_for_const(const nb::object& lhs, const nb::object& rhs)

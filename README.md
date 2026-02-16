@@ -5,7 +5,19 @@ It combines C++ encoder engines (via nanobind) with Python-facing APIs.
 The API is native-first: encoders return `BatchEncoding` by default, and PyTorch Geometric
 (`Data` / `HeteroData`) objects are built on demand.
 
+[![Unit & C++ Tests](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml)
+[![Install & Test](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml)
+[![Wheel Builds](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml)
+[![Performance Gate](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
 [![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
+
+| Workflow | Platforms | Python versions |
+| --- | --- | --- |
+| Unit & C++ Tests | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
+| Install & Test | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
+| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3*` (platform-dependent) |
+| Performance Gate | macOS | 3.12 |
+| Docs Check | Ubuntu | 3.12 |
 
 ## Documentation
 
@@ -34,6 +46,16 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 - `pymimir>=0.13.60` available in the Python environment used for build/runtime
 - For Python-side graph assembly: `torch` and `torch-geometric`
 - For source builds: Conan (or `CONAN_COMMAND`/`CONAN_CMD` pointing to it)
+
+### Python dependency files
+
+- `requirements.txt`: runtime Python dependency set
+- `requirements/build.txt`: Python tooling for source builds (`conan`, `cmake`, `ninja`, etc.)
+- `requirements/test.txt`: test-only Python dependencies
+- `requirements/perf.txt`: performance-gate dependencies
+- `requirements/dev.txt`: convenience union of build + test + perf
+- `requirements/constraints-ci.txt`: CI-only version constraints used by workflows
+- `pyproject.toml` extras: `.[test]`, `.[perf]`, `.[dev]`
 
 ## Installation
 

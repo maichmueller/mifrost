@@ -1,16 +1,15 @@
-name: Perf BatchEncodings
+name: Performance Gate
 
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
-      - main
-      - master
+      - "**"
 
 jobs:
   perf-batch-encodings:
-    name: batch_encodings perf gate (macOS)
+    name: Batch Encodings Perf Gate (macOS)
     runs-on: macos-latest
 
     steps:
@@ -20,26 +19,56 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build/runtime deps
+      - name: Set Conan cache dir
+        run: |
+          echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2" >> $GITHUB_ENV
+
+      - name: Restore Conan cache
+        id: conan_cache_restore
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.CONAN_HOME }}
+          key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+          restore-keys: |
+            conan-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install runtime deps
         run: |
           python -m pip install --upgrade pip
-          python -m pip install conan pymimir torch
+          python -m pip install -r requirements/build.txt -r requirements/perf.txt -r requirements.txt
 
       - name: Build and install mifrost
-        env:
-          CONAN_COMMAND: conan
+        id: build_install
         run: |
-          export MIFROST_MIMIR_CMAKE_DIR="$(python -c "import pymimir; print(pymimir.get_cmake_dir())")"
-          python -m pip install --verbose .
+          python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
       - name: Run batch_encodings benchmark gate
         run: |
+          # Reduce runner noise sensitivity:
+          # - use CPU-time clock (less affected by scheduler preemption / noisy neighbors)
+          # - gate on median instead of mean (robust to occasional outliers)
+          # - pin common BLAS/OMP thread pools to 1
+          OMP_NUM_THREADS=1 \
+          MKL_NUM_THREADS=1 \
+          OPENBLAS_NUM_THREADS=1 \
+          VECLIB_MAXIMUM_THREADS=1 \
+          NUMEXPR_NUM_THREADS=1 \
           python scripts/benchmark_batch_encodings.py \
             --scenarios plain,typed,pyobj \
             --import-mode installed \
             --batch-size 64 \
             --warmup 30 \
             --repeats 120 \
+            --inner-iters 50 \
+            --clock cpu \
+            --gate-stat median \
             --max-plain-mean-ms 0.40 \
             --max-overhead-typed 1.55 \
             --max-overhead-pyobj 2.35
+
+      - name: Save Conan cache
+        if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_install.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CONAN_HOME }}
+          key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}

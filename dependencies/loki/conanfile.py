@@ -71,7 +71,7 @@ class LokiRecipe(ConanFile):
 
     def requirements(self):
         self.requires("boost/[>=1.86.0]")
-        self.requires("abseil/20230125.3")
+        self.requires("abseil/20240116.2")
         self.requires("fmt/11.2.0")
 
     def source(self):

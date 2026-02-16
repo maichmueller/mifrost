@@ -84,8 +84,24 @@ batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::st
 
 nb::object to_torch_tensor(nb::handle array_like)
 {
-   static const nb::object numpy = nb::module_::import_("numpy");
-   static const nb::object torch = nb::module_::import_("torch");
+   // Avoid function-local `static nb::object`: its destructor may run after
+   // Python interpreter finalization and crash at shutdown.
+   //
+   // Assumption: Imported modules remain alive for the remainder of the
+   // interpreter lifetime (normally ensured by `sys.modules`). We do not
+   // support module deletion/reload patterns that would invalidate cached
+   // borrowed pointers (e.g., ``importlib.reload(torch)``).
+   static PyObject* numpy_mod = []() -> PyObject* {
+      nb::object obj = nb::module_::import_("numpy");
+      return obj.ptr();
+   }();
+   static PyObject* torch_mod = []() -> PyObject* {
+      nb::object obj = nb::module_::import_("torch");
+      return obj.ptr();
+   }();
+
+   nb::object numpy = nb::borrow< nb::object >(nb::handle(numpy_mod));
+   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
    nb::object array = numpy.attr("asarray")(array_like);
    return torch.attr("from_numpy")(array);
 }

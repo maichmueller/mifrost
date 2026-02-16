@@ -21,9 +21,15 @@ class VallaRecipe(ConanFile):
     }
 
     def requirements(self):
-        self.requires("abseil/20230125.3")
+        self.requires("abseil/20240116.2")
         self.requires("fmt/11.2.0")
-        self.requires("onetbb/2021.12.0")
+        # Valla uses TBB headers and links to libtbb, but downstream consumers
+        # should not be forced to link tbbmalloc/tbbmalloc_proxy. Export only the
+        # headers transitively; final link closure is owned by the top-level
+        # project.
+        self.requires(
+            "onetbb/2021.12.0", transitive_headers=True, transitive_libs=False
+        )
 
     def validate(self):
         check_min_cppstd(self, "20")
