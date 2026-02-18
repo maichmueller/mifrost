@@ -2,7 +2,7 @@
 # Build-time requirements used by isolated PEP 517 builds.
 requires = [
     "scikit-build-core>=0.10",
-    "cmake>=3.24,<4",
+    "cmake>=3.24,<5",
     "conan>=2.4,<3",
     "pymimir>=0.13.60",
     "ninja>=1.11,<2",

@@ -11,9 +11,9 @@ Primary methods/properties include:
 - `as_dict()`
 - `as_pyg(as_batch=...)`
 - `as_hetero()`, `as_homo()` (lazy tensor facades without PyG materialization)
-- `has_graph_field(key)`, `get_graph_field(key)`
-- `set_graph_field(key, value)`, `set_graph_fields({...})`
-- `graph_field_specs()`, `register_graph_field_specs({...})`
+- `has_field(key)`, `get_field(key)`
+- `set_field(key, value)`, `set_fields({...})`
+- `field_specs()`, `register_field_specs({...})`
 - `keys()`, `items()` (lightweight runtime introspection)
 - `schema_fingerprint()`
 - `dumps(include_metadata=True)`, `loads(payload)`
@@ -28,14 +28,14 @@ Ragged field notes:
 
 - Ragged values are keyed at `<key>`, with ptr metadata at `<key>_ptr`.
 - Direct assignment to `<key>_ptr` is rejected.
-- Assign ragged values as `(values, ptr)` via `set_graph_field` / `set_graph_fields`.
+- Assign ragged values as `(values, ptr)` via `set_field` / `set_fields`.
 - In-place mutation on returned value tensors is write-through; ptr tensors are returned as snapshots.
 
 Collision policy:
 
 - During `as_pyg(...)`, native graph fields still win over python attrs for the same key.
 - Registering python collation specs that collide with native graph-field keys now raises `ValueError`
-  (both on `register_graph_field_specs(...)` and `batch_encodings(..., graph_field_specs=...)`).
+  (both on `register_field_specs(...)` and `batch_encodings(..., field_specs=...)`).
 
 ## Native Helpers
 

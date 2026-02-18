@@ -11,7 +11,7 @@ def main() -> None:
     _action, state1 = first_successor(space, state0)
 
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "goal_distance": GraphFieldSpec(mode=Mode.STACK, dtype=DType.F32),
             "target_indices": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.I64),

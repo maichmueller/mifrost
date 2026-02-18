@@ -176,7 +176,7 @@ TEST_P(SuccessorHGraphEncoderTest, DeltaModeEncodesOnlyAddedRemovedAtoms)
          }
          const auto atom = repos.get_ground_atom< Tag >(idx);
          const auto predicate = atom->get_predicate();
-         if(predicate->get_arity() == 0 && ! config.add_nullary_predicates) {
+         if(predicate->get_arity() == 0 && not config.add_nullary_predicates) {
             continue;
          }
          const std::string node_type = RelationFormatter::format_predicate(
@@ -205,7 +205,7 @@ TEST_P(SuccessorHGraphEncoderTest, DeltaModeEncodesOnlyAddedRemovedAtoms)
          }
          const auto atom = repos.get_ground_atom< Tag >(idx);
          const auto predicate = atom->get_predicate();
-         if(predicate->get_arity() == 0 && ! config.add_nullary_predicates) {
+         if(predicate->get_arity() == 0 && not config.add_nullary_predicates) {
             continue;
          }
          const std::string node_type = RelationFormatter::format_predicate(

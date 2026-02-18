@@ -14,6 +14,8 @@ namespace mifrost {
 
 namespace {
 
+constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
+
 enum class GraphFieldLookupKind { VALUE, PTR, MISSING };
 
 struct GraphFieldLookup {
@@ -70,7 +72,7 @@ batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::st
    }
    constexpr std::string_view kPtrSuffix = "_ptr";
    if(key.size() <= kPtrSuffix.size()
-      || key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
+      or key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
       return {};
    }
    std::string base(key.substr(0, key.size() - kPtrSuffix.size()));
@@ -106,6 +108,42 @@ nb::object to_torch_tensor(nb::handle array_like)
    return torch.attr("from_numpy")(array);
 }
 
+std::string ascii_lower_copy(std::string text)
+{
+   for(char& c : text) {
+      c = ascii_lower(c);
+   }
+   return text;
+}
+
+bool is_cpu_device(nb::handle device)
+{
+   if(device.is_none()) {
+      return true;
+   }
+   std::string text = nb::cast< std::string >(nb::str(device));
+   text = ascii_lower_copy(std::move(text));
+   return text.find("cpu") != std::string::npos;
+}
+
+nb::object target_device_from_owner(nb::handle owner)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(not attrs.contains(kPythonTensorDeviceAttr.data())) {
+      return nb::none();
+   }
+   return nb::borrow< nb::object >(attrs[kPythonTensorDeviceAttr.data()]);
+}
+
+nb::object maybe_move_tensor_to_device(nb::object tensor, nb::handle owner)
+{
+   nb::object device = target_device_from_owner(owner);
+   if(device.is_none() or is_cpu_device(device)) {
+      return tensor;
+   }
+   return tensor.attr("to")(device);
+}
+
 nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner)
 {
    return std::visit(
@@ -115,8 +153,8 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
             return to_torch_tensor(vector_to_1d_ndarray_view(values, owner).cast());
          }
          const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
-                                   || field.spec.mode == GraphFieldMode::RAGGED_CAT)
-                                  && graph_field_cat_dim_is_one(field.spec.cat_dim);
+                                   or field.spec.mode == GraphFieldMode::RAGGED_CAT)
+                                  and graph_field_cat_dim_is_one(field.spec.cat_dim);
          const size_t rows = cat_dim_one ? static_cast< size_t >(field.spec.dim)
                                          : values.size() / static_cast< size_t >(field.spec.dim);
          const size_t cols = cat_dim_one ? values.size() / static_cast< size_t >(field.spec.dim)
@@ -158,7 +196,7 @@ bool batch_encoding_has_graph_field(
    }
    constexpr std::string_view kPtrSuffix = "_ptr";
    if(key.size() <= kPtrSuffix.size()
-      || key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
+      or key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
       return false;
    }
    std::string base(key.substr(0, key.size() - kPtrSuffix.size()));
@@ -176,14 +214,14 @@ nb::object batch_encoding_get_graph_field(
 {
    const auto lookup = batch_encoding_lookup_graph_field(encoding, key);
    if(lookup.kind == GraphFieldLookupKind::VALUE) {
-      return graph_field_values_to_tensor_view(*lookup.field, owner);
+      return maybe_move_tensor_to_device(
+         graph_field_values_to_tensor_view(*lookup.field, owner), owner
+      );
    }
    if(lookup.kind == GraphFieldLookupKind::PTR) {
-      return graph_field_ptr_to_tensor(*lookup.field);
+      return maybe_move_tensor_to_device(graph_field_ptr_to_tensor(*lookup.field), owner);
    }
-   throw std::invalid_argument(
-      "BatchEncoding.get_graph_field unknown key '" + std::string(key) + "'"
-   );
+   throw std::invalid_argument("BatchEncoding.get_field unknown key '" + std::string(key) + "'");
 }
 
 void validate_batch_encoding_graph_fields(

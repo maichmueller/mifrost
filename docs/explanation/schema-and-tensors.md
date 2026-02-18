@@ -15,7 +15,7 @@ the native graph field value is kept and the python attr is skipped. For ragged
 native fields, `<attr>_ptr` is reserved by the native field as well.
 
 For native `BatchEncoding` access (without PyG conversion), native graph fields are
-also reachable as attributes and through `get_graph_field(key)`. The attribute path
+also reachable as attributes and through `get_field(key)`. The attribute path
 is routed to native storage for known keys.
 
 Python graph-field collation specs (`dtype="pyobj"`) are now validated against native

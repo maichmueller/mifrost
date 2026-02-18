@@ -46,36 +46,44 @@ namespace mifrost {
 
 namespace {
 
+std::string py_string(nb::handle value)
+{
+   return {nb::str(value).c_str()};
+}
+
 GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
 {
    GraphFieldSpec spec;
    if(not spec_dict.contains("dtype")) {
-      throw std::invalid_argument("graph field spec requires 'dtype'");
+      throw std::invalid_argument("field spec requires 'dtype'");
    }
    if(not spec_dict.contains("mode")) {
-      throw std::invalid_argument("graph field spec requires 'mode'");
+      throw std::invalid_argument("field spec requires 'mode'");
    }
-   const auto dtype = nb::cast< nb::str >(spec_dict["dtype"]);
-   const auto mode = nb::cast< nb::str >(spec_dict["mode"]);
-   spec.dtype = graph_field_dtype_from_name(dtype.c_str());
-   spec.mode = graph_field_mode_from_name(mode.c_str());
+   const auto dtype = py_string(spec_dict["dtype"]);
+   const auto mode = py_string(spec_dict["mode"]);
+   spec.dtype = graph_field_dtype_from_name(dtype);
+   spec.mode = graph_field_mode_from_name(mode);
    if(spec_dict.contains("dim")) {
       spec.dim = nb::cast< int >(spec_dict["dim"]);
    }
    if(spec_dict.contains("cat_dim")) {
       spec.cat_dim = normalize_graph_field_cat_dim(nb::cast< int >(spec_dict["cat_dim"]));
    }
-   if(spec_dict.contains("inc")) {
+   if(spec_dict.contains("inc") and not spec_dict["inc"].is_none()) {
+      if(not nb::isinstance< nb::dict >(spec_dict["inc"])) {
+         throw std::invalid_argument("field spec 'inc' must be a dict");
+      }
       const auto inc_dict = nb::cast< nb::dict >(spec_dict["inc"]);
       if(inc_dict.contains("kind")) {
-         const auto kind = nb::cast< nb::str >(inc_dict["kind"]);
-         spec.inc.kind = graph_field_inc_kind_from_name(kind.c_str());
+         const auto kind = py_string(inc_dict["kind"]);
+         spec.inc.kind = graph_field_inc_kind_from_name(kind);
       }
       if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
          if(not inc_dict.contains("node_type")) {
-            throw std::invalid_argument("graph field spec inc NODE_OFFSET requires node_type");
+            throw std::invalid_argument("field spec inc NODE_OFFSET requires node_type");
          }
-         spec.inc.node_type = nb::cast< std::string >(inc_dict["node_type"]);
+         spec.inc.node_type = py_string(inc_dict["node_type"]);
       }
    }
    return spec;
@@ -128,13 +136,13 @@ hash_map< std::string, GraphField > graph_field_map_from_dict(const nb::dict& pa
    hash_map< std::string, GraphField > out;
    out.reserve(payload.size());
    for(auto [key_obj, field_obj] : payload) {
-      const auto key = nb::cast< std::string >(key_obj);
+      const auto key = py_string(key_obj);
       const auto entry = nb::cast< nb::dict >(field_obj);
       GraphField field;
       field.spec = graph_field_spec_from_dict(nb::cast< nb::dict >(entry["spec"]));
       field.ptr = nb::cast< std::vector< int64_t > >(entry["ptr"]);
 
-      const auto dtype = nb::cast< std::string >(entry["dtype"]);
+      const auto dtype = py_string(entry["dtype"]);
       const auto length = static_cast< size_t >(nb::cast< int64_t >(entry["length"]));
       const auto raw_bytes = nb::cast< nb::bytes >(entry["raw"]);
       const std::string_view raw(raw_bytes.c_str(), raw_bytes.size());
@@ -177,10 +185,10 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
 {
    NumericFieldInput< T > out;
    const auto is_string_like = [](nb::handle handle) {
-      return nb::isinstance< nb::str >(handle) || nb::isinstance< nb::bytes >(handle);
+      return nb::isinstance< nb::str >(handle) or nb::isinstance< nb::bytes >(handle);
    };
    const auto try_scalar_from_zero_dim_arraylike = [&](nb::handle handle) -> std::optional< T > {
-      if(! nb::hasattr(handle, "ndim")) {
+      if(not nb::hasattr(handle, "ndim")) {
          return std::nullopt;
       }
       int ndim = 0;
@@ -198,8 +206,8 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
       return nb::cast< T >(handle);
    };
 
-   if(nb::isinstance< nb::bool_ >(value) || nb::isinstance< nb::int_ >(value)
-      || nb::isinstance< nb::float_ >(value)) {
+   if(nb::isinstance< nb::bool_ >(value) or nb::isinstance< nb::int_ >(value)
+      or nb::isinstance< nb::float_ >(value)) {
       out.values.push_back(nb::cast< T >(value));
       out.ndim = 0;
       out.rows = 1;
@@ -214,7 +222,7 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
       return out;
    }
 
-   if(not nb::isinstance< nb::iterable >(value) || is_string_like(value)) {
+   if(not nb::isinstance< nb::iterable >(value) or is_string_like(value)) {
       throw std::invalid_argument("Graph field value must be a scalar or iterable");
    }
 
@@ -231,7 +239,7 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
          out.values.push_back(*scalar);
          continue;
       }
-      if(nb::isinstance< nb::iterable >(item) && ! is_string_like(item)) {
+      if(nb::isinstance< nb::iterable >(item) and not is_string_like(item)) {
          has_nested = true;
          size_t row_size = 0;
          nb::object nested_obj = nb::borrow< nb::object >(item);
@@ -239,7 +247,7 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
             out.values.push_back(nb::cast< T >(nested));
             row_size++;
          }
-         if(! nested_cols_set) {
+         if(not nested_cols_set) {
             nested_cols = row_size;
             nested_cols_set = true;
          } else if(row_size != nested_cols) {
@@ -253,7 +261,7 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
          out.values.push_back(nb::cast< T >(item));
       }
    }
-   if(has_nested && has_scalar) {
+   if(has_nested and has_scalar) {
       throw std::invalid_argument(
          "Graph field value must be consistently 1D or 2D, not mixed nested/scalar"
       );
@@ -280,10 +288,10 @@ std::vector< T > normalize_graph_field_input(
 {
    const int cat_dim = normalize_graph_field_cat_dim(spec.cat_dim);
    const bool is_concat_mode = spec.mode == GraphFieldMode::CAT
-                               || spec.mode == GraphFieldMode::RAGGED_CAT;
-   if(is_concat_mode && spec.dim > 1) {
+                               or spec.mode == GraphFieldMode::RAGGED_CAT;
+   if(is_concat_mode and spec.dim > 1) {
       if(cat_dim == 0) {
-         if(input.ndim == 2 && input.cols != static_cast< size_t >(spec.dim)) {
+         if(input.ndim == 2 and input.cols != static_cast< size_t >(spec.dim)) {
             throw std::invalid_argument(
                "Graph field '" + key + "' with cat_dim=0 expects 2D shape [N, dim]"
             );
@@ -312,7 +320,7 @@ bool is_native_graph_field_ptr_key(
 {
    constexpr std::string_view kPtrSuffix = "_ptr";
    if(key.size() <= kPtrSuffix.size()
-      || key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
+      or key.compare(key.size() - kPtrSuffix.size(), kPtrSuffix.size(), kPtrSuffix) != 0) {
       return false;
    }
    std::string base(key.substr(0, key.size() - kPtrSuffix.size()));
@@ -363,7 +371,7 @@ void set_batch_encoding_graph_field(
    const auto spec = field.spec;
 
    if(spec.mode == GraphFieldMode::RAGGED_CAT) {
-      if(! nb::isinstance< nb::tuple >(value)) {
+      if(not nb::isinstance< nb::tuple >(value)) {
          throw std::invalid_argument(
             "Graph field '" + key + "' in RAGGED_CAT mode expects assignment as (values, ptr)"
          );
@@ -412,7 +420,7 @@ void set_batch_encoding_graph_fields(BatchBuilder::BatchEncoding& encoding, cons
 {
    for(auto [key_obj, value_obj] : values) {
       set_batch_encoding_graph_field(
-         encoding, nb::cast< std::string >(key_obj), nb::borrow< nb::object >(value_obj)
+         encoding, py_string(key_obj), nb::borrow< nb::object >(value_obj)
       );
    }
 }
@@ -444,7 +452,7 @@ auto vector_to_2d_ndarray_view(std::vector< T >& vec, size_t rows, size_t cols, 
 }
 
 template < typename T >
-auto vector_to_1d_ndarray_owned(std::vector< T >&& vec)
+auto vector_to_1d_ndarray_owned(std::vector< T >and vec)
 {
    auto* heap_vec = new std::vector< T >(std::move(vec));
    heap_vec->shrink_to_fit();
@@ -454,7 +462,7 @@ auto vector_to_1d_ndarray_owned(std::vector< T >&& vec)
 }
 
 template < typename T >
-auto vector_to_2d_ndarray_owned(std::vector< T >&& vec, size_t rows, size_t cols)
+auto vector_to_2d_ndarray_owned(std::vector< T >and vec, size_t rows, size_t cols)
 {
    auto* heap_vec = new std::vector< T >(std::move(vec));
    heap_vec->shrink_to_fit();
@@ -479,11 +487,11 @@ std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
 
 nb::object flatten_single_graph_metadata_list(nb::handle value)
 {
-   if(! nb::isinstance< nb::list >(value)) {
+   if(not nb::isinstance< nb::list >(value)) {
       return nb::borrow< nb::object >(value);
    }
    nb::list outer = nb::borrow< nb::list >(value);
-   if(nb::len(outer) == 1 && nb::isinstance< nb::list >(outer[0])) {
+   if(nb::len(outer) == 1 and nb::isinstance< nb::list >(outer[0])) {
       return nb::borrow< nb::object >(outer[0]);
    }
    return nb::borrow< nb::object >(value);
@@ -492,8 +500,8 @@ nb::object flatten_single_graph_metadata_list(nb::handle value)
 void copy_store_attrs_without_batch(nb::object& dst_store, nb::object& src_store)
 {
    for(auto key_obj : src_store.attr("keys")()) {
-      const std::string key = nb::cast< std::string >(key_obj);
-      if(key == "ptr" || key == "batch") {
+      const std::string key = py_string(key_obj);
+      if(key == "ptr" or key == "batch") {
          continue;
       }
       dst_store.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
@@ -504,7 +512,7 @@ void copy_global_attrs_for_single(nb::object& dst, nb::object& src)
 {
    nb::object global_store = src.attr("_global_store");
    for(auto key_obj : global_store.attr("keys")()) {
-      const std::string key = nb::cast< std::string >(key_obj);
+      const std::string key = py_string(key_obj);
       if(key == "_num_graphs") {
          continue;
       }
@@ -522,7 +530,7 @@ nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
    nb::object out = tg_data.attr("HeteroData")();
 
    for(auto node_type_obj : pyg_batch.attr("node_types")) {
-      std::string node_type = nb::cast< std::string >(node_type_obj);
+      std::string node_type = py_string(node_type_obj);
       nb::object src_store = pyg_batch.attr("__getitem__")(node_type);
       nb::object dst_store = out.attr("__getitem__")(node_type);
       copy_store_attrs_without_batch(dst_store, src_store);
@@ -560,11 +568,11 @@ nb::object batch_to_single_homo_data(nb::object& pyg_batch)
    }
 
    if(nb::len(node_types) == 1) {
-      std::string node_type = nb::cast< std::string >(node_types[0]);
+      std::string node_type = py_string(node_types[0]);
       nb::object src_store = pyg_batch.attr("__getitem__")(node_type);
       for(auto key_obj : src_store.attr("keys")()) {
-         const std::string key = nb::cast< std::string >(key_obj);
-         if(key == "ptr" || key == "batch") {
+         const std::string key = py_string(key_obj);
+         if(key == "ptr" or key == "batch") {
             continue;
          }
          out.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
@@ -653,46 +661,173 @@ auto map_from_dict(const nb::dict& source)
 {
    absl::btree_map< std::string, value_type > out;
    for(auto [key_obj, value_obj] : source) {
-      out.emplace(nb::cast< std::string >(key_obj), nb::cast< value_type >(value_obj));
+      out.emplace(py_string(key_obj), nb::cast< value_type >(value_obj));
    }
    return out;
 };
 
 BatchBuilder::BatchEncoding batch_encoding_from_state_dict(const nb::dict& state)
 {
-   if(const int version = nb::cast< int >(state["format_version"]); version != 1) {
+   const int version = nb::cast< int >(state["format_version"]);
+   if(version != 1) {
       throw std::invalid_argument("Unsupported BatchEncoding format version");
    }
 
    BatchBuilder::BatchEncoding encoding;
-   encoding.graph_kind = nb::cast< std::string >(state["graph_kind"]);
-   encoding.num_graphs = nb::cast< int64_t >(state["num_graphs"]);
-   encoding.schema_flags = map_from_dict< bool >(nb::cast< nb::dict >(state["schema_flags"]));
-   encoding.node_feature_dims = nb::cast< hash_map< std::string, int > >(
-      state["node_feature_dims"]
-   );
-   encoding.graph_attrs = nb::cast< hash_map< std::string, BatchBuilder::GraphAttrValue > >(
-      state["graph_attrs"]
-   );
-   if(state.contains("graph_fields")) {
-      encoding.graph_fields = graph_field_map_from_dict(
-         nb::cast< nb::dict >(state["graph_fields"])
+   try {
+      encoding.graph_kind = py_string(state["graph_kind"]);
+   } catch(const std::exception& ex) {
+      throw std::invalid_argument("Failed to parse state['graph_kind']: " + std::string(ex.what()));
+   }
+   try {
+      encoding.num_graphs = nb::cast< int64_t >(state["num_graphs"]);
+   } catch(const std::exception& ex) {
+      throw std::invalid_argument("Failed to parse state['num_graphs']: " + std::string(ex.what()));
+   }
+   try {
+      nb::dict schema_flags = nb::cast< nb::dict >(state["schema_flags"]);
+      encoding.schema_flags = map_from_dict< bool >(schema_flags);
+   } catch(const std::exception& ex) {
+      throw std::invalid_argument(
+         "Failed to parse state['schema_flags']: " + std::string(ex.what())
       );
    }
-   encoding.ptrs = nb::cast< hash_map< std::string, std::vector< int64_t > > >(state["ptrs"]);
-   encoding.node_counts = map_from_dict< int64_t >(nb::cast< nb::dict >(state["node_counts"]));
-   encoding.schema = Schema::from_dict(nb::cast< nb::dict >(state["schema"]));
-   encoding.node_names = nb::cast< hash_map< std::string, std::vector< std::string > > >(
-      state["node_names"]
-   );
-   encoding.object_names = nb::cast< std::vector< std::string > >(state["object_names"]);
+   {
+      nb::dict node_feature_dims;
+      try {
+         node_feature_dims = nb::cast< nb::dict >(state["node_feature_dims"]);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Failed to parse state['node_feature_dims']: " + std::string(ex.what())
+         );
+      }
+      encoding.node_feature_dims.clear();
+      encoding.node_feature_dims.reserve(node_feature_dims.size());
+      for(auto [key_obj, value_obj] : node_feature_dims) {
+         try {
+            encoding.node_feature_dims.emplace(py_string(key_obj), nb::cast< int >(value_obj));
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "Failed to parse state['node_feature_dims'] entry: " + std::string(ex.what())
+            );
+         }
+      }
+   }
+   {
+      nb::dict graph_attrs;
+      try {
+         graph_attrs = nb::cast< nb::dict >(state["graph_attrs"]);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Failed to parse state['graph_attrs']: " + std::string(ex.what())
+         );
+      }
+      encoding.graph_attrs.clear();
+      encoding.graph_attrs.reserve(graph_attrs.size());
+      for(auto [key_obj, value_obj] : graph_attrs) {
+         try {
+            encoding.graph_attrs.emplace(
+               py_string(key_obj), nb::cast< BatchBuilder::GraphAttrValue >(value_obj)
+            );
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "Failed to parse state['graph_attrs'] entry: " + std::string(ex.what())
+            );
+         }
+      }
+   }
+   if(state.contains("graph_fields")) {
+      try {
+         encoding.graph_fields = graph_field_map_from_dict(
+            nb::cast< nb::dict >(state["graph_fields"])
+         );
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Failed to parse state['graph_fields']: " + std::string(ex.what())
+         );
+      }
+   }
+   {
+      nb::dict ptrs;
+      try {
+         ptrs = nb::cast< nb::dict >(state["ptrs"]);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument("Failed to parse state['ptrs']: " + std::string(ex.what()));
+      }
+      encoding.ptrs.clear();
+      encoding.ptrs.reserve(ptrs.size());
+      for(auto [key_obj, value_obj] : ptrs) {
+         try {
+            encoding.ptrs.emplace(
+               py_string(key_obj), nb::cast< std::vector< int64_t > >(value_obj)
+            );
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "Failed to parse state['ptrs'] entry: " + std::string(ex.what())
+            );
+         }
+      }
+   }
+   {
+      try {
+         nb::dict node_counts = nb::cast< nb::dict >(state["node_counts"]);
+         encoding.node_counts = map_from_dict< int64_t >(node_counts);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Failed to parse state['node_counts']: " + std::string(ex.what())
+         );
+      }
+   }
+   {
+      try {
+         nb::dict schema = nb::cast< nb::dict >(state["schema"]);
+         encoding.schema = Schema::from_dict(schema);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument("Failed to parse state['schema']: " + std::string(ex.what()));
+      }
+   }
+   {
+      nb::dict node_names;
+      try {
+         node_names = nb::cast< nb::dict >(state["node_names"]);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Failed to parse state['node_names']: " + std::string(ex.what())
+         );
+      }
+      encoding.node_names.clear();
+      encoding.node_names.reserve(node_names.size());
+      for(auto [key_obj, value_obj] : node_names) {
+         try {
+            encoding.node_names.emplace(
+               py_string(key_obj), nb::cast< std::vector< std::string > >(value_obj)
+            );
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "Failed to parse state['node_names'] entry: " + std::string(ex.what())
+            );
+         }
+      }
+   }
+   try {
+      encoding.object_names = nb::cast< std::vector< std::string > >(state["object_names"]);
+   } catch(const std::exception& ex) {
+      throw std::invalid_argument(
+         "Failed to parse state['object_names']: " + std::string(ex.what())
+      );
+   }
 
-   nb::dict columns = nb::cast< nb::dict >(state["columns"]);
+   nb::dict columns;
+   try {
+      columns = nb::cast< nb::dict >(state["columns"]);
+   } catch(const std::exception& ex) {
+      throw std::invalid_argument("Failed to parse state['columns']: " + std::string(ex.what()));
+   }
    for(auto [key_obj, col_obj] : columns) {
       auto col = nb::cast< nb::dict >(col_obj);
-      const auto key = nb::cast< std::string >(key_obj);
+      const auto key = py_string(key_obj);
       const auto dim = nb::cast< int >(col["dim"]);
-      const auto dtype = nb::cast< std::string >(col["dtype"]);
+      const auto dtype = py_string(col["dtype"]);
       const auto length = nb::cast< int64_t >(col["length"]);
       const auto raw_bytes = nb::cast< nb::bytes >(col["raw"]);
       const std::string_view raw(raw_bytes.c_str(), raw_bytes.size());
@@ -895,7 +1030,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
       tensors[(node_type + "/ptr").c_str()] = vector_to_1d_ndarray_view(ptr, owner);
       tensors[(node_type + "/batch").c_str()] = vector_to_1d_ndarray_owned(ptr_to_batch(ptr));
    }
-   if(! exported_ptr) {
+   if(not exported_ptr) {
       for(const auto& [node_type, count] : encoding.node_counts) {
          if(count <= 0) {
             continue;
@@ -917,8 +1052,8 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
                return;
             }
             const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
-                                      || field.spec.mode == GraphFieldMode::RAGGED_CAT)
-                                     && graph_field_cat_dim_is_one(field.spec.cat_dim);
+                                      or field.spec.mode == GraphFieldMode::RAGGED_CAT)
+                                     and graph_field_cat_dim_is_one(field.spec.cat_dim);
             const size_t rows = cat_dim_one ? static_cast< size_t >(field.spec.dim)
                                             : data.size() / static_cast< size_t >(field.spec.dim);
             const size_t cols = cat_dim_one ? data.size() / static_cast< size_t >(field.spec.dim)
@@ -950,7 +1085,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
    out["object_names"] = nb::cast(encoding.object_names);
    out["num_graphs"] = encoding.num_graphs;
 
-   if(! encoding.graph_attrs.empty()) {
+   if(not encoding.graph_attrs.empty()) {
       nb::dict graph_attrs_dict;
       for(const auto& [key, value] : encoding.graph_attrs) {
          std::visit([&](const auto& v) { graph_attrs_dict[key.c_str()] = nb::cast(v); }, value);
@@ -971,11 +1106,11 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
    builder.load_from_batch_encoding(encoding);
    nb::object pyg_batch = builder.build_pyg();
 
-   if(! want_batch && encoding.num_graphs != 1) {
+   if(not want_batch and encoding.num_graphs != 1) {
       throw std::invalid_argument("BatchEncoding.as_pyg(as_batch=False) requires num_graphs == 1");
    }
 
-   if(! want_batch) {
+   if(not want_batch) {
       if(encoding.graph_kind == "homo") {
          return batch_to_single_homo_data(pyg_batch);
       }
@@ -991,6 +1126,95 @@ nb::object to_torch_tensor(nb::handle value)
    return torch.attr("as_tensor")(value);
 }
 
+constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
+
+std::string ascii_lower_copy(std::string text)
+{
+   for(char& c : text) {
+      c = ascii_lower(c);
+   }
+   return text;
+}
+
+bool is_cpu_device(nb::handle device)
+{
+   if(device.is_none()) {
+      return true;
+   }
+   std::string text = nb::cast< std::string >(nb::str(device));
+   text = ascii_lower_copy(std::move(text));
+   return text.find("cpu") != std::string::npos;
+}
+
+nb::object owner_target_device(nb::handle owner)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(not attrs.contains(kPythonTensorDeviceAttr.data())) {
+      return nb::none();
+   }
+   return nb::borrow< nb::object >(attrs[kPythonTensorDeviceAttr.data()]);
+}
+
+nb::object to_torch_tensor(nb::handle value, nb::handle device)
+{
+   nb::object tensor = to_torch_tensor(value);
+   if(device.is_none() or is_cpu_device(device)) {
+      return tensor;
+   }
+   return tensor.attr("to")(device);
+}
+
+bool is_torch_tensor(nb::handle value)
+{
+   nb::object torch = nb::module_::import_("torch");
+   return nb::isinstance(value, torch.attr("Tensor"));
+}
+
+nb::object move_object_to_device(nb::handle value, nb::handle device)
+{
+   if(device.is_none() or is_cpu_device(device)) {
+      return nb::borrow< nb::object >(value);
+   }
+   if(is_torch_tensor(value)) {
+      return nb::borrow< nb::object >(value).attr("to")(device);
+   }
+   if(nb::isinstance< nb::dict >(value)) {
+      nb::dict out;
+      for(auto [k, v] : nb::borrow< nb::dict >(value)) {
+         out[k] = move_object_to_device(nb::borrow< nb::object >(v), device);
+      }
+      return out;
+   }
+   if(nb::isinstance< nb::list >(value)) {
+      nb::list out;
+      for(nb::handle item : nb::borrow< nb::list >(value)) {
+         out.append(move_object_to_device(item, device));
+      }
+      return out;
+   }
+   if(nb::isinstance< nb::tuple >(value)) {
+      nb::list tmp;
+      for(nb::handle item : nb::borrow< nb::tuple >(value)) {
+         tmp.append(move_object_to_device(item, device));
+      }
+      return nb::module_::import_("builtins").attr("tuple")(tmp);
+   }
+   return nb::borrow< nb::object >(value);
+}
+
+void set_owner_target_device(nb::handle owner, nb::handle device)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(device.is_none()) {
+      if(attrs.contains(kPythonTensorDeviceAttr.data())) {
+         attrs.attr("pop")(kPythonTensorDeviceAttr.data());
+      }
+      return;
+   }
+   nb::object torch = nb::module_::import_("torch");
+   attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
+}
+
 nb::object to_mapping_proxy(const nb::dict& mapping)
 {
    nb::object types = nb::module_::import_("types");
@@ -1001,7 +1225,7 @@ std::optional< std::string >
 find_node_attr_key(const Schema& schema, std::string_view node_type, std::string_view attr)
 {
    for(const auto& spec : schema.node_tensors) {
-      if(spec.node_type == node_type && spec.attr == attr) {
+      if(spec.node_type == node_type and spec.attr == attr) {
          return spec.key;
       }
    }
@@ -1014,7 +1238,7 @@ find_edge_index_keys(const Schema& schema, int edge_type_idx)
    std::optional< std::string > key0;
    std::optional< std::string > key1;
    for(const auto& spec : schema.edge_tensors) {
-      if(spec.edge_type != edge_type_idx || spec.attr != "edge_index") {
+      if(spec.edge_type != edge_type_idx or spec.attr != "edge_index") {
          continue;
       }
       if(spec.part == "0") {
@@ -1029,7 +1253,7 @@ find_edge_index_keys(const Schema& schema, int edge_type_idx)
 std::optional< std::string > find_edge_attr_key(const Schema& schema, int edge_type_idx)
 {
    for(const auto& spec : schema.edge_tensors) {
-      if(spec.edge_type == edge_type_idx && spec.attr == "edge_attr") {
+      if(spec.edge_type == edge_type_idx and spec.attr == "edge_attr") {
          return spec.key;
       }
    }
@@ -1048,6 +1272,7 @@ class HeteroBatchEncodingView {
       encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
          owner_, "HeteroBatchEncodingView created with invalid BatchEncoding instance"
       );
+      device_ = owner_target_device(owner_);
    }
 
    int64_t num_graphs() const { return encoding_->num_graphs; }
@@ -1069,7 +1294,7 @@ class HeteroBatchEncodingView {
       nb::dict out;
       for(const auto& node_type : encoding_->schema.node_types) {
          if(const auto key = find_node_attr_key(encoding_->schema, node_type, "x");
-            key.has_value() && has_tensor(*key)) {
+            key.has_value() and has_tensor(*key)) {
             out[node_type.c_str()] = tensor(*key);
             continue;
          }
@@ -1099,10 +1324,10 @@ class HeteroBatchEncodingView {
       nb::dict out;
       for(size_t idx = 0; idx < encoding_->schema.edge_types.size(); ++idx) {
          const auto [key0, key1] = find_edge_index_keys(encoding_->schema, static_cast< int >(idx));
-         if(! key0.has_value() || ! key1.has_value()) {
+         if(not key0.has_value() or not key1.has_value()) {
             continue;
          }
-         if(! has_tensor(*key0) || ! has_tensor(*key1)) {
+         if(not has_tensor(*key0) or not has_tensor(*key1)) {
             continue;
          }
          nb::list pair;
@@ -1160,7 +1385,7 @@ class HeteroBatchEncodingView {
       nb::dict out;
       for(size_t idx = 0; idx < encoding_->schema.edge_types.size(); ++idx) {
          const auto key = find_edge_attr_key(encoding_->schema, static_cast< int >(idx));
-         if(! key.has_value() || ! has_tensor(*key)) {
+         if(not key.has_value() or not has_tensor(*key)) {
             continue;
          }
          out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = tensor(*key);
@@ -1169,7 +1394,26 @@ class HeteroBatchEncodingView {
       return edge_attr_dict_cache_;
    }
 
+   void set_device(nb::handle device)
+   {
+      set_owner_target_device(owner_, device);
+      device_ = owner_target_device(owner_);
+      clear_caches();
+   }
+
   private:
+   void clear_caches()
+   {
+      as_dict_cache_ = nb::object();
+      tensors_cache_ = nb::dict();
+      tensor_cache_ = nb::dict();
+      x_dict_cache_ = nb::object();
+      edge_index_dict_cache_ = nb::object();
+      batch_dict_cache_ = nb::object();
+      ptr_dict_cache_ = nb::object();
+      edge_attr_dict_cache_ = nb::object();
+   }
+
    void ensure_as_dict_cache()
    {
       if(as_dict_cache_.is_valid()) {
@@ -1191,13 +1435,14 @@ class HeteroBatchEncodingView {
          return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
       }
       ensure_as_dict_cache();
-      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()]);
+      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
       tensor_cache_[key.c_str()] = value;
       return value;
    }
 
    nb::object owner_;
    BatchBuilder::BatchEncoding* encoding_ = nullptr;
+   nb::object device_;
    nb::object as_dict_cache_;
    nb::dict tensors_cache_;
    nb::dict tensor_cache_;
@@ -1215,6 +1460,7 @@ class HomoBatchEncodingView {
       encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
          owner_, "HomoBatchEncodingView created with invalid BatchEncoding instance"
       );
+      device_ = owner_target_device(owner_);
    }
 
    int64_t num_graphs() const { return encoding_->num_graphs; }
@@ -1237,7 +1483,7 @@ class HomoBatchEncodingView {
       }
       const std::string& node_type = encoding_->schema.node_types.front();
       if(const auto key = find_node_attr_key(encoding_->schema, node_type, "x");
-         key.has_value() && has_tensor(*key)) {
+         key.has_value() and has_tensor(*key)) {
          x_cache_ = tensor(*key);
          return x_cache_;
       }
@@ -1267,7 +1513,8 @@ class HomoBatchEncodingView {
          return edge_index_cache_;
       }
       const auto [key0, key1] = find_edge_index_keys(encoding_->schema, 0);
-      if(! key0.has_value() || ! key1.has_value() || ! has_tensor(*key0) || ! has_tensor(*key1)) {
+      if(not key0.has_value() or not key1.has_value() or not has_tensor(*key0)
+         or not has_tensor(*key1)) {
          return edge_index_cache_;
       }
       nb::list pair;
@@ -1323,13 +1570,37 @@ class HomoBatchEncodingView {
          return edge_attr_cache_;
       }
       const auto key = find_edge_attr_key(encoding_->schema, 0);
-      if(key.has_value() && has_tensor(*key)) {
+      if(key.has_value() and has_tensor(*key)) {
          edge_attr_cache_ = tensor(*key);
       }
       return edge_attr_cache_;
    }
 
+   void set_device(nb::handle device)
+   {
+      set_owner_target_device(owner_, device);
+      device_ = owner_target_device(owner_);
+      clear_caches();
+   }
+
   private:
+   void clear_caches()
+   {
+      as_dict_cache_ = nb::object();
+      tensors_cache_ = nb::dict();
+      tensor_cache_ = nb::dict();
+      x_ready_ = false;
+      edge_index_ready_ = false;
+      batch_ready_ = false;
+      ptr_ready_ = false;
+      edge_attr_ready_ = false;
+      x_cache_ = nb::object();
+      edge_index_cache_ = nb::object();
+      batch_cache_ = nb::object();
+      ptr_cache_ = nb::object();
+      edge_attr_cache_ = nb::object();
+   }
+
    void ensure_as_dict_cache()
    {
       if(as_dict_cache_.is_valid()) {
@@ -1351,13 +1622,14 @@ class HomoBatchEncodingView {
          return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
       }
       ensure_as_dict_cache();
-      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()]);
+      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
       tensor_cache_[key.c_str()] = value;
       return value;
    }
 
    nb::object owner_;
    BatchBuilder::BatchEncoding* encoding_ = nullptr;
+   nb::object device_;
    nb::object as_dict_cache_;
    nb::dict tensors_cache_;
    nb::dict tensor_cache_;
@@ -1407,7 +1679,7 @@ void init_batch_encoding(nb::module_& m)
                const std::string& dst_type,
                nb::ndarray< nb::numpy, int64_t > src,
                nb::ndarray< nb::numpy, int64_t > dst) {
-               if(src.ndim() != 1 || dst.ndim() != 1) {
+               if(src.ndim() != 1 or dst.ndim() != 1) {
                   throw std::invalid_argument("add_edges expects 1D arrays for src/dst indices");
                }
                if(src.size() != dst.size()) {
@@ -1481,64 +1753,56 @@ void init_batch_encoding(nb::module_& m)
             },
             nb::rv_policy::move
          )
-         .def("graph_field_keys", &BatchBuilder::graph_field_keys)
+         .def("field_keys", &BatchBuilder::field_keys)
          .def(
-            "graph_field_specs",
+            "field_specs",
             [](const BatchBuilder& builder) {
                nb::dict out;
-               for(const auto& [key, spec] : builder.graph_field_specs()) {
+               for(const auto& [key, spec] : builder.field_specs()) {
                   out[key.c_str()] = graph_field_spec_to_dict(spec);
                }
                return out;
             }
          )
          .def(
-            "register_graph_field",
+            "register_field",
             [](BatchBuilder& builder, const std::string& key, const nb::dict& spec) {
-               builder.register_graph_field(key, graph_field_spec_from_dict(spec));
+               builder.register_field(key, graph_field_spec_from_dict(spec));
             },
             "key"_a,
             "spec"_a
          )
          .def(
-            "set_graph_field",
+            "set_field",
             [](BatchBuilder& builder, const std::string& key, nb::handle value) {
                const auto spec = builder.get_graph_field_spec(key);
                if(spec.dtype == GraphFieldDType::F32) {
                   auto input = coerce_numeric_values< float >(value);
                   auto values = normalize_graph_field_input(key, spec, std::move(input));
-                  builder.set_graph_field(
-                     key, std::span< const float >(values.data(), values.size())
-                  );
+                  builder.set_field(key, std::span< const float >(values.data(), values.size()));
                } else {
                   auto input = coerce_numeric_values< int64_t >(value);
                   auto values = normalize_graph_field_input(key, spec, std::move(input));
-                  builder.set_graph_field(
-                     key, std::span< const int64_t >(values.data(), values.size())
-                  );
+                  builder.set_field(key, std::span< const int64_t >(values.data(), values.size()));
                }
             },
             "key"_a,
             "value"_a
          )
          .def(
-            "set_graph_fields",
+            "set_fields",
             [](BatchBuilder& builder, const nb::dict& values) {
                for(auto [key_obj, value_obj] : values) {
-                  const std::string key = nb::cast< std::string >(key_obj);
+                  const std::string key = py_string(key_obj);
                   const auto spec = builder.get_graph_field_spec(key);
                   if(spec.dtype == GraphFieldDType::F32) {
                      auto input = coerce_numeric_values< float >(value_obj);
                      auto data = normalize_graph_field_input(key, spec, std::move(input));
-                     builder.set_graph_field(
-                        key, std::span< const float >(data.data(), data.size())
-                     );
+                     builder.set_field(key, std::span< const float >(data.data(), data.size()));
                   } else {
                      auto input = coerce_numeric_values< int64_t >(value_obj);
                      auto data = normalize_graph_field_input(key, spec, std::move(input));
-                     builder.set_graph_field(
-                        key, std::span< const int64_t >(data.data(), data.size())
-                     );
+                     builder.set_field(key, std::span< const int64_t >(data.data(), data.size()));
                   }
                }
             },
@@ -1583,6 +1847,15 @@ void init_batch_encoding(nb::module_& m)
             "def edge_attr_dict(self) -> collections.abc.Mapping[tuple[str, str, str], "
             "torch.Tensor]"
          )
+      )
+      .def(
+         "to",
+         [](HeteroBatchEncodingView& view, nb::handle device) -> HeteroBatchEncodingView& {
+            view.set_device(device);
+            return view;
+         },
+         "device"_a,
+         nb::rv_policy::reference_internal
       );
 
    nb::class_< HomoBatchEncodingView >(m, "HomoBatchEncodingView")
@@ -1609,6 +1882,15 @@ void init_batch_encoding(nb::module_& m)
          "edge_attr",
          &HomoBatchEncodingView::edge_attr,
          nb::sig("def edge_attr(self) -> torch.Tensor | None")
+      )
+      .def(
+         "to",
+         [](HomoBatchEncodingView& view, nb::handle device) -> HomoBatchEncodingView& {
+            view.set_device(device);
+            return view;
+         },
+         "device"_a,
+         nb::rv_policy::reference_internal
       );
 
    auto batch_encoding_cls =
@@ -1663,17 +1945,41 @@ void init_batch_encoding(nb::module_& m)
             }
          )
          .def(
-            "register_graph_field_specs",
+            "to",
+            [](nb::handle self, nb::handle device) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.to called with invalid instance"
+               );
+               (void) encoding;
+               set_owner_target_device(self, device);
+               nb::object normalized = owner_target_device(self);
+               nb::dict attrs = batch_encoding_python_attrs(self);
+               const auto native_keys = batch_encoding_native_graph_field_keys(*encoding);
+               for(auto [key_obj, value_obj] : attrs) {
+                  const std::string key = py_string(key_obj);
+                  if(is_reserved_python_attr_key(key) or native_keys.contains(key)) {
+                     continue;
+                  }
+                  attrs[key_obj] = move_object_to_device(
+                     nb::borrow< nb::object >(value_obj), normalized
+                  );
+               }
+               return nb::borrow< nb::object >(self);
+            },
+            "device"_a
+         )
+         .def(
+            "register_field_specs",
             [](nb::handle self, const nb::dict& specs) {
-               register_batch_encoding_graph_field_specs(self, specs);
+               register_batch_encoding_field_specs(self, specs);
             },
             "specs"_a
          )
          .def(
-            "set_graph_field",
+            "set_field",
             [](nb::handle self, const std::string& key, nb::handle value) {
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.set_graph_field called with invalid instance"
+                  self, "BatchEncoding.set_field called with invalid instance"
                );
                set_batch_encoding_graph_field(*encoding, key, value);
             },
@@ -1681,34 +1987,31 @@ void init_batch_encoding(nb::module_& m)
             "value"_a
          )
          .def(
-            "set_graph_fields",
+            "set_fields",
             [](nb::handle self, const nb::dict& values) {
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.set_graph_fields called with invalid instance"
+                  self, "BatchEncoding.set_fields called with invalid instance"
                );
                set_batch_encoding_graph_fields(*encoding, values);
             },
             "values"_a
          )
+         .def("field_specs", [](nb::handle self) { return batch_encoding_field_specs(self); })
          .def(
-            "graph_field_specs",
-            [](nb::handle self) { return batch_encoding_graph_field_specs(self); }
-         )
-         .def(
-            "has_graph_field",
+            "has_field",
             [](nb::handle self, const std::string& key) {
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.has_graph_field called with invalid instance"
+                  self, "BatchEncoding.has_field called with invalid instance"
                );
                return batch_encoding_has_graph_field(*encoding, key);
             },
             "key"_a
          )
          .def(
-            "get_graph_field",
+            "get_field",
             [](nb::handle self, const std::string& key) {
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.get_graph_field called with invalid instance"
+                  self, "BatchEncoding.get_field called with invalid instance"
                );
                return batch_encoding_get_graph_field(*encoding, key, self);
             },
@@ -1757,8 +2060,8 @@ void init_batch_encoding(nb::module_& m)
                nb::dict attrs = batch_encoding_python_attrs(self);
                for(auto [key_obj, value_obj] : attrs) {
                   (void) value_obj;
-                  const std::string key = nb::cast< std::string >(key_obj);
-                  if(is_reserved_python_attr_key(key) || key_set.contains(key)) {
+                  const std::string key = py_string(key_obj);
+                  if(is_reserved_python_attr_key(key) or key_set.contains(key)) {
                      continue;
                   }
                   key_set.insert(key);
@@ -1780,8 +2083,8 @@ void init_batch_encoding(nb::module_& m)
                nb::dict attrs = batch_encoding_python_attrs(self);
                for(auto [key_obj, value_obj] : attrs) {
                   (void) value_obj;
-                  const std::string key = nb::cast< std::string >(key_obj);
-                  if(is_reserved_python_attr_key(key) || key_set.contains(key)) {
+                  const std::string key = py_string(key_obj);
+                  if(is_reserved_python_attr_key(key) or key_set.contains(key)) {
                      continue;
                   }
                   key_set.insert(key);
@@ -1839,7 +2142,7 @@ void init_batch_encoding(nb::module_& m)
                   throw std::invalid_argument("BatchEncoding graph_kind mismatch: expected 'homo'");
                }
                if(encoding->schema.node_types.size() > 1
-                  || encoding->schema.edge_types.size() > 1) {
+                  or encoding->schema.edge_types.size() > 1) {
                   throw std::invalid_argument(
                      "BatchEncoding.as_homo() expects schema with at most one node type and one "
                      "edge type"
@@ -1935,18 +2238,7 @@ void init_batch_encoding(nb::module_& m)
 
    m.def(
       "batch_encodings",
-      [](nb::iterable encodings_obj,
-         nb::object graph_field_specs_obj,
-         nb::object py_field_specs_obj) {
-         if(! graph_field_specs_obj.is_none() && ! py_field_specs_obj.is_none()) {
-            throw std::invalid_argument(
-               "batch_encodings received both graph_field_specs and py_field_specs"
-            );
-         }
-         if(graph_field_specs_obj.is_none()) {
-            graph_field_specs_obj = std::move(py_field_specs_obj);
-         }
-
+      [](nb::iterable encodings_obj, nb::object field_specs_obj) {
          std::vector< const BatchBuilder::BatchEncoding* > encodings;
          std::vector< nb::object > source_objects;
          for(nb::handle item : encodings_obj) {
@@ -1977,9 +2269,16 @@ void init_batch_encoding(nb::module_& m)
          }
 
          nb::object out = nb::cast(builder.build());
-         auto collation_inputs = build_python_collation_inputs(
-            source_objects, graph_field_specs_obj
-         );
+         PythonCollationInputs collation_inputs;
+         try {
+            collation_inputs = build_python_collation_inputs(
+               source_objects, encodings, field_specs_obj
+            );
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "batch_encodings field_specs preparation failed: " + std::string(ex.what())
+            );
+         }
          if(collation_inputs.field_specs.empty()) {
             return out;
          }
@@ -1988,20 +2287,19 @@ void init_batch_encoding(nb::module_& m)
             out, "batch_encodings failed to materialize BatchEncoding output instance"
          );
          const auto reserved_native_keys = batch_encoding_native_graph_field_keys(*out_encoding);
-         for(const auto& [key, mode] : collation_inputs.field_specs) {
+         for(const auto& [key, spec] : collation_inputs.field_specs) {
             if(reserved_native_keys.contains(key)) {
                throw std::invalid_argument(
-                  "Python graph field spec key '" + key
-                  + "' collides with native graph field key during batch_encodings"
+                  "Python field spec key '" + key
+                  + "' collides with native field key during batch_encodings"
                );
             }
-            if(mode == PythonFieldMode::RAGGED_CAT) {
+            if(spec.mode == GraphFieldMode::RAGGED_CAT) {
                const std::string ptr_key = key + "_ptr";
                if(reserved_native_keys.contains(ptr_key)) {
                   throw std::invalid_argument(
-                     "Python graph field spec key '" + key
-                     + "' collides with native graph field ptr key '" + ptr_key
-                     + "' during batch_encodings"
+                     "Python field spec key '" + key + "' collides with native field ptr key '"
+                     + ptr_key + "' during batch_encodings"
                   );
                }
             }
@@ -2013,16 +2311,27 @@ void init_batch_encoding(nb::module_& m)
             return out;
          }
 
-         apply_python_collation_to_output(out, filtered_specs, collation_inputs.source_attrs);
+         try {
+            apply_python_collation_to_output(
+               out, filtered_specs, collation_inputs.source_attrs, collation_inputs.source_encodings
+            );
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "batch_encodings python collation failed: " + std::string(ex.what())
+            );
+         }
 
-         register_batch_encoding_graph_field_specs(
-            out, python_graph_field_specs_to_dict(filtered_specs)
-         );
+         try {
+            register_batch_encoding_field_specs(out, python_field_specs_to_dict(filtered_specs));
+         } catch(const std::exception& ex) {
+            throw std::invalid_argument(
+               "batch_encodings field_specs registration failed: " + std::string(ex.what())
+            );
+         }
          return out;
       },
       "encodings"_a,
-      "graph_field_specs"_a = nb::none(),
-      "py_field_specs"_a = nb::none()
+      "field_specs"_a = nb::none()
    );
 }
 

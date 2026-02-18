@@ -77,7 +77,7 @@ class EncodedGraph:
         if name.startswith("_"):
             object.__setattr__(self, name, value)
             return
-        specs = self._encoder._graph_field_specs
+        specs = self._encoder._field_specs
         if name in specs:
             self._dynamic_values[name] = value
             self._cached_encoding = None
@@ -85,7 +85,7 @@ class EncodedGraph:
         object.__setattr__(self, name, value)
 
     def __getattr__(self, name: str) -> Any:
-        specs = self._encoder._graph_field_specs
+        specs = self._encoder._field_specs
         if name in specs and name in self._dynamic_values:
             return self._dynamic_values[name]
         raise AttributeError(name)
@@ -632,7 +632,7 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         **extra_config_kwargs: object,
     ) -> None:
         """Create an HGraph encoder for one domain."""
-        self._graph_field_specs: dict[str, GraphFieldSpec] = {}
+        self._field_specs: dict[str, GraphFieldSpec] = {}
         config = self._make_config(
             _config_cls,
             symbol_type_id=symbol_type_id,
@@ -651,24 +651,24 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         )
         self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
 
-    def register_graph_fields(
+    def register_fields(
         self, specs: Mapping[str, GraphFieldSpec | Mapping[str, object]]
     ) -> None:
         """Register strict dynamic graph-field specs used by ``encode_graph`` wrappers."""
         normalized: dict[str, GraphFieldSpec] = {}
         for key, spec in specs.items():
             normalized[str(key)] = GraphFieldSpec.from_spec(spec)
-        self._graph_field_specs = normalized
+        self._field_specs = normalized
 
     @property
-    def graph_field_specs(self) -> Mapping[str, GraphFieldSpec]:
+    def field_specs(self) -> Mapping[str, GraphFieldSpec]:
         """Return registered dynamic graph-field specs (copy)."""
-        return dict(self._graph_field_specs)
+        return dict(self._field_specs)
 
     @property
-    def graph_field_keys(self) -> list[str]:
+    def field_keys(self) -> list[str]:
         """Return registered dynamic graph-field keys (sorted)."""
-        return sorted(self._graph_field_specs.keys())
+        return sorted(self._field_specs.keys())
 
     def _encode_one_into_builder(
         self,
@@ -728,12 +728,12 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
     def _finalize_encoded_graph(self, graph: EncodedGraph) -> HeteroEncoding:
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
-        for key, spec in self._graph_field_specs.items():
-            builder.register_graph_field(key, spec.to_core_dict())
+        for key, spec in self._field_specs.items():
+            builder.register_field(key, spec.to_core_dict())
 
         self._encode_one_into_builder(graph._state, builder, **graph._encode_kwargs)
         if graph._dynamic_values:
-            builder.set_graph_fields(graph._dynamic_values)
+            builder.set_fields(graph._dynamic_values)
         builder.next_graph()
         return builder.build()
 

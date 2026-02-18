@@ -69,7 +69,7 @@ int TransitionDAG::index(const mimir::search::State& state) const
 
 int TransitionDAG::depth(int idx) const
 {
-   if(idx < 0 || idx >= static_cast< int >(nodes_ordered_.size())) {
+   if(idx < 0 or idx >= static_cast< int >(nodes_ordered_.size())) {
       throw std::out_of_range("Invalid node index");
    }
    return nodes_ordered_[idx].depth;
@@ -77,7 +77,7 @@ int TransitionDAG::depth(int idx) const
 
 std::optional< mimir::formalism::GroundAction > TransitionDAG::action(int idx) const
 {
-   if(idx < 0 || idx >= static_cast< int >(nodes_ordered_.size())) {
+   if(idx < 0 or idx >= static_cast< int >(nodes_ordered_.size())) {
       throw std::out_of_range("Invalid node index");
    }
    return nodes_ordered_[idx].action;
@@ -85,7 +85,7 @@ std::optional< mimir::formalism::GroundAction > TransitionDAG::action(int idx) c
 
 mimir::search::State TransitionDAG::state(int idx) const
 {
-   if(idx < 0 || idx >= static_cast< int >(nodes_ordered_.size())) {
+   if(idx < 0 or idx >= static_cast< int >(nodes_ordered_.size())) {
       throw std::out_of_range("Invalid node index");
    }
    return nodes_ordered_[idx].state;

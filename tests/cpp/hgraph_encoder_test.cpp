@@ -83,7 +83,7 @@ TEST_P(HGraphEncoderTest, InitialStateIncludesObjectsFactsAndEdges)
    auto handle_atom = [&](auto atom) {
       using Tag = typename std::remove_pointer_t< decltype(atom) >::Type;
       const auto predicate = atom->get_predicate();
-      if(predicate->get_arity() == 0 && ! cfg.add_nullary_predicates) {
+      if(predicate->get_arity() == 0 && not cfg.add_nullary_predicates) {
          return;
       }
       const std::string node_type = mifrost::RelationFormatter::format_predicate(predicate);
@@ -206,7 +206,7 @@ TEST_P(HGraphEncoderTest, NullaryPredicatesIncludeNullaryObjectWhenEnabled)
       }
    }
 
-   if(! has_nullary) {
+   if(not has_nullary) {
       GTEST_SKIP() << "Domain has no nullary predicates in the initial state.";
    }
 
@@ -246,7 +246,7 @@ TEST_P(HGraphEncoderInputsTest, GoalsActionsSubgoalsMatchConfig)
             const bool use_goals = include_goals || include_subgoals;
 
             mifrost::HGraphEncoderEngine::Config config;
-            config.ignore_actions = ! include_actions;
+            config.ignore_actions = not include_actions;
             config.max_goal_level = 1;
 
             mifrost::HGraphEncoderEngine engine(ctx.problem->get_domain(), config);
@@ -257,18 +257,18 @@ TEST_P(HGraphEncoderInputsTest, GoalsActionsSubgoalsMatchConfig)
             if(use_goals) {
                inputs = mifrost_test::make_goal_inputs(ctx.problem);
                if(include_subgoals) {
-                  if(! inputs.fluent_goals.empty()) {
+                  if(not inputs.fluent_goals.empty()) {
                      inputs.fluent_goal_levels[inputs.fluent_goals.front()] = 1;
-                  } else if(! inputs.derived_goals.empty()) {
+                  } else if(not inputs.derived_goals.empty()) {
                      inputs.derived_goal_levels[inputs.derived_goals.front()] = 1;
-                  } else if(! inputs.static_goals.empty()) {
+                  } else if(not inputs.static_goals.empty()) {
                      inputs.static_goal_levels[inputs.static_goals.front()] = 1;
                   }
                }
             }
 
             std::vector< mimir::formalism::GroundAction > actions;
-            if(include_actions && ! ctx.actions.empty()) {
+            if(include_actions && not ctx.actions.empty()) {
                actions.emplace_back(ctx.actions.front());
             }
 
@@ -278,7 +278,7 @@ TEST_P(HGraphEncoderInputsTest, GoalsActionsSubgoalsMatchConfig)
                engine.encode(ctx.root, builder);
             }
 
-            if(include_actions && ! actions.empty()) {
+            if(include_actions && not actions.empty()) {
                const auto action = actions.front();
                const std::string node_type = mifrost::RelationFormatter::format_action_schema(
                   *action->get_action()
@@ -311,18 +311,18 @@ TEST_P(HGraphEncoderInputsTest, GoalsActionsSubgoalsMatchConfig)
                   checked = true;
                };
 
-               if(! inputs.fluent_goals.empty()) {
+               if(not inputs.fluent_goals.empty()) {
                   const int level = inputs.fluent_goal_levels.at(inputs.fluent_goals.front());
                   check_goal(inputs.fluent_goals.front(), level);
-               } else if(! inputs.derived_goals.empty()) {
+               } else if(not inputs.derived_goals.empty()) {
                   const int level = inputs.derived_goal_levels.at(inputs.derived_goals.front());
                   check_goal(inputs.derived_goals.front(), level);
-               } else if(! inputs.static_goals.empty()) {
+               } else if(not inputs.static_goals.empty()) {
                   const int level = inputs.static_goal_levels.at(inputs.static_goals.front());
                   check_goal(inputs.static_goals.front(), level);
                }
 
-               if(! checked) {
+               if(not checked) {
                   GTEST_SKIP() << "No goals present in problem.";
                }
             }
@@ -367,7 +367,7 @@ TEST_P(HGraphEncoderFlagVariantsTest, FlagVariantsRespectStaticAndLganConfig)
                auto goals = mifrost_test::make_goal_inputs(ctx.problem);
                engine.encode(ctx.root, goals, {}, builder);
 
-               if(! include_lgan_edges) {
+               if(not include_lgan_edges) {
                   for(const auto& [key, _] : builder.columns) {
                      EXPECT_EQ(key.find(config.lgan_nn_edge_pos), std::string::npos)
                         << "Unexpected lgan edge column: " << key;
@@ -380,7 +380,7 @@ TEST_P(HGraphEncoderFlagVariantsTest, FlagVariantsRespectStaticAndLganConfig)
                for(const auto& literal : literals) {
                   if(literal->get_polarity()) {
                      has_static = true;
-                     if(! include_static) {
+                     if(not include_static) {
                         const auto atom = literal->get_atom();
                         const auto node_type = mifrost::RelationFormatter::format_predicate(
                            atom->get_predicate()
@@ -497,14 +497,14 @@ TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
    auto check_goal = [&](auto literal, int level) {
       const auto atom = literal->get_atom();
       const auto predicate = atom->get_predicate();
-      if(predicate->get_arity() == 0 && ! config.add_nullary_predicates) {
+      if(predicate->get_arity() == 0 && not config.add_nullary_predicates) {
          return;
       }
       const auto key = mifrost::RelationFormatter::format_atom(atom);
       const bool satisfied = fact_keys.contains(key) == literal->get_polarity();
       const mifrost::GoalSatisfaction sat = satisfied ? mifrost::GoalSatisfaction::satisfied
                                                       : mifrost::GoalSatisfaction::unsatisfied;
-      if(! config.goal_satisfaction_derivations.contains(sat)) {
+      if(not config.goal_satisfaction_derivations.contains(sat)) {
          return;
       }
 
@@ -557,20 +557,20 @@ TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
       checked = true;
    };
 
-   if(! goals.fluent_goals.empty()) {
+   if(not goals.fluent_goals.empty()) {
       const int level = goals.fluent_goal_levels.at(goals.fluent_goals.front());
       check_goal(goals.fluent_goals.front(), level);
    }
-   if(! checked && ! goals.derived_goals.empty()) {
+   if(not checked && not goals.derived_goals.empty()) {
       const int level = goals.derived_goal_levels.at(goals.derived_goals.front());
       check_goal(goals.derived_goals.front(), level);
    }
-   if(! checked && ! goals.static_goals.empty()) {
+   if(not checked && not goals.static_goals.empty()) {
       const int level = goals.static_goal_levels.at(goals.static_goals.front());
       check_goal(goals.static_goals.front(), level);
    }
 
-   if(! checked) {
+   if(not checked) {
       GTEST_SKIP() << "No goals available to assert goal satisfaction edges.";
    }
 }

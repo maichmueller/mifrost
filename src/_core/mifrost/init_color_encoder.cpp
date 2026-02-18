@@ -21,13 +21,16 @@ namespace {
 void apply_color_config_kwargs(ColorEncoderEngine::Config& config, const nb::kwargs& kwargs)
 {
    for(const auto& [key_handle, value_handle] : kwargs) {
-      const std::string key = nb::cast< std::string >(key_handle);
-      if(key == "edge_features") {
+      const auto key = nb::str(key_handle);
+      auto key_view = std::string_view{key.c_str()};
+      if(key_view == "edge_features") {
          config.edge_features = nb::cast< bool >(value_handle);
-      } else if(key == "enable_global_predicate_nodes") {
+      } else if(key_view == "enable_global_predicate_nodes") {
          config.enable_global_predicate_nodes = nb::cast< bool >(value_handle);
       } else {
-         throw std::invalid_argument("Unknown ColorEncoderConfig kwarg '" + key + "'");
+         throw std::invalid_argument(
+            fmt::format("Unknown ColorEncoderConfig kwarg '{}'", key_view)
+         );
       }
    }
 }

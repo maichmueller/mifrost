@@ -11,6 +11,15 @@
 
 namespace mifrost {
 
+namespace {
+
+std::string py_string(nb::handle value)
+{
+   return {nb::str(value).c_str()};
+}
+
+}  // namespace
+
 void Schema::validate_base() const
 {
    if(version <= 0) {
@@ -21,15 +30,15 @@ void Schema::validate_base() const
    }
    absl::btree_map< int, std::set< std::string > > edge_index_components;
    for(const auto& spec : node_tensors) {
-      if(spec.node_type.empty() || spec.attr.empty() || spec.key.empty()) {
+      if(spec.node_type.empty() or spec.attr.empty() or spec.key.empty()) {
          throw std::invalid_argument("Schema node_tensors contain empty fields");
       }
    }
    for(const auto& spec : edge_tensors) {
-      if(spec.edge_type < 0 || static_cast< size_t >(spec.edge_type) >= edge_types.size()) {
+      if(spec.edge_type < 0 or static_cast< size_t >(spec.edge_type) >= edge_types.size()) {
          throw std::invalid_argument("Schema edge_tensors reference invalid edge_type index");
       }
-      if(spec.attr.empty() || spec.key.empty()) {
+      if(spec.attr.empty() or spec.key.empty()) {
          throw std::invalid_argument("Schema edge_tensors contain empty fields");
       }
       if(spec.attr == "edge_index") {
@@ -43,18 +52,18 @@ void Schema::validate_base() const
       }
    }
    for(const auto& [edge_type, components] : edge_index_components) {
-      if(components.count("0") == 0 || components.count("1") == 0) {
+      if(components.count("0") == 0 or components.count("1") == 0) {
          throw std::invalid_argument("Schema edge_index must include both components '0' and '1'");
       }
    }
    for(const auto& spec : graph_tensors) {
-      if(spec.attr.empty() || spec.key.empty()) {
+      if(spec.attr.empty() or spec.key.empty()) {
          throw std::invalid_argument("Schema graph_tensors contain empty fields");
       }
-      if(spec.mode == GraphFieldMode::RAGGED_CAT && spec.ptr_key.empty()) {
+      if(spec.mode == GraphFieldMode::RAGGED_CAT and spec.ptr_key.empty()) {
          throw std::invalid_argument("Schema ragged graph_tensors require ptr_key");
       }
-      if(spec.mode != GraphFieldMode::RAGGED_CAT && ! spec.ptr_key.empty()) {
+      if(spec.mode != GraphFieldMode::RAGGED_CAT and not spec.ptr_key.empty()) {
          throw std::invalid_argument("Schema non-ragged graph_tensors must not define ptr_key");
       }
       if(spec.dim <= 0) {
@@ -93,15 +102,13 @@ void Schema::validate_history() const
       throw std::invalid_argument("History encoding requires graph_kind='hetero'");
    }
 
-   if(std::find(node_types.begin(), node_types.end(), "history") == node_types.end()) {
+   if(std::ranges::find(node_types, "history") == node_types.end()) {
       throw std::invalid_argument("History encoding requires 'history' node type");
    }
 
-   const auto has_history_dt = std::any_of(
-      node_tensors.begin(), node_tensors.end(), [](const NodeTensorSpec& spec) {
-         return spec.node_type == "history" and spec.attr == "history_dt";
-      }
-   );
+   const auto has_history_dt = std::ranges::any_of(node_tensors, [](const NodeTensorSpec& spec) {
+      return spec.node_type == "history" and spec.attr == "history_dt";
+   });
    if(not has_history_dt) {
       throw std::invalid_argument("History encoding requires history/history_dt tensor");
    }
@@ -124,12 +131,10 @@ void Schema::validate_history() const
       if(edge_type.src != "history") {
          continue;
       }
-      const bool has_reverse = std::any_of(
-         edge_types.begin(), edge_types.end(), [&](const EdgeType& candidate) {
-            return candidate.src == edge_type.dst and candidate.dst == "history"
-                   and candidate.rel == edge_type.rel;
-         }
-      );
+      const bool has_reverse = std::ranges::any_of(edge_types, [&](const EdgeType& candidate) {
+         return candidate.src == edge_type.dst and candidate.dst == "history"
+                and candidate.rel == edge_type.rel;
+      });
       if(has_reverse) {
          has_pair = true;
          break;
@@ -147,8 +152,9 @@ void Schema::validate_history() const
       }
    }
    for(const auto edge_id : history_edge_ids) {
-      const auto it = parts_by_edge.find(edge_id);
-      if(it == parts_by_edge.end() or it->second.count("0") == 0 or it->second.count("1") == 0) {
+      const auto iterator = parts_by_edge.find(edge_id);
+      if(iterator == parts_by_edge.end() or not iterator->second.contains("0")
+         or not iterator->second.contains("1")) {
          throw std::invalid_argument(
             "History encoding requires edge_index components for history link edges"
          );
@@ -239,13 +245,36 @@ Schema Schema::from_dict(const nb::dict& schema)
 {
    Schema out;
    if(schema.contains("version")) {
-      out.version = nb::cast< int >(schema["version"]);
+      try {
+         out.version = nb::cast< int >(schema["version"]);
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Schema key 'version' parse failed: " + std::string(ex.what())
+         );
+      }
    }
    if(schema.contains("graph_kind")) {
-      out.graph_kind = nb::cast< std::string >(schema["graph_kind"]);
+      try {
+         out.graph_kind = nb::str(schema["graph_kind"]).c_str();
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Schema key 'graph_kind' parse failed: " + std::string(ex.what())
+         );
+      }
    }
    if(schema.contains("node_types")) {
-      out.node_types = nb::cast< std::vector< std::string > >(schema["node_types"]);
+      try {
+         auto node_types = nb::cast< nb::list >(schema["node_types"]);
+         out.node_types.clear();
+         out.node_types.reserve(node_types.size());
+         for(nb::handle entry : node_types) {
+            out.node_types.push_back(py_string(entry));
+         }
+      } catch(const std::exception& ex) {
+         throw std::invalid_argument(
+            "Schema key 'node_types' parse failed: " + std::string(ex.what())
+         );
+      }
    }
    if(schema.contains("edge_types")) {
       auto edge_type_list = nb::cast< nb::list >(schema["edge_types"]);
@@ -254,9 +283,9 @@ Schema Schema::from_dict(const nb::dict& schema)
          auto entry = nb::cast< nb::dict >(entry_handle);
          out.edge_types.emplace_back(
             EdgeType{
-               .src = nb::cast< std::string >(entry["src"]),
-               .rel = nb::cast< std::string >(entry["rel"]),
-               .dst = nb::cast< std::string >(entry["dst"])
+               .src = py_string(entry["src"]),
+               .rel = py_string(entry["rel"]),
+               .dst = py_string(entry["dst"])
             }
          );
       }
@@ -268,9 +297,9 @@ Schema Schema::from_dict(const nb::dict& schema)
          auto entry = nb::cast< nb::dict >(entry_handle);
          out.node_tensors.emplace_back(
             NodeTensorSpec{
-               .node_type = nb::cast< std::string >(entry["node_type"]),
-               .attr = nb::cast< std::string >(entry["attr"]),
-               .key = nb::cast< std::string >(entry["key"])
+               .node_type = py_string(entry["node_type"]),
+               .attr = py_string(entry["attr"]),
+               .key = py_string(entry["key"])
             }
          );
       }
@@ -283,9 +312,9 @@ Schema Schema::from_dict(const nb::dict& schema)
          out.edge_tensors.emplace_back(
             EdgeTensorSpec{
                .edge_type = nb::cast< int >(entry["edge_type"]),
-               .attr = nb::cast< std::string >(entry["attr"]),
-               .key = nb::cast< std::string >(entry["key"]),
-               .part = entry.contains("part") ? nb::cast< std::string >(entry["part"]) : ""
+               .attr = py_string(entry["attr"]),
+               .key = py_string(entry["key"]),
+               .part = entry.contains("part") ? py_string(entry["part"]) : ""
             }
          );
       }
@@ -298,20 +327,19 @@ Schema Schema::from_dict(const nb::dict& schema)
          GraphFieldInc inc{};
          if(entry.contains("inc")) {
             auto inc_entry = nb::cast< nb::dict >(entry["inc"]);
-            const auto inc_kind = nb::cast< nb::str >(inc_entry["kind"]);
+            const auto inc_kind = nb::str(inc_entry["kind"]);
             inc.kind = graph_field_inc_kind_from_name(inc_kind.c_str());
             if(inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
-               inc.node_type = nb::cast< std::string >(inc_entry["node_type"]);
+               inc.node_type = nb::str(inc_entry["node_type"]).c_str();
             }
          }
-         const auto mode = nb::cast< nb::str >(entry["mode"]);
-         const auto dtype = nb::cast< nb::str >(entry["dtype"]);
+         const auto mode = nb::str(entry["mode"]);
+         const auto dtype = nb::str(entry["dtype"]);
          out.graph_tensors.emplace_back(
             GraphTensorSpec{
-               .attr = nb::cast< std::string >(entry["attr"]),
-               .key = nb::cast< std::string >(entry["key"]),
-               .ptr_key = entry.contains("ptr_key") ? nb::cast< std::string >(entry["ptr_key"])
-                                                    : "",
+               .attr = py_string(entry["attr"]),
+               .key = py_string(entry["key"]),
+               .ptr_key = entry.contains("ptr_key") ? py_string(entry["ptr_key"]) : "",
                .mode = graph_field_mode_from_name(mode.c_str()),
                .dtype = graph_field_dtype_from_name(dtype.c_str()),
                .dim = entry.contains("dim") ? nb::cast< int >(entry["dim"]) : 1,
@@ -325,9 +353,9 @@ Schema Schema::from_dict(const nb::dict& schema)
    }
    if(schema.contains("flags")) {
       if(schema.contains("flags")) {
-         nb::dict flags = nb::cast< nb::dict >(schema["flags"]);
+         auto flags = nb::cast< nb::dict >(schema["flags"]);
          for(auto [key, value] : flags) {
-            out.flags[nb::cast< std::string >(key)] = nb::cast< bool >(value);
+            out.flags[py_string(key)] = nb::cast< bool >(value);
          }
       }
    }

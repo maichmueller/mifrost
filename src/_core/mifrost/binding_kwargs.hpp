@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fmt/format.h>
 #include <nanobind/nanobind.h>
 
 #include <boost/describe.hpp>
@@ -27,7 +28,11 @@ bool try_set_config_kwarg(Config& config, std::string_view key, const nb::handle
       }
       using member_t = std::remove_cv_t<
          std::remove_reference_t< decltype(config.*desc_t::pointer) > >;
-      config.*desc_t::pointer = nb::cast< member_t >(value);
+      if constexpr(std::is_same_v< member_t, std::string >) {
+         config.*desc_t::pointer = nb::str(value).c_str();
+      } else {
+         config.*desc_t::pointer = nb::cast< member_t >(value);
+      }
       matched = true;
    });
 
@@ -38,10 +43,10 @@ template < typename Config >
 void apply_config_kwargs(Config& config, const nb::kwargs& kwargs, std::string_view config_name)
 {
    for(const auto& [key_handle, value_handle] : kwargs) {
-      const std::string key = nb::cast< std::string >(key_handle);
-      if(not try_set_config_kwarg(config, key, value_handle)) {
+      const auto key = nb::str(key_handle);
+      if(not try_set_config_kwarg(config, key.c_str(), value_handle)) {
          throw std::invalid_argument(
-            "Unknown " + std::string(config_name) + " kwarg '" + key + "'"
+            fmt::format("Unknown {} kwarg '{}'", config_name, key.c_str())
          );
       }
    }

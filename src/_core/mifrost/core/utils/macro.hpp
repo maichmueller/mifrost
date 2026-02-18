@@ -71,12 +71,12 @@
       }                                                    \
                                                            \
       template < size_t N >                                \
-      auto&& get() const&&                                 \
+      auto&& get() constand                                \
       {                                                    \
          return std::move(std::get< N >(tuple_member));    \
       }                                                    \
       template < size_t N >                                \
-      auto&& get() &&                                      \
+      auto&& get() and                                     \
       {                                                    \
          return std::move(std::get< N >(tuple_member));    \
       }                                                    \
@@ -93,12 +93,12 @@
       }                                                    \
                                                            \
       template < typename T >                              \
-      auto&& get() const&&                                 \
+      auto&& get() constand                                \
       {                                                    \
          return std::move(std::get< T >(tuple_member));    \
       }                                                    \
       template < typename T >                              \
-      auto&& get() &&                                      \
+      auto&& get() and                                     \
       {                                                    \
          return std::move(std::get< T >(tuple_member));    \
       }

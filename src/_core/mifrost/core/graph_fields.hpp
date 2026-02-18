@@ -80,7 +80,7 @@ inline const char* graph_field_inc_kind_name(GraphFieldInc::Kind kind)
 
 inline char ascii_lower(char c)
 {
-   if(c >= 'A' && c <= 'Z') {
+   if(c >= 'A' and c <= 'Z') {
       return static_cast< char >(c - 'A' + 'a');
    }
    return c;
@@ -101,6 +101,12 @@ inline bool ascii_iequals(const std::string_view lhs, const std::string_view rhs
 
 inline GraphFieldDType graph_field_dtype_from_name(const std::string_view value)
 {
+   if(ascii_iequals(value, "<class 'float'>") or ascii_iequals(value, "float")) {
+      return GraphFieldDType::F32;
+   }
+   if(ascii_iequals(value, "<class 'int'>") or ascii_iequals(value, "int")) {
+      return GraphFieldDType::I64;
+   }
    if(ascii_iequals(value, "f32")) {
       return GraphFieldDType::F32;
    }
@@ -159,8 +165,8 @@ inline void validate_graph_field_spec(const std::string_view key, const GraphFie
       throw std::invalid_argument("Graph field '" + key_str + "' requires dim > 0");
    }
    const int cat_dim = normalize_graph_field_cat_dim(spec.cat_dim);
-   if(spec.mode == GraphFieldMode::CAT || spec.mode == GraphFieldMode::RAGGED_CAT) {
-      if(cat_dim != 0 && cat_dim != 1) {
+   if(spec.mode == GraphFieldMode::CAT or spec.mode == GraphFieldMode::RAGGED_CAT) {
+      if(cat_dim != 0 and cat_dim != 1) {
          throw std::invalid_argument(
             "Graph field '" + key_str + "' CAT/RAGGED_CAT requires cat_dim in {0, 1, -1}"
          );
@@ -170,12 +176,12 @@ inline void validate_graph_field_spec(const std::string_view key, const GraphFie
          "Graph field '" + key_str + "' non-concat modes require cat_dim == 0"
       );
    }
-   if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET && spec.dtype != GraphFieldDType::I64) {
+   if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET and spec.dtype != GraphFieldDType::I64) {
       throw std::invalid_argument(
          "Graph field '" + key_str + "' NODE_OFFSET increment requires dtype=i64"
       );
    }
-   if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET && spec.inc.node_type.empty()) {
+   if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET and spec.inc.node_type.empty()) {
       throw std::invalid_argument(
          "Graph field '" + key_str + "' NODE_OFFSET increment requires non-empty node_type"
       );
@@ -217,13 +223,13 @@ inline void validate_graph_field_storage(
    }
    validate_graph_field_spec(key, field.spec);
    if(field.spec.dtype == GraphFieldDType::F32) {
-      if(! std::holds_alternative< std::vector< float > >(field.values)) {
+      if(not std::holds_alternative< std::vector< float > >(field.values)) {
          throw std::invalid_argument(
             "Graph field '" + key_str + "' storage dtype mismatch: expected f32"
          );
       }
    } else {
-      if(! std::holds_alternative< std::vector< int64_t > >(field.values)) {
+      if(not std::holds_alternative< std::vector< int64_t > >(field.values)) {
          throw std::invalid_argument(
             "Graph field '" + key_str + "' storage dtype mismatch: expected i64"
          );
@@ -232,7 +238,7 @@ inline void validate_graph_field_storage(
 
    const int64_t rows = graph_field_rows(key, field);
    const bool is_ragged = field.spec.mode == GraphFieldMode::RAGGED_CAT;
-   if(! is_ragged && ! field.ptr.empty()) {
+   if(not is_ragged and not field.ptr.empty()) {
       throw std::invalid_argument(
          "Graph field '" + key_str + "' non-ragged mode must not store ptr values"
       );
@@ -271,7 +277,7 @@ inline void validate_graph_field_storage(
                "Graph field '" + key_str + "' RAGGED_CAT expects ptr size == num_graphs + 1"
             );
          }
-         if(field.ptr.empty() || field.ptr.front() != 0) {
+         if(field.ptr.empty() or field.ptr.front() != 0) {
             throw std::invalid_argument(
                "Graph field '" + key_str + "' RAGGED_CAT ptr must start with 0"
             );

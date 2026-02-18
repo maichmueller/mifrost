@@ -215,17 +215,17 @@ class BatchBuilder {
    /// Set string graph attribute.
    void set_graph_attr(const std::string& key, std::string value);
    /// Register one dynamic graph field with strict typed collation spec.
-   void register_graph_field(const std::string& key, const GraphFieldSpec& spec);
-   /// Get dynamic graph field spec for one registered key.
+   void register_field(const std::string& key, const GraphFieldSpec& spec);
+   /// Get dynamic field spec for one registered key.
    [[nodiscard]] GraphFieldSpec get_graph_field_spec(const std::string& key) const;
    /// Set float dynamic graph field value for the current graph.
-   void set_graph_field(const std::string& key, std::span< const float > values);
+   void set_field(const std::string& key, std::span< const float > values);
    /// Set int64 dynamic graph field value for the current graph.
-   void set_graph_field(const std::string& key, std::span< const int64_t > values);
+   void set_field(const std::string& key, std::span< const int64_t > values);
    /// Return registered dynamic graph-field keys (sorted).
-   [[nodiscard]] std::vector< std::string > graph_field_keys() const;
+   [[nodiscard]] std::vector< std::string > field_keys() const;
    /// Return registered dynamic graph-field specs keyed by name.
-   [[nodiscard]] absl::btree_map< std::string, GraphFieldSpec > graph_field_specs() const;
+   [[nodiscard]] absl::btree_map< std::string, GraphFieldSpec > field_specs() const;
 
   private:
    /// Get or create a typed column with the requested feature dimension.
@@ -253,7 +253,7 @@ std::vector< T >& BatchBuilder::get_column(const std::string& key, int dim)
          it = columns.try_emplace(key, Column{LongCol{}, dim}).first;
       } else {
          static_assert(
-            std::is_same_v< T, float > || std::is_same_v< T, int64_t >, "Unsupported column type"
+            std::is_same_v< T, float > or std::is_same_v< T, int64_t >, "Unsupported column type"
          );
       }
    } else if(it->second.dim != dim) {

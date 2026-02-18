@@ -35,7 +35,7 @@ concept AnyLiteralRange = std::ranges::input_range< R >
 
 template < typename RR >
 concept AnyLiteralRangeRange = std::ranges::input_range< RR >
-                               && AnyLiteralRange< std::ranges::range_reference_t< RR > >;
+                               and AnyLiteralRange< std::ranges::range_reference_t< RR > >;
 
 template < class T >
 concept pair_like = requires(T t) {
@@ -54,13 +54,13 @@ concept pair_like = requires(T t) {
 
 template < typename LR >
 concept LeveledGoalLayers = std::ranges::input_range< LR >
-                            && pair_like< std::ranges::range_value_t< LR > >
-                            && std::convertible_to<
+                            and pair_like< std::ranges::range_value_t< LR > >
+                            and std::convertible_to<
                                detail::raw_t< decltype(std::get< 0 >(
                                   std::declval< std::ranges::range_reference_t< LR > >()
                                )) >,
                                size_t >
-                            && AnyLiteralRange< decltype(std::get< 1 >(
+                            and AnyLiteralRange< decltype(std::get< 1 >(
                                std::declval< std::ranges::range_reference_t< LR > >()
                             )) >;
 

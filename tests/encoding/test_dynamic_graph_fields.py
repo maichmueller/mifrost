@@ -21,7 +21,7 @@ def test_graph_field_spec_rejects_pyobj_dtype_for_native_fields():
 def test_encoded_graph_assignment_batch_graphs_and_as_pyg(small_blocks):
     space, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "goal_distance": GraphFieldSpec(mode=Mode.STACK, dtype=DType.F32),
             "target_indices": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.I64),
@@ -60,7 +60,7 @@ def test_encoded_graph_assignment_batch_graphs_and_as_pyg(small_blocks):
 def test_encoded_graph_cat_mode_batches_without_ptr(small_blocks):
     space, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "target_concat": GraphFieldSpec(mode=Mode.CAT, dtype=DType.I64),
         }
@@ -95,7 +95,7 @@ def test_no_dynamic_graph_fields_emit_no_graph_tensor_schema(small_blocks):
 def test_encoded_graph_cat_dim1_for_matrix_field(small_blocks):
     space, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "target_matrix": GraphFieldSpec(
                 mode=Mode.CAT, dtype=DType.I64, dim=2, cat_dim=1
@@ -122,7 +122,7 @@ def test_encoded_graph_cat_dim1_for_matrix_field(small_blocks):
 def test_encoder_exposes_registered_graph_field_specs(small_blocks):
     _, domain, _ = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "goal_distance": GraphFieldSpec(mode=Mode.STACK, dtype=DType.F32),
             "target_matrix": GraphFieldSpec(
@@ -131,8 +131,8 @@ def test_encoder_exposes_registered_graph_field_specs(small_blocks):
         }
     )
 
-    assert encoder.graph_field_keys == ["goal_distance", "target_matrix"]
-    specs = encoder.graph_field_specs
+    assert encoder.field_keys == ["goal_distance", "target_matrix"]
+    specs = encoder.field_specs
     assert specs["goal_distance"].mode is Mode.STACK
     assert specs["target_matrix"].cat_dim == 1
 
@@ -140,7 +140,7 @@ def test_encoder_exposes_registered_graph_field_specs(small_blocks):
 def test_encoder_register_graph_fields_accepts_dict_specs(small_blocks):
     _, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "goal_distance": {
                 "mode": "stack",
@@ -151,7 +151,7 @@ def test_encoder_register_graph_fields_accepts_dict_specs(small_blocks):
         }
     )
 
-    specs = encoder.graph_field_specs
+    specs = encoder.field_specs
     assert specs["goal_distance"].mode is Mode.STACK
     assert specs["goal_distance"].dtype is DType.F32
 
@@ -164,7 +164,7 @@ def test_encoder_register_graph_fields_accepts_dict_specs(small_blocks):
 def test_encoded_graph_accepts_zero_dim_tensors_for_graph_fields(small_blocks):
     _, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "reward": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.F32),
             "done": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.I64),
@@ -183,7 +183,7 @@ def test_encoded_graph_accepts_zero_dim_tensors_for_graph_fields(small_blocks):
 def test_dynamic_graph_field_batch_encoding_dumps_loads_roundtrip(small_blocks):
     _, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
-    encoder.register_graph_fields(
+    encoder.register_fields(
         {
             "idx": {
                 "mode": "stack",
@@ -200,6 +200,4 @@ def test_dynamic_graph_field_batch_encoding_dumps_loads_roundtrip(small_blocks):
     sample = graph.finalize()
 
     loaded = mifrost.BatchEncoding.loads(sample.dumps(include_metadata=True))
-    assert torch.equal(
-        loaded.get_graph_field("idx"), torch.tensor([0], dtype=torch.int64)
-    )
+    assert torch.equal(loaded.get_field("idx"), torch.tensor([0], dtype=torch.int64))

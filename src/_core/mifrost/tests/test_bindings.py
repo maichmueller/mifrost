@@ -59,11 +59,11 @@ def test_batch_builder_basics():
 def test_batch_builder_exposes_registered_graph_field_specs():
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "a",
         {"dtype": "f32", "mode": "stack", "dim": 1, "inc": {"kind": "none"}},
     )
-    builder.register_graph_field(
+    builder.register_field(
         "m",
         {
             "dtype": "i64",
@@ -74,8 +74,8 @@ def test_batch_builder_exposes_registered_graph_field_specs():
         },
     )
 
-    assert builder.graph_field_keys() == ["a", "m"]
-    specs = builder.graph_field_specs()
+    assert builder.field_keys() == ["a", "m"]
+    specs = builder.field_specs()
     assert specs["a"]["dtype"] == "f32"
     assert specs["a"]["mode"] == "stack"
     assert specs["m"]["dtype"] == "i64"
@@ -240,12 +240,12 @@ import mifrost
 
 b = mifrost.BatchBuilder()
 b.set_graph_kind("hetero")
-b.register_graph_field(
+b.register_field(
     "goal_distance",
     {"dtype": "f32", "mode": "stack", "dim": 1, "inc": {"kind": "none"}},
 )
 b.add_node_features("atom", "x", torch.zeros(1, 1))
-b.set_graph_field("goal_distance", 7.0)
+b.set_field("goal_distance", 7.0)
 b.next_graph()
 encoding = b.build()
 
@@ -323,7 +323,7 @@ def test_batch_encodings_collates_python_fields_with_specs():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        graph_field_specs={
+        field_specs={
             "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
             "transition_label": {"dtype": "pyobj", "mode": "stack"},
             "domain_path": {"dtype": "pyobj", "mode": "const"},
@@ -334,8 +334,8 @@ def test_batch_encodings_collates_python_fields_with_specs():
     assert batched.targets_ptr == [0, 2, 3]
     assert batched.transition_label == ["left", "right"]
     assert batched.domain_path == "domain.pddl"
-    assert batched.graph_field_specs()["targets"]["mode"] == "ragged_cat"
-    assert batched.graph_field_specs()["domain_path"]["dtype"] == "pyobj"
+    assert batched.field_specs()["targets"]["mode"] == "ragged_cat"
+    assert batched.field_specs()["domain_path"]["dtype"] == "pyobj"
 
 
 def test_batch_encodings_collates_registered_python_graph_field_specs():
@@ -351,15 +351,64 @@ def test_batch_encodings_collates_registered_python_graph_field_specs():
         "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
         "returns": {"mode": "stack"},
     }
-    enc0.register_graph_field_specs(specs)
-    enc1.register_graph_field_specs(specs)
+    enc0.register_field_specs(specs)
+    enc1.register_field_specs(specs)
 
     batched = mifrost.batch_encodings([enc0, enc1])
     assert batched.targets == ["a0", "a1", "b0"]
     assert batched.targets_ptr == [0, 2, 3]
     assert batched.returns == [3.0, 4.0]
-    assert batched.graph_field_specs()["targets"]["dtype"] == "pyobj"
-    assert batched.graph_field_specs()["returns"]["mode"] == "stack"
+    assert batched.field_specs()["targets"]["dtype"] == "pyobj"
+    assert batched.field_specs()["returns"]["mode"] == "stack"
+
+
+def test_batch_encodings_accepts_python_str_builtin_dtype():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.label = "left"
+    enc1.label = "right"
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        field_specs={"label": {"dtype": str, "mode": "stack"}},
+    )
+    assert batched.label == ["left", "right"]
+    assert batched.field_specs()["label"]["dtype"] == "str"
+
+
+def test_batch_encodings_accepts_python_int_float_builtin_dtypes():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.steps = 3
+    enc1.steps = 7
+    enc0.value = 1.5
+    enc1.value = 2.5
+
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        field_specs={
+            "steps": {"dtype": int, "mode": "stack", "dim": 1},
+            "value": {"dtype": float, "mode": "stack", "dim": 1},
+        },
+    )
+    assert torch.equal(batched.steps, torch.tensor([3, 7], dtype=torch.int64))
+    assert torch.allclose(batched.value, torch.tensor([1.5, 2.5], dtype=torch.float32))
+    assert batched.field_specs()["steps"]["dtype"] == "i64"
+    assert batched.field_specs()["value"]["dtype"] == "f32"
+
+
+def test_batch_builder_register_field_accepts_python_int_float_builtin_dtypes():
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.register_field("f", {"dtype": float, "mode": "stack", "dim": 1})
+    builder.register_field("i", {"dtype": int, "mode": "cat", "dim": 1})
+    builder.add_node_features("atom", "x", torch.zeros(1, 1))
+    builder.set_field("f", 1.25)
+    builder.set_field("i", [2, 3])
+    builder.next_graph()
+    enc = builder.build()
+    assert torch.allclose(enc.get_field("f"), torch.tensor([1.25], dtype=torch.float32))
+    assert torch.equal(enc.get_field("i"), torch.tensor([2, 3], dtype=torch.int64))
 
 
 def test_batch_encodings_accepts_legacy_py_field_specs_alias():
@@ -370,7 +419,7 @@ def test_batch_encodings_accepts_legacy_py_field_specs_alias():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        py_field_specs={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
+        field_specs={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
     )
     assert batched.targets == ["a0", "b0", "b1"]
     assert batched.targets_ptr == [0, 1, 3]
@@ -381,8 +430,8 @@ def test_batch_encodings_without_python_attrs_keeps_python_specs_empty():
     enc1 = _single_graph_with_stack_field(2.0)
 
     batched = mifrost.batch_encodings([enc0, enc1])
-    assert batched.graph_field_specs() == {}
-    assert "__mifrost_graph_field_specs__" not in batched.__dict__
+    assert batched.field_specs() == {}
+    assert "__mifrost_field_specs__" not in batched.__dict__
 
 
 def test_batch_encodings_mixed_python_attrs_infers_stack_and_pads_missing():
@@ -393,7 +442,7 @@ def test_batch_encodings_mixed_python_attrs_infers_stack_and_pads_missing():
 
     batched = mifrost.batch_encodings([enc0, enc1])
     assert batched.transition_label == ["left", None]
-    assert batched.graph_field_specs()["transition_label"]["mode"] == "stack"
+    assert batched.field_specs()["transition_label"]["mode"] == "stack"
 
 
 def test_batch_encodings_mixed_registered_ragged_spec_handles_missing_values():
@@ -401,14 +450,12 @@ def test_batch_encodings_mixed_registered_ragged_spec_handles_missing_values():
     enc1 = _single_graph_with_stack_field(2.0)
 
     enc0.targets = ["a0", "a1"]
-    enc0.register_graph_field_specs(
-        {"targets": {"dtype": "pyobj", "mode": "ragged_cat"}}
-    )
+    enc0.register_field_specs({"targets": {"dtype": "pyobj", "mode": "ragged_cat"}})
 
     batched = mifrost.batch_encodings([enc0, enc1])
     assert batched.targets == ["a0", "a1"]
     assert batched.targets_ptr == [0, 2, 2]
-    assert batched.graph_field_specs()["targets"]["mode"] == "ragged_cat"
+    assert batched.field_specs()["targets"]["mode"] == "ragged_cat"
 
 
 def test_batch_encodings_mixed_explicit_specs_collate_per_mode():
@@ -423,7 +470,7 @@ def test_batch_encodings_mixed_explicit_specs_collate_per_mode():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        graph_field_specs={
+        field_specs={
             "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
             "transition_label": {"dtype": "pyobj", "mode": "stack"},
             "domain_path": {"dtype": "pyobj", "mode": "const"},
@@ -444,7 +491,7 @@ def test_batch_encodings_const_python_field_requires_presence_on_all_inputs():
     with pytest.raises(ValueError, match="missing value for encoding index 1"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            graph_field_specs={"domain_path": {"dtype": "pyobj", "mode": "const"}},
+            field_specs={"domain_path": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
@@ -457,7 +504,7 @@ def test_batch_encodings_collates_const_tensor_python_field():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+        field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
     )
 
     assert torch.equal(
@@ -475,7 +522,7 @@ def test_batch_encodings_const_tensor_field_requires_exact_structure():
     with pytest.raises(ValueError, match="non-constant values"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+            field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
@@ -489,14 +536,14 @@ def test_batch_encodings_const_numpy_field_requires_exact_structure():
     with pytest.raises(ValueError, match="non-constant values"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            graph_field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+            field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
 def test_batch_encoding_as_pyg_copies_python_attrs():
     encoding = _single_graph_with_stack_field(3.0)
     encoding.sample_labels = ["label-0"]
-    encoding.register_graph_field_specs(
+    encoding.register_field_specs(
         {"sample_labels": {"dtype": "pyobj", "mode": "stack"}}
     )
 
@@ -505,25 +552,25 @@ def test_batch_encoding_as_pyg_copies_python_attrs():
 
     assert as_single.sample_labels == "label-0"
     assert as_batch.sample_labels == ["label-0"]
-    assert not hasattr(as_single, "__mifrost_graph_field_specs__")
-    assert not hasattr(as_batch, "__mifrost_graph_field_specs__")
+    assert not hasattr(as_single, "__mifrost_field_specs__")
+    assert not hasattr(as_batch, "__mifrost_field_specs__")
 
 
 def test_batch_encoding_graph_field_accessors_and_introspection():
     encoding = _single_graph_with_ragged_i64_field([5, 6])
     encoding.label = "demo"
-    encoding.register_graph_field_specs({"label": {"dtype": "pyobj", "mode": "stack"}})
+    encoding.register_field_specs({"label": {"dtype": "pyobj", "mode": "stack"}})
 
-    assert encoding.has_graph_field("target_indices")
-    assert encoding.has_graph_field("target_indices_ptr")
-    assert not encoding.has_graph_field("missing")
+    assert encoding.has_field("target_indices")
+    assert encoding.has_field("target_indices_ptr")
+    assert not encoding.has_field("missing")
 
     assert torch.equal(
-        encoding.get_graph_field("target_indices"),
+        encoding.get_field("target_indices"),
         torch.tensor([5, 6], dtype=torch.int64),
     )
     assert torch.equal(
-        encoding.get_graph_field("target_indices_ptr"),
+        encoding.get_field("target_indices_ptr"),
         torch.tensor([0, 2], dtype=torch.int64),
     )
 
@@ -531,7 +578,7 @@ def test_batch_encoding_graph_field_accessors_and_introspection():
     assert "target_indices" in keys
     assert "target_indices_ptr" in keys
     assert "label" in keys
-    assert "__mifrost_graph_field_specs__" not in keys
+    assert "__mifrost_field_specs__" not in keys
 
     items = dict(encoding.items())
     assert torch.equal(items["target_indices"], torch.tensor([5, 6], dtype=torch.int64))
@@ -548,20 +595,20 @@ def test_batch_encoding_get_graph_field_supports_stack_cat_const_ragged():
     ragged = _single_graph_with_ragged_i64_field([7, 8, 9])
 
     assert torch.allclose(
-        stack.get_graph_field("goal_distance"), torch.tensor([1.5], dtype=torch.float32)
+        stack.get_field("goal_distance"), torch.tensor([1.5], dtype=torch.float32)
     )
     assert torch.equal(
-        cat.get_graph_field("target_concat"), torch.tensor([2, 4], dtype=torch.int64)
+        cat.get_field("target_concat"), torch.tensor([2, 4], dtype=torch.int64)
     )
     assert torch.equal(
-        const.get_graph_field("problem_id"), torch.tensor([42], dtype=torch.int64)
+        const.get_field("problem_id"), torch.tensor([42], dtype=torch.int64)
     )
     assert torch.equal(
-        ragged.get_graph_field("target_indices"),
+        ragged.get_field("target_indices"),
         torch.tensor([7, 8, 9], dtype=torch.int64),
     )
     assert torch.equal(
-        ragged.get_graph_field("target_indices_ptr"),
+        ragged.get_field("target_indices_ptr"),
         torch.tensor([0, 3], dtype=torch.int64),
     )
 
@@ -572,10 +619,10 @@ def test_batch_encoding_graph_field_introspection_is_stable_across_as_pyg_calls(
     keys_before = set(encoding.keys())
     items_before = dict(encoding.items())
     assert torch.equal(
-        encoding.get_graph_field("target_indices"), items_before["target_indices"]
+        encoding.get_field("target_indices"), items_before["target_indices"]
     )
     assert torch.equal(
-        encoding.get_graph_field("target_indices_ptr"),
+        encoding.get_field("target_indices_ptr"),
         items_before["target_indices_ptr"],
     )
 
@@ -617,7 +664,7 @@ def test_batch_encoding_native_graph_field_attr_access_and_write_through():
     assert torch.equal(values, torch.tensor([1, 2, 3], dtype=torch.int64))
 
     values[0] = 99
-    roundtrip = batched.get_graph_field("target_indices")
+    roundtrip = batched.get_field("target_indices")
     assert torch.equal(roundtrip, torch.tensor([99, 2, 3], dtype=torch.int64))
 
 
@@ -629,7 +676,7 @@ def test_batch_encoding_ragged_ptr_attr_is_read_only_snapshot():
     ptr = batched.target_indices_ptr
     ptr[0] = 123
     assert torch.equal(
-        batched.get_graph_field("target_indices_ptr"),
+        batched.get_field("target_indices_ptr"),
         torch.tensor([0, 1, 3], dtype=torch.int64),
     )
 
@@ -639,8 +686,8 @@ def test_batch_encoding_ragged_ptr_attr_is_read_only_snapshot():
 
 def test_register_graph_field_specs_raises_on_native_key_collision():
     encoding = _single_graph_with_stack_field(1.0)
-    with pytest.raises(ValueError, match="collides with native graph field key"):
-        encoding.register_graph_field_specs(
+    with pytest.raises(ValueError, match="collides with native field key"):
+        encoding.register_field_specs(
             {"goal_distance": {"dtype": "pyobj", "mode": "stack"}}
         )
 
@@ -656,7 +703,7 @@ def test_batch_encodings_raises_on_python_specs_colliding_with_native_graph_fiel
     with pytest.raises(ValueError, match="collides with native graph field key"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            graph_field_specs={
+            field_specs={
                 "target_indices": {"dtype": "pyobj", "mode": "ragged_cat"},
                 "tag": {"dtype": "pyobj", "mode": "stack"},
             },
@@ -738,7 +785,7 @@ def test_hgraph_encoder_instantiation():
 def _single_graph_with_stack_field(value: float):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "goal_distance",
         {
             "dtype": "f32",
@@ -748,7 +795,7 @@ def _single_graph_with_stack_field(value: float):
         },
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
-    builder.set_graph_field("goal_distance", value)
+    builder.set_field("goal_distance", value)
     builder.next_graph()
     return builder.build()
 
@@ -756,7 +803,7 @@ def _single_graph_with_stack_field(value: float):
 def _single_graph_with_ragged_i64_field(values):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_indices",
         {
             "dtype": "i64",
@@ -766,7 +813,7 @@ def _single_graph_with_ragged_i64_field(values):
         },
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
-    builder.set_graph_field("target_indices", list(values))
+    builder.set_field("target_indices", list(values))
     builder.next_graph()
     return builder.build()
 
@@ -774,7 +821,7 @@ def _single_graph_with_ragged_i64_field(values):
 def _single_graph_with_inc_ragged_field(symbol_count: int, positions):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_positions",
         {
             "dtype": "i64",
@@ -784,7 +831,7 @@ def _single_graph_with_inc_ragged_field(symbol_count: int, positions):
         },
     )
     builder.add_node_features("symbol", "x", torch.zeros(symbol_count, 1))
-    builder.set_graph_field("target_positions", list(positions))
+    builder.set_field("target_positions", list(positions))
     builder.next_graph()
     return builder.build()
 
@@ -792,7 +839,7 @@ def _single_graph_with_inc_ragged_field(symbol_count: int, positions):
 def _single_graph_with_cat_i64_field(values):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_concat",
         {
             "dtype": "i64",
@@ -803,7 +850,7 @@ def _single_graph_with_cat_i64_field(values):
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
     if values is not None:
-        builder.set_graph_field("target_concat", list(values))
+        builder.set_field("target_concat", list(values))
     builder.next_graph()
     return builder.build()
 
@@ -811,7 +858,7 @@ def _single_graph_with_cat_i64_field(values):
 def _single_graph_with_const_i64_field(value: int):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "problem_id",
         {
             "dtype": "i64",
@@ -821,7 +868,7 @@ def _single_graph_with_const_i64_field(value: int):
         },
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
-    builder.set_graph_field("problem_id", value)
+    builder.set_field("problem_id", value)
     builder.next_graph()
     return builder.build()
 
@@ -829,7 +876,7 @@ def _single_graph_with_const_i64_field(value: int):
 def _single_graph_with_inc_cat_field(symbol_count: int, values):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_concat",
         {
             "dtype": "i64",
@@ -839,7 +886,7 @@ def _single_graph_with_inc_cat_field(symbol_count: int, values):
         },
     )
     builder.add_node_features("symbol", "x", torch.zeros(symbol_count, 1))
-    builder.set_graph_field("target_concat", list(values))
+    builder.set_field("target_concat", list(values))
     builder.next_graph()
     return builder.build()
 
@@ -847,7 +894,7 @@ def _single_graph_with_inc_cat_field(symbol_count: int, values):
 def _single_graph_with_matrix_field(values, *, mode: str = "cat", cat_dim: int = 1):
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_matrix",
         {
             "dtype": "i64",
@@ -859,7 +906,7 @@ def _single_graph_with_matrix_field(values, *, mode: str = "cat", cat_dim: int =
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
     if values is not None:
-        builder.set_graph_field("target_matrix", values)
+        builder.set_field("target_matrix", values)
     builder.next_graph()
     return builder.build()
 
@@ -1019,7 +1066,7 @@ def test_batch_encodings_collates_cat_dim1_ragged_graph_field_with_ptr():
 def test_graph_field_cat_dim1_dim_gt_1_requires_2d_input():
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
-    builder.register_graph_field(
+    builder.register_field(
         "target_matrix",
         {
             "dtype": "i64",
@@ -1031,7 +1078,7 @@ def test_graph_field_cat_dim1_dim_gt_1_requires_2d_input():
     )
     builder.add_node_features("atom", "x", torch.zeros(1, 1))
     with pytest.raises(ValueError, match="requires a 2D value shaped \\[dim, N\\]"):
-        builder.set_graph_field("target_matrix", [10, 20, 30, 40])
+        builder.set_field("target_matrix", [10, 20, 30, 40])
 
 
 def test_batch_encodings_schema_fingerprint_mismatch_on_cat_dim():

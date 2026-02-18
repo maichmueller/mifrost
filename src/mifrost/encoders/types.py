@@ -92,6 +92,8 @@ class HeteroBatchEncodingViewLike(Protocol):
     ptr_dict: Mapping[str, "torch.Tensor"]
     edge_attr_dict: Mapping[EdgeType, "torch.Tensor"]
 
+    def to(self, device: Any) -> "HeteroBatchEncodingViewLike": ...
+
 
 @runtime_checkable
 class HomoBatchEncodingViewLike(Protocol):
@@ -101,6 +103,8 @@ class HomoBatchEncodingViewLike(Protocol):
     batch: "torch.Tensor | None"
     ptr: "torch.Tensor | None"
     edge_attr: "torch.Tensor | None"
+
+    def to(self, device: Any) -> "HomoBatchEncodingViewLike": ...
 
 
 @runtime_checkable
@@ -129,6 +133,8 @@ class NativeEncoding(Protocol):
     def as_hetero(self) -> "HeteroBatchEncodingView": ...
 
     def as_homo(self) -> "HomoBatchEncodingView": ...
+
+    def to(self, device: Any) -> "NativeEncoding": ...
 
     def schema_fingerprint(self) -> int: ...
 

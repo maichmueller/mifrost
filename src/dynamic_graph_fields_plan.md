@@ -162,8 +162,8 @@ Files:
 - `src/_core/mifrost/core/batch_builder.cpp`
 
 Add methods:
-- `register_graph_field(key, spec)` (creates field entry + validates if exists)
-- `set_graph_field(key, scalar/ndarray/list)`:
+- `register_field(key, spec)` (creates field entry + validates if exists)
+- `set_field(key, scalar/ndarray/list)`:
   - requires registered spec in MVP (avoid inference in C++ initially)
   - appends value(s) into a per-graph staging slot
 - `commit_graph_fields()` called from `next_graph()`:
@@ -246,7 +246,7 @@ Files:
 - `src/mifrost/encoders/hgraph.py` (or `src/mifrost/encoders/base.py` if generalized)
 
 Add:
-- `HGraphEncoder.register_graph_fields(specs: dict[str, GraphFieldSpec])`
+- `HGraphEncoder.register_fields(specs: dict[str, GraphFieldSpec])`
 - `HGraphEncoder.encode_graph(state, ...) -> EncodedGraph`
 - `HGraphEncoder.batch_graphs(graphs: Sequence[EncodedGraph]) -> BatchEncoding`
 
@@ -259,9 +259,9 @@ Add:
 - `__setattr__` stores values for registered keys into `_dynamic_values`
 - `finalize()` (must be pure-native; no PyG construction):
   - creates a fresh `BatchBuilder`, `builder.set_graph_kind("hetero")` (or derive kind from encoder)
-  - registers graph field specs onto the builder
+  - registers field specs onto the builder
   - calls the C++ engine encode into the builder for exactly one graph
-  - calls `builder.set_graph_fields(_dynamic_values)` once
+  - calls `builder.set_fields(_dynamic_values)` once
   - calls `builder.next_graph()` then `builder.build()` → returns `BatchEncoding(num_graphs==1)` with embedded graph fields
   - caches and returns the encoding
 
@@ -293,7 +293,7 @@ import mifrost
 from mifrost.graph_fields import GraphFieldSpec, Mode, DType, Inc
 
 enc = mifrost.HGraphEncoder(domain)
-enc.register_graph_fields({
+enc.register_fields({
     "goal_distance": GraphFieldSpec(mode=Mode.STACK, dtype=DType.F32),
     "target_indices": GraphFieldSpec(mode=Mode.RAGGED_CAT, dtype=DType.I64),
     "target_positions": GraphFieldSpec(

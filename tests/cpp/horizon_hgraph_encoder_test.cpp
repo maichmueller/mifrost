@@ -713,7 +713,7 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDag)
             break;
          }
       }
-      if(! seen) {
+      if(not seen) {
          root_succs.emplace_back(succ_state, action);
       }
       if(root_succs.size() >= 2) {
@@ -729,7 +729,7 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDag)
 
    auto gc1 = find_successor_from(succ1.first);
    auto gc2 = find_successor_from(succ2.first);
-   if(! gc1.has_value() || ! gc2.has_value()) {
+   if(not gc1.has_value() || not gc2.has_value()) {
       GTEST_SKIP() << "Need grandchildren for cousin relation.";
    }
 

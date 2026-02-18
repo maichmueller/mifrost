@@ -53,16 +53,16 @@ void append_with_inc(
       auto& dst = expect_column< float >(dst_data, key);
       const auto& src = expect_column< float >(src_data, key);
       const bool cat_dim_one = (spec.mode == GraphFieldMode::CAT
-                                || spec.mode == GraphFieldMode::RAGGED_CAT)
-                               && graph_field_cat_dim_is_one(spec.cat_dim) && spec.dim > 1;
-      if(! cat_dim_one) {
+                                or spec.mode == GraphFieldMode::RAGGED_CAT)
+                               and graph_field_cat_dim_is_one(spec.cat_dim) and spec.dim > 1;
+      if(not cat_dim_one) {
          dst.reserve(dst.size() + src.size());
          dst.insert(dst.end(), src.begin(), src.end());
          return;
       }
 
       const size_t dim = static_cast< size_t >(spec.dim);
-      if(dst.size() % dim != 0 || src.size() % dim != 0) {
+      if(dst.size() % dim != 0 or src.size() % dim != 0) {
          throw std::invalid_argument(
             "Graph field '" + key + "' invalid size for cat_dim=1 concatenation"
          );
@@ -92,9 +92,9 @@ void append_with_inc(
    auto& dst = expect_column< int64_t >(dst_data, key);
    const auto& src = expect_column< int64_t >(src_data, key);
    const bool cat_dim_one = (spec.mode == GraphFieldMode::CAT
-                             || spec.mode == GraphFieldMode::RAGGED_CAT)
-                            && graph_field_cat_dim_is_one(spec.cat_dim) && spec.dim > 1;
-   if(! cat_dim_one) {
+                             or spec.mode == GraphFieldMode::RAGGED_CAT)
+                            and graph_field_cat_dim_is_one(spec.cat_dim) and spec.dim > 1;
+   if(not cat_dim_one) {
       dst.reserve(dst.size() + src.size());
       if(inc == 0) {
          dst.insert(dst.end(), src.begin(), src.end());
@@ -107,7 +107,7 @@ void append_with_inc(
    }
 
    const size_t dim = static_cast< size_t >(spec.dim);
-   if(dst.size() % dim != 0 || src.size() % dim != 0) {
+   if(dst.size() % dim != 0 or src.size() % dim != 0) {
       throw std::invalid_argument(
          "Graph field '" + key + "' invalid size for cat_dim=1 concatenation"
       );
@@ -177,7 +177,7 @@ hash_map< std::string, std::string > build_edge_index_offset_node_types(
       }
       const int edge_type_idx = edge_spec.edge_type;
       if(edge_type_idx < 0
-         || static_cast< size_t >(edge_type_idx) >= batch_encoding.schema.edge_types.size()) {
+         or static_cast< size_t >(edge_type_idx) >= batch_encoding.schema.edge_types.size()) {
          throw std::invalid_argument(
             "append_batch_encoding encountered invalid schema edge_type index for edge_index key '"
             + edge_spec.key + "'"
@@ -199,7 +199,7 @@ hash_map< std::string, std::string > build_edge_index_offset_node_types(
       }
 
       auto [it, inserted] = node_type_by_key.try_emplace(edge_spec.key, std::string(node_type));
-      if(! inserted && it->second != node_type) {
+      if(not inserted and it->second != node_type) {
          throw std::invalid_argument(
             "append_batch_encoding schema maps edge_index key to conflicting node types for key '"
             + edge_spec.key + "'"
@@ -402,7 +402,7 @@ void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
    graph_attrs[key] = std::move(value);
 }
 
-void BatchBuilder::register_graph_field(const std::string& key, const GraphFieldSpec& spec)
+void BatchBuilder::register_field(const std::string& key, const GraphFieldSpec& spec)
 {
    GraphFieldSpec normalized_spec = spec;
    normalized_spec.cat_dim = normalize_graph_field_cat_dim(normalized_spec.cat_dim);
@@ -429,10 +429,10 @@ void BatchBuilder::register_graph_field(const std::string& key, const GraphField
    }
 }
 
-std::vector< std::string > BatchBuilder::graph_field_keys() const
+std::vector< std::string > BatchBuilder::field_keys() const
 {
    std::vector< std::string > out;
-   if(! graph_fields) {
+   if(not graph_fields) {
       return out;
    }
    out.reserve(graph_fields->size());
@@ -444,10 +444,10 @@ std::vector< std::string > BatchBuilder::graph_field_keys() const
    return out;
 }
 
-absl::btree_map< std::string, GraphFieldSpec > BatchBuilder::graph_field_specs() const
+absl::btree_map< std::string, GraphFieldSpec > BatchBuilder::field_specs() const
 {
    absl::btree_map< std::string, GraphFieldSpec > out;
-   if(! graph_fields) {
+   if(not graph_fields) {
       return out;
    }
    for(const auto& [key, field] : *graph_fields) {
@@ -468,7 +468,7 @@ GraphFieldSpec BatchBuilder::get_graph_field_spec(const std::string& key) const
    return it->second.spec;
 }
 
-void BatchBuilder::set_graph_field(const std::string& key, std::span< const float > values)
+void BatchBuilder::set_field(const std::string& key, std::span< const float > values)
 {
    if(not graph_fields) {
       throw std::invalid_argument("Graph field '" + key + "' is not registered");
@@ -488,14 +488,14 @@ void BatchBuilder::set_graph_field(const std::string& key, std::span< const floa
    }
 
    const int64_t total = static_cast< int64_t >(values.size());
-   if(field.spec.mode == GraphFieldMode::STACK || field.spec.mode == GraphFieldMode::CONST) {
+   if(field.spec.mode == GraphFieldMode::STACK or field.spec.mode == GraphFieldMode::CONST) {
       if(total != field.spec.dim) {
          throw std::invalid_argument(
             "Graph field '" + key + "' STACK/CONST expects exactly dim values"
          );
       }
    } else if(field.spec.mode == GraphFieldMode::RAGGED_CAT
-             || field.spec.mode == GraphFieldMode::CAT) {
+             or field.spec.mode == GraphFieldMode::CAT) {
       if(total % field.spec.dim != 0) {
          throw std::invalid_argument(
             "Graph field '" + key + "' values size must be divisible by dim"
@@ -507,7 +507,7 @@ void BatchBuilder::set_graph_field(const std::string& key, std::span< const floa
    field.pending = NumericColumnData{std::move(data)};
 }
 
-void BatchBuilder::set_graph_field(const std::string& key, std::span< const int64_t > values)
+void BatchBuilder::set_field(const std::string& key, std::span< const int64_t > values)
 {
    if(not graph_fields) {
       throw std::invalid_argument("Graph field '" + key + "' is not registered");
@@ -527,14 +527,14 @@ void BatchBuilder::set_graph_field(const std::string& key, std::span< const int6
    }
 
    const int64_t total = static_cast< int64_t >(values.size());
-   if(field.spec.mode == GraphFieldMode::STACK || field.spec.mode == GraphFieldMode::CONST) {
+   if(field.spec.mode == GraphFieldMode::STACK or field.spec.mode == GraphFieldMode::CONST) {
       if(total != field.spec.dim) {
          throw std::invalid_argument(
             "Graph field '" + key + "' STACK/CONST expects exactly dim values"
          );
       }
    } else if(field.spec.mode == GraphFieldMode::RAGGED_CAT
-             || field.spec.mode == GraphFieldMode::CAT) {
+             or field.spec.mode == GraphFieldMode::CAT) {
       if(total % field.spec.dim != 0) {
          throw std::invalid_argument(
             "Graph field '" + key + "' values size must be divisible by dim"
@@ -745,7 +745,7 @@ void vector_deleter(void* p) noexcept
 }
 
 template < typename T >
-std::vector< T >* heap_vector(std::vector< T >&& vec)
+std::vector< T >* heap_vector(std::vector< T >and vec)
 {
    auto* heap_vec = new std::vector< T >(std::move(vec));
    heap_vec->shrink_to_fit();
@@ -753,7 +753,7 @@ std::vector< T >* heap_vector(std::vector< T >&& vec)
 }
 
 template < typename T >
-auto vector_to_1d_ndarray(std::vector< T >&& vec)
+auto vector_to_1d_ndarray(std::vector< T >and vec)
 {
    auto* heap_vec = heap_vector(std::move(vec));
    size_t shape[1] = {heap_vec->size()};
@@ -762,7 +762,7 @@ auto vector_to_1d_ndarray(std::vector< T >&& vec)
 }
 
 template < typename T >
-auto vector_to_2d_ndarray(std::vector< T >&& vec, size_t rows, size_t cols)
+auto vector_to_2d_ndarray(std::vector< T >and vec, size_t rows, size_t cols)
 {
    auto* heap_vec = heap_vector(std::move(vec));
    size_t shape[2] = {rows, cols};
@@ -920,7 +920,7 @@ nb::object BatchBuilder::build_pyg()
          const std::string suffix = key.substr(edge_pos + 12);
          const auto first = base.find('|');
          const auto second = base.find('|', first + 1);
-         if(first == std::string::npos || second == std::string::npos) {
+         if(first == std::string::npos or second == std::string::npos) {
             throw std::invalid_argument(fmt::format("Malformed edge key '{}'", key));
          }
          const std::string src = base.substr(0, first);
@@ -952,7 +952,7 @@ nb::object BatchBuilder::build_pyg()
    }
 
    for(const auto& [edge_key, components] : edge_components) {
-      if(not components.src.is_valid() || not components.dst.is_valid()) {
+      if(not components.src.is_valid() or not components.dst.is_valid()) {
          throw std::invalid_argument("Incomplete edge_index components for edge type");
       }
       nb::object edge_index = torch.attr("stack")(
@@ -1045,7 +1045,7 @@ nb::object BatchBuilder::build_pyg()
                continue;
             }
             auto ptr_it = ptr_vectors.find(node_type);
-            if(ptr_it == ptr_vectors.end() || ptr_it->second.size() < 2) {
+            if(ptr_it == ptr_vectors.end() or ptr_it->second.size() < 2) {
                break;
             }
             const auto& ptr = ptr_it->second;
@@ -1084,8 +1084,8 @@ nb::object BatchBuilder::build_pyg()
                   value_tensor = to_tensor(vector_to_1d_ndarray< T >(std::move(values)).cast());
                } else {
                   const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
-                                            || field.spec.mode == GraphFieldMode::RAGGED_CAT)
-                                           && graph_field_cat_dim_is_one(field.spec.cat_dim);
+                                            or field.spec.mode == GraphFieldMode::RAGGED_CAT)
+                                           and graph_field_cat_dim_is_one(field.spec.cat_dim);
                   const size_t rows = cat_dim_one ? static_cast< size_t >(field.spec.dim)
                                                   : size / static_cast< size_t >(field.spec.dim);
                   const size_t cols = cat_dim_one ? size / static_cast< size_t >(field.spec.dim)
@@ -1136,7 +1136,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
          }
       }
    }
-   if(has_uncommitted_nodes || has_pending_graph_fields) {
+   if(has_uncommitted_nodes or has_pending_graph_fields) {
       next_graph();
    }
 
@@ -1206,7 +1206,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
          graph_count = 1;
       }
    }
-   if(graph_count == 0 && current_graph_idx > 0) {
+   if(graph_count == 0 and current_graph_idx > 0) {
       graph_count = current_graph_idx;
    }
 
@@ -1488,20 +1488,20 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
 
    const auto edge_index_offset_node_types = build_edge_index_offset_node_types(batch_encoding);
 
-   if(graph_fields || not batch_encoding.graph_fields.empty()) {
+   if(graph_fields or not batch_encoding.graph_fields.empty()) {
       if(not graph_fields) {
          graph_fields = std::make_unique< hash_map< std::string, GraphField > >();
          graph_fields->reserve(batch_encoding.graph_fields.size());
       }
       for(const auto& [key, field] : batch_encoding.graph_fields) {
-         register_graph_field(key, field.spec);
+         register_field(key, field.spec);
       }
 
       for(auto& [key, field] : *graph_fields) {
          const auto src_it = batch_encoding.graph_fields.find(key);
          if(src_it == batch_encoding.graph_fields.end()) {
             if(field.spec.mode == GraphFieldMode::STACK
-               || field.spec.mode == GraphFieldMode::CONST) {
+               or field.spec.mode == GraphFieldMode::CONST) {
                throw std::invalid_argument(
                   "append_batch_encoding missing required graph field '" + key + "'"
                );
@@ -1518,7 +1518,7 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
          const auto& src_field = src_it->second;
          if(src_field.spec != field.spec) {
             throw std::invalid_argument(
-               "append_batch_encoding graph field spec mismatch for '" + key + "'"
+               "append_batch_encoding field spec mismatch for '" + key + "'"
             );
          }
 
@@ -1586,7 +1586,7 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
                const std::string_view base = key_view.substr(0, slash);
                const auto first = base.find('|');
                const auto second = base.find('|', first + 1);
-               if(first == std::string_view::npos || second == std::string_view::npos) {
+               if(first == std::string_view::npos or second == std::string_view::npos) {
                   throw std::invalid_argument("Malformed edge key in append_batch_encoding");
                }
                const std::string_view src_type = base.substr(0, first);

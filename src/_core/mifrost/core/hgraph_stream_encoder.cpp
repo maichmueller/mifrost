@@ -374,7 +374,7 @@ void HGraphEncoderEngine::encode_impl_core(
       workspace.symbol_to_relations
    );
    encode_goal_inputs(goals, builder, workspace);
-   if(! history_subgoals.empty()) {
+   if(not history_subgoals.empty()) {
       encode_history(
          history_subgoals,
          history_max_steps,
@@ -920,7 +920,7 @@ HGraphEncoderEngine::RelationRef
 HGraphEncoderEngine::relation_ref_for(const std::string& node_type, int64_t relation_idx)
 {
    if(relation_idx < 0
-      || relation_idx > static_cast< int64_t >(std::numeric_limits< uint32_t >::max())) {
+      or relation_idx > static_cast< int64_t >(std::numeric_limits< uint32_t >::max())) {
       throw std::overflow_error("relation index out of u32 range for RelationRef");
    }
    const auto type_id = get_or_assign_relation_type_id(node_type);

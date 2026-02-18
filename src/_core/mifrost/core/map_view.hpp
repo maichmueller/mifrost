@@ -46,7 +46,7 @@ struct map_view_python_type_token_traits< const volatile T >:
 template < typename T >
    requires(
       std::is_integral_v< std::remove_cvref_t< T > >
-      && ! std::is_same_v< std::remove_cvref_t< T >, bool >
+      and not std::is_same_v< std::remove_cvref_t< T >, bool >
    )
 struct map_view_python_type_token_traits< T > {
    static constexpr std::string_view value = "int";

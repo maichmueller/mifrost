@@ -56,7 +56,7 @@ class GraphFieldSpec:
         if self.dtype is DType.PYOBJ:
             raise ValueError(
                 "GraphFieldSpec dtype='pyobj' is only supported for Python-side "
-                "batch_encodings graph_field_specs, not native HGraph dynamic fields"
+                "batch_encodings field_specs, not native HGraph dynamic fields"
             )
         normalized_cat_dim = 1 if self.cat_dim == -1 else int(self.cat_dim)
         if self.mode in (Mode.CAT, Mode.RAGGED_CAT):

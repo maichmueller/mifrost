@@ -122,7 +122,7 @@ TEST_P(ColorEncoderTest, ConfigVariantsMatchSchemaAndColumns)
          };
 
          auto add_predicate_self_edge = [&](const std::string& predicate_node, int64_t idx) {
-            if(! edge_features) {
+            if(not edge_features) {
                return;
             }
             if(predicate_self_edges.contains(predicate_node)) {

@@ -153,7 +153,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
          workspace.symbol_to_relations
       );
 
-      if(not polarity.has_value() || *polarity) {
+      if(not polarity.has_value() or *polarity) {
          uint32_t tag_id = 0;
          if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
             tag_id = 1;
