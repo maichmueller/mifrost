@@ -67,8 +67,9 @@ jobs:
 
       with:
         path: ${{ env.CONAN_HOME }}
-        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ runner.os == 'macOS' && env.MIFROST_MACOSX_DEPLOYMENT_TARGET || 'none' }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
         restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-${{ runner.os == 'macOS' && env.MIFROST_MACOSX_DEPLOYMENT_TARGET || 'none' }}-
           conan-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Set min macOS version
@@ -88,10 +89,3 @@ jobs:
 
     - name: Test
       run: python -m pytest
-
-    - name: Save Conan cache
-      if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_install.outcome == 'success'
-      uses: actions/cache/save@v5
-      with:
-        path: ${{ env.CONAN_HOME }}
-        key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}

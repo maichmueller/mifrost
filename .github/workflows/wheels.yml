@@ -45,7 +45,7 @@ jobs:
 
   generate_stubs:
     name: Generate Stubs
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
       with:
@@ -180,8 +180,7 @@ jobs:
         CIBW_BEFORE_BUILD_MACOS: python -m pip install -c {project}/requirements/constraints-ci.txt -r {project}/requirements.txt && python -m pip install delocate
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
-        CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
-        CIBW_ENVIRONMENT_LINUX: CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1 CMAKE_ARGS=-DCONAN_INSTALL_ARGS=--build=missing\;--build=b2/*
+        CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/root/.conan2
         CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1
 
     - name: Verify clean directory
@@ -194,6 +193,52 @@ jobs:
       with:
         path: ${{ env.CONAN_HOME }}
         key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
+
+    - name: Verify wheel artifacts
+      shell: bash
+      run: |
+        set -euo pipefail
+        ls -lh wheelhouse
+        python -m pip install --upgrade pip
+        python -m pip install twine
+        python -m twine check wheelhouse/*.whl
+        python - <<'PY'
+        import glob
+        import pathlib
+        import zipfile
+        import email
+
+        wheels = sorted(glob.glob("wheelhouse/*.whl"))
+        if not wheels:
+            raise SystemExit("No wheels were produced in wheelhouse/")
+
+        for wheel in wheels:
+            wheel_path = pathlib.Path(wheel)
+            with zipfile.ZipFile(wheel_path) as zf:
+                names = set(zf.namelist())
+                has_core_ext = any(
+                    name.startswith("mifrost/_core")
+                    and (name.endswith(".so") or name.endswith(".dylib"))
+                    for name in names
+                )
+                if not has_core_ext:
+                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_core extension")
+                if "mifrost/_core.pyi" not in names:
+                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_core.pyi")
+
+                metadata_name = next(
+                    (n for n in names if n.endswith(".dist-info/METADATA")),
+                    None,
+                )
+                if metadata_name is None:
+                    raise SystemExit(f"{wheel_path.name}: missing dist-info METADATA")
+                metadata = email.message_from_bytes(zf.read(metadata_name))
+                requires = metadata.get_all("Requires-Dist", [])
+                if not any(req.lower().startswith("pymimir") for req in requires):
+                    raise SystemExit(f"{wheel_path.name}: missing Requires-Dist for pymimir")
+
+            print(f"validated: {wheel_path.name}")
+        PY
 
     - name: Upload wheels
       uses: actions/upload-artifact@v6

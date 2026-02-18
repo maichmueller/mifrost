@@ -7,6 +7,9 @@ on:
     branches:
       - "**"
 
+env:
+  MIFROST_MACOSX_DEPLOYMENT_TARGET: "11.0"
+
 jobs:
   test:
     name: Tests (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -63,8 +66,9 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{ env.CONAN_HOME }}
-          key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
+          key: conan-${{ runner.os }}-${{ runner.arch }}-${{ runner.os == 'macOS' && env.MIFROST_MACOSX_DEPLOYMENT_TARGET || 'none' }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
           restore-keys: |
+            conan-${{ runner.os }}-${{ runner.arch }}-${{ runner.os == 'macOS' && env.MIFROST_MACOSX_DEPLOYMENT_TARGET || 'none' }}-
             conan-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install test dependency
@@ -90,7 +94,13 @@ jobs:
         run: ctest --test-dir build_ci -R mifrost_tests --output-on-failure
 
       - name: Save Conan cache
-        if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_install.outcome == 'success' && steps.build_cpp_tests.outcome == 'success'
+        if: >-
+          always() &&
+          steps.conan_cache_restore.outcome == 'success' &&
+          steps.build_install.outcome == 'success' &&
+          steps.build_cpp_tests.outcome == 'success' &&
+          matrix.python-version == '3.12' &&
+          steps.conan_cache_restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CONAN_HOME }}

@@ -2,7 +2,7 @@
 # Use via: python -m pip install -c requirements/constraints-ci.txt <packages...>
 
 conan>=2.4,<3
-cmake>=3.27,<5
+cmake>=3.27,<4
 ninja>=1.11,<2
 pymimir==0.13.60
 pytest>=8.0,<9
