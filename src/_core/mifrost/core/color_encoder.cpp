@@ -22,11 +22,11 @@ struct ColorBuffers {
 };
 
 template < typename MapT, typename KeyT >
-std::optional< int > find_goal_level(const MapT& map, const KeyT& key)
+std::optional< GoalLevel > find_goal_level(const MapT& map, const KeyT& key)
 {
    auto it = map.find(key);
    if(it != map.end()) {
-      return it->second;
+      return GoalLevel{it->second};
    }
    return std::nullopt;
 }
@@ -194,7 +194,7 @@ void ColorEncoderEngine::encode_impl(
       }
    };
 
-   auto encode_literal = [&](const auto& literal, std::optional< int > goal_level) {
+   auto encode_literal = [&](const auto& literal, std::optional< GoalLevel > goal_level) {
       const auto atom = literal->get_atom();
       const auto predicate = atom->get_predicate();
       const auto arity = predicate->get_arity();
@@ -204,9 +204,8 @@ void ColorEncoderEngine::encode_impl(
       std::optional< int64_t > predicate_idx;
       if(config_.enable_global_predicate_nodes) {
          if(goal_level.has_value()) {
-            const GoalLevel level(static_cast< std::size_t >(*goal_level));
             predicate_node = RelationFormatter::format_predicate(
-               predicate, level, std::nullopt, polarity, ""
+               predicate, *goal_level, std::nullopt, polarity, ""
             );
          } else {
             predicate_node = RelationFormatter::format_predicate(
@@ -219,7 +218,7 @@ void ColorEncoderEngine::encode_impl(
 
       const std::string base_name = [&]() {
          if(goal_level.has_value()) {
-            const GoalLevel level(static_cast< std::size_t >(*goal_level));
+            const GoalLevel level(*goal_level);
             return RelationFormatter::format_literal(literal, level, std::nullopt, polarity, "");
          }
          return RelationFormatter::format_literal(
@@ -293,15 +292,15 @@ void ColorEncoderEngine::encode_impl(
    }
 
    for(const auto& literal : goals.static_goals) {
-      auto level = find_goal_level(goals.static_goal_levels, literal).value_or(0);
+      auto level = find_goal_level(goals.static_goal_levels, literal);
       encode_literal(literal, level);
    }
    for(const auto& literal : goals.fluent_goals) {
-      auto level = find_goal_level(goals.fluent_goal_levels, literal).value_or(0);
+      auto level = find_goal_level(goals.fluent_goal_levels, literal);
       encode_literal(literal, level);
    }
    for(const auto& literal : goals.derived_goals) {
-      auto level = find_goal_level(goals.derived_goal_levels, literal).value_or(0);
+      auto level = find_goal_level(goals.derived_goal_levels, literal);
       encode_literal(literal, level);
    }
 
