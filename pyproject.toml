@@ -70,6 +70,15 @@ test-command = "python -c \"import pymimir, mifrost; print('pymimir', getattr(py
 # Don't test Python 3.8 wheels on macOS/arm64
 test-skip = "cp38-macosx_*:arm64"
 
+[tool.cibuildwheel.linux.environment]
+# Ensure Conan's provider path resolves b2 from source in manylinux/musllinux,
+# where prebuilt b2 binaries can be glibc-incompatible.
+CMAKE_ARGS = "-DCONAN_INSTALL_ARGS=--build=missing\\;--build=b2/*"
+CONAN_NON_INTERACTIVE = "1"
+# Use an explicit non-default Conan cache path in wheel containers to avoid
+# accidentally consuming pre-existing /root/.conan2 contents.
+CONAN_HOME = "/conan_home"
+
 # Needed for full C++17 support
 [tool.cibuildwheel.macos.environment]
 MACOSX_DEPLOYMENT_TARGET = "11.0"
