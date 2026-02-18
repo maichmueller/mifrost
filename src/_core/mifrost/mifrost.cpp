@@ -8,6 +8,9 @@ namespace mifrost {
 
 NB_MODULE(_core, m)
 {
+#ifdef NDEBUG
+   nb::set_leak_warnings(false);
+#endif
    init_common(m);
    init_map_view(m);
    init_relation_formatter(m);
