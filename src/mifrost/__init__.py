@@ -16,10 +16,13 @@ if _in_stubgen:
     ]
     __all__: list[str] = []
 else:
+    from collections.abc import Mapping as _Mapping
+
     from . import _core  # make _core cpp module explicitly available to re-export
     from .map_view import MapView, install_map_view_wrappers
 
     install_map_view_wrappers(_core)
+    _Mapping.register(_core.RelationDict)
     from ._core import *  # noqa: F401,F403
     from .graph_fields import DType, GraphFieldSpec, Inc, Mode
 

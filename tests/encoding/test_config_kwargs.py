@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pytest
 
 import mifrost
@@ -116,6 +118,21 @@ def test_relation_dict_constructs_from_simple_mapping() -> None:
     relation_dict = mifrost.RelationDict({"custom_rel": 2, "other_rel": 1})
     assert relation_dict.arity["custom_rel"] == 2
     assert relation_dict.arity["other_rel"] == 1
+
+
+def test_relation_dict_fulfills_mapping_interface() -> None:
+    relation_dict = mifrost.RelationDict({"a": 2, "b": 1})
+    assert isinstance(relation_dict, Mapping)
+    assert len(relation_dict) == 2
+    assert relation_dict["a"] == 2
+    assert "b" in relation_dict
+    assert "missing" not in relation_dict
+    assert relation_dict.get("missing") is None
+    assert relation_dict.get("missing", 7) == 7
+    assert set(iter(relation_dict)) == {"a", "b"}
+    assert set(relation_dict.keys()) == {"a", "b"}
+    assert set(relation_dict.values()) == {1, 2}
+    assert set(relation_dict.items()) == {("a", 2), ("b", 1)}
 
 
 def test_hgraph_encoder_update_relations_accepts_mapping_and_relation_dict(

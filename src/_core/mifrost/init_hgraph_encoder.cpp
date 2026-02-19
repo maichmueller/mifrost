@@ -1,3 +1,4 @@
+#include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
@@ -93,7 +94,80 @@ void init_hgraph_encoder(nb::module_& m)
       .def_ro("arity", &RelationDict::arity)
       .def_ro("max_goal_level", &RelationDict::max_goal_level)
       .def_ro("support_literals", &RelationDict::support_literals)
-      .def_ro("goal_satisfaction_derivations", &RelationDict::goal_satisfaction_derivations);
+      .def_ro("goal_satisfaction_derivations", &RelationDict::goal_satisfaction_derivations)
+      .def("__len__", [](const RelationDict& self) { return self.arity.size(); })
+      .def("__bool__", [](const RelationDict& self) { return not self.arity.empty(); })
+      .def(
+         "__contains__",
+         [](const RelationDict& self, const std::string& key) {
+            return self.arity.find(key) != self.arity.end();
+         }
+      )
+      .def("__contains__", [](const RelationDict&, nb::handle) { return false; })
+      .def(
+         "__getitem__",
+         [](const RelationDict& self, const std::string& key) {
+            auto it = self.arity.find(key);
+            if(it == self.arity.end()) {
+               throw nb::key_error();
+            }
+            return it->second;
+         }
+      )
+      .def(
+         "__iter__",
+         [](const RelationDict& self) {
+            return nb::make_key_iterator(
+               nb::type< RelationDict >(),
+               "RelationDictKeyIterator",
+               self.arity.begin(),
+               self.arity.end()
+            );
+         },
+         nb::keep_alive< 0, 1 >()
+      )
+      .def(
+         "keys",
+         [](const RelationDict& self) {
+            nb::list out;
+            for(const auto& [key, _] : self.arity) {
+               out.append(key);
+            }
+            return out;
+         }
+      )
+      .def(
+         "values",
+         [](const RelationDict& self) {
+            nb::list out;
+            for(const auto& [_, value] : self.arity) {
+               out.append(value);
+            }
+            return out;
+         }
+      )
+      .def(
+         "items",
+         [](const RelationDict& self) {
+            nb::list out;
+            for(const auto& [key, value] : self.arity) {
+               out.append(nb::make_tuple(key, value));
+            }
+            return out;
+         }
+      )
+      .def(
+         "get",
+         [](const RelationDict& self, const std::string& key, nb::handle default_value) {
+            auto it = self.arity.find(key);
+            if(it == self.arity.end()) {
+               return nb::borrow< nb::object >(default_value);
+            }
+            return nb::cast(it->second);
+         },
+         "key"_a,
+         "default_value"_a = nb::none()
+      );
 
    nb::class_< HGraphEncoderEngine >(m, "HGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
