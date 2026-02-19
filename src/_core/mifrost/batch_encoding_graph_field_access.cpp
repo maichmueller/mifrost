@@ -1,7 +1,5 @@
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 
-#include <nanobind/ndarray.h>
-
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -9,6 +7,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#include "mifrost/core/dlpack_utils.hpp"
 
 namespace nb = nanobind;
 
@@ -25,46 +25,6 @@ struct GraphFieldLookup {
    GraphFieldLookupKind kind = GraphFieldLookupKind::MISSING;
    GraphField* field = nullptr;
 };
-
-template < typename T >
-void vector_owner_deleter(void* p) noexcept
-{
-   delete static_cast< std::vector< T >* >(p);
-}
-
-template < typename T >
-auto vector_to_1d_ndarray_view(std::vector< T >& vec, nb::handle owner)
-{
-   size_t shape[1] = {vec.size()};
-   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(vec.data(), 1, shape, owner);
-}
-
-template < typename T >
-auto vector_to_2d_ndarray_view(std::vector< T >& vec, size_t rows, size_t cols, nb::handle owner)
-{
-   size_t shape[2] = {rows, cols};
-   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(vec.data(), 2, shape, owner);
-}
-
-template < typename T >
-auto vector_to_1d_ndarray_owned_copy(const std::vector< T >& vec)
-{
-   auto* heap_vec = new std::vector< T >(vec);
-   heap_vec->shrink_to_fit();
-   size_t shape[1] = {heap_vec->size()};
-   nb::capsule owner(heap_vec, vector_owner_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
-}
-
-template < typename T >
-auto vector_to_2d_ndarray_owned_copy(const std::vector< T >& vec, size_t rows, size_t cols)
-{
-   auto* heap_vec = new std::vector< T >(vec);
-   heap_vec->shrink_to_fit();
-   size_t shape[2] = {rows, cols};
-   nb::capsule owner(heap_vec, vector_owner_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(heap_vec->data(), 2, shape, owner);
-}
 
 GraphFieldLookup
 batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::string_view key)
@@ -87,45 +47,25 @@ batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::st
    return {};
 }
 
+nb::handle torch_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
+   return *module;
+}
+
 nb::object to_torch_tensor(nb::handle array_like)
 {
-   // Avoid function-local `static nb::object`: its destructor may run after
-   // Python interpreter finalization and crash at shutdown.
-   static PyObject* torch_mod = []() -> PyObject* {
-      nb::object obj = nb::module_::import_("torch");
-      return obj.ptr();
-   }();
-
-   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
+   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
    if(nb::isinstance(array_like, torch.attr("Tensor"))) {
       return nb::borrow< nb::object >(array_like);
+   }
+   if(dlpack_utils::is_dlpack_capsule(array_like)) {
+      return torch.attr("utils").attr("dlpack").attr("from_dlpack")(array_like);
    }
    if(nb::hasattr(array_like, "__dlpack__")) {
       return torch.attr("from_dlpack")(nb::borrow< nb::object >(array_like));
    }
    return torch.attr("as_tensor")(array_like);
-}
-
-std::string ascii_lower_copy(std::string text)
-{
-   for(char& c : text) {
-      c = ascii_lower(c);
-   }
-   return text;
-}
-
-bool is_cpu_device(nb::handle device)
-{
-   if(device.is_none()) {
-      return true;
-   }
-   nb::str device_text(device);
-   const char* raw_text = device_text.c_str();
-   if(raw_text == nullptr) {
-      throw nb::python_error();
-   }
-   auto text = ascii_lower_copy(raw_text);
-   return text.find("cpu") != std::string::npos;
 }
 
 nb::object target_device_from_owner(nb::handle owner)
@@ -153,7 +93,7 @@ std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
 nb::object maybe_move_tensor_to_device(nb::object tensor, nb::handle owner)
 {
    nb::object device = target_device_from_owner(owner);
-   if(device.is_none() or is_cpu_device(device)) {
+   if(device.is_none()) {
       return tensor;
    }
    return tensor.attr("to")(device);
@@ -165,7 +105,7 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
       [&](auto& values) -> nb::object {
          using T = std::decay_t< decltype(values) >::value_type;
          if(field.spec.dim == 1) {
-            return to_torch_tensor(vector_to_1d_ndarray_view(values, owner).cast());
+            return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
          }
          const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
                                    or field.spec.mode == GraphFieldMode::RAGGED_CAT)
@@ -174,7 +114,7 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
                                          : values.size() / static_cast< size_t >(field.spec.dim);
          const size_t cols = cat_dim_one ? values.size() / static_cast< size_t >(field.spec.dim)
                                          : static_cast< size_t >(field.spec.dim);
-         return to_torch_tensor(vector_to_2d_ndarray_view(values, rows, cols, owner).cast());
+         return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_2d(values, rows, cols, owner));
       },
       field.values
    );
@@ -182,7 +122,7 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
 
 nb::object graph_field_ptr_to_tensor(const GraphField& field)
 {
-   return to_torch_tensor(vector_to_1d_ndarray_owned_copy(field.ptr).cast());
+   return to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(field.ptr));
 }
 
 }  // namespace
@@ -198,6 +138,28 @@ std::set< std::string > batch_encoding_native_graph_field_keys(
          out.insert(key + "_ptr");
       }
    }
+   return out;
+}
+
+std::set< std::string > batch_encoding_native_tensor_keys(
+   const BatchBuilder::BatchEncoding& encoding
+)
+{
+   std::set< std::string > out;
+
+   for(const auto& [key, col] : encoding.columns) {
+      (void) col;
+      out.insert(key);
+   }
+
+   for(const auto& [node_type, ptr] : encoding.ptrs) {
+      (void) ptr;
+      out.insert(node_type + "/ptr");
+      out.insert(node_type + "/batch");
+   }
+
+   const auto graph_keys = batch_encoding_native_graph_field_keys(encoding);
+   out.insert(graph_keys.begin(), graph_keys.end());
    return out;
 }
 

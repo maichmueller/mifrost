@@ -121,16 +121,24 @@ def hetero_data_equal(data: HeteroData, expected: HeteroData):
 
 
 def keywise_equal(sample_normal, sample_streaming):
+    def _maybe_tensor(value):
+        if isinstance(value, torch.Tensor):
+            return value
+        try:
+            return torch.utils.dlpack.from_dlpack(value)
+        except Exception:
+            return None
+
     if hasattr(sample_normal, "as_dict"):
         sample_normal = sample_normal.as_dict()
     if hasattr(sample_streaming, "as_dict"):
         sample_streaming = sample_streaming.as_dict()
     assert sorted(sample_normal.keys()) == sorted(sample_streaming.keys())
     for key in sample_normal.keys():
-        if isinstance(sample_normal[key], torch.Tensor) and isinstance(
-            sample_streaming[key], torch.Tensor
-        ):
-            assert torch.equal(sample_normal[key], sample_streaming[key])
+        left_tensor = _maybe_tensor(sample_normal[key])
+        right_tensor = _maybe_tensor(sample_streaming[key])
+        if left_tensor is not None and right_tensor is not None:
+            assert torch.equal(left_tensor, right_tensor)
         else:
             if key == "targets" and any(
                 isinstance(value, Sequence) and isinstance(value[0], BaseData)

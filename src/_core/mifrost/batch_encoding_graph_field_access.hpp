@@ -14,6 +14,10 @@ std::set< std::string > batch_encoding_native_graph_field_keys(
    const BatchBuilder::BatchEncoding& encoding
 );
 
+std::set< std::string > batch_encoding_native_tensor_keys(
+   const BatchBuilder::BatchEncoding& encoding
+);
+
 bool batch_encoding_has_graph_field(
    const BatchBuilder::BatchEncoding& encoding,
    std::string_view key

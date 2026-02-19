@@ -45,98 +45,76 @@ nb::object try_import_module(const char* module_name)
 
 nb::handle torch_module()
 {
-   // NOTE: Avoid function-local `static nb::object`: its destructor may run after
-   // Python interpreter finalization and crash. Cache a borrowed handle instead.
-   //
-   // Assumption: The imported module object stays alive for the remainder of the
-   // interpreter lifetime (normally true because `sys.modules` holds a strong
-   // reference). We intentionally do not support exotic patterns like deleting
-   // `sys.modules["torch"]` / `sys.modules["numpy"]` or reloading modules in a
-   // way that invalidates cached objects.
-   static PyObject* module = []() -> PyObject* {
-      nb::object imported = try_import_module("torch");
-      return imported.ptr();
-   }();
-   return nb::handle(module);
+   static nb::object* module = []() { return new nb::object(try_import_module("torch")); }();
+   return *module;
 }
 
 nb::handle numpy_module()
 {
-   static PyObject* module = []() -> PyObject* {
-      nb::object imported = try_import_module("numpy");
-      return imported.ptr();
-   }();
-   return nb::handle(module);
+   static nb::object* module = []() { return new nb::object(try_import_module("numpy")); }();
+   return *module;
 }
 
 nb::handle torch_tensor_type()
 {
-   static PyObject* type = []() -> PyObject* {
+   static nb::object* type = []() {
       const nb::handle torch = torch_module();
       if(torch.is_none()) {
-         return nb::none().ptr();
+         return new nb::object(nb::none());
       }
-      nb::object obj = nb::borrow< nb::object >(torch).attr("Tensor");
-      return obj.ptr();
+      return new nb::object(nb::borrow< nb::object >(torch).attr("Tensor"));
    }();
-   return nb::handle(type);
+   return *type;
 }
 
 nb::handle numpy_array_type()
 {
-   static PyObject* type = []() -> PyObject* {
+   static nb::object* type = []() {
       const nb::handle np = numpy_module();
       if(np.is_none()) {
-         return nb::none().ptr();
+         return new nb::object(nb::none());
       }
-      nb::object obj = nb::borrow< nb::object >(np).attr("ndarray");
-      return obj.ptr();
+      return new nb::object(nb::borrow< nb::object >(np).attr("ndarray"));
    }();
-   return nb::handle(type);
+   return *type;
 }
 
 nb::handle operator_module()
 {
-   static PyObject* module = []() -> PyObject* {
-      nb::object obj = nb::module_::import_("operator");
-      return obj.ptr();
-   }();
-   return nb::handle(module);
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("operator")); }();
+   return *module;
 }
 
 nb::handle operator_eq_fn()
 {
-   static PyObject* eq_fn = []() -> PyObject* {
-      nb::object obj = nb::borrow< nb::object >(operator_module()).attr("eq");
-      return obj.ptr();
+   static nb::object* eq_fn = []() {
+      return new nb::object(nb::borrow< nb::object >(operator_module()).attr("eq"));
    }();
-   return nb::handle(eq_fn);
+   return *eq_fn;
 }
 
 nb::handle torch_equal_fn()
 {
-   static PyObject* fn = []() -> PyObject* {
+   static nb::object* fn = []() {
       const nb::handle torch = torch_module();
       if(torch.is_none()) {
-         return nb::none().ptr();
+         return new nb::object(nb::none());
       }
-      nb::object obj = nb::borrow< nb::object >(torch).attr("equal");
-      return obj.ptr();
+      return new nb::object(nb::borrow< nb::object >(torch).attr("equal"));
    }();
-   return nb::handle(fn);
+   return *fn;
 }
 
 nb::handle numpy_array_equal_fn()
 {
-   static PyObject* fn = []() -> PyObject* {
+   static nb::object* fn = []() {
       const nb::handle np = numpy_module();
       if(np.is_none()) {
-         return nb::none().ptr();
+         return new nb::object(nb::none());
       }
-      nb::object obj = nb::borrow< nb::object >(np).attr("array_equal");
-      return obj.ptr();
+      return new nb::object(nb::borrow< nb::object >(np).attr("array_equal"));
    }();
-   return nb::handle(fn);
+   return *fn;
 }
 
 bool is_torch_tensor(nb::handle value)
@@ -497,12 +475,13 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
 
    if(spec_dict.contains("dtype")) {
       nb::handle dtype_obj = spec_dict["dtype"];
-      if(PyType_Check(dtype_obj.ptr())) {
-         if(dtype_obj.ptr() == reinterpret_cast< PyObject* >(&PyUnicode_Type)) {
+      nb::object builtins = nb::module_::import_("builtins");
+      if(nb::isinstance(dtype_obj, builtins.attr("type"))) {
+         if(dtype_obj.ptr() == builtins.attr("str").ptr()) {
             spec.dtype = PythonFieldDType::STR;
-         } else if(dtype_obj.ptr() == reinterpret_cast< PyObject* >(&PyFloat_Type)) {
+         } else if(dtype_obj.ptr() == builtins.attr("float").ptr()) {
             spec.dtype = PythonFieldDType::F32;
-         } else if(dtype_obj.ptr() == reinterpret_cast< PyObject* >(&PyLong_Type)) {
+         } else if(dtype_obj.ptr() == builtins.attr("int").ptr()) {
             spec.dtype = PythonFieldDType::I64;
          } else {
             auto dtype_s = nb::str(dtype_obj);

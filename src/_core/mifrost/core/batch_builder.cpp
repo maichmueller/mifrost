@@ -14,6 +14,7 @@
 #include <string_view>
 #include <tuple>
 
+#include "mifrost/core/dlpack_utils.hpp"
 #include "schema.hpp"
 #include "utils/macro.hpp"
 
@@ -739,35 +740,15 @@ void BatchBuilder::next_graph()
 // --- DLPack Owner Capsule ---
 
 template < typename T >
-void vector_deleter(void* p) noexcept
+nb::object vector_to_1d_dlpack(std::vector< T >&& vec)
 {
-   delete static_cast< std::vector< T >* >(p);
+   return dlpack_utils::vector_to_dlpack_owned_1d(std::move(vec));
 }
 
 template < typename T >
-std::vector< T >* heap_vector(std::vector< T >and vec)
+nb::object vector_to_2d_dlpack(std::vector< T >&& vec, size_t rows, size_t cols)
 {
-   auto* heap_vec = new std::vector< T >(std::move(vec));
-   heap_vec->shrink_to_fit();
-   return heap_vec;
-}
-
-template < typename T >
-auto vector_to_1d_ndarray(std::vector< T >and vec)
-{
-   auto* heap_vec = heap_vector(std::move(vec));
-   size_t shape[1] = {heap_vec->size()};
-   nb::capsule owner(heap_vec, vector_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
-}
-
-template < typename T >
-auto vector_to_2d_ndarray(std::vector< T >and vec, size_t rows, size_t cols)
-{
-   auto* heap_vec = heap_vector(std::move(vec));
-   size_t shape[2] = {rows, cols};
-   nb::capsule owner(heap_vec, vector_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(heap_vec->data(), 2, shape, owner);
+   return dlpack_utils::vector_to_dlpack_owned_2d(std::move(vec), rows, cols);
 }
 
 // --- Build / Export ---
@@ -775,7 +756,7 @@ auto vector_to_2d_ndarray(std::vector< T >and vec, size_t rows, size_t cols)
 nb::dict BatchBuilder::build_dict()
 {
    // Destructive export: tensor backing vectors are moved into Python-owned
-   // ndarray capsules to avoid copies.
+   // DLPack capsules to avoid copies.
    nb::dict out;
 
    for(auto& [key, col] : columns) {
@@ -784,13 +765,13 @@ nb::dict BatchBuilder::build_dict()
          [&]< typename T >(std::vector< T >& vec) {
             size_t size = vec.size();
             if(is_edge_index) {
-               out[key.c_str()] = vector_to_1d_ndarray(std::move(vec));
+               out[key.c_str()] = vector_to_1d_dlpack(std::move(vec));
                return;
             }
 
             int dim = col.dim;
             size_t num_rows = dim > 0 ? size / dim : 0;
-            out[key.c_str()] = vector_to_2d_ndarray(
+            out[key.c_str()] = vector_to_2d_dlpack(
                std::move(vec), num_rows, static_cast< size_t >(dim)
             );
          },
@@ -801,7 +782,7 @@ nb::dict BatchBuilder::build_dict()
    // Also export Ptr columns (converting them to tensor columns first
    // essentially)
    for(auto& [ntype, p_vec] : ptrs) {
-      auto tensor = vector_to_1d_ndarray(std::move(p_vec));
+      auto tensor = vector_to_1d_dlpack(std::move(p_vec));
       std::string key = ntype + "/ptr";
       out[key.c_str()] = tensor;
    }
@@ -910,6 +891,9 @@ nb::object BatchBuilder::build_pyg()
       if(nb::isinstance(value, torch.attr("Tensor"))) {
          return nb::borrow< nb::object >(value);
       }
+      if(dlpack_utils::is_dlpack_capsule(value)) {
+         return torch.attr("utils").attr("dlpack").attr("from_dlpack")(value);
+      }
       if(nb::hasattr(value, "__dlpack__")) {
          return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
       }
@@ -973,28 +957,15 @@ nb::object BatchBuilder::build_pyg()
    }
 
    for(const auto& [node_type, ptr] : ptr_vectors) {
-      auto* heap_ptr = new std::vector< int64_t >(ptr);
-      size_t shape[1] = {heap_ptr->size()};
-      nb::capsule owner(heap_ptr, [](void* p) noexcept {
-         delete static_cast< std::vector< int64_t >* >(p);
-      });
-      auto ptr_array = nb::ndarray< nb::numpy, int64_t, nb::shape< -1 > >(
-         heap_ptr->data(), 1, shape, owner
-      );
-      nb::object ptr_tensor = to_tensor(ptr_array.cast());
+      nb::object ptr_tensor = to_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(ptr));
 
       auto batch_it = batch_vectors.find(node_type);
-      auto* heap_batch = new std::vector< int64_t >(
-         batch_it != batch_vectors.end() ? batch_it->second : std::vector< int64_t >{}
+      const std::vector< int64_t > batch_values = batch_it != batch_vectors.end()
+                                                     ? batch_it->second
+                                                     : std::vector< int64_t >{};
+      nb::object batch_tensor = to_tensor(
+         dlpack_utils::vector_to_dlpack_owned_copy_1d(batch_values)
       );
-      size_t batch_shape[1] = {heap_batch->size()};
-      nb::capsule batch_owner(heap_batch, [](void* p) noexcept {
-         delete static_cast< std::vector< int64_t >* >(p);
-      });
-      auto batch_array = nb::ndarray< nb::numpy, int64_t, nb::shape< -1 > >(
-         heap_batch->data(), 1, batch_shape, batch_owner
-      );
-      nb::object batch_tensor = to_tensor(batch_array.cast());
 
       nb::object store = batch.attr("__getitem__")(node_type);
       store.attr("__setitem__")("ptr", ptr_tensor);
@@ -1089,7 +1060,7 @@ nb::object BatchBuilder::build_pyg()
                using T = std::decay_t< decltype(values) >::value_type;
                const size_t size = values.size();
                if(field.spec.dim == 1) {
-                  value_tensor = to_tensor(vector_to_1d_ndarray< T >(std::move(values)).cast());
+                  value_tensor = to_tensor(vector_to_1d_dlpack< T >(std::move(values)));
                } else {
                   const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
                                             or field.spec.mode == GraphFieldMode::RAGGED_CAT)
@@ -1098,9 +1069,7 @@ nb::object BatchBuilder::build_pyg()
                                                   : size / static_cast< size_t >(field.spec.dim);
                   const size_t cols = cat_dim_one ? size / static_cast< size_t >(field.spec.dim)
                                                   : static_cast< size_t >(field.spec.dim);
-                  value_tensor = to_tensor(
-                     vector_to_2d_ndarray< T >(std::move(values), rows, cols).cast()
-                  );
+                  value_tensor = to_tensor(vector_to_2d_dlpack< T >(std::move(values), rows, cols));
                }
             },
             field.values
@@ -1110,7 +1079,7 @@ nb::object BatchBuilder::build_pyg()
          if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
             std::string ptr_attr = attr + "_ptr";
             batch.attr("__setattr__")(
-               ptr_attr.c_str(), to_tensor(vector_to_1d_ndarray(std::move(field.ptr)).cast())
+               ptr_attr.c_str(), to_tensor(vector_to_1d_dlpack(std::move(field.ptr)))
             );
          }
       }

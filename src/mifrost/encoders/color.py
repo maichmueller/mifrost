@@ -22,7 +22,7 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
 )
-from .common import _advanced_domain, _advanced_state, _split_goals
+from .common import _advanced_domain, _advanced_state, _split_goals, _to_tensor
 from .types import (
     EncodingDict,
     HomoEncoding,
@@ -93,7 +93,7 @@ def _encoding_dict_to_pyg_homo(
             return cached
         if value is None:
             value = tensors[key]
-        tensor = torch.as_tensor(value)
+        tensor = _to_tensor(value)
         tensors_torch[key] = tensor
         return tensor
 

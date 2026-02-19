@@ -25,7 +25,15 @@ from .._core import GoalInputs
 
 
 def _to_tensor(value: Any) -> torch.Tensor:
-    """Normalize array-like values to torch tensors."""
+    """Normalize array-like or DLPack-exporting values to torch tensors."""
+    if torch.is_tensor(value):
+        return value
+    try:
+        return torch.utils.dlpack.from_dlpack(value)
+    except Exception:
+        pass
+    if hasattr(value, "__dlpack__"):
+        return torch.from_dlpack(value)
     return torch.as_tensor(value)
 
 

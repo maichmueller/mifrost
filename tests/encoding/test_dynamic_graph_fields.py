@@ -119,7 +119,7 @@ def test_encoded_graph_cat_dim1_for_matrix_field(small_blocks):
     )
 
 
-def test_encoder_exposes_registered_graph_field_specs(small_blocks):
+def test_encoder_exposes_registered_field_specs(small_blocks):
     _, domain, _ = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
     encoder.register_fields(
@@ -137,7 +137,7 @@ def test_encoder_exposes_registered_graph_field_specs(small_blocks):
     assert specs["target_matrix"].cat_dim == 1
 
 
-def test_encoder_register_graph_fields_accepts_dict_specs(small_blocks):
+def test_encoder_register_fields_accepts_dict_specs(small_blocks):
     _, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)
     encoder.register_fields(

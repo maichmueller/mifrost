@@ -30,6 +30,7 @@
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/default_relations.hpp"
+#include "mifrost/core/dlpack_utils.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/horizon_hgraph_encoder.hpp"
@@ -55,6 +56,12 @@ constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__"
 constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
 void clear_owner_tensor_cache(nb::handle owner);
+
+nb::handle torch_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
+   return *module;
+}
 
 GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
 {
@@ -437,43 +444,28 @@ void set_python_attribute(nb::handle self, const std::string& key, nb::handle va
 }
 
 template < typename T >
-void vector_owner_deleter(void* p) noexcept
+nb::object vector_to_1d_tensor_view(std::vector< T >& vec, nb::handle owner)
 {
-   delete static_cast< std::vector< T >* >(p);
+   return dlpack_utils::vector_to_dlpack_view_1d(vec, owner);
 }
 
 template < typename T >
-auto vector_to_1d_ndarray_view(std::vector< T >& vec, nb::handle owner)
+nb::object
+vector_to_2d_tensor_view(std::vector< T >& vec, size_t rows, size_t cols, nb::handle owner)
 {
-   size_t shape[1] = {vec.size()};
-   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(vec.data(), 1, shape, owner);
+   return dlpack_utils::vector_to_dlpack_view_2d(vec, rows, cols, owner);
 }
 
 template < typename T >
-auto vector_to_2d_ndarray_view(std::vector< T >& vec, size_t rows, size_t cols, nb::handle owner)
+nb::object vector_to_1d_tensor_owned(std::vector< T >&& vec)
 {
-   size_t shape[2] = {rows, cols};
-   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(vec.data(), 2, shape, owner);
+   return dlpack_utils::vector_to_dlpack_owned_1d(std::move(vec));
 }
 
 template < typename T >
-auto vector_to_1d_ndarray_owned(std::vector< T >and vec)
+nb::object vector_to_2d_tensor_owned(std::vector< T >&& vec, size_t rows, size_t cols)
 {
-   auto* heap_vec = new std::vector< T >(std::move(vec));
-   heap_vec->shrink_to_fit();
-   size_t shape[1] = {heap_vec->size()};
-   nb::capsule owner(heap_vec, vector_owner_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1 > >(heap_vec->data(), 1, shape, owner);
-}
-
-template < typename T >
-auto vector_to_2d_ndarray_owned(std::vector< T >and vec, size_t rows, size_t cols)
-{
-   auto* heap_vec = new std::vector< T >(std::move(vec));
-   heap_vec->shrink_to_fit();
-   size_t shape[2] = {rows, cols};
-   nb::capsule owner(heap_vec, vector_owner_deleter< T >);
-   return nb::ndarray< nb::numpy, T, nb::shape< -1, -1 > >(heap_vec->data(), 2, shape, owner);
+   return dlpack_utils::vector_to_dlpack_owned_2d(std::move(vec), rows, cols);
 }
 
 std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
@@ -1018,11 +1010,11 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
       std::visit(
          [&]< typename T >(std::vector< T >& data) {
             if(is_edge_index) {
-               tensors[key.c_str()] = vector_to_1d_ndarray_view(data, owner);
+               tensors[key.c_str()] = vector_to_1d_tensor_view(data, owner);
                return;
             }
             const size_t rows = col.dim > 0 ? data.size() / static_cast< size_t >(col.dim) : 0;
-            tensors[key.c_str()] = vector_to_2d_ndarray_view(
+            tensors[key.c_str()] = vector_to_2d_tensor_view(
                data, rows, static_cast< size_t >(col.dim), owner
             );
          },
@@ -1036,8 +1028,8 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
          continue;
       }
       exported_ptr = true;
-      tensors[(node_type + "/ptr").c_str()] = vector_to_1d_ndarray_view(ptr, owner);
-      tensors[(node_type + "/batch").c_str()] = vector_to_1d_ndarray_owned(ptr_to_batch(ptr));
+      tensors[(node_type + "/ptr").c_str()] = vector_to_1d_tensor_view(ptr, owner);
+      tensors[(node_type + "/batch").c_str()] = vector_to_1d_tensor_owned(ptr_to_batch(ptr));
    }
    if(not exported_ptr) {
       for(const auto& [node_type, count] : encoding.node_counts) {
@@ -1045,8 +1037,8 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
             continue;
          }
          std::vector< int64_t > ptr{0, count};
-         tensors[(node_type + "/ptr").c_str()] = vector_to_1d_ndarray_owned(std::move(ptr));
-         tensors[(node_type + "/batch").c_str()] = vector_to_1d_ndarray_owned(
+         tensors[(node_type + "/ptr").c_str()] = vector_to_1d_tensor_owned(std::move(ptr));
+         tensors[(node_type + "/batch").c_str()] = vector_to_1d_tensor_owned(
             std::vector< int64_t >(count, 0)
          );
       }
@@ -1057,7 +1049,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
       std::visit(
          [&]< typename T >(std::vector< T >& data) {
             if(field.spec.dim == 1) {
-               tensors[key.c_str()] = vector_to_1d_ndarray_view(data, owner);
+               tensors[key.c_str()] = vector_to_1d_tensor_view(data, owner);
                return;
             }
             const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
@@ -1067,12 +1059,12 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
                                             : data.size() / static_cast< size_t >(field.spec.dim);
             const size_t cols = cat_dim_one ? data.size() / static_cast< size_t >(field.spec.dim)
                                             : static_cast< size_t >(field.spec.dim);
-            tensors[key.c_str()] = vector_to_2d_ndarray_view(data, rows, cols, owner);
+            tensors[key.c_str()] = vector_to_2d_tensor_view(data, rows, cols, owner);
          },
          field.values
       );
       if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
-         tensors[(key + "/ptr").c_str()] = vector_to_1d_ndarray_view(field.ptr, owner);
+         tensors[(key + "/ptr").c_str()] = vector_to_1d_tensor_view(field.ptr, owner);
       }
    }
 
@@ -1131,41 +1123,18 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
 
 nb::object to_torch_tensor(nb::handle value)
 {
-   static PyObject* torch_mod = []() -> PyObject* {
-      nb::object imported = nb::module_::import_("torch");
-      return imported.ptr();
-   }();
-   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
+   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
 
    if(nb::isinstance(value, torch.attr("Tensor"))) {
       return nb::borrow< nb::object >(value);
+   }
+   if(dlpack_utils::is_dlpack_capsule(value)) {
+      return torch.attr("utils").attr("dlpack").attr("from_dlpack")(value);
    }
    if(nb::hasattr(value, "__dlpack__")) {
       return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
    }
    return torch.attr("as_tensor")(value);
-}
-
-std::string ascii_lower_copy(std::string text)
-{
-   for(char& c : text) {
-      c = ascii_lower(c);
-   }
-   return text;
-}
-
-bool is_cpu_device(nb::handle device)
-{
-   if(device.is_none()) {
-      return true;
-   }
-   nb::str device_text(device);
-   const char* raw_text = device_text.c_str();
-   if(raw_text == nullptr) {
-      throw nb::python_error();
-   }
-   auto text = ascii_lower_copy(raw_text);
-   return text.find("cpu") != std::string::npos;
 }
 
 nb::object owner_target_device(nb::handle owner)
@@ -1201,7 +1170,7 @@ void clear_owner_tensor_cache(nb::handle owner)
 nb::object to_torch_tensor(nb::handle value, nb::handle device)
 {
    nb::object tensor = to_torch_tensor(value);
-   if(device.is_none() or is_cpu_device(device)) {
+   if(device.is_none()) {
       return tensor;
    }
    return tensor.attr("to")(device);
@@ -1209,11 +1178,7 @@ nb::object to_torch_tensor(nb::handle value, nb::handle device)
 
 bool is_torch_tensor(nb::handle value)
 {
-   static PyObject* torch_mod = []() -> PyObject* {
-      nb::object imported = nb::module_::import_("torch");
-      return imported.ptr();
-   }();
-   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
+   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
    return nb::isinstance(value, torch.attr("Tensor"));
 }
 
@@ -1258,11 +1223,7 @@ void set_owner_target_device(nb::handle owner, nb::handle device)
       }
       return;
    }
-   static PyObject* torch_mod = []() -> PyObject* {
-      nb::object imported = nb::module_::import_("torch");
-      return imported.ptr();
-   }();
-   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
+   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
    attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
 }
 
@@ -1276,18 +1237,21 @@ void materialize_owner_tensor_cache(
 
    nb::dict cache;
 
+   const auto native_tensor_keys = batch_encoding_native_tensor_keys(encoding);
    nb::dict as_dict = batch_encoding_as_dict(encoding, owner);
    nb::dict tensors = nb::cast< nb::dict >(as_dict["tensors"]);
-   for(auto [key_obj, value_obj] : tensors) {
-      cache[key_obj] = to_torch_tensor(nb::borrow< nb::object >(value_obj), device);
-   }
 
-   for(const auto& [key, field] : encoding.graph_fields) {
-      cache[key.c_str()] = batch_encoding_get_graph_field(encoding, key, owner);
-      if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
-         const std::string ptr_key = key + "_ptr";
-         cache[ptr_key.c_str()] = batch_encoding_get_graph_field(encoding, ptr_key, owner);
+   for(const auto& key : native_tensor_keys) {
+      if(batch_encoding_has_graph_field(encoding, key)) {
+         cache[key.c_str()] = batch_encoding_get_graph_field(encoding, key, owner);
+         continue;
       }
+      if(not tensors.contains(key.c_str())) {
+         throw std::invalid_argument(
+            "BatchEncoding tensor materialization missing native key '" + key + "'"
+         );
+      }
+      cache[key.c_str()] = to_torch_tensor(nb::borrow< nb::object >(tensors[key.c_str()]), device);
    }
 
    nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));

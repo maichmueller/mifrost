@@ -103,9 +103,13 @@ find_package(phmap CONFIG REQUIRED)
 find_package(unordered_dense CONFIG REQUIRED)
 find_package(strong_type REQUIRED)
 find_package(range-v3 REQUIRED)
+find_package(dlpack REQUIRED)
 if (MIFROST_BUILD_BENCHMARKS)
     find_package(benchmark REQUIRED)
     find_package(argparse REQUIRED)
+endif ()
+if (NOT TARGET dlpack::dlpack)
+    message(FATAL_ERROR "Expected Conan package dlpack to define target dlpack::dlpack")
 endif ()
 
 # Conan include fallbacks (some recipes omit include dirs).
@@ -254,6 +258,8 @@ target_link_libraries(
         rollbear::strong_type
         # ranges fallback
         range-v3::range-v3
+        # dlpack headers/types
+        dlpack::dlpack
 )
 
 conan_add_package_include_fallback(mifrost_core abseil)

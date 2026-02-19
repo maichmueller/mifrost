@@ -22,6 +22,15 @@ def _non_cpu_device() -> torch.device | None:
     return None
 
 
+def _export_to_tensor(value):
+    if torch.is_tensor(value):
+        return value
+    try:
+        return torch.utils.dlpack.from_dlpack(value)
+    except Exception:
+        return torch.as_tensor(value)
+
+
 def test_batch_builder_basics():
     builder = mifrost.BatchBuilder()
 
@@ -64,7 +73,7 @@ def test_batch_builder_basics():
     assert torch.equal(ptr, torch.tensor([0, 10, 20], dtype=torch.int64))
 
 
-def test_batch_builder_exposes_registered_graph_field_specs():
+def test_batch_builder_exposes_registered_field_specs():
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
     builder.register_field(
@@ -346,7 +355,7 @@ def test_batch_encodings_collates_python_fields_with_specs():
     assert batched.field_specs()["domain_path"]["dtype"] == "pyobj"
 
 
-def test_batch_encodings_collates_registered_python_graph_field_specs():
+def test_batch_encodings_collates_registered_python_field_specs():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
 
@@ -419,7 +428,7 @@ def test_batch_builder_register_field_accepts_python_int_float_builtin_dtypes():
     assert torch.equal(enc.get_field("i"), torch.tensor([2, 3], dtype=torch.int64))
 
 
-def test_batch_encodings_accepts_legacy_py_field_specs_alias():
+def test_batch_encodings_accepts_py_field_specs_for_ragged_fields():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
     enc0.targets = ["a0"]
@@ -564,7 +573,7 @@ def test_batch_encoding_as_pyg_copies_python_attrs():
     assert not hasattr(as_batch, "__mifrost_field_specs__")
 
 
-def test_batch_encoding_graph_field_accessors_and_introspection():
+def test_batch_encoding_field_accessors_and_introspection():
     encoding = _single_graph_with_ragged_i64_field([5, 6])
     encoding.label = "demo"
     encoding.register_field_specs({"label": {"dtype": "pyobj", "mode": "stack"}})
@@ -636,7 +645,7 @@ def test_batch_encoding_set_field_clears_tensor_cache():
     assert "__mifrost_tensor_cache__" not in encoding.__dict__
 
 
-def test_batch_encoding_get_graph_field_supports_stack_cat_const_ragged():
+def test_batch_encoding_get_field_supports_stack_cat_const_ragged():
     stack = _single_graph_with_stack_field(1.5)
     cat = _single_graph_with_cat_i64_field([2, 4])
     const = _single_graph_with_const_i64_field(42)
@@ -661,7 +670,7 @@ def test_batch_encoding_get_graph_field_supports_stack_cat_const_ragged():
     )
 
 
-def test_batch_encoding_graph_field_introspection_is_stable_across_as_pyg_calls():
+def test_batch_encoding_field_introspection_is_stable_across_as_pyg_calls():
     encoding = _single_graph_with_ragged_i64_field([4, 5, 6])
 
     keys_before = set(encoding.keys())
@@ -686,7 +695,7 @@ def test_batch_encoding_graph_field_introspection_is_stable_across_as_pyg_calls(
     )
 
 
-def test_batch_encoding_as_pyg_native_graph_fields_win_on_python_attr_collision():
+def test_batch_encoding_as_pyg_native_fields_win_on_python_attr_collision():
     encoding = _single_graph_with_ragged_i64_field([5, 6])
     encoding.__dict__["target_indices"] = ["shadowed"]
     encoding.__dict__["target_indices_ptr"] = [99]
@@ -702,7 +711,7 @@ def test_batch_encoding_as_pyg_native_graph_fields_win_on_python_attr_collision(
     assert torch.equal(as_single.target_indices_ptr, expected_ptr)
 
 
-def test_batch_encoding_native_graph_field_attr_access_and_write_through():
+def test_batch_encoding_native_field_attr_access_and_write_through():
     enc0 = _single_graph_with_ragged_i64_field([1, 2])
     enc1 = _single_graph_with_ragged_i64_field([3])
     batched = mifrost.batch_encodings([enc0, enc1])
@@ -732,7 +741,7 @@ def test_batch_encoding_ragged_ptr_attr_is_read_only_snapshot():
         batched.target_indices_ptr = [0, 1, 3]
 
 
-def test_register_graph_field_specs_raises_on_native_key_collision():
+def test_register_field_specs_raises_on_native_key_collision():
     encoding = _single_graph_with_stack_field(1.0)
     with pytest.raises(ValueError, match="collides with native field key"):
         encoding.register_field_specs(
@@ -740,7 +749,7 @@ def test_register_graph_field_specs_raises_on_native_key_collision():
         )
 
 
-def test_batch_encodings_raises_on_python_specs_colliding_with_native_graph_fields():
+def test_batch_encodings_raises_on_python_specs_colliding_with_native_fields():
     enc0 = _single_graph_with_ragged_i64_field([1])
     enc1 = _single_graph_with_ragged_i64_field([2, 3])
     enc0.__dict__["target_indices"] = ["shadow-a"]
@@ -758,7 +767,7 @@ def test_batch_encodings_raises_on_python_specs_colliding_with_native_graph_fiel
         )
 
 
-def test_batch_encoding_consumption_validates_malformed_graph_field_state():
+def test_batch_encoding_consumption_validates_malformed_field_state():
     encoding = _single_graph_with_ragged_i64_field([4, 5])
     state = encoding.__getstate__()
     state["graph_fields"]["target_indices"]["ptr"] = [0]
@@ -822,7 +831,9 @@ def _assert_tensor_payload_equal(
     rhs_tensors = rhs.as_dict()["tensors"]
     assert lhs_tensors.keys() == rhs_tensors.keys()
     for key in lhs_tensors:
-        assert np.array_equal(lhs_tensors[key], rhs_tensors[key]), key
+        assert torch.equal(
+            _export_to_tensor(lhs_tensors[key]), _export_to_tensor(rhs_tensors[key])
+        ), key
 
 
 def test_hgraph_encoder_instantiation():
@@ -959,7 +970,7 @@ def _single_graph_with_matrix_field(values, *, mode: str = "cat", cat_dim: int =
     return builder.build()
 
 
-def test_batch_encodings_collates_stack_graph_field():
+def test_batch_encodings_collates_stack_field():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
 
@@ -968,7 +979,9 @@ def test_batch_encodings_collates_stack_graph_field():
     builder.append_batch_encoding(enc0)
     builder.append_batch_encoding(enc1)
     manual = builder.build().as_dict()
-    manual_goal_distance = torch.as_tensor(manual["tensors"]["__graph__/goal_distance"])
+    manual_goal_distance = _export_to_tensor(
+        manual["tensors"]["__graph__/goal_distance"]
+    )
     assert torch.allclose(
         manual_goal_distance, torch.tensor([1.0, 2.0], dtype=torch.float32)
     )
@@ -979,7 +992,7 @@ def test_batch_encodings_collates_stack_graph_field():
     tensors = out["tensors"]
 
     assert "__graph__/goal_distance" in tensors
-    goal_distance = torch.as_tensor(tensors["__graph__/goal_distance"])
+    goal_distance = _export_to_tensor(tensors["__graph__/goal_distance"])
     assert goal_distance.ndim == 1
     assert torch.allclose(goal_distance, torch.tensor([1.0, 2.0], dtype=torch.float32))
 
@@ -988,7 +1001,7 @@ def test_batch_encodings_collates_stack_graph_field():
     assert any(entry["attr"] == "goal_distance" for entry in schema["graph_tensors"])
 
 
-def test_batch_encodings_collates_ragged_graph_field_with_ptr():
+def test_batch_encodings_collates_ragged_field_with_ptr():
     enc0 = _single_graph_with_ragged_i64_field([5, 6])
     enc1 = _single_graph_with_ragged_i64_field([7])
 
@@ -999,8 +1012,8 @@ def test_batch_encodings_collates_ragged_graph_field_with_ptr():
     assert "__graph__/target_indices" in tensors
     assert "__graph__/target_indices/ptr" in tensors
 
-    values = torch.as_tensor(tensors["__graph__/target_indices"])
-    ptr = torch.as_tensor(tensors["__graph__/target_indices/ptr"])
+    values = _export_to_tensor(tensors["__graph__/target_indices"])
+    ptr = _export_to_tensor(tensors["__graph__/target_indices/ptr"])
     assert torch.equal(values, torch.tensor([5, 6, 7], dtype=torch.int64))
     assert torch.equal(ptr, torch.tensor([0, 2, 3], dtype=torch.int64))
 
@@ -1011,14 +1024,14 @@ def test_batch_encodings_applies_node_offset_inc_for_ragged_i64_field():
 
     batched = mifrost.batch_encodings([enc0, enc1])
     tensors = batched.as_dict()["tensors"]
-    values = torch.as_tensor(tensors["__graph__/target_positions"])
-    ptr = torch.as_tensor(tensors["__graph__/target_positions/ptr"])
+    values = _export_to_tensor(tensors["__graph__/target_positions"])
+    ptr = _export_to_tensor(tensors["__graph__/target_positions/ptr"])
 
     assert torch.equal(values, torch.tensor([2, 7, 10, 13], dtype=torch.int64))
     assert torch.equal(ptr, torch.tensor([0, 2, 4], dtype=torch.int64))
 
 
-def test_batch_encodings_collates_cat_graph_field():
+def test_batch_encodings_collates_cat_field():
     enc0 = _single_graph_with_cat_i64_field([5, 6])
     enc1 = _single_graph_with_cat_i64_field([7])
 
@@ -1027,7 +1040,7 @@ def test_batch_encodings_collates_cat_graph_field():
     tensors = out["tensors"]
     assert "__graph__/target_concat" in tensors
     assert "__graph__/target_concat/ptr" not in tensors
-    values = torch.as_tensor(tensors["__graph__/target_concat"])
+    values = _export_to_tensor(tensors["__graph__/target_concat"])
     assert torch.equal(values, torch.tensor([5, 6, 7], dtype=torch.int64))
 
 
@@ -1040,7 +1053,7 @@ def test_append_batch_encoding_cat_missing_treated_as_empty():
     builder.append_batch_encoding(enc0)
     builder.append_batch_encoding(enc1)
     out = builder.build().as_dict()["tensors"]
-    values = torch.as_tensor(out["__graph__/target_concat"])
+    values = _export_to_tensor(out["__graph__/target_concat"])
     assert torch.equal(values, torch.tensor([5, 6], dtype=torch.int64))
 
 
@@ -1050,17 +1063,17 @@ def test_batch_encodings_applies_node_offset_inc_for_cat_i64_field():
 
     batched = mifrost.batch_encodings([enc0, enc1])
     out = batched.as_dict()["tensors"]
-    values = torch.as_tensor(out["__graph__/target_concat"])
+    values = _export_to_tensor(out["__graph__/target_concat"])
     assert torch.equal(values, torch.tensor([2, 7, 10, 13], dtype=torch.int64))
 
 
-def test_batch_encodings_collates_const_graph_field():
+def test_batch_encodings_collates_const_field():
     enc0 = _single_graph_with_const_i64_field(42)
     enc1 = _single_graph_with_const_i64_field(42)
 
     batched = mifrost.batch_encodings([enc0, enc1])
     out = batched.as_dict()["tensors"]
-    values = torch.as_tensor(out["__graph__/problem_id"])
+    values = _export_to_tensor(out["__graph__/problem_id"])
     assert torch.equal(values, torch.tensor([42], dtype=torch.int64))
 
 
@@ -1080,12 +1093,12 @@ def test_append_batch_encoding_missing_const_raises():
         builder.append_batch_encoding(enc_without_const)
 
 
-def test_batch_encodings_collates_cat_dim1_cat_graph_field():
+def test_batch_encodings_collates_cat_dim1_cat_field():
     enc0 = _single_graph_with_matrix_field([[10, 20], [30, 40]], mode="cat", cat_dim=1)
     enc1 = _single_graph_with_matrix_field([[50], [60]], mode="cat", cat_dim=1)
 
     batched = mifrost.batch_encodings([enc0, enc1]).as_dict()
-    values = torch.as_tensor(batched["tensors"]["__graph__/target_matrix"])
+    values = _export_to_tensor(batched["tensors"]["__graph__/target_matrix"])
     assert values.shape == (2, 3)
     assert torch.equal(
         values, torch.tensor([[10, 20, 50], [30, 40, 60]], dtype=torch.int64)
@@ -1095,15 +1108,15 @@ def test_batch_encodings_collates_cat_dim1_cat_graph_field():
     assert entry["cat_dim"] == 1
 
 
-def test_batch_encodings_collates_cat_dim1_ragged_graph_field_with_ptr():
+def test_batch_encodings_collates_cat_dim1_ragged_field_with_ptr():
     enc0 = _single_graph_with_matrix_field(
         [[10, 20], [30, 40]], mode="ragged_cat", cat_dim=1
     )
     enc1 = _single_graph_with_matrix_field([[50], [60]], mode="ragged_cat", cat_dim=1)
 
     batched = mifrost.batch_encodings([enc0, enc1]).as_dict()
-    values = torch.as_tensor(batched["tensors"]["__graph__/target_matrix"])
-    ptr = torch.as_tensor(batched["tensors"]["__graph__/target_matrix/ptr"])
+    values = _export_to_tensor(batched["tensors"]["__graph__/target_matrix"])
+    ptr = _export_to_tensor(batched["tensors"]["__graph__/target_matrix/ptr"])
     assert values.shape == (2, 3)
     assert torch.equal(
         values, torch.tensor([[10, 20, 50], [30, 40, 60]], dtype=torch.int64)
@@ -1111,7 +1124,7 @@ def test_batch_encodings_collates_cat_dim1_ragged_graph_field_with_ptr():
     assert torch.equal(ptr, torch.tensor([0, 2, 3], dtype=torch.int64))
 
 
-def test_graph_field_cat_dim1_dim_gt_1_requires_2d_input():
+def test_field_cat_dim1_dim_gt_1_requires_2d_input():
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")
     builder.register_field(
@@ -1137,7 +1150,7 @@ def test_batch_encodings_schema_fingerprint_mismatch_on_cat_dim():
         mifrost.batch_encodings([enc0, enc1])
 
 
-def test_append_batch_encoding_legacy_edge_index_schema_fallback():
+def test_append_batch_encoding_edge_index_schema_fallback():
     src = torch.tensor([0], dtype=torch.int64)
     dst = torch.tensor([1], dtype=torch.int64)
 
@@ -1160,7 +1173,7 @@ def test_append_batch_encoding_legacy_edge_index_schema_fallback():
     builder.append_batch_encoding(legacy)
     tensors = builder.build().as_dict()["tensors"]
 
-    out_src = torch.as_tensor(tensors["atom|rel|atom/edge_index_0"])
-    out_dst = torch.as_tensor(tensors["atom|rel|atom/edge_index_1"])
+    out_src = _export_to_tensor(tensors["atom|rel|atom/edge_index_0"])
+    out_dst = _export_to_tensor(tensors["atom|rel|atom/edge_index_1"])
     assert torch.equal(out_src, torch.tensor([0, 2], dtype=torch.int64))
     assert torch.equal(out_dst, torch.tensor([1, 3], dtype=torch.int64))
