@@ -95,6 +95,7 @@ class MifrostRecipe(ConanFile):
             self.output.warning(
                 "conandata.yml not specified or empty, using defaults/failsafes"
             )
+            self.requires("dlpack/1.2")
             self.requires("loki/f86e5e10f685a77897269742c84c9d780237084a")
             self.requires("nauty/2.8.8")
             self.requires("gtest/1.14.0")

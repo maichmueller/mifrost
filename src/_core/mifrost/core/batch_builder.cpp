@@ -906,7 +906,15 @@ nb::object BatchBuilder::build_pyg()
    };
    absl::btree_map< EdgeKey, EdgeComponents > edge_components;
 
-   auto to_tensor = [&](const nb::object& array) { return torch.attr("as_tensor")(array); };
+   auto to_tensor = [&](nb::handle value) -> nb::object {
+      if(nb::isinstance(value, torch.attr("Tensor"))) {
+         return nb::borrow< nb::object >(value);
+      }
+      if(nb::hasattr(value, "__dlpack__")) {
+         return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
+      }
+      return torch.attr("as_tensor")(value);
+   };
 
    for(auto [key_handle, value_handle] : payload) {
       const std::string key = nb::str(key_handle).c_str();

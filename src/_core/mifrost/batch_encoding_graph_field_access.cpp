@@ -91,24 +91,19 @@ nb::object to_torch_tensor(nb::handle array_like)
 {
    // Avoid function-local `static nb::object`: its destructor may run after
    // Python interpreter finalization and crash at shutdown.
-   //
-   // Assumption: Imported modules remain alive for the remainder of the
-   // interpreter lifetime (normally ensured by `sys.modules`). We do not
-   // support module deletion/reload patterns that would invalidate cached
-   // borrowed pointers (e.g., ``importlib.reload(torch)``).
-   static PyObject* numpy_mod = []() -> PyObject* {
-      nb::object obj = nb::module_::import_("numpy");
-      return obj.ptr();
-   }();
    static PyObject* torch_mod = []() -> PyObject* {
       nb::object obj = nb::module_::import_("torch");
       return obj.ptr();
    }();
 
-   nb::object numpy = nb::borrow< nb::object >(nb::handle(numpy_mod));
    nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
-   nb::object array = numpy.attr("asarray")(array_like);
-   return torch.attr("from_numpy")(array);
+   if(nb::isinstance(array_like, torch.attr("Tensor"))) {
+      return nb::borrow< nb::object >(array_like);
+   }
+   if(nb::hasattr(array_like, "__dlpack__")) {
+      return torch.attr("from_dlpack")(nb::borrow< nb::object >(array_like));
+   }
+   return torch.attr("as_tensor")(array_like);
 }
 
 std::string ascii_lower_copy(std::string text)

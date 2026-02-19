@@ -1131,7 +1131,18 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
 
 nb::object to_torch_tensor(nb::handle value)
 {
-   nb::object torch = nb::module_::import_("torch");
+   static PyObject* torch_mod = []() -> PyObject* {
+      nb::object imported = nb::module_::import_("torch");
+      return imported.ptr();
+   }();
+   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
+
+   if(nb::isinstance(value, torch.attr("Tensor"))) {
+      return nb::borrow< nb::object >(value);
+   }
+   if(nb::hasattr(value, "__dlpack__")) {
+      return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
+   }
    return torch.attr("as_tensor")(value);
 }
 
@@ -1198,7 +1209,11 @@ nb::object to_torch_tensor(nb::handle value, nb::handle device)
 
 bool is_torch_tensor(nb::handle value)
 {
-   nb::object torch = nb::module_::import_("torch");
+   static PyObject* torch_mod = []() -> PyObject* {
+      nb::object imported = nb::module_::import_("torch");
+      return imported.ptr();
+   }();
+   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
    return nb::isinstance(value, torch.attr("Tensor"));
 }
 
@@ -1243,7 +1258,11 @@ void set_owner_target_device(nb::handle owner, nb::handle device)
       }
       return;
    }
-   nb::object torch = nb::module_::import_("torch");
+   static PyObject* torch_mod = []() -> PyObject* {
+      nb::object imported = nb::module_::import_("torch");
+      return imported.ptr();
+   }();
+   nb::object torch = nb::borrow< nb::object >(nb::handle(torch_mod));
    attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
 }
 
