@@ -1167,15 +1167,6 @@ void clear_owner_tensor_cache(nb::handle owner)
    }
 }
 
-nb::object to_torch_tensor(nb::handle value, nb::handle device)
-{
-   nb::object tensor = to_torch_tensor(value);
-   if(device.is_none()) {
-      return tensor;
-   }
-   return tensor.attr("to")(device);
-}
-
 bool is_torch_tensor(nb::handle value)
 {
    nb::object torch = nb::borrow< nb::object >(torch_module_handle());
@@ -1227,31 +1218,16 @@ void set_owner_target_device(nb::handle owner, nb::handle device)
    attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
 }
 
-void materialize_owner_tensor_cache(
-   nb::handle owner,
-   BatchBuilder::BatchEncoding& encoding,
-   nb::handle device
-)
+void materialize_owner_tensor_cache(nb::handle owner, BatchBuilder::BatchEncoding& encoding)
 {
    clear_owner_tensor_cache(owner);
 
    nb::dict cache;
 
    const auto native_tensor_keys = batch_encoding_native_tensor_keys(encoding);
-   nb::dict as_dict = batch_encoding_as_dict(encoding, owner);
-   nb::dict tensors = nb::cast< nb::dict >(as_dict["tensors"]);
 
    for(const auto& key : native_tensor_keys) {
-      if(batch_encoding_has_graph_field(encoding, key)) {
-         cache[key.c_str()] = batch_encoding_get_graph_field(encoding, key, owner);
-         continue;
-      }
-      if(not tensors.contains(key.c_str())) {
-         throw std::invalid_argument(
-            "BatchEncoding tensor materialization missing native key '" + key + "'"
-         );
-      }
-      cache[key.c_str()] = to_torch_tensor(nb::borrow< nb::object >(tensors[key.c_str()]), device);
+      cache[key.c_str()] = batch_encoding_get_native_tensor(encoding, key, owner);
    }
 
    nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
@@ -1315,7 +1291,6 @@ class HeteroBatchEncodingView {
       encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
          owner_, "HeteroBatchEncodingView created with invalid BatchEncoding instance"
       );
-      device_ = owner_target_device(owner_);
    }
 
    int64_t num_graphs() const { return encoding_->num_graphs; }
@@ -1443,8 +1418,7 @@ class HeteroBatchEncodingView {
          return;
       }
       set_owner_target_device(owner_, device);
-      device_ = owner_target_device(owner_);
-      materialize_owner_tensor_cache(owner_, *encoding_, device_);
+      materialize_owner_tensor_cache(owner_, *encoding_);
       clear_caches();
       prewarm_caches();
    }
@@ -1452,8 +1426,6 @@ class HeteroBatchEncodingView {
   private:
    void clear_caches()
    {
-      as_dict_cache_ = nb::object();
-      tensors_cache_ = nb::dict();
       tensor_cache_ = nb::dict();
       x_dict_cache_ = nb::object();
       edge_index_dict_cache_ = nb::object();
@@ -1471,19 +1443,9 @@ class HeteroBatchEncodingView {
       (void) edge_attr_dict();
    }
 
-   void ensure_as_dict_cache()
-   {
-      if(as_dict_cache_.is_valid()) {
-         return;
-      }
-      as_dict_cache_ = batch_encoding_as_dict(*encoding_, owner_);
-      tensors_cache_ = nb::cast< nb::dict >(as_dict_cache_.attr("__getitem__")("tensors"));
-   }
-
    bool has_tensor(const std::string& key)
    {
-      ensure_as_dict_cache();
-      return tensors_cache_.contains(key.c_str());
+      return batch_encoding_has_native_tensor(*encoding_, key);
    }
 
    nb::object tensor(const std::string& key)
@@ -1497,8 +1459,7 @@ class HeteroBatchEncodingView {
          tensor_cache_[key.c_str()] = value;
          return value;
       }
-      ensure_as_dict_cache();
-      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
+      nb::object value = batch_encoding_get_native_tensor(*encoding_, key, owner_);
       tensor_cache_[key.c_str()] = value;
       if(auto owner_cache = owner_tensor_cache_if_present(owner_); owner_cache.has_value()) {
          (*owner_cache)[key.c_str()] = value;
@@ -1508,9 +1469,6 @@ class HeteroBatchEncodingView {
 
    nb::object owner_;
    BatchBuilder::BatchEncoding* encoding_ = nullptr;
-   nb::object device_;
-   nb::object as_dict_cache_;
-   nb::dict tensors_cache_;
    nb::dict tensor_cache_;
    nb::object x_dict_cache_;
    nb::object edge_index_dict_cache_;
@@ -1526,7 +1484,6 @@ class HomoBatchEncodingView {
       encoding_ = require_instance_ptr< BatchBuilder::BatchEncoding >(
          owner_, "HomoBatchEncodingView created with invalid BatchEncoding instance"
       );
-      device_ = owner_target_device(owner_);
    }
 
    int64_t num_graphs() const { return encoding_->num_graphs; }
@@ -1648,8 +1605,7 @@ class HomoBatchEncodingView {
          return;
       }
       set_owner_target_device(owner_, device);
-      device_ = owner_target_device(owner_);
-      materialize_owner_tensor_cache(owner_, *encoding_, device_);
+      materialize_owner_tensor_cache(owner_, *encoding_);
       clear_caches();
       prewarm_caches();
    }
@@ -1657,8 +1613,6 @@ class HomoBatchEncodingView {
   private:
    void clear_caches()
    {
-      as_dict_cache_ = nb::object();
-      tensors_cache_ = nb::dict();
       tensor_cache_ = nb::dict();
       x_ready_ = false;
       edge_index_ready_ = false;
@@ -1681,19 +1635,9 @@ class HomoBatchEncodingView {
       (void) edge_attr();
    }
 
-   void ensure_as_dict_cache()
-   {
-      if(as_dict_cache_.is_valid()) {
-         return;
-      }
-      as_dict_cache_ = batch_encoding_as_dict(*encoding_, owner_);
-      tensors_cache_ = nb::cast< nb::dict >(as_dict_cache_.attr("__getitem__")("tensors"));
-   }
-
    bool has_tensor(const std::string& key)
    {
-      ensure_as_dict_cache();
-      return tensors_cache_.contains(key.c_str());
+      return batch_encoding_has_native_tensor(*encoding_, key);
    }
 
    nb::object tensor(const std::string& key)
@@ -1707,8 +1651,7 @@ class HomoBatchEncodingView {
          tensor_cache_[key.c_str()] = value;
          return value;
       }
-      ensure_as_dict_cache();
-      nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
+      nb::object value = batch_encoding_get_native_tensor(*encoding_, key, owner_);
       tensor_cache_[key.c_str()] = value;
       if(auto owner_cache = owner_tensor_cache_if_present(owner_); owner_cache.has_value()) {
          (*owner_cache)[key.c_str()] = value;
@@ -1718,9 +1661,6 @@ class HomoBatchEncodingView {
 
    nb::object owner_;
    BatchBuilder::BatchEncoding* encoding_ = nullptr;
-   nb::object device_;
-   nb::object as_dict_cache_;
-   nb::dict tensors_cache_;
    nb::dict tensor_cache_;
    bool x_ready_ = false;
    bool edge_index_ready_ = false;
@@ -2056,7 +1996,7 @@ void init_batch_encoding(nb::module_& m)
                      nb::borrow< nb::object >(value_obj), normalized
                   );
                }
-               materialize_owner_tensor_cache(self, *encoding, normalized);
+               materialize_owner_tensor_cache(self, *encoding);
                return nb::borrow< nb::object >(self);
             },
             "device"_a

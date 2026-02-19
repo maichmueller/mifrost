@@ -18,6 +18,17 @@ std::set< std::string > batch_encoding_native_tensor_keys(
    const BatchBuilder::BatchEncoding& encoding
 );
 
+bool batch_encoding_has_native_tensor(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+);
+
+nanobind::object batch_encoding_get_native_tensor(
+   BatchBuilder::BatchEncoding& encoding,
+   std::string_view key,
+   nanobind::handle owner
+);
+
 bool batch_encoding_has_graph_field(
    const BatchBuilder::BatchEncoding& encoding,
    std::string_view key

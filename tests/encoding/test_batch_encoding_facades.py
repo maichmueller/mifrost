@@ -139,9 +139,12 @@ def test_facade_properties_are_cached_and_avoid_as_pyg(small_blocks):
     ]
     encoding = encoder.encode_batch(states)
 
-    # If facade properties route through as_pyg, this will fail.
+    # If facade properties route through as_pyg/as_dict, this will fail.
     encoding.as_pyg = lambda *args, **kwargs: (_ for _ in ()).throw(
         AssertionError("as_pyg should not be used by facades")
+    )
+    encoding.as_dict = lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("as_dict should not be used by facades")
     )
 
     view = encoding.as_hetero()

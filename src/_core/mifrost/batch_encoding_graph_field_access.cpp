@@ -1,5 +1,6 @@
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -18,6 +19,8 @@ namespace {
 
 constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
 constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
+constexpr std::string_view kPtrKeySuffix = "/ptr";
+constexpr std::string_view kBatchKeySuffix = "/batch";
 
 enum class GraphFieldLookupKind { VALUE, PTR, MISSING };
 
@@ -125,6 +128,101 @@ nb::object graph_field_ptr_to_tensor(const GraphField& field)
    return to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(field.ptr));
 }
 
+std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
+{
+   std::vector< int64_t > batch;
+   if(ptr.size() < 2) {
+      return batch;
+   }
+   batch.reserve(static_cast< size_t >(std::max< int64_t >(0, ptr.back())));
+   for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {
+      const int64_t count = std::max< int64_t >(0, ptr[idx + 1] - ptr[idx]);
+      batch.insert(batch.end(), static_cast< size_t >(count), static_cast< int64_t >(idx));
+   }
+   return batch;
+}
+
+bool has_suffix(std::string_view key, std::string_view suffix)
+{
+   return key.size() >= suffix.size()
+          and key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::optional< std::string > node_type_for_suffix_key(std::string_view key, std::string_view suffix)
+{
+   if(not has_suffix(key, suffix) or key.size() == suffix.size()) {
+      return std::nullopt;
+   }
+   return std::string(key.substr(0, key.size() - suffix.size()));
+}
+
+bool has_exported_ptrs(const BatchBuilder::BatchEncoding& encoding)
+{
+   for(const auto& [node_type, ptr] : encoding.ptrs) {
+      (void) node_type;
+      if(ptr.size() >= 2) {
+         return true;
+      }
+   }
+   return false;
+}
+
+const std::vector< int64_t >*
+find_exported_ptr(const BatchBuilder::BatchEncoding& encoding, std::string_view node_type)
+{
+   const auto it = encoding.ptrs.find(std::string(node_type));
+   if(it == encoding.ptrs.end() or it->second.size() < 2) {
+      return nullptr;
+   }
+   return &it->second;
+}
+
+std::vector< int64_t >*
+find_exported_ptr(BatchBuilder::BatchEncoding& encoding, std::string_view node_type)
+{
+   const auto it = encoding.ptrs.find(std::string(node_type));
+   if(it == encoding.ptrs.end() or it->second.size() < 2) {
+      return nullptr;
+   }
+   return &it->second;
+}
+
+std::optional< int64_t >
+fallback_ptr_node_count(const BatchBuilder::BatchEncoding& encoding, std::string_view node_type)
+{
+   if(has_exported_ptrs(encoding)) {
+      return std::nullopt;
+   }
+   const auto count_it = encoding.node_counts.find(std::string(node_type));
+   if(count_it == encoding.node_counts.end() or count_it->second <= 0) {
+      return std::nullopt;
+   }
+   return count_it->second;
+}
+
+bool is_edge_index_key(std::string_view key)
+{
+   return key.find("/edge_index_") != std::string_view::npos;
+}
+
+nb::object column_to_tensor(BatchBuilder::Column& column, std::string_view key, nb::handle owner)
+{
+   return std::visit(
+      [&](auto& values) -> nb::object {
+         if(is_edge_index_key(key)) {
+            return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
+         }
+         const size_t rows = column.dim > 0 ? values.size() / static_cast< size_t >(column.dim) : 0;
+         return to_torch_tensor(
+            dlpack_utils::vector_to_dlpack_view_2d(
+               values, rows, static_cast< size_t >(column.dim), owner
+            )
+         );
+      },
+      column.data
+   );
+}
+
 }  // namespace
 
 std::set< std::string > batch_encoding_native_graph_field_keys(
@@ -153,14 +251,117 @@ std::set< std::string > batch_encoding_native_tensor_keys(
    }
 
    for(const auto& [node_type, ptr] : encoding.ptrs) {
-      (void) ptr;
+      if(ptr.size() < 2) {
+         continue;
+      }
       out.insert(node_type + "/ptr");
       out.insert(node_type + "/batch");
+   }
+   if(not has_exported_ptrs(encoding)) {
+      for(const auto& [node_type, count] : encoding.node_counts) {
+         if(count <= 0) {
+            continue;
+         }
+         out.insert(node_type + "/ptr");
+         out.insert(node_type + "/batch");
+      }
    }
 
    const auto graph_keys = batch_encoding_native_graph_field_keys(encoding);
    out.insert(graph_keys.begin(), graph_keys.end());
    return out;
+}
+
+bool batch_encoding_has_native_tensor(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+)
+{
+   if(batch_encoding_has_graph_field(encoding, key)) {
+      return true;
+   }
+
+   if(const auto node_type = node_type_for_suffix_key(key, kPtrKeySuffix); node_type.has_value()) {
+      return find_exported_ptr(encoding, *node_type) != nullptr
+             or fallback_ptr_node_count(encoding, *node_type).has_value();
+   }
+   if(const auto node_type = node_type_for_suffix_key(key, kBatchKeySuffix);
+      node_type.has_value()) {
+      return find_exported_ptr(encoding, *node_type) != nullptr
+             or fallback_ptr_node_count(encoding, *node_type).has_value();
+   }
+
+   return encoding.columns.contains(std::string(key));
+}
+
+nb::object batch_encoding_get_native_tensor(
+   BatchBuilder::BatchEncoding& encoding,
+   std::string_view key,
+   nb::handle owner
+)
+{
+   const std::string key_string(key);
+   if(auto cache = owner_tensor_cache_if_present(owner);
+      cache.has_value() and cache->contains(key_string.c_str())) {
+      return nb::borrow< nb::object >((*cache)[key_string.c_str()]);
+   }
+
+   if(batch_encoding_has_graph_field(encoding, key)) {
+      return batch_encoding_get_graph_field(encoding, key, owner);
+   }
+
+   const auto cache_value = [&](nb::object value) {
+      if(auto cache = owner_tensor_cache_if_present(owner); cache.has_value()) {
+         (*cache)[key_string.c_str()] = value;
+      }
+      return value;
+   };
+
+   if(const auto node_type = node_type_for_suffix_key(key, kPtrKeySuffix); node_type.has_value()) {
+      if(auto* ptr = find_exported_ptr(encoding, *node_type); ptr != nullptr) {
+         return cache_value(maybe_move_tensor_to_device(
+            to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(*ptr, owner)), owner
+         ));
+      }
+      if(const auto count = fallback_ptr_node_count(encoding, *node_type); count.has_value()) {
+         std::vector< int64_t > ptr{0, *count};
+         return cache_value(maybe_move_tensor_to_device(
+            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(ptr))), owner
+         ));
+      }
+      throw std::invalid_argument(
+         "BatchEncoding.get_native_tensor unknown key '" + std::string(key) + "'"
+      );
+   }
+
+   if(const auto node_type = node_type_for_suffix_key(key, kBatchKeySuffix);
+      node_type.has_value()) {
+      if(auto* ptr = find_exported_ptr(encoding, *node_type); ptr != nullptr) {
+         auto batch = ptr_to_batch(*ptr);
+         return cache_value(maybe_move_tensor_to_device(
+            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
+         ));
+      }
+      if(const auto count = fallback_ptr_node_count(encoding, *node_type); count.has_value()) {
+         std::vector< int64_t > batch(static_cast< size_t >(*count), 0);
+         return cache_value(maybe_move_tensor_to_device(
+            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
+         ));
+      }
+      throw std::invalid_argument(
+         "BatchEncoding.get_native_tensor unknown key '" + std::string(key) + "'"
+      );
+   }
+
+   if(const auto col_it = encoding.columns.find(key_string); col_it != encoding.columns.end()) {
+      return cache_value(
+         maybe_move_tensor_to_device(column_to_tensor(col_it->second, key, owner), owner)
+      );
+   }
+
+   throw std::invalid_argument(
+      "BatchEncoding.get_native_tensor unknown key '" + std::string(key) + "'"
+   );
 }
 
 bool batch_encoding_has_graph_field(
