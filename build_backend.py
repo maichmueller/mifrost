@@ -100,6 +100,23 @@ def _set_default_rpath_mode(mode: str) -> None:
         os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", "11.0")
 
 
+def _as_bool(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _wheel_generate_stubs_enabled() -> bool:
+    # Wheel builds include stubs by default. Workflows that pre-generate stubs can
+    # set MIFROST_WHEEL_GENERATE_STUBS=0 to avoid duplicate stub work.
+    return _as_bool(os.environ.get("MIFROST_WHEEL_GENERATE_STUBS"), default=True)
+
+
 def _prepare_common_cmake_env() -> None:
     rpath_mode = os.environ.get("MIFROST_RPATH_MODE", "dev")
     _set_cmake_arg("MIFROST_RPATH_MODE", rpath_mode)
@@ -234,6 +251,8 @@ def prepare_metadata_for_build_wheel(
     _set_default_rpath_mode("wheel")
     _set_cmake_arg("BUILD_TESTING", "OFF")
     _set_cmake_arg("MIFROST_BUILD_BENCHMARKS", "OFF")
+    # Metadata prep should stay cheap and avoid any stub-related build work.
+    # Actual wheel generation controls whether stubs are produced.
     _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
     _maybe_prepare_conan(config_settings)
     return _sbc.prepare_metadata_for_build_wheel(metadata_directory, config_settings)
@@ -255,7 +274,10 @@ def build_wheel(
     _set_default_rpath_mode("wheel")
     _set_cmake_arg("BUILD_TESTING", "OFF")
     _set_cmake_arg("MIFROST_BUILD_BENCHMARKS", "OFF")
-    _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
+    _set_cmake_arg(
+        "MIFROST_GENERATE_STUBS",
+        "ON" if _wheel_generate_stubs_enabled() else "OFF",
+    )
     _maybe_prepare_conan(config_settings)
     return _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
 
