@@ -8,6 +8,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "mifrost/core/api.hpp"
+
 namespace mifrost {
 
 namespace nb = nanobind;
@@ -43,7 +45,7 @@ constexpr DLDataType dlpack_dtype()
 }
 
 template < typename T >
-struct VectorDlpackCtx {
+struct MIFROST_LOCAL VectorDlpackCtx {
    std::vector< T >* vec = nullptr;
    nb::object owner;
    bool owns_vec = false;
