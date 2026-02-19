@@ -1123,7 +1123,7 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
 
 nb::object to_torch_tensor(nb::handle value)
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
+   nb::handle torch = torch_module_handle();
 
    if(nb::isinstance(value, torch.attr("Tensor"))) {
       return nb::borrow< nb::object >(value);
@@ -1169,7 +1169,7 @@ void clear_owner_tensor_cache(nb::handle owner)
 
 bool is_torch_tensor(nb::handle value)
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
+   nb::handle torch = torch_module_handle();
    return nb::isinstance(value, torch.attr("Tensor"));
 }
 
@@ -1214,7 +1214,7 @@ void set_owner_target_device(nb::handle owner, nb::handle device)
       }
       return;
    }
-   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
+   nb::handle torch = torch_module_handle();
    attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
 }
 
@@ -1238,6 +1238,18 @@ nb::object to_mapping_proxy(const nb::dict& mapping)
 {
    nb::object types = nb::module_::import_("types");
    return types.attr("MappingProxyType")(mapping);
+}
+
+nb::object zeros_f32_on_owner_device(nb::handle owner, int64_t rows, int64_t cols)
+{
+   nb::handle torch = torch_module_handle();
+   nb::object device = owner_target_device(owner);
+   if(device.is_none()) {
+      return torch.attr("zeros")(nb::make_tuple(rows, cols), "dtype"_a = torch.attr("float32"));
+   }
+   return torch.attr("zeros")(
+      nb::make_tuple(rows, cols), "dtype"_a = torch.attr("float32"), "device"_a = device
+   );
 }
 
 std::optional< std::string >
@@ -1323,10 +1335,7 @@ class HeteroBatchEncodingView {
                count_it != encoding_->node_counts.end()) {
                count = std::max< int64_t >(0, count_it->second);
             }
-            nb::object torch = nb::module_::import_("torch");
-            out[node_type.c_str()] = torch.attr("zeros")(
-               nb::make_tuple(count, it->second), "dtype"_a = torch.attr("float32")
-            );
+            out[node_type.c_str()] = zeros_f32_on_owner_device(owner_, count, it->second);
          }
       }
       x_dict_cache_ = to_mapping_proxy(out);
@@ -1351,7 +1360,7 @@ class HeteroBatchEncodingView {
          nb::list pair;
          pair.append(tensor(*key0));
          pair.append(tensor(*key1));
-         nb::object torch = nb::module_::import_("torch");
+         nb::handle torch = torch_module_handle();
          out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = torch.attr("stack")(
             pair, "dim"_a = 0
          );
@@ -1517,10 +1526,7 @@ class HomoBatchEncodingView {
             count_it != encoding_->node_counts.end()) {
             count = std::max< int64_t >(0, count_it->second);
          }
-         nb::object torch = nb::module_::import_("torch");
-         x_cache_ = torch.attr("zeros")(
-            nb::make_tuple(count, it->second), "dtype"_a = torch.attr("float32")
-         );
+         x_cache_ = zeros_f32_on_owner_device(owner_, count, it->second);
       }
       return x_cache_;
    }
@@ -1543,7 +1549,7 @@ class HomoBatchEncodingView {
       nb::list pair;
       pair.append(tensor(*key0));
       pair.append(tensor(*key1));
-      nb::object torch = nb::module_::import_("torch");
+      nb::handle torch = torch_module_handle();
       edge_index_cache_ = torch.attr("stack")(pair, "dim"_a = 0);
       return edge_index_cache_;
    }

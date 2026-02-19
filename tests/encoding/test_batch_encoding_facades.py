@@ -14,6 +14,55 @@ def _assert_tensor_equal(actual: torch.Tensor, expected: torch.Tensor) -> None:
     assert torch.equal(actual, expected)
 
 
+def _non_cpu_device() -> torch.device | None:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return None
+
+
+def _hetero_encoding_with_missing_x_column() -> mifrost.BatchEncoding:
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("hetero")
+    builder.add_node_features("src", "x", torch.zeros(2, 1))
+    builder.add_node_features("dst", "x", torch.zeros(2, 1))
+    builder.add_edges(
+        "src",
+        "rel",
+        "dst",
+        torch.tensor([0, 1], dtype=torch.int64),
+        torch.tensor([1, 0], dtype=torch.int64),
+    )
+    builder.next_graph()
+    encoding = builder.build()
+    state = encoding.__getstate__()
+    state["columns"].pop("src/x")
+    out = mifrost.BatchEncoding()
+    out.__setstate__(state)
+    return out
+
+
+def _homo_encoding_with_missing_x_column() -> mifrost.BatchEncoding:
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("homo")
+    builder.add_node_features("atom", "x", torch.zeros(2, 1))
+    builder.add_edges(
+        "atom",
+        "rel",
+        "atom",
+        torch.tensor([0, 1], dtype=torch.int64),
+        torch.tensor([1, 0], dtype=torch.int64),
+    )
+    builder.next_graph()
+    encoding = builder.build()
+    state = encoding.__getstate__()
+    state["columns"].pop("atom/x")
+    out = mifrost.BatchEncoding()
+    out.__setstate__(state)
+    return out
+
+
 def _expected_edge_attr_dict_from_hetero_batch(
     data,
 ) -> dict[tuple[str, str, str], torch.Tensor]:
@@ -213,6 +262,50 @@ def test_homo_facade_to_cpu_is_eager_and_in_place(small_blocks):
         assert view.ptr.device.type == "cpu"
     if view.edge_attr is not None:
         assert view.edge_attr.device.type == "cpu"
+
+
+def test_hetero_facade_to_non_cpu_moves_fallback_x_with_edge_index():
+    device = _non_cpu_device()
+    if device is None:
+        pytest.skip("No non-CPU device available")
+
+    encoding = _hetero_encoding_with_missing_x_column()
+    view = encoding.as_hetero().to(device)
+    edge_type = ("src", "rel", "dst")
+
+    assert view.x_dict["src"].device.type == device.type
+    assert view.x_dict["dst"].device.type == device.type
+    assert view.edge_index_dict[edge_type].device.type == device.type
+
+    if device.type == "cuda":
+        from torch_geometric.nn import SimpleConv
+
+        conv = SimpleConv()
+        out = conv(
+            (view.x_dict["src"], view.x_dict["dst"]), view.edge_index_dict[edge_type]
+        )
+        assert out.device.type == "cuda"
+
+
+def test_homo_facade_to_non_cpu_moves_fallback_x_with_edge_index():
+    device = _non_cpu_device()
+    if device is None:
+        pytest.skip("No non-CPU device available")
+
+    encoding = _homo_encoding_with_missing_x_column()
+    view = encoding.as_homo().to(device)
+
+    assert view.x is not None
+    assert view.edge_index is not None
+    assert view.x.device.type == device.type
+    assert view.edge_index.device.type == device.type
+
+    if device.type == "cuda":
+        from torch_geometric.nn import SimpleConv
+
+        conv = SimpleConv()
+        out = conv(view.x, view.edge_index)
+        assert out.device.type == "cuda"
 
 
 def test_facade_access_is_faster_than_repeated_as_pyg(small_blocks):

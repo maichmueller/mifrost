@@ -305,7 +305,7 @@ def main() -> None:
     }
     if pyobj_supported:
         fns["pyobj"] = lambda: mifrost_module.batch_encodings(
-            enc_pyobj, graph_field_specs=pyobj_specs
+            enc_pyobj, field_specs=pyobj_specs
         )
 
     results: list[ScenarioResult] = []

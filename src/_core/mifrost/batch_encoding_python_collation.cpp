@@ -314,7 +314,7 @@ bool is_numeric_scalar(nb::handle value)
 
 nb::object torch_dtype_for_python_field_dtype(PythonFieldDType dtype)
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module());
+   nb::handle torch = torch_module();
    switch(dtype) {
       case PythonFieldDType::F32: return torch.attr("float32");
       case PythonFieldDType::I64: return torch.attr("int64");
@@ -341,7 +341,7 @@ PythonFieldDType infer_numeric_dtype_from_tensor(const nb::object& tensor)
 nb::object
 normalize_numeric_tensor(const std::string& key, const PythonFieldSpec& spec, nb::handle value)
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module());
+   nb::handle torch = torch_module();
    nb::object tensor = torch.attr("as_tensor")(
       value, "dtype"_a = torch_dtype_for_python_field_dtype(spec.dtype)
    );
@@ -971,7 +971,7 @@ nb::object collate_numeric_field(
    nb::object& out_ptr
 )
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module());
+   nb::handle torch = torch_module();
    const nb::str key_obj(key.c_str());
    const int64_t cat_dim = graph_field_cat_dim_is_one(spec.cat_dim) ? 1 : 0;
 

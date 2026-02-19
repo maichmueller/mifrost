@@ -58,7 +58,7 @@ nb::handle torch_module_handle()
 
 nb::object to_torch_tensor(nb::handle array_like)
 {
-   nb::object torch = nb::borrow< nb::object >(torch_module_handle());
+   nb::handle torch = torch_module_handle();
    if(nb::isinstance(array_like, torch.attr("Tensor"))) {
       return nb::borrow< nb::object >(array_like);
    }
