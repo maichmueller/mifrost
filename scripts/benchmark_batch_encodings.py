@@ -93,12 +93,12 @@ def _make_plain_encoding(
     return b.build()
 
 
-def _make_typed_graph_field_encoding(
+def _make_typed_field_encoding(
     mifrost_module: Any, seed: int, *, node_count: int, feature_dim: int
 ) -> Any:
     b = mifrost_module.BatchBuilder()
     b.set_graph_kind("hetero")
-    b.register_graph_field(
+    b.register_field(
         "target_indices",
         {
             "dtype": "i64",
@@ -107,7 +107,7 @@ def _make_typed_graph_field_encoding(
             "inc": {"kind": "none"},
         },
     )
-    b.register_graph_field(
+    b.register_field(
         "problem_id",
         {
             "dtype": "i64",
@@ -118,8 +118,8 @@ def _make_typed_graph_field_encoding(
     )
 
     _fill_graph(b, seed, node_count=node_count, feature_dim=feature_dim)
-    b.set_graph_field("target_indices", [seed, seed + 1, seed + 2])
-    b.set_graph_field("problem_id", 7)
+    b.set_field("target_indices", [seed, seed + 1, seed + 2])
+    b.set_field("problem_id", 7)
     b.next_graph()
     return b.build()
 
