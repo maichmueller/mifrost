@@ -3,7 +3,9 @@
 #include <nanobind/ndarray.h>
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -15,6 +17,7 @@ namespace mifrost {
 namespace {
 
 constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
+constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
 enum class GraphFieldLookupKind { VALUE, PTR, MISSING };
 
@@ -139,6 +142,19 @@ nb::object target_device_from_owner(nb::handle owner)
    return nb::borrow< nb::object >(attrs[kPythonTensorDeviceAttr.data()]);
 }
 
+std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(not attrs.contains(kPythonTensorCacheAttr.data())) {
+      return std::nullopt;
+   }
+   nb::object raw_cache = nb::borrow< nb::object >(attrs[kPythonTensorCacheAttr.data()]);
+   if(not nb::isinstance< nb::dict >(raw_cache)) {
+      throw std::invalid_argument("BatchEncoding internal tensor cache must be a dict");
+   }
+   return nb::cast< nb::dict >(raw_cache);
+}
+
 nb::object maybe_move_tensor_to_device(nb::object tensor, nb::handle owner)
 {
    nb::object device = target_device_from_owner(owner);
@@ -216,14 +232,30 @@ nb::object batch_encoding_get_graph_field(
    nb::handle owner
 )
 {
+   const std::string key_string(key);
+   if(auto cache = owner_tensor_cache_if_present(owner);
+      cache.has_value() and cache->contains(key_string.c_str())) {
+      return nb::borrow< nb::object >((*cache)[key_string.c_str()]);
+   }
+
    const auto lookup = batch_encoding_lookup_graph_field(encoding, key);
    if(lookup.kind == GraphFieldLookupKind::VALUE) {
-      return maybe_move_tensor_to_device(
+      nb::object value = maybe_move_tensor_to_device(
          graph_field_values_to_tensor_view(*lookup.field, owner), owner
       );
+      if(auto cache = owner_tensor_cache_if_present(owner); cache.has_value()) {
+         (*cache)[key_string.c_str()] = value;
+      }
+      return value;
    }
    if(lookup.kind == GraphFieldLookupKind::PTR) {
-      return maybe_move_tensor_to_device(graph_field_ptr_to_tensor(*lookup.field), owner);
+      nb::object value = maybe_move_tensor_to_device(
+         graph_field_ptr_to_tensor(*lookup.field), owner
+      );
+      if(auto cache = owner_tensor_cache_if_present(owner); cache.has_value()) {
+         (*cache)[key_string.c_str()] = value;
+      }
+      return value;
    }
    throw std::invalid_argument("BatchEncoding.get_field unknown key '" + std::string(key) + "'");
 }

@@ -22,6 +22,7 @@ namespace {
 
 constexpr std::string_view kPythonFieldSpecsAttr = "__mifrost_field_specs__";
 constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
+constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
 bool try_cast_python_bool(nb::handle value, bool& out)
 {
@@ -796,7 +797,8 @@ nb::dict batch_encoding_python_attrs_copy(nb::handle self)
 
 bool is_reserved_python_attr_key(std::string_view key)
 {
-   return key == kPythonFieldSpecsAttr or key == kPythonTensorDeviceAttr;
+   return key == kPythonFieldSpecsAttr or key == kPythonTensorDeviceAttr
+          or key == kPythonTensorCacheAttr;
 }
 
 void batch_encoding_clear_python_attrs(nb::handle self)

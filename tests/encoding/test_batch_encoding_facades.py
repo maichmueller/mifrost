@@ -157,6 +157,61 @@ def test_facade_properties_are_cached_and_avoid_as_pyg(small_blocks):
     assert b1 is b2
 
 
+def test_hetero_facade_to_cpu_is_eager_and_in_place(small_blocks):
+    space, domain, problem = small_blocks
+    encoder = HGraphEncoder(domain)
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+    encoding = encoder.encode_batch(states)
+    view = encoding.as_hetero()
+
+    out = view.to(torch.device("cpu"))
+    assert out is view
+
+    cache = encoding.__dict__.get("__mifrost_tensor_cache__")
+    assert isinstance(cache, dict)
+    assert len(cache) > 0
+
+    for tensor in view.x_dict.values():
+        assert tensor.device.type == "cpu"
+    for tensor in view.edge_index_dict.values():
+        assert tensor.device.type == "cpu"
+    for tensor in view.batch_dict.values():
+        assert tensor.device.type == "cpu"
+    for tensor in view.ptr_dict.values():
+        assert tensor.device.type == "cpu"
+    for tensor in view.edge_attr_dict.values():
+        assert tensor.device.type == "cpu"
+
+
+def test_homo_facade_to_cpu_is_eager_and_in_place(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = ColorEncoder(domain)
+    states = [problem.get_initial_state(), problem.get_initial_state()]
+    encoding = encoder.encode_batch(states)
+    view = encoding.as_homo()
+
+    out = view.to(torch.device("cpu"))
+    assert out is view
+
+    cache = encoding.__dict__.get("__mifrost_tensor_cache__")
+    assert isinstance(cache, dict)
+    assert len(cache) > 0
+
+    if view.x is not None:
+        assert view.x.device.type == "cpu"
+    if view.edge_index is not None:
+        assert view.edge_index.device.type == "cpu"
+    if view.batch is not None:
+        assert view.batch.device.type == "cpu"
+    if view.ptr is not None:
+        assert view.ptr.device.type == "cpu"
+    if view.edge_attr is not None:
+        assert view.edge_attr.device.type == "cpu"
+
+
 def test_facade_access_is_faster_than_repeated_as_pyg(small_blocks):
     space, domain, problem = small_blocks
     encoder = HGraphEncoder(domain)

@@ -51,6 +51,11 @@ std::string py_string(nb::handle value)
    return {nb::str(value).c_str()};
 }
 
+constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
+constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
+
+void clear_owner_tensor_cache(nb::handle owner);
+
 GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
 {
    GraphFieldSpec spec;
@@ -866,6 +871,9 @@ nb::dict batch_encoding_state_from_instance(nb::handle self, bool include_metada
    validate_batch_encoding_graph_fields(*encoding, "BatchEncoding state extraction");
    nb::dict state = batch_encoding_to_state_dict(*encoding, include_metadata);
    nb::dict py_attrs = batch_encoding_python_attrs_copy(self);
+   if(py_attrs.contains(kPythonTensorCacheAttr.data())) {
+      py_attrs.attr("pop")(kPythonTensorCacheAttr.data());
+   }
    if(nb::len(py_attrs) > 0) {
       state["python_attrs"] = std::move(py_attrs);
    }
@@ -883,6 +891,7 @@ nb::object batch_encoding_object_from_state(const nb::dict& state)
    auto attrs = nb::cast< nb::dict >(obj.attr("__dict__"));
    attrs.clear();
    batch_encoding_apply_python_attrs_from_state(obj, state, attrs);
+   clear_owner_tensor_cache(obj);
    return obj;
 }
 
@@ -1126,8 +1135,6 @@ nb::object to_torch_tensor(nb::handle value)
    return torch.attr("as_tensor")(value);
 }
 
-constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
-
 std::string ascii_lower_copy(std::string text)
 {
    for(char& c : text) {
@@ -1159,6 +1166,27 @@ nb::object owner_target_device(nb::handle owner)
    return nb::borrow< nb::object >(attrs[kPythonTensorDeviceAttr.data()]);
 }
 
+std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(not attrs.contains(kPythonTensorCacheAttr.data())) {
+      return std::nullopt;
+   }
+   nb::object raw_cache = nb::borrow< nb::object >(attrs[kPythonTensorCacheAttr.data()]);
+   if(not nb::isinstance< nb::dict >(raw_cache)) {
+      throw std::invalid_argument("BatchEncoding internal tensor cache must be a dict");
+   }
+   return nb::cast< nb::dict >(raw_cache);
+}
+
+void clear_owner_tensor_cache(nb::handle owner)
+{
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   if(attrs.contains(kPythonTensorCacheAttr.data())) {
+      attrs.attr("pop")(kPythonTensorCacheAttr.data());
+   }
+}
+
 nb::object to_torch_tensor(nb::handle value, nb::handle device)
 {
    nb::object tensor = to_torch_tensor(value);
@@ -1176,7 +1204,7 @@ bool is_torch_tensor(nb::handle value)
 
 nb::object move_object_to_device(nb::handle value, nb::handle device)
 {
-   if(device.is_none() or is_cpu_device(device)) {
+   if(device.is_none()) {
       return nb::borrow< nb::object >(value);
    }
    if(is_torch_tensor(value)) {
@@ -1217,6 +1245,34 @@ void set_owner_target_device(nb::handle owner, nb::handle device)
    }
    nb::object torch = nb::module_::import_("torch");
    attrs[kPythonTensorDeviceAttr.data()] = torch.attr("device")(device);
+}
+
+void materialize_owner_tensor_cache(
+   nb::handle owner,
+   BatchBuilder::BatchEncoding& encoding,
+   nb::handle device
+)
+{
+   clear_owner_tensor_cache(owner);
+
+   nb::dict cache;
+
+   nb::dict as_dict = batch_encoding_as_dict(encoding, owner);
+   nb::dict tensors = nb::cast< nb::dict >(as_dict["tensors"]);
+   for(auto [key_obj, value_obj] : tensors) {
+      cache[key_obj] = to_torch_tensor(nb::borrow< nb::object >(value_obj), device);
+   }
+
+   for(const auto& [key, field] : encoding.graph_fields) {
+      cache[key.c_str()] = batch_encoding_get_graph_field(encoding, key, owner);
+      if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
+         const std::string ptr_key = key + "_ptr";
+         cache[ptr_key.c_str()] = batch_encoding_get_graph_field(encoding, ptr_key, owner);
+      }
+   }
+
+   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   attrs[kPythonTensorCacheAttr.data()] = std::move(cache);
 }
 
 nb::object to_mapping_proxy(const nb::dict& mapping)
@@ -1400,9 +1456,14 @@ class HeteroBatchEncodingView {
 
    void set_device(nb::handle device)
    {
+      if(device.is_none()) {
+         return;
+      }
       set_owner_target_device(owner_, device);
       device_ = owner_target_device(owner_);
+      materialize_owner_tensor_cache(owner_, *encoding_, device_);
       clear_caches();
+      prewarm_caches();
    }
 
   private:
@@ -1416,6 +1477,15 @@ class HeteroBatchEncodingView {
       batch_dict_cache_ = nb::object();
       ptr_dict_cache_ = nb::object();
       edge_attr_dict_cache_ = nb::object();
+   }
+
+   void prewarm_caches()
+   {
+      (void) x_dict();
+      (void) edge_index_dict();
+      (void) batch_dict();
+      (void) ptr_dict();
+      (void) edge_attr_dict();
    }
 
    void ensure_as_dict_cache()
@@ -1438,9 +1508,18 @@ class HeteroBatchEncodingView {
       if(tensor_cache_.contains(key.c_str())) {
          return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
       }
+      if(auto owner_cache = owner_tensor_cache_if_present(owner_);
+         owner_cache.has_value() and owner_cache->contains(key.c_str())) {
+         nb::object value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
+         tensor_cache_[key.c_str()] = value;
+         return value;
+      }
       ensure_as_dict_cache();
       nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
       tensor_cache_[key.c_str()] = value;
+      if(auto owner_cache = owner_tensor_cache_if_present(owner_); owner_cache.has_value()) {
+         (*owner_cache)[key.c_str()] = value;
+      }
       return value;
    }
 
@@ -1582,9 +1661,14 @@ class HomoBatchEncodingView {
 
    void set_device(nb::handle device)
    {
+      if(device.is_none()) {
+         return;
+      }
       set_owner_target_device(owner_, device);
       device_ = owner_target_device(owner_);
+      materialize_owner_tensor_cache(owner_, *encoding_, device_);
       clear_caches();
+      prewarm_caches();
    }
 
   private:
@@ -1603,6 +1687,15 @@ class HomoBatchEncodingView {
       batch_cache_ = nb::object();
       ptr_cache_ = nb::object();
       edge_attr_cache_ = nb::object();
+   }
+
+   void prewarm_caches()
+   {
+      (void) x();
+      (void) edge_index();
+      (void) batch();
+      (void) ptr();
+      (void) edge_attr();
    }
 
    void ensure_as_dict_cache()
@@ -1625,9 +1718,18 @@ class HomoBatchEncodingView {
       if(tensor_cache_.contains(key.c_str())) {
          return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
       }
+      if(auto owner_cache = owner_tensor_cache_if_present(owner_);
+         owner_cache.has_value() and owner_cache->contains(key.c_str())) {
+         nb::object value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
+         tensor_cache_[key.c_str()] = value;
+         return value;
+      }
       ensure_as_dict_cache();
       nb::object value = to_torch_tensor(tensors_cache_[key.c_str()], device_);
       tensor_cache_[key.c_str()] = value;
+      if(auto owner_cache = owner_tensor_cache_if_present(owner_); owner_cache.has_value()) {
+         (*owner_cache)[key.c_str()] = value;
+      }
       return value;
    }
 
@@ -1955,6 +2057,9 @@ void init_batch_encoding(nb::module_& m)
                   self, "BatchEncoding.to called with invalid instance"
                );
                (void) encoding;
+               if(device.is_none()) {
+                  return nb::borrow< nb::object >(self);
+               }
                set_owner_target_device(self, device);
                nb::object normalized = owner_target_device(self);
                nb::dict attrs = batch_encoding_python_attrs(self);
@@ -1968,6 +2073,7 @@ void init_batch_encoding(nb::module_& m)
                      nb::borrow< nb::object >(value_obj), normalized
                   );
                }
+               materialize_owner_tensor_cache(self, *encoding, normalized);
                return nb::borrow< nb::object >(self);
             },
             "device"_a
@@ -1986,6 +2092,7 @@ void init_batch_encoding(nb::module_& m)
                   self, "BatchEncoding.set_field called with invalid instance"
                );
                set_batch_encoding_graph_field(*encoding, key, value);
+               clear_owner_tensor_cache(self);
             },
             "key"_a,
             "value"_a
@@ -1997,6 +2104,7 @@ void init_batch_encoding(nb::module_& m)
                   self, "BatchEncoding.set_fields called with invalid instance"
                );
                set_batch_encoding_graph_fields(*encoding, values);
+               clear_owner_tensor_cache(self);
             },
             "values"_a
          )
@@ -2049,6 +2157,7 @@ void init_batch_encoding(nb::module_& m)
                      );
                   }
                   set_batch_encoding_graph_field(*encoding, key, value);
+                  clear_owner_tensor_cache(self);
                   return;
                }
                set_python_attribute(self, key, value);
@@ -2231,6 +2340,7 @@ void init_batch_encoding(nb::module_& m)
             *encoding = batch_encoding_from_state_dict(state);
             batch_encoding_clear_python_attrs(self);
             batch_encoding_apply_python_attrs_from_state(self, state);
+            clear_owner_tensor_cache(self);
          });
 
    batch_builder_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple(

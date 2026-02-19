@@ -14,6 +14,14 @@ import mifrost
 from torch_geometric.data import Batch
 
 
+def _non_cpu_device() -> torch.device | None:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return None
+
+
 def test_batch_builder_basics():
     builder = mifrost.BatchBuilder()
 
@@ -588,6 +596,46 @@ def test_batch_encoding_graph_field_accessors_and_introspection():
     assert items["label"] == "demo"
 
 
+def test_batch_encoding_to_cpu_moves_python_tensor_attrs():
+    source_device = _non_cpu_device()
+    if source_device is None:
+        pytest.skip("No non-CPU device available for round-trip to(cpu) test")
+
+    encoding = _single_graph_with_stack_field(1.0)
+    encoding.payload = {"tensors": [torch.tensor([1.0, 2.0], device=source_device)]}
+
+    out = encoding.to(torch.device("cpu"))
+    assert out is encoding
+    assert encoding.payload["tensors"][0].device.type == "cpu"
+
+
+def test_batch_encoding_to_materializes_tensor_cache_eagerly_and_hides_it():
+    encoding = _single_graph_with_ragged_i64_field([5, 6, 7])
+
+    out = encoding.to(torch.device("cpu"))
+    assert out is encoding
+    cache = encoding.__dict__.get("__mifrost_tensor_cache__")
+    assert isinstance(cache, dict)
+    assert "target_indices" in cache
+    assert "target_indices_ptr" in cache
+    assert torch.equal(
+        cache["target_indices"], torch.tensor([5, 6, 7], dtype=torch.int64)
+    )
+    assert torch.equal(
+        cache["target_indices_ptr"], torch.tensor([0, 3], dtype=torch.int64)
+    )
+    assert "__mifrost_tensor_cache__" not in encoding.keys()
+
+
+def test_batch_encoding_set_field_clears_tensor_cache():
+    encoding = _single_graph_with_stack_field(1.0)
+    encoding.to(torch.device("cpu"))
+    assert "__mifrost_tensor_cache__" in encoding.__dict__
+
+    encoding.set_field("goal_distance", 4.0)
+    assert "__mifrost_tensor_cache__" not in encoding.__dict__
+
+
 def test_batch_encoding_get_graph_field_supports_stack_cat_const_ragged():
     stack = _single_graph_with_stack_field(1.5)
     cat = _single_graph_with_cat_i64_field([2, 4])
@@ -700,7 +748,7 @@ def test_batch_encodings_raises_on_python_specs_colliding_with_native_graph_fiel
     enc0.tag = "a"
     enc1.tag = "b"
 
-    with pytest.raises(ValueError, match="collides with native graph field key"):
+    with pytest.raises(ValueError, match="collides with native field key"):
         mifrost.batch_encodings(
             [enc0, enc1],
             field_specs={
