@@ -42,6 +42,11 @@ Collision policy:
 - `mifrost.batch_encodings([...])`: merge single-graph encodings with schema checks.
 - `mifrost.encoding_to_tensors(encoding.as_dict())`: convert flat tensor payload to torch tensors.
 
+Tensor payload note:
+
+- `BatchEncoding.as_dict()["tensors"]` exports DLPack-backed tensor values.
+- Convert with `mifrost.encoding_to_tensors(...)`, `torch.utils.dlpack.from_dlpack(...)`, or any consumer supporting `__dlpack__`.
+
 ## Config Surfaces
 
 Key config classes (bindings-defined):

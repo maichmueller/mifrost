@@ -116,6 +116,8 @@ batch = batch_encoding.as_pyg(as_batch=True)                     # HeteroDataBat
 data2 = encoder.encode_pyg(state)
 batch2 = encoder.encode_batch_pyg([state1, state2, state3])
 encoding_dict = batch_encoding.as_dict()      # dictionary form
+# note: encoding_dict["tensors"] entries are DLPack-exporting values
+# (consume with torch.utils.dlpack.from_dlpack(...) or mifrost.encoding_to_tensors(...))
 ```
 
 Example output (trimmed):

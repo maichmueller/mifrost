@@ -6,6 +6,10 @@
 - `tensors`: flat tensor payload keyed by schema keys
 - optional metadata such as `node_names`, `object_names`, `graph_attrs`
 
+`tensors` values are exported as DLPack-backed Python values (`__dlpack__`),
+so downstream conversion should use DLPack-aware paths (for example
+`mifrost.encoding_to_tensors(...)` or `torch.utils.dlpack.from_dlpack(...)`).
+
 PyG conversion uses the schema to reconstruct node stores, edge stores, edge indices, and graph-level attributes.
 
 Dynamic graph fields appear under schema `graph_tensors` and are attached as root attributes in PyG output (`attr`, plus optional `attr_ptr` for ragged fields).
