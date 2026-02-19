@@ -86,6 +86,7 @@ void init_horizon_encoder(nb::module_& m)
       .def_prop_ro(
          "config", &HorizonHGraphEncoderEngine::get_config, nb::rv_policy::reference_internal
       )
+      .def("update_relations", &HorizonHGraphEncoderEngine::update_relations, "relation_dict"_a)
       .def(
          "encode",
          [](HorizonHGraphEncoderEngine& encoder,

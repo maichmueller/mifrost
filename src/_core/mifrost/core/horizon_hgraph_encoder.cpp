@@ -7,6 +7,7 @@
 #include <mimir/search/formatter.hpp>
 #include <set>
 #include <sstream>
+#include <utility>
 
 namespace mifrost {
 
@@ -65,6 +66,12 @@ void HorizonHGraphEncoderEngine::encode(
 )
 {
    encode_impl(root, dag, goals, builder);
+}
+
+void HorizonHGraphEncoderEngine::update_relations(RelationDict relation_dict)
+{
+   HGraphEncoderEngine::update_relations(std::move(relation_dict));
+   configure_relations();
 }
 
 void HorizonHGraphEncoderEngine::encode_impl(

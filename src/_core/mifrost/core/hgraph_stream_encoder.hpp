@@ -223,6 +223,12 @@ class HGraphEncoderEngine {
    /// Return the effective runtime configuration.
    const Config& get_config() const { return config_; }
 
+   /// Return the effective built relation dictionary.
+   const RelationDict& get_relation_dict() const { return relation_dict_; }
+
+   /// Replace the effective relation dictionary used by subsequent encodes.
+   void update_relations(RelationDict relation_dict);
+
   protected:
    /**
     * @brief Initialize per-step workspace and ensure feature dimension defaults.
@@ -282,6 +288,9 @@ class HGraphEncoderEngine {
 
    /// Build the relation dictionary and precompute schema metadata from the configured domain.
    void initialize_from_domain();
+
+   /// Recompute predeclared edge-type metadata from the current relation dictionary.
+   void rebuild_all_edge_types();
 
    /// Internal implementation for typed goals.
    template < typename GoalTag >

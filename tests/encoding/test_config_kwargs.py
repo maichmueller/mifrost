@@ -73,3 +73,81 @@ def test_transition_encoder_exposes_unified_config(small_blocks) -> None:
     assert encoder.config.successor_suffix == "[next]"
     assert encoder.config.include_lgan_edges is True
     assert encoder.config.max_goal_level == 1
+
+
+def test_hgraph_encoder_exposes_relation_dict(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.HGraphEncoder(
+        domain,
+        max_goal_level=1,
+        support_literals=True,
+        goal_satisfaction_derivations={
+            mifrost.GoalSatisfaction.satisfied,
+            mifrost.GoalSatisfaction.unsatisfied,
+        },
+    )
+    relation_dict = encoder.relation_dict
+    assert type(relation_dict).__name__ == "RelationDict"
+    assert isinstance(relation_dict.arity, dict)
+    assert relation_dict.max_goal_level == 1
+    assert relation_dict.support_literals is True
+    satisfactions = set(relation_dict.goal_satisfaction_derivations)
+    assert mifrost.GoalSatisfaction.none in satisfactions
+    assert mifrost.GoalSatisfaction.satisfied in satisfactions
+    assert mifrost.GoalSatisfaction.unsatisfied in satisfactions
+
+
+def test_derived_hgraph_encoders_expose_relation_dict(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    horizon_encoder = mifrost.HorizonEncoder(
+        domain,
+        enable_parent_relation=True,
+    )
+    transition_encoder = mifrost.TransitionHGraphEncoder(domain)
+
+    assert type(horizon_encoder.relation_dict).__name__ == "RelationDict"
+    assert isinstance(horizon_encoder.relation_dict.arity, dict)
+    assert horizon_encoder.parent_relation in horizon_encoder.relation_dict.arity
+    assert type(transition_encoder.relation_dict).__name__ == "RelationDict"
+    assert isinstance(transition_encoder.relation_dict.arity, dict)
+
+
+def test_relation_dict_constructs_from_simple_mapping() -> None:
+    relation_dict = mifrost.RelationDict({"custom_rel": 2, "other_rel": 1})
+    assert relation_dict.arity["custom_rel"] == 2
+    assert relation_dict.arity["other_rel"] == 1
+
+
+def test_hgraph_encoder_update_relations_accepts_mapping_and_relation_dict(
+    small_blocks,
+) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.HGraphEncoder(domain)
+
+    encoder.update_relations({"custom_rel": 2})
+    assert "custom_rel" in encoder.relation_dict.arity
+    assert encoder.relation_dict.arity["custom_rel"] == 2
+
+    custom = mifrost.RelationDict(
+        {"custom_rel_2": 3},
+        2,
+        True,
+        {
+            mifrost.GoalSatisfaction.satisfied,
+            mifrost.GoalSatisfaction.unsatisfied,
+        },
+    )
+    encoder.update_relations(custom)
+    assert "custom_rel_2" in encoder.relation_dict.arity
+    assert encoder.relation_dict.max_goal_level == 2
+    assert encoder.relation_dict.support_literals is True
+
+
+def test_horizon_encoder_update_relations_reapplies_parent_relation(
+    small_blocks,
+) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.HorizonEncoder(domain, enable_parent_relation=True)
+    encoder.update_relations({"manual_rel": 1})
+    assert "manual_rel" in encoder.relation_dict.arity
+    assert encoder.parent_relation in encoder.relation_dict.arity

@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
@@ -61,12 +62,49 @@ void init_hgraph_encoder(nb::module_& m)
          "lgan_nn_edge_pos"_a = defaults::lgan_nn_edge_pos
       );
 
+   nb::class_< RelationDict >(m, "RelationDict")
+      .def(nb::init<>())
+      .def(
+         "__init__",
+         [](RelationDict* self, const std::map< std::string, int >& arity) {
+            new(self) RelationDict();
+            self->arity = arity;
+         },
+         "arity"_a
+      )
+      .def(
+         "__init__",
+         [](RelationDict* self,
+            const std::map< std::string, int >& arity,
+            int max_goal_level,
+            bool support_literals,
+            const std::set< GoalSatisfaction >& goal_satisfaction_derivations) {
+            new(self) RelationDict();
+            self->arity = arity;
+            self->max_goal_level = max_goal_level;
+            self->support_literals = support_literals;
+            self->goal_satisfaction_derivations = goal_satisfaction_derivations;
+         },
+         "arity"_a,
+         "max_goal_level"_a,
+         "support_literals"_a,
+         "goal_satisfaction_derivations"_a
+      )
+      .def_ro("arity", &RelationDict::arity)
+      .def_ro("max_goal_level", &RelationDict::max_goal_level)
+      .def_ro("support_literals", &RelationDict::support_literals)
+      .def_ro("goal_satisfaction_derivations", &RelationDict::goal_satisfaction_derivations);
+
    nb::class_< HGraphEncoderEngine >(m, "HGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
       .def(nb::init< const mimir::formalism::DomainImpl&, HGraphEncoderEngine::Config >())
       .def(nb::init< mimir::formalism::Domain >())
       .def(nb::init< mimir::formalism::Domain, HGraphEncoderEngine::Config >())
       .def_prop_ro("config", &HGraphEncoderEngine::get_config, nb::rv_policy::reference_internal)
+      .def_prop_ro(
+         "relation_dict", &HGraphEncoderEngine::get_relation_dict, nb::rv_policy::reference_internal
+      )
+      .def("update_relations", &HGraphEncoderEngine::update_relations, "relation_dict"_a)
       .def(
          "encode",
          [](HGraphEncoderEngine& encoder, const mimir::search::State& state) {

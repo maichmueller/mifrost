@@ -761,6 +761,23 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         """Expose the effective encoder config object."""
         return self._config
 
+    @property
+    def relation_dict(self) -> Any:
+        """Expose the effective built relation dictionary from the C++ engine."""
+        return self._engine.relation_dict
+
+    def update_relations(self, relation_dict: Any) -> None:
+        """Replace relation dictionary used by the underlying C++ engine."""
+        if isinstance(relation_dict, _core.RelationDict):
+            core_relation_dict = relation_dict
+        elif isinstance(relation_dict, Mapping):
+            core_relation_dict = _core.RelationDict(dict(relation_dict))
+        else:
+            raise TypeError(
+                "update_relations expects mifrost.RelationDict or a mapping[str, int]"
+            )
+        self._engine.update_relations(core_relation_dict)
+
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}
 

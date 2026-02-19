@@ -11,12 +11,12 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 [![Performance Gate](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
 [![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
 
-| Workflow | Platforms | Python versions |
-| --- | --- | --- |
+| Workflow | Platforms | Python versions               |
+| --- | --- |-------------------------------|
 | Unit & C++ Tests | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
 | Install & Test | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
-| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3*` (platform-dependent) |
-| Performance Gate | macOS | 3.12 |
+| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(10-14)`    |
+
 | Docs Check | Ubuntu | 3.12 |
 
 ## Documentation

@@ -63,7 +63,12 @@ void HGraphEncoderEngine::initialize_from_domain()
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
    relation_dict_ = RelationDict::build(domain_, actions, rel_config);
+   rebuild_all_edge_types();
+}
 
+void HGraphEncoderEngine::rebuild_all_edge_types()
+{
+   all_edge_types_.clear();
    for(const auto& [node_type, arity] : relation_dict_.arity) {
       const int effective_arity = (config_.add_nullary_predicates and arity == 0) ? 1 : arity;
       for(int pos = 0; pos < effective_arity; ++pos) {
@@ -79,6 +84,12 @@ void HGraphEncoderEngine::initialize_from_domain()
    }
    std::ranges::sort(all_edge_types_);
    all_edge_types_.erase(std::ranges::unique(all_edge_types_).begin(), all_edge_types_.end());
+}
+
+void HGraphEncoderEngine::update_relations(RelationDict relation_dict)
+{
+   relation_dict_ = std::move(relation_dict);
+   rebuild_all_edge_types();
 }
 
 HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_workspace(

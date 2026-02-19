@@ -50,6 +50,9 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    /// Return effective horizon config (includes inherited hgraph fields).
    const Config& get_config() const { return horizon_config_; }
 
+   /// Replace relation dictionary and re-apply horizon-specific relation registrations.
+   void update_relations(RelationDict relation_dict);
+
   private:
    /// Effective horizon-specific config.
    Config horizon_config_;
