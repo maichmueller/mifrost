@@ -274,7 +274,7 @@ def main() -> None:
         for i in range(args.batch_size)
     ]
     enc_typed = [
-        _make_typed_graph_field_encoding(
+        _make_typed_field_encoding(
             mifrost_module, i, node_count=args.node_count, feature_dim=args.feature_dim
         )
         for i in range(args.batch_size)
