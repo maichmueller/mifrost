@@ -1141,8 +1141,12 @@ bool is_cpu_device(nb::handle device)
    if(device.is_none()) {
       return true;
    }
-   std::string text = nb::cast< std::string >(nb::str(device));
-   text = ascii_lower_copy(std::move(text));
+   nb::str device_text(device);
+   const char* raw_text = device_text.c_str();
+   if(raw_text == nullptr) {
+      throw nb::python_error();
+   }
+   auto text = ascii_lower_copy(raw_text);
    return text.find("cpu") != std::string::npos;
 }
 
