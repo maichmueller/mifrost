@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import pickle
 
 import pytest
 
@@ -133,6 +134,27 @@ def test_relation_dict_fulfills_mapping_interface() -> None:
     assert set(relation_dict.keys()) == {"a", "b"}
     assert set(relation_dict.values()) == {1, 2}
     assert set(relation_dict.items()) == {("a", 2), ("b", 1)}
+
+
+def test_relation_dict_pickle_roundtrip() -> None:
+    relation_dict = mifrost.RelationDict(
+        {"a": 2, "b": 1},
+        3,
+        True,
+        {
+            mifrost.GoalSatisfaction.satisfied,
+            mifrost.GoalSatisfaction.unsatisfied,
+        },
+    )
+    restored = pickle.loads(pickle.dumps(relation_dict))
+    assert isinstance(restored, Mapping)
+    assert restored["a"] == 2
+    assert restored["b"] == 1
+    assert restored.max_goal_level == 3
+    assert restored.support_literals is True
+    satisfactions = set(restored.goal_satisfaction_derivations)
+    assert mifrost.GoalSatisfaction.satisfied in satisfactions
+    assert mifrost.GoalSatisfaction.unsatisfied in satisfactions
 
 
 def test_hgraph_encoder_update_relations_accepts_mapping_and_relation_dict(

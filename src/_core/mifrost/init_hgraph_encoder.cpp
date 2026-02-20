@@ -167,7 +167,16 @@ void init_hgraph_encoder(nb::module_& m)
          },
          "key"_a,
          "default_value"_a = nb::none()
-      );
+      )
+      .def("__reduce__", [](const RelationDict& self) {
+         nb::tuple args = nb::make_tuple(
+            self.arity,
+            self.max_goal_level,
+            self.support_literals,
+            self.goal_satisfaction_derivations
+         );
+         return nb::make_tuple(nb::type< RelationDict >(), args);
+      });
 
    nb::class_< HGraphEncoderEngine >(m, "HGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
