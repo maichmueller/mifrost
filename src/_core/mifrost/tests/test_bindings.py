@@ -605,6 +605,31 @@ def test_batch_encoding_field_accessors_and_introspection():
     assert items["label"] == "demo"
 
 
+def test_batch_encoding_str_and_repr_summarize_contents():
+    encoding = _single_graph_with_ragged_i64_field([5, 6])
+    encoding.label = "demo"
+
+    str_text = str(encoding)
+    repr_text = repr(encoding)
+
+    assert "BatchEncoding(" in str_text
+    assert "graph_kind=hetero" in str_text
+    assert "num_graphs=1" in str_text
+    assert "num_nodes=1" in str_text
+    assert "num_edges=0" in str_text
+    assert "node_types=[atom]" in str_text
+    assert "edge_types=[]" in str_text
+    assert "fields=[target_indices, target_indices_ptr]" in str_text
+    assert "python_attrs=[label]" in str_text
+    assert "device=None" in str_text
+
+    assert "BatchEncoding(" in repr_text
+    assert "graph_kind='hetero'" in repr_text
+    assert "node_types=['atom']" in repr_text
+    assert "fields=['target_indices', 'target_indices_ptr']" in repr_text
+    assert "python_attrs=['label']" in repr_text
+
+
 def test_batch_encoding_to_cpu_moves_python_tensor_attrs():
     source_device = _non_cpu_device()
     if source_device is None:
