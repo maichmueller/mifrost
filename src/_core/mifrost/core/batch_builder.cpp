@@ -22,6 +22,68 @@ namespace mifrost {
 
 namespace {
 
+nb::handle torch_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
+   return *module;
+}
+
+nb::handle torch_tensor_type_handle()
+{
+   static nb::object* type = []() {
+      return new nb::object(torch_module_handle().attr("Tensor"));
+   }();
+   return *type;
+}
+
+nb::handle torch_as_tensor_fn_handle()
+{
+   static nb::object* fn = []() {
+      return new nb::object(torch_module_handle().attr("as_tensor"));
+   }();
+   return *fn;
+}
+
+nb::handle torch_from_dlpack_fn_handle()
+{
+   static nb::object* fn = []() {
+      return new nb::object(torch_module_handle().attr("from_dlpack"));
+   }();
+   return *fn;
+}
+
+nb::handle torch_utils_dlpack_from_dlpack_fn_handle()
+{
+   static nb::object* fn = []() {
+      return new nb::object(torch_module_handle().attr("utils").attr("dlpack").attr("from_dlpack"));
+   }();
+   return *fn;
+}
+
+nb::handle torch_geometric_data_module_handle()
+{
+   static nb::object* module = []() {
+      return new nb::object(nb::module_::import_("torch_geometric.data"));
+   }();
+   return *module;
+}
+
+nb::handle torch_geometric_batch_ctor_handle()
+{
+   static nb::object* ctor = []() {
+      return new nb::object(torch_geometric_data_module_handle().attr("Batch"));
+   }();
+   return *ctor;
+}
+
+nb::handle torch_geometric_heterodata_ctor_handle()
+{
+   static nb::object* ctor = []() {
+      return new nb::object(torch_geometric_data_module_handle().attr("HeteroData"));
+   }();
+   return *ctor;
+}
+
 template < typename T >
 std::vector< T >& expect_column(NumericColumnData& data, const std::string& key)
 {
@@ -876,9 +938,10 @@ nb::object BatchBuilder::build_pyg()
 
    nb::dict payload = build_dict();
 
-   nb::object torch = nb::module_::import_("torch");
-   nb::object tg_data = nb::module_::import_("torch_geometric.data");
-   nb::object batch = tg_data.attr("Batch")(nb::arg("_base_cls") = tg_data.attr("HeteroData"));
+   nb::handle torch = torch_module_handle();
+   nb::object batch = torch_geometric_batch_ctor_handle()(
+      nb::arg("_base_cls") = torch_geometric_heterodata_ctor_handle()
+   );
 
    using EdgeKey = std::tuple< std::string, std::string, std::string >;
    struct EdgeComponents {
@@ -888,16 +951,16 @@ nb::object BatchBuilder::build_pyg()
    absl::btree_map< EdgeKey, EdgeComponents > edge_components;
 
    auto to_tensor = [&](nb::handle value) -> nb::object {
-      if(nb::isinstance(value, torch.attr("Tensor"))) {
+      if(nb::isinstance(value, torch_tensor_type_handle())) {
          return nb::borrow< nb::object >(value);
       }
       if(dlpack_utils::is_dlpack_capsule(value)) {
-         return torch.attr("utils").attr("dlpack").attr("from_dlpack")(value);
+         return torch_utils_dlpack_from_dlpack_fn_handle()(value);
       }
       if(nb::hasattr(value, "__dlpack__")) {
-         return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
+         return torch_from_dlpack_fn_handle()(nb::borrow< nb::object >(value));
       }
-      return torch.attr("as_tensor")(value);
+      return torch_as_tensor_fn_handle()(value);
    };
 
    for(auto [key_handle, value_handle] : payload) {

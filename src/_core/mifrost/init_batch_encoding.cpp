@@ -138,6 +138,106 @@ nb::handle torch_module_handle()
    return *module;
 }
 
+nb::handle builtins_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("builtins")); }();
+   return *module;
+}
+
+nb::handle builtins_object_setattr_handle()
+{
+   static nb::object* fn = []() {
+      return new nb::object(builtins_module_handle().attr("object").attr("__setattr__"));
+   }();
+   return *fn;
+}
+
+nb::handle builtins_open_handle()
+{
+   static nb::object* fn = []() { return new nb::object(builtins_module_handle().attr("open")); }();
+   return *fn;
+}
+
+nb::handle builtins_tuple_ctor_handle()
+{
+   static nb::object* fn = []() {
+      return new nb::object(builtins_module_handle().attr("tuple"));
+   }();
+   return *fn;
+}
+
+nb::handle pickle_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("pickle")); }();
+   return *module;
+}
+
+nb::handle pickle_dumps_handle()
+{
+   static nb::object* fn = []() { return new nb::object(pickle_module_handle().attr("dumps")); }();
+   return *fn;
+}
+
+nb::handle pickle_loads_handle()
+{
+   static nb::object* fn = []() { return new nb::object(pickle_module_handle().attr("loads")); }();
+   return *fn;
+}
+
+nb::handle types_module_handle()
+{
+   static nb::object* module = []() { return new nb::object(nb::module_::import_("types")); }();
+   return *module;
+}
+
+nb::handle mapping_proxy_type_ctor_handle()
+{
+   static nb::object* ctor = []() {
+      return new nb::object(types_module_handle().attr("MappingProxyType"));
+   }();
+   return *ctor;
+}
+
+nb::handle torch_geometric_data_module_handle()
+{
+   static nb::object* module = []() {
+      return new nb::object(nb::module_::import_("torch_geometric.data"));
+   }();
+   return *module;
+}
+
+nb::handle torch_geometric_heterodata_ctor_handle()
+{
+   static nb::object* ctor = []() {
+      return new nb::object(torch_geometric_data_module_handle().attr("HeteroData"));
+   }();
+   return *ctor;
+}
+
+nb::handle torch_geometric_data_ctor_handle()
+{
+   static nb::object* ctor = []() {
+      return new nb::object(torch_geometric_data_module_handle().attr("Data"));
+   }();
+   return *ctor;
+}
+
+nb::handle mifrost_core_batch_encoding_cls_handle()
+{
+   static nb::object* cls = []() {
+      return new nb::object(nb::module_::import_("mifrost._core").attr("BatchEncoding"));
+   }();
+   return *cls;
+}
+
+nb::handle mifrost_batch_encoding_loader_handle()
+{
+   static nb::object* loader = []() {
+      return new nb::object(nb::module_::import_("mifrost").attr("_batch_encoding_from_payload"));
+   }();
+   return *loader;
+}
+
 GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
 {
    GraphFieldSpec spec;
@@ -514,8 +614,7 @@ void set_batch_encoding_graph_fields(BatchBuilder::BatchEncoding& encoding, cons
 
 void set_python_attribute(nb::handle self, const std::string& key, nb::handle value)
 {
-   nb::object object_setattr = nb::module_::import_("builtins").attr("object").attr("__setattr__");
-   object_setattr(self, key, value);
+   builtins_object_setattr_handle()(self, key, value);
 }
 
 template < typename T >
@@ -598,8 +697,7 @@ void copy_global_attrs_for_single(nb::object& dst, nb::object& src)
 
 nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
 {
-   nb::object tg_data = nb::module_::import_("torch_geometric.data");
-   nb::object out = tg_data.attr("HeteroData")();
+   nb::object out = torch_geometric_heterodata_ctor_handle()();
 
    for(auto node_type_obj : pyg_batch.attr("node_types")) {
       std::string node_type = py_string(node_type_obj);
@@ -629,8 +727,7 @@ nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
 
 nb::object batch_to_single_homo_data(nb::object& pyg_batch)
 {
-   nb::object tg_data = nb::module_::import_("torch_geometric.data");
-   nb::object out = tg_data.attr("Data")();
+   nb::object out = torch_geometric_data_ctor_handle()();
 
    nb::list node_types = nb::cast< nb::list >(pyg_batch.attr("node_types"));
    if(nb::len(node_types) > 1) {
@@ -949,8 +1046,7 @@ nb::dict batch_encoding_state_from_instance(nb::handle self, bool include_metada
 
 nb::object batch_encoding_object_from_state(const nb::dict& state)
 {
-   nb::object cls = nb::module_::import_("mifrost._core").attr("BatchEncoding");
-   nb::object obj = cls();
+   nb::object obj = mifrost_core_batch_encoding_cls_handle()();
    auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
       obj, "Failed to instantiate BatchEncoding during state load"
    );
@@ -1196,25 +1292,9 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
    return pyg_batch;
 }
 
-nb::object to_torch_tensor(nb::handle value)
-{
-   nb::handle torch = torch_module_handle();
-
-   if(nb::isinstance(value, torch.attr("Tensor"))) {
-      return nb::borrow< nb::object >(value);
-   }
-   if(dlpack_utils::is_dlpack_capsule(value)) {
-      return torch.attr("utils").attr("dlpack").attr("from_dlpack")(value);
-   }
-   if(nb::hasattr(value, "__dlpack__")) {
-      return torch.attr("from_dlpack")(nb::borrow< nb::object >(value));
-   }
-   return torch.attr("as_tensor")(value);
-}
-
 nb::object owner_target_device(nb::handle owner)
 {
-   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   auto attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
    if(not attrs.contains(kPythonTensorDeviceAttr.data())) {
       return nb::none();
    }
@@ -1223,11 +1303,11 @@ nb::object owner_target_device(nb::handle owner)
 
 std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
 {
-   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   auto attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
    if(not attrs.contains(kPythonTensorCacheAttr.data())) {
       return std::nullopt;
    }
-   nb::object raw_cache = nb::borrow< nb::object >(attrs[kPythonTensorCacheAttr.data()]);
+   auto raw_cache = nb::borrow< nb::object >(attrs[kPythonTensorCacheAttr.data()]);
    if(not nb::isinstance< nb::dict >(raw_cache)) {
       throw std::invalid_argument("BatchEncoding internal tensor cache must be a dict");
    }
@@ -1236,7 +1316,7 @@ std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
 
 void clear_owner_tensor_cache(nb::handle owner)
 {
-   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
+   auto attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
    if(attrs.contains(kPythonTensorCacheAttr.data())) {
       attrs.attr("pop")(kPythonTensorCacheAttr.data());
    }
@@ -1275,7 +1355,7 @@ nb::object move_object_to_device(nb::handle value, nb::handle device)
       for(nb::handle item : nb::borrow< nb::tuple >(value)) {
          tmp.append(move_object_to_device(item, device));
       }
-      return nb::module_::import_("builtins").attr("tuple")(tmp);
+      return builtins_tuple_ctor_handle()(tmp);
    }
    return nb::borrow< nb::object >(value);
 }
@@ -1407,8 +1487,7 @@ void materialize_owner_tensor_cache(nb::handle owner, BatchBuilder::BatchEncodin
 
 nb::object to_mapping_proxy(const nb::dict& mapping)
 {
-   nb::object types = nb::module_::import_("types");
-   return types.attr("MappingProxyType")(mapping);
+   return mapping_proxy_type_ctor_handle()(mapping);
 }
 
 nb::object zeros_f32_on_owner_device(nb::handle owner, int64_t rows, int64_t cols)
@@ -1476,15 +1555,18 @@ class HeteroBatchEncodingView {
       );
    }
 
-   int64_t num_graphs() const { return encoding_->num_graphs; }
-   int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
-   int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
-   std::string graph_kind() const { return encoding_->graph_kind; }
+   [[nodiscard]] int64_t num_graphs() const { return encoding_->num_graphs; }
+   [[nodiscard]] int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
+   [[nodiscard]] int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
+   [[nodiscard]] std::string graph_kind() const { return encoding_->graph_kind; }
 
-   std::vector< std::string > node_types() const { return encoding_->schema.node_types; }
+   [[nodiscard]] std::vector< std::string > node_types() const
+   {
+      return encoding_->schema.node_types;
+   }
 
-   nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
-   std::vector< std::string > object_names() const { return encoding_->object_names; }
+   [[nodiscard]] nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
+   [[nodiscard]] std::vector< std::string > object_names() const { return encoding_->object_names; }
 
    nb::object x_dict()
    {
@@ -1623,19 +1705,19 @@ class HeteroBatchEncodingView {
       (void) edge_attr_dict();
    }
 
-   bool has_tensor(const std::string& key)
+   bool has_tensor(const std::string& key) const
    {
       return batch_encoding_has_native_tensor(*encoding_, key);
    }
 
-   nb::object tensor(const std::string& key)
+   nb::object tensor(const std::string& key) const
    {
       if(tensor_cache_.contains(key.c_str())) {
          return nb::borrow< nb::object >(tensor_cache_[key.c_str()]);
       }
       if(auto owner_cache = owner_tensor_cache_if_present(owner_);
          owner_cache.has_value() and owner_cache->contains(key.c_str())) {
-         nb::object value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
+         auto value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
          tensor_cache_[key.c_str()] = value;
          return value;
       }
@@ -1666,13 +1748,16 @@ class HomoBatchEncodingView {
       );
    }
 
-   int64_t num_graphs() const { return encoding_->num_graphs; }
-   int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
-   int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
-   std::string graph_kind() const { return encoding_->graph_kind; }
-   std::vector< std::string > node_types() const { return encoding_->schema.node_types; }
-   nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
-   std::vector< std::string > object_names() const { return encoding_->object_names; }
+   [[nodiscard]] int64_t num_graphs() const { return encoding_->num_graphs; }
+   [[nodiscard]] int64_t num_nodes() const { return batch_encoding_num_nodes(*encoding_); }
+   [[nodiscard]] int64_t num_edges() const { return batch_encoding_num_edges(*encoding_); }
+   [[nodiscard]] std::string graph_kind() const { return encoding_->graph_kind; }
+   [[nodiscard]] std::vector< std::string > node_types() const
+   {
+      return encoding_->schema.node_types;
+   }
+   [[nodiscard]] nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
+   [[nodiscard]] std::vector< std::string > object_names() const { return encoding_->object_names; }
 
    nb::object x()
    {
@@ -1708,14 +1793,13 @@ class HomoBatchEncodingView {
          return edge_index_cache_;
       }
       edge_index_ready_ = true;
-      edge_index_cache_ = nb::none();
       if(encoding_->schema.edge_types.empty()) {
-         return edge_index_cache_;
+         return edge_index_cache_ = nb::none();
       }
       const auto [key0, key1] = find_edge_index_keys(encoding_->schema, 0);
       if(not key0.has_value() or not key1.has_value() or not has_tensor(*key0)
          or not has_tensor(*key1)) {
-         return edge_index_cache_;
+         return edge_index_cache_ = nb::none();
       }
       nb::list pair;
       pair.append(tensor(*key0));
@@ -1731,15 +1815,14 @@ class HomoBatchEncodingView {
          return batch_cache_;
       }
       batch_ready_ = true;
-      batch_cache_ = nb::none();
-      if(encoding_->schema.node_types.empty()) {
-         return batch_cache_;
+      std::string key;
+      if(encoding_->schema.node_types.empty() or std::invoke([&] {
+            key = encoding_->schema.node_types.front() + "/batch";
+            return not has_tensor(key);
+         })) {
+         return batch_cache_ = nb::none();
       }
-      const std::string key = encoding_->schema.node_types.front() + "/batch";
-      if(has_tensor(key)) {
-         batch_cache_ = tensor(key);
-      }
-      return batch_cache_;
+      return batch_cache_ = tensor(key);
    }
 
    nb::object ptr()
@@ -1748,15 +1831,14 @@ class HomoBatchEncodingView {
          return ptr_cache_;
       }
       ptr_ready_ = true;
-      ptr_cache_ = nb::none();
-      if(encoding_->schema.node_types.empty()) {
-         return ptr_cache_;
+      std::string key;
+      if(encoding_->schema.node_types.empty() or std::invoke([&] {
+            key = encoding_->schema.node_types.front() + "/ptr";
+            return not has_tensor(key);
+         })) {
+         return ptr_cache_ = nb::none();
       }
-      const std::string key = encoding_->schema.node_types.front() + "/ptr";
-      if(has_tensor(key)) {
-         ptr_cache_ = tensor(key);
-      }
-      return ptr_cache_;
+      return ptr_cache_ = tensor(key);
    }
 
    nb::object edge_attr()
@@ -1824,7 +1906,7 @@ class HomoBatchEncodingView {
       }
       if(auto owner_cache = owner_tensor_cache_if_present(owner_);
          owner_cache.has_value() and owner_cache->contains(key.c_str())) {
-         nb::object value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
+         auto value = nb::borrow< nb::object >((*owner_cache)[key.c_str()]);
          tensor_cache_[key.c_str()] = value;
          return value;
       }
@@ -2386,11 +2468,9 @@ void init_batch_encoding(nb::module_& m)
          .def(
             "save",
             [](nb::handle self, const std::string& path, bool include_metadata) {
-               nb::object pickle = nb::module_::import_("pickle");
-               nb::object builtins = nb::module_::import_("builtins");
-               nb::object file = builtins.attr("open")(path, "wb");
+               nb::object file = builtins_open_handle()(path, "wb");
                nb::dict state = batch_encoding_state_from_instance(self, include_metadata);
-               auto payload = pickle.attr("dumps")(state, 5);
+               auto payload = pickle_dumps_handle()(state, 5);
                file.attr("write")(payload);
                file.attr("close")();
             },
@@ -2400,11 +2480,9 @@ void init_batch_encoding(nb::module_& m)
          .def_static(
             "load",
             [](const std::string& path) {
-               nb::object builtins = nb::module_::import_("builtins");
-               nb::object pickle = nb::module_::import_("pickle");
-               nb::object file = builtins.attr("open")(path, "rb");
+               nb::object file = builtins_open_handle()(path, "rb");
                nb::bytes payload = nb::cast< nb::bytes >(file.attr("read")());
-               nb::dict state = nb::cast< nb::dict >(pickle.attr("loads")(payload));
+               nb::dict state = nb::cast< nb::dict >(pickle_loads_handle()(payload));
                file.attr("close")();
                return batch_encoding_object_from_state(state);
             }
@@ -2412,17 +2490,15 @@ void init_batch_encoding(nb::module_& m)
          .def(
             "dumps",
             [](nb::handle self, bool include_metadata) {
-               nb::object pickle = nb::module_::import_("pickle");
                nb::dict state = batch_encoding_state_from_instance(self, include_metadata);
-               return nb::cast< nb::bytes >(pickle.attr("dumps")(state, 5));
+               return nb::cast< nb::bytes >(pickle_dumps_handle()(state, 5));
             },
             "include_metadata"_a = true
          )
          .def_static(
             "loads",
             [](nb::bytes payload) {
-               nb::object pickle = nb::module_::import_("pickle");
-               nb::dict state = nb::cast< nb::dict >(pickle.attr("loads")(payload));
+               nb::dict state = nb::cast< nb::dict >(pickle_loads_handle()(payload));
                return batch_encoding_object_from_state(state);
             },
             "payload"_a
@@ -2434,21 +2510,19 @@ void init_batch_encoding(nb::module_& m)
          .def(
             "__reduce__",
             [](nb::handle self) {
-               nb::object loader = nb::module_::import_("mifrost").attr(
-                  "_batch_encoding_from_payload"
-               );
                nb::bytes payload = nb::cast< nb::bytes >(self.attr("dumps")(true));
-               return nb::make_tuple(std::move(loader), nb::make_tuple(std::move(payload)));
+               return nb::make_tuple(
+                  mifrost_batch_encoding_loader_handle(), nb::make_tuple(std::move(payload))
+               );
             }
          )
          .def(
             "__reduce_ex__",
             [](nb::handle self, int) {
-               nb::object loader = nb::module_::import_("mifrost").attr(
-                  "_batch_encoding_from_payload"
-               );
                nb::bytes payload = nb::cast< nb::bytes >(self.attr("dumps")(true));
-               return nb::make_tuple(std::move(loader), nb::make_tuple(std::move(payload)));
+               return nb::make_tuple(
+                  mifrost_batch_encoding_loader_handle(), nb::make_tuple(std::move(payload))
+               );
             }
          )
          .def("__setstate__", [](nb::handle self, const nb::dict& state) {
