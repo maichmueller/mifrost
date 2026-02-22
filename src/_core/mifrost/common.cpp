@@ -14,10 +14,10 @@ std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
    if(ptr.size() < 2) {
       return batch;
    }
-   batch.reserve(static_cast< size_t >(std::max< int64_t >(0, ptr.back())));
+   batch.reserve(std::max< int64_t >(0, ptr.back()));
    for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {
       const int64_t count = std::max< int64_t >(0, ptr[idx + 1] - ptr[idx]);
-      batch.insert(batch.end(), static_cast< size_t >(count), static_cast< int64_t >(idx));
+      batch.insert(batch.end(), count, static_cast< int64_t >(idx));
    }
    return batch;
 }
@@ -31,42 +31,33 @@ std::string to_std_string(nb::handle value)
    return {nb::str(value).c_str()};
 }
 
-nb::object try_import_module(const char* module_name)
-{
-   try {
-      return nb::module_::import_(module_name);
-   } catch(...) {
-      return nb::none();
-   }
-}
-
 nb::handle builtins_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("builtins")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("builtins")); }();
    return *module;
 }
 
 nb::handle pickle_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("pickle")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("pickle")); }();
    return *module;
 }
 
 nb::handle types_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("types")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("types")); }();
    return *module;
 }
 
 nb::handle torch_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("torch")); }();
    return *module;
 }
 
 nb::handle torch_geometric_data_module()
 {
-   static nb::object* module = []() {
+   static nb::object* module = [] {
       return new nb::object(nb::module_::import_("torch_geometric.data"));
    }();
    return *module;
@@ -74,13 +65,13 @@ nb::handle torch_geometric_data_module()
 
 nb::handle mifrost_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("mifrost")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("mifrost")); }();
    return *module;
 }
 
 nb::handle mifrost_core_module()
 {
-   static nb::object* module = []() {
+   static nb::object* module = [] {
       return new nb::object(nb::module_::import_("mifrost._core"));
    }();
    return *module;
@@ -88,19 +79,19 @@ nb::handle mifrost_core_module()
 
 nb::handle operator_module()
 {
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("operator")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("operator")); }();
    return *module;
 }
 
 nb::handle numpy_module()
 {
-   static nb::object* module = []() { return new nb::object(try_import_module("numpy")); }();
+   static nb::object* module = [] { return new nb::object(nb::module_::import_("numpy")); }();
    return *module;
 }
 
 nb::handle builtins_object_setattr()
 {
-   static nb::object* fn = []() {
+   static nb::object* fn = [] {
       return new nb::object(builtins_module().attr("object").attr("__setattr__"));
    }();
    return *fn;
@@ -108,55 +99,55 @@ nb::handle builtins_object_setattr()
 
 nb::handle builtins_open()
 {
-   static nb::object* fn = []() { return new nb::object(builtins_module().attr("open")); }();
+   static nb::object* fn = [] { return new nb::object(builtins_module().attr("open")); }();
    return *fn;
 }
 
 nb::handle builtins_tuple_ctor()
 {
-   static nb::object* fn = []() { return new nb::object(builtins_module().attr("tuple")); }();
+   static nb::object* fn = [] { return new nb::object(builtins_module().attr("tuple")); }();
    return *fn;
 }
 
 nb::handle builtins_type_type()
 {
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("type")); }();
+   static nb::object* type = [] { return new nb::object(builtins_module().attr("type")); }();
    return *type;
 }
 
 nb::handle builtins_str_type()
 {
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("str")); }();
+   static nb::object* type = [] { return new nb::object(builtins_module().attr("str")); }();
    return *type;
 }
 
 nb::handle builtins_float_type()
 {
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("float")); }();
+   static nb::object* type = [] { return new nb::object(builtins_module().attr("float")); }();
    return *type;
 }
 
 nb::handle builtins_int_type()
 {
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("int")); }();
+   static nb::object* type = [] { return new nb::object(builtins_module().attr("int")); }();
    return *type;
 }
 
 nb::handle pickle_dumps()
 {
-   static nb::object* fn = []() { return new nb::object(pickle_module().attr("dumps")); }();
+   static nb::object* fn = [] { return new nb::object(pickle_module().attr("dumps")); }();
    return *fn;
 }
 
 nb::handle pickle_loads()
 {
-   static nb::object* fn = []() { return new nb::object(pickle_module().attr("loads")); }();
+   static nb::object* fn = [] { return new nb::object(pickle_module().attr("loads")); }();
    return *fn;
 }
 
 nb::handle mapping_proxy_type_ctor()
 {
-   static nb::object* ctor = []() {
+   static nb::object* ctor = [] {
       return new nb::object(types_module().attr("MappingProxyType"));
    }();
    return *ctor;
@@ -186,31 +177,31 @@ nb::object flatten_single_graph_metadata_list(nb::handle value)
 
 nb::handle torch_tensor_type()
 {
-   static nb::object* type = []() { return new nb::object(torch_module().attr("Tensor")); }();
+   static nb::object* type = [] { return new nb::object(torch_module().attr("Tensor")); }();
    return *type;
 }
 
 nb::handle torch_equal_fn()
 {
-   static nb::object* fn = []() { return new nb::object(torch_module().attr("equal")); }();
+   static nb::object* fn = [] { return new nb::object(torch_module().attr("equal")); }();
    return *fn;
 }
 
 nb::handle torch_as_tensor_fn()
 {
-   static nb::object* fn = []() { return new nb::object(torch_module().attr("as_tensor")); }();
+   static nb::object* fn = [] { return new nb::object(torch_module().attr("as_tensor")); }();
    return *fn;
 }
 
 nb::handle torch_from_dlpack_fn()
 {
-   static nb::object* fn = []() { return new nb::object(torch_module().attr("from_dlpack")); }();
+   static nb::object* fn = [] { return new nb::object(torch_module().attr("from_dlpack")); }();
    return *fn;
 }
 
 nb::handle torch_utils_dlpack_from_dlpack_fn()
 {
-   static nb::object* fn = []() {
+   static nb::object* fn = [] {
       return new nb::object(torch_module().attr("utils").attr("dlpack").attr("from_dlpack"));
    }();
    return *fn;
@@ -232,31 +223,31 @@ nb::object to_torch_tensor(nb::handle value)
 
 nb::handle torch_device_ctor()
 {
-   static nb::object* ctor = []() { return new nb::object(torch_module().attr("device")); }();
+   static nb::object* ctor = [] { return new nb::object(torch_module().attr("device")); }();
    return *ctor;
 }
 
 nb::handle torch_stack_fn()
 {
-   static nb::object* fn = []() { return new nb::object(torch_module().attr("stack")); }();
+   static nb::object* fn = [] { return new nb::object(torch_module().attr("stack")); }();
    return *fn;
 }
 
 nb::handle torch_zeros_fn()
 {
-   static nb::object* fn = []() { return new nb::object(torch_module().attr("zeros")); }();
+   static nb::object* fn = [] { return new nb::object(torch_module().attr("zeros")); }();
    return *fn;
 }
 
 nb::handle torch_float32_dtype()
 {
-   static nb::object* dtype = []() { return new nb::object(torch_module().attr("float32")); }();
+   static nb::object* dtype = [] { return new nb::object(torch_module().attr("float32")); }();
    return *dtype;
 }
 
 nb::handle torch_geometric_batch_ctor()
 {
-   static nb::object* ctor = []() {
+   static nb::object* ctor = [] {
       return new nb::object(torch_geometric_data_module().attr("Batch"));
    }();
    return *ctor;
@@ -264,7 +255,7 @@ nb::handle torch_geometric_batch_ctor()
 
 nb::handle torch_geometric_heterodata_ctor()
 {
-   static nb::object* ctor = []() {
+   static nb::object* ctor = [] {
       return new nb::object(torch_geometric_data_module().attr("HeteroData"));
    }();
    return *ctor;
@@ -272,7 +263,7 @@ nb::handle torch_geometric_heterodata_ctor()
 
 nb::handle torch_geometric_data_ctor()
 {
-   static nb::object* ctor = []() {
+   static nb::object* ctor = [] {
       return new nb::object(torch_geometric_data_module().attr("Data"));
    }();
    return *ctor;
@@ -280,7 +271,7 @@ nb::handle torch_geometric_data_ctor()
 
 nb::handle mifrost_core_batch_encoding_cls()
 {
-   static nb::object* cls = []() {
+   static nb::object* cls = [] {
       return new nb::object(mifrost_core_module().attr("BatchEncoding"));
    }();
    return *cls;
@@ -288,7 +279,7 @@ nb::handle mifrost_core_batch_encoding_cls()
 
 nb::handle mifrost_batch_encoding_loader()
 {
-   static nb::object* loader = []() {
+   static nb::object* loader = [] {
       return new nb::object(mifrost_module().attr("_batch_encoding_from_payload"));
    }();
    return *loader;
@@ -296,13 +287,13 @@ nb::handle mifrost_batch_encoding_loader()
 
 nb::handle operator_eq_fn()
 {
-   static nb::object* fn = []() { return new nb::object(operator_module().attr("eq")); }();
+   static nb::object* fn = [] { return new nb::object(operator_module().attr("eq")); }();
    return *fn;
 }
 
 nb::handle numpy_array_type()
 {
-   static nb::object* type = []() {
+   static nb::object* type = [] {
       const nb::handle np = numpy_module();
       if(np.is_none()) {
          return new nb::object(nb::none());
@@ -314,7 +305,7 @@ nb::handle numpy_array_type()
 
 nb::handle numpy_array_equal_fn()
 {
-   static nb::object* fn = []() {
+   static nb::object* fn = [] {
       const nb::handle np = numpy_module();
       if(np.is_none()) {
          return new nb::object(nb::none());

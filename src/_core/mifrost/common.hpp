@@ -23,8 +23,6 @@ namespace mifrost::py {
 
 std::string to_std_string(nanobind::handle value);
 
-nanobind::object try_import_module(const char* module_name);
-
 nanobind::handle builtins_module();
 nanobind::handle pickle_module();
 nanobind::handle types_module();

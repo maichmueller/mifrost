@@ -18,6 +18,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pymimir>=0.13.60",
+    "torch-geometric>=2.7",
+    "torch>=2.2,<3",
+    "numpy"
 ]
 authors = [
     { name = "Michael Aichmüller", email = "m.aichmueller@gmail.com" },
