@@ -1,10 +1,17 @@
 #pragma once
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include <cstdint>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
+
+#include "core/schema.hpp"
+#include "core/utils/macro.hpp"
+#include "core/utils/type_traits.hpp"
 
 namespace mifrost {
 
@@ -63,5 +70,15 @@ nanobind::handle mifrost_batch_encoding_loader();
 nanobind::handle operator_eq_fn();
 nanobind::handle numpy_array_type();
 nanobind::handle numpy_array_equal_fn();
+
+template < typename T >
+   requires requires(T t) {
+      as_tuple(t);
+      mifrost::detail::is_specialization_v< detail::raw_t< decltype(as_tuple(t)) >, std::tuple >;
+   }
+nb::tuple to_py_tuple(const T& t)
+{
+   return std::apply(AS_LAMBDA(nb::make_tuple), as_tuple(t));
+}
 
 }  // namespace mifrost::py

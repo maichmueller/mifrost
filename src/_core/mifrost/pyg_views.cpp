@@ -57,7 +57,7 @@ nb::object HeteroBatchEncodingView::edge_index_dict()
       pair.append(tensor(*key0));
       pair.append(tensor(*key1));
       nb::handle torch = py::torch_module();
-      out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = torch.attr("stack")(
+      out[py::to_py_tuple(encoding_->schema.edge_types[idx])] = torch.attr("stack")(
          pair, "dim"_a = 0
       );
    }
@@ -111,7 +111,7 @@ nb::object HeteroBatchEncodingView::edge_attr_dict()
       if(not key.has_value() or not has_tensor(*key)) {
          continue;
       }
-      out[edge_type_to_tuple(encoding_->schema.edge_types[idx])] = tensor(*key);
+      out[py::to_py_tuple(encoding_->schema.edge_types[idx])] = tensor(*key);
    }
    edge_attr_dict_cache_ = py::mapping_proxy(out);
    return edge_attr_dict_cache_;

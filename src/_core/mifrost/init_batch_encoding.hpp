@@ -40,6 +40,4 @@ find_edge_index_keys(const Schema& schema, int edge_type_idx);
 
 std::optional< std::string > find_edge_attr_key(const Schema& schema, int edge_type_idx);
 
-nb::tuple edge_type_to_tuple(const EdgeType& edge_type);
-
 }  // namespace mifrost

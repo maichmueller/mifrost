@@ -1395,11 +1395,6 @@ std::optional< std::string > find_edge_attr_key(const Schema& schema, int edge_t
    return std::nullopt;
 }
 
-nb::tuple edge_type_to_tuple(const EdgeType& edge_type)
-{
-   return nb::make_tuple(edge_type.src, edge_type.rel, edge_type.dst);
-}
-
 void init_batch_encoding(nb::module_& m)
 {
    register_mapview_maybe< absl::btree_map< std::string, bool > >(m);

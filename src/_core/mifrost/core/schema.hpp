@@ -24,6 +24,11 @@ struct EdgeType {
    auto operator<=>(const EdgeType&) const noexcept = default;
 };
 
+inline auto as_tuple(const EdgeType& e) noexcept
+{
+   return std::tie(e.src, e.rel, e.dst);
+}
+
 /**
  * @brief Mapping entry for one node tensor in the flat encoding tensor dict.
  */
@@ -32,6 +37,11 @@ struct NodeTensorSpec {
    std::string attr;
    std::string key;
 };
+
+inline auto as_tuple(const NodeTensorSpec& spec) noexcept
+{
+   return std::tie(spec.node_type, spec.attr, spec.key);
+}
 
 /**
  * @brief Mapping entry for one edge tensor in the flat encoding tensor dict.
@@ -44,6 +54,11 @@ struct EdgeTensorSpec {
 
    auto operator<=>(const EdgeTensorSpec&) const noexcept = default;
 };
+
+inline auto as_tuple(const EdgeTensorSpec& spec) noexcept
+{
+   return std::tie(spec.edge_type, spec.attr, spec.key, spec.part);
+}
 
 /**
  * @brief Mapping entry for one graph-level tensor in the flat encoding tensor dict.
@@ -60,6 +75,13 @@ struct GraphTensorSpec {
 
    auto operator<=>(const GraphTensorSpec&) const noexcept = default;
 };
+
+inline auto as_tuple(const GraphTensorSpec& spec) noexcept
+{
+   return std::tie(
+      spec.attr, spec.key, spec.ptr_key, spec.mode, spec.dtype, spec.dim, spec.cat_dim, spec.inc
+   );
+}
 
 /**
  * @brief Versioned schema for normalized encoder dictionary payloads.
