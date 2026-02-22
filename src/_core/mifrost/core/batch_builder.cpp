@@ -14,6 +14,7 @@
 #include <string_view>
 #include <tuple>
 
+#include "mifrost/common.hpp"
 #include "mifrost/core/dlpack_utils.hpp"
 #include "schema.hpp"
 #include "utils/macro.hpp"
@@ -21,68 +22,6 @@
 namespace mifrost {
 
 namespace {
-
-nb::handle torch_module_handle()
-{
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
-   return *module;
-}
-
-nb::handle torch_tensor_type_handle()
-{
-   static nb::object* type = []() {
-      return new nb::object(torch_module_handle().attr("Tensor"));
-   }();
-   return *type;
-}
-
-nb::handle torch_as_tensor_fn_handle()
-{
-   static nb::object* fn = []() {
-      return new nb::object(torch_module_handle().attr("as_tensor"));
-   }();
-   return *fn;
-}
-
-nb::handle torch_from_dlpack_fn_handle()
-{
-   static nb::object* fn = []() {
-      return new nb::object(torch_module_handle().attr("from_dlpack"));
-   }();
-   return *fn;
-}
-
-nb::handle torch_utils_dlpack_from_dlpack_fn_handle()
-{
-   static nb::object* fn = []() {
-      return new nb::object(torch_module_handle().attr("utils").attr("dlpack").attr("from_dlpack"));
-   }();
-   return *fn;
-}
-
-nb::handle torch_geometric_data_module_handle()
-{
-   static nb::object* module = []() {
-      return new nb::object(nb::module_::import_("torch_geometric.data"));
-   }();
-   return *module;
-}
-
-nb::handle torch_geometric_batch_ctor_handle()
-{
-   static nb::object* ctor = []() {
-      return new nb::object(torch_geometric_data_module_handle().attr("Batch"));
-   }();
-   return *ctor;
-}
-
-nb::handle torch_geometric_heterodata_ctor_handle()
-{
-   static nb::object* ctor = []() {
-      return new nb::object(torch_geometric_data_module_handle().attr("HeteroData"));
-   }();
-   return *ctor;
-}
 
 template < typename T >
 std::vector< T >& expect_column(NumericColumnData& data, const std::string& key)
@@ -938,9 +877,8 @@ nb::object BatchBuilder::build_pyg()
 
    nb::dict payload = build_dict();
 
-   nb::handle torch = torch_module_handle();
-   nb::object batch = torch_geometric_batch_ctor_handle()(
-      nb::arg("_base_cls") = torch_geometric_heterodata_ctor_handle()
+   nb::object batch = py::torch_geometric_batch_ctor()(
+      nb::arg("_base_cls") = py::torch_geometric_heterodata_ctor()
    );
 
    using EdgeKey = std::tuple< std::string, std::string, std::string >;
@@ -949,19 +887,6 @@ nb::object BatchBuilder::build_pyg()
       nb::object dst;
    };
    absl::btree_map< EdgeKey, EdgeComponents > edge_components;
-
-   auto to_tensor = [&](nb::handle value) -> nb::object {
-      if(nb::isinstance(value, torch_tensor_type_handle())) {
-         return nb::borrow< nb::object >(value);
-      }
-      if(dlpack_utils::is_dlpack_capsule(value)) {
-         return torch_utils_dlpack_from_dlpack_fn_handle()(value);
-      }
-      if(nb::hasattr(value, "__dlpack__")) {
-         return torch_from_dlpack_fn_handle()(nb::borrow< nb::object >(value));
-      }
-      return torch_as_tensor_fn_handle()(value);
-   };
 
    for(auto [key_handle, value_handle] : payload) {
       const std::string key = nb::str(key_handle).c_str();
@@ -984,7 +909,7 @@ nb::object BatchBuilder::build_pyg()
 
          EdgeKey edge_key{src, rel, dst};
          auto& components = edge_components[edge_key];
-         nb::object tensor = to_tensor(nb::borrow< nb::object >(value_handle));
+         nb::object tensor = py::to_torch_tensor(nb::borrow< nb::object >(value_handle));
          if(suffix == "0") {
             components.src = tensor;
          } else if(suffix == "1") {
@@ -1002,7 +927,7 @@ nb::object BatchBuilder::build_pyg()
       const std::string node_type = key.substr(0, slash);
       const std::string attr = key.substr(slash + 1);
       nb::object store = batch.attr("__getitem__")(node_type);
-      nb::object tensor = to_tensor(nb::borrow< nb::object >(value_handle));
+      nb::object tensor = py::to_torch_tensor(nb::borrow< nb::object >(value_handle));
       store.attr("__setitem__")(attr, tensor);
    }
 
@@ -1010,7 +935,7 @@ nb::object BatchBuilder::build_pyg()
       if(not components.src.is_valid() or not components.dst.is_valid()) {
          throw std::invalid_argument("Incomplete edge_index components for edge type");
       }
-      nb::object edge_index = torch.attr("stack")(
+      nb::object edge_index = py::torch_stack_fn()(
          nb::make_tuple(components.src, components.dst), nb::arg("dim") = 0
       );
       nb::object store = batch.attr("__getitem__")(
@@ -1020,13 +945,15 @@ nb::object BatchBuilder::build_pyg()
    }
 
    for(const auto& [node_type, ptr] : ptr_vectors) {
-      nb::object ptr_tensor = to_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(ptr));
+      nb::object ptr_tensor = py::to_torch_tensor(
+         dlpack_utils::vector_to_dlpack_owned_copy_1d(ptr)
+      );
 
       auto batch_it = batch_vectors.find(node_type);
       const std::vector< int64_t > batch_values = batch_it != batch_vectors.end()
                                                      ? batch_it->second
                                                      : std::vector< int64_t >{};
-      nb::object batch_tensor = to_tensor(
+      nb::object batch_tensor = py::to_torch_tensor(
          dlpack_utils::vector_to_dlpack_owned_copy_1d(batch_values)
       );
 
@@ -1044,8 +971,8 @@ nb::object BatchBuilder::build_pyg()
          if(dim_it != node_feature_dims.end()) {
             dim = dim_it->second;
          }
-         nb::object zeros = torch.attr("zeros")(
-            nb::make_tuple(count, dim), nb::arg("dtype") = torch.attr("float32")
+         nb::object zeros = py::torch_zeros_fn()(
+            nb::make_tuple(count, dim), nb::arg("dtype") = py::torch_float32_dtype()
          );
          store.attr("__setitem__")("x", zeros);
       }
@@ -1123,7 +1050,7 @@ nb::object BatchBuilder::build_pyg()
                using T = std::decay_t< decltype(values) >::value_type;
                const size_t size = values.size();
                if(field.spec.dim == 1) {
-                  value_tensor = to_tensor(vector_to_1d_dlpack< T >(std::move(values)));
+                  value_tensor = py::to_torch_tensor(vector_to_1d_dlpack< T >(std::move(values)));
                } else {
                   const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
                                             or field.spec.mode == GraphFieldMode::RAGGED_CAT)
@@ -1132,7 +1059,9 @@ nb::object BatchBuilder::build_pyg()
                                                   : size / static_cast< size_t >(field.spec.dim);
                   const size_t cols = cat_dim_one ? size / static_cast< size_t >(field.spec.dim)
                                                   : static_cast< size_t >(field.spec.dim);
-                  value_tensor = to_tensor(vector_to_2d_dlpack< T >(std::move(values), rows, cols));
+                  value_tensor = py::to_torch_tensor(
+                     vector_to_2d_dlpack< T >(std::move(values), rows, cols)
+                  );
                }
             },
             field.values
@@ -1142,7 +1071,7 @@ nb::object BatchBuilder::build_pyg()
          if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
             std::string ptr_attr = attr + "_ptr";
             batch.attr("__setattr__")(
-               ptr_attr.c_str(), to_tensor(vector_to_1d_dlpack(std::move(field.ptr)))
+               ptr_attr.c_str(), py::to_torch_tensor(vector_to_1d_dlpack(std::move(field.ptr)))
             );
          }
       }

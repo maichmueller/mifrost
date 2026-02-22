@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "mifrost/batch_encoding_graph_field_access.hpp"
+#include "mifrost/common.hpp"
 #include "mifrost/core/graph_fields.hpp"
 #include "mifrost/core/nb_instance.hpp"
 
@@ -34,121 +35,28 @@ bool try_cast_python_bool(nb::handle value, bool& out)
    }
 }
 
-nb::handle torch_module()
-{
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
-   return *module;
-}
-
-nb::handle numpy_module()
-{
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("numpy")); }();
-   return *module;
-}
-
-nb::handle builtins_module()
-{
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("builtins")); }();
-   return *module;
-}
-
-nb::handle builtins_type_type()
-{
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("type")); }();
-   return *type;
-}
-
-nb::handle builtins_str_type()
-{
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("str")); }();
-   return *type;
-}
-
-nb::handle builtins_float_type()
-{
-   static nb::object* type = []() { return new nb::object(builtins_module().attr("float")); }();
-   return *type;
-}
-
-nb::handle builtins_int_type()
-{
-   static nb::object* type = std::invoke([]() {
-      return new nb::object(builtins_module().attr("int"));
-   });
-   return *type;
-}
-
-nb::handle torch_tensor_type()
-{
-   static nb::object* type = std::invoke([]() {
-      const nb::handle torch = torch_module();
-      if(torch.is_none()) {
-         return new nb::object(nb::none());
-      }
-      return new nb::object(nb::borrow< nb::object >(torch).attr("Tensor"));
-   });
-   return *type;
-}
-
-nb::handle numpy_array_type()
-{
-   static nb::object* type = std::invoke([]() {
-      const nb::handle np = numpy_module();
-      return new nb::object(nb::borrow< nb::object >(np).attr("ndarray"));
-   });
-   return *type;
-}
-
-nb::handle operator_module()
-{
-   static nb::object* module = std::invoke([]() {
-      return new nb::object(nb::module_::import_("operator"));
-   });
-   return *module;
-}
-
-nb::handle operator_eq_fn()
-{
-   static nb::object* eq_fn = std::invoke([]() {
-      return new nb::object(nb::borrow< nb::object >(operator_module()).attr("eq"));
-   });
-   return *eq_fn;
-}
-
-nb::handle torch_equal_fn()
-{
-   static nb::object* fn = std::invoke([]() {
-      const nb::handle torch = torch_module();
-      return new nb::object(nb::borrow< nb::object >(torch).attr("equal"));
-   });
-   return *fn;
-}
-
-nb::handle numpy_array_equal_fn()
-{
-   static nb::object* fn = std::invoke([]() {
-      const nb::handle np = numpy_module();
-      return new nb::object(nb::borrow< nb::object >(np).attr("array_equal"));
-   });
-   return *fn;
-}
-
 bool is_torch_tensor(nb::handle value)
 {
-   const nb::handle type = torch_tensor_type();
+   const nb::handle type = py::torch_tensor_type();
+   if(type.is_none()) {
+      return false;
+   }
    return nb::isinstance(value, type);
 }
 
 bool is_numpy_array(nb::handle value)
 {
-   const nb::handle type = numpy_array_type();
+   const nb::handle type = py::numpy_array_type();
+   if(type.is_none()) {
+      return false;
+   }
    return nb::isinstance(value, type);
 }
 
 bool python_eq_returns_true(nb::handle lhs, nb::handle rhs)
 {
    bool result = false;
-   nb::handle eq = operator_eq_fn();
+   nb::handle eq = py::operator_eq_fn();
    if(not try_cast_python_bool(eq(lhs, rhs), result)) {
       throw std::invalid_argument("Python const field comparison produced a non-boolean result");
    }
@@ -173,7 +81,7 @@ bool torch_tensors_equal_exact(const nb::object& lhs, const nb::object& rhs)
       return false;
    }
 
-   const nb::handle equal = torch_equal_fn();
+   const nb::handle equal = py::torch_equal_fn();
    if(equal.is_none()) {
       throw std::invalid_argument("Torch tensor comparison requested but torch is unavailable");
    }
@@ -192,7 +100,7 @@ bool numpy_arrays_equal_exact(const nb::object& lhs, const nb::object& rhs)
       return false;
    }
 
-   const nb::handle array_equal = numpy_array_equal_fn();
+   const nb::handle array_equal = py::numpy_array_equal_fn();
    if(array_equal.is_none()) {
       throw std::invalid_argument("NumPy array comparison requested but numpy is unavailable");
    }
@@ -324,7 +232,7 @@ bool is_numeric_scalar(nb::handle value)
 
 nb::object torch_dtype_for_python_field_dtype(PythonFieldDType dtype)
 {
-   nb::handle torch = torch_module();
+   nb::handle torch = py::torch_module();
    switch(dtype) {
       case PythonFieldDType::F32: return torch.attr("float32");
       case PythonFieldDType::I64: return torch.attr("int64");
@@ -351,7 +259,7 @@ PythonFieldDType infer_numeric_dtype_from_tensor(const nb::object& tensor)
 nb::object
 normalize_numeric_tensor(const std::string& key, const PythonFieldSpec& spec, nb::handle value)
 {
-   nb::handle torch = torch_module();
+   nb::handle torch = py::torch_module();
    nb::object tensor = torch.attr("as_tensor")(
       value, "dtype"_a = torch_dtype_for_python_field_dtype(spec.dtype)
    );
@@ -485,12 +393,12 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
 
    if(spec_dict.contains("dtype")) {
       nb::handle dtype_obj = spec_dict["dtype"];
-      if(nb::isinstance(dtype_obj, builtins_type_type())) {
-         if(dtype_obj.ptr() == builtins_str_type().ptr()) {
+      if(nb::isinstance(dtype_obj, py::builtins_type_type())) {
+         if(dtype_obj.ptr() == py::builtins_str_type().ptr()) {
             spec.dtype = PythonFieldDType::STR;
-         } else if(dtype_obj.ptr() == builtins_float_type().ptr()) {
+         } else if(dtype_obj.ptr() == py::builtins_float_type().ptr()) {
             spec.dtype = PythonFieldDType::F32;
-         } else if(dtype_obj.ptr() == builtins_int_type().ptr()) {
+         } else if(dtype_obj.ptr() == py::builtins_int_type().ptr()) {
             spec.dtype = PythonFieldDType::I64;
          } else {
             auto dtype_s = nb::str(dtype_obj);
@@ -576,7 +484,7 @@ infer_field_spec_from_value(const std::string& key, nb::handle value)
 
    if(is_numeric_scalar(value) or is_torch_tensor(value) or is_numpy_array(value)
       or (nb::isinstance< nb::iterable >(value) and not is_string_like(value))) {
-      nb::handle torch = torch_module();
+      nb::handle torch = py::torch_module();
       nb::object tensor = torch.attr("as_tensor")(value);
       PythonFieldSpec spec;
       spec.dtype = infer_numeric_dtype_from_tensor(tensor);
@@ -980,7 +888,7 @@ nb::object collate_numeric_field(
    nb::object& out_ptr
 )
 {
-   nb::handle torch = torch_module();
+   nb::handle torch = py::torch_module();
    const nb::str key_obj(key.c_str());
    const int64_t cat_dim = graph_field_cat_dim_is_one(spec.cat_dim) ? 1 : 0;
 

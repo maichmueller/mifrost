@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "mifrost/common.hpp"
 #include "mifrost/core/dlpack_utils.hpp"
 
 namespace nb = nanobind;
@@ -50,27 +51,6 @@ batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::st
    return {};
 }
 
-nb::handle torch_module_handle()
-{
-   static nb::object* module = []() { return new nb::object(nb::module_::import_("torch")); }();
-   return *module;
-}
-
-nb::object to_torch_tensor(nb::handle array_like)
-{
-   nb::handle torch = torch_module_handle();
-   if(nb::isinstance(array_like, torch.attr("Tensor"))) {
-      return nb::borrow< nb::object >(array_like);
-   }
-   if(dlpack_utils::is_dlpack_capsule(array_like)) {
-      return torch.attr("utils").attr("dlpack").attr("from_dlpack")(array_like);
-   }
-   if(nb::hasattr(array_like, "__dlpack__")) {
-      return torch.attr("from_dlpack")(nb::borrow< nb::object >(array_like));
-   }
-   return torch.attr("as_tensor")(array_like);
-}
-
 nb::object target_device_from_owner(nb::handle owner)
 {
    nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
@@ -108,7 +88,7 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
       [&](auto& values) -> nb::object {
          using T = std::decay_t< decltype(values) >::value_type;
          if(field.spec.dim == 1) {
-            return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
+            return py::to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
          }
          const bool cat_dim_one = (field.spec.mode == GraphFieldMode::CAT
                                    or field.spec.mode == GraphFieldMode::RAGGED_CAT)
@@ -117,7 +97,9 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
                                          : values.size() / static_cast< size_t >(field.spec.dim);
          const size_t cols = cat_dim_one ? values.size() / static_cast< size_t >(field.spec.dim)
                                          : static_cast< size_t >(field.spec.dim);
-         return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_2d(values, rows, cols, owner));
+         return py::to_torch_tensor(
+            dlpack_utils::vector_to_dlpack_view_2d(values, rows, cols, owner)
+         );
       },
       field.values
    );
@@ -125,21 +107,7 @@ nb::object graph_field_values_to_tensor_view(GraphField& field, nb::handle owner
 
 nb::object graph_field_ptr_to_tensor(const GraphField& field)
 {
-   return to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(field.ptr));
-}
-
-std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr)
-{
-   std::vector< int64_t > batch;
-   if(ptr.size() < 2) {
-      return batch;
-   }
-   batch.reserve(static_cast< size_t >(std::max< int64_t >(0, ptr.back())));
-   for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {
-      const int64_t count = std::max< int64_t >(0, ptr[idx + 1] - ptr[idx]);
-      batch.insert(batch.end(), static_cast< size_t >(count), static_cast< int64_t >(idx));
-   }
-   return batch;
+   return py::to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_copy_1d(field.ptr));
 }
 
 bool has_suffix(std::string_view key, std::string_view suffix)
@@ -210,10 +178,10 @@ nb::object column_to_tensor(BatchBuilder::Column& column, std::string_view key, 
    return std::visit(
       [&](auto& values) -> nb::object {
          if(is_edge_index_key(key)) {
-            return to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
+            return py::to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(values, owner));
          }
          const size_t rows = column.dim > 0 ? values.size() / static_cast< size_t >(column.dim) : 0;
-         return to_torch_tensor(
+         return py::to_torch_tensor(
             dlpack_utils::vector_to_dlpack_view_2d(
                values, rows, static_cast< size_t >(column.dim), owner
             )
@@ -320,13 +288,13 @@ nb::object batch_encoding_get_native_tensor(
    if(const auto node_type = node_type_for_suffix_key(key, kPtrKeySuffix); node_type.has_value()) {
       if(auto* ptr = find_exported_ptr(encoding, *node_type); ptr != nullptr) {
          return cache_value(maybe_move_tensor_to_device(
-            to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(*ptr, owner)), owner
+            py::to_torch_tensor(dlpack_utils::vector_to_dlpack_view_1d(*ptr, owner)), owner
          ));
       }
       if(const auto count = fallback_ptr_node_count(encoding, *node_type); count.has_value()) {
          std::vector< int64_t > ptr{0, *count};
          return cache_value(maybe_move_tensor_to_device(
-            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(ptr))), owner
+            py::to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(ptr))), owner
          ));
       }
       throw std::invalid_argument(
@@ -337,15 +305,15 @@ nb::object batch_encoding_get_native_tensor(
    if(const auto node_type = node_type_for_suffix_key(key, kBatchKeySuffix);
       node_type.has_value()) {
       if(auto* ptr = find_exported_ptr(encoding, *node_type); ptr != nullptr) {
-         auto batch = ptr_to_batch(*ptr);
+         auto batch = mifrost::ptr_to_batch(*ptr);
          return cache_value(maybe_move_tensor_to_device(
-            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
+            py::to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
          ));
       }
       if(const auto count = fallback_ptr_node_count(encoding, *node_type); count.has_value()) {
          std::vector< int64_t > batch(static_cast< size_t >(*count), 0);
          return cache_value(maybe_move_tensor_to_device(
-            to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
+            py::to_torch_tensor(dlpack_utils::vector_to_dlpack_owned_1d(std::move(batch))), owner
          ));
       }
       throw std::invalid_argument(

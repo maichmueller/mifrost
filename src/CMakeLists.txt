@@ -217,6 +217,7 @@ endfunction()
 add_library(
         mifrost_core
         STATIC
+        "_core/mifrost/common.cpp"
         "_core/mifrost/core/batch_builder.cpp"
         "_core/mifrost/core/schema.cpp"
         "_core/mifrost/core/color_encoder.cpp"
@@ -275,6 +276,7 @@ nanobind_add_module(mifrost_core_module
         STABLE_ABI  # free-threading does not have stable api, but nanobind handles this.
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
+        "_core/mifrost/pyg_views.cpp"
         "_core/mifrost/batch_encoding_graph_field_access.cpp"
         "_core/mifrost/batch_encoding_python_collation.cpp"
         "_core/mifrost/init_common.cpp"
