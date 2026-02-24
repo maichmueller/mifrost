@@ -3,5 +3,5 @@
 
 pymimir>=0.13.60
 torch-geometric>=2.7
-torch>=2.2,<3
+torch>=2.2
 numpy
