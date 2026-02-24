@@ -14,6 +14,17 @@ def test_hgraph_config_accepts_kwargs() -> None:
     assert config.symbol_type_id == "_sym_"
 
 
+def test_hgraph_config_goal_satisfaction_derivations_accepts_string_aliases() -> None:
+    config = mifrost.HGraphEncoderConfig(
+        goal_satisfaction_derivations=["true", "+", "-"]
+    )
+    assert set(config.goal_satisfaction_derivations) == {
+        mifrost.GoalSatisfaction.satisfied,
+        mifrost.GoalSatisfaction.added_satisfied,
+        mifrost.GoalSatisfaction.added_unsatisfied,
+    }
+
+
 def test_horizon_config_accepts_kwargs() -> None:
     config = mifrost.HorizonEncoderConfig(
         transition_mode=mifrost.HorizonEncoderMode.Delta,

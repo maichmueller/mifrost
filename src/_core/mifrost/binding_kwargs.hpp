@@ -2,17 +2,108 @@
 
 #include <fmt/format.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/set.h>
 
 #include <boost/describe.hpp>
 #include <boost/mp11.hpp>
+#include <cctype>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 
+#include "mifrost/core/relation_formatter.hpp"
+
 namespace mifrost {
 
 namespace nb = nanobind;
+
+namespace detail {
+
+inline std::string ascii_lower(std::string_view value)
+{
+   std::string out;
+   out.reserve(value.size());
+   for(const unsigned char c : value) {
+      out.push_back(static_cast< char >(std::tolower(c)));
+   }
+   return out;
+}
+
+inline std::optional< GoalSatisfaction > parse_goal_satisfaction_alias(std::string_view value)
+{
+   const auto normalized = ascii_lower(value);
+   if(normalized.empty() or normalized == "none") {
+      return GoalSatisfaction::none;
+   }
+   if(normalized == "true" or normalized == "sat" or normalized == "satisfied"
+      or normalized == "[sat]") {
+      return GoalSatisfaction::satisfied;
+   }
+   if(normalized == "false" or normalized == "unsat" or normalized == "unsatisfied"
+      or normalized == "[unsat]") {
+      return GoalSatisfaction::unsatisfied;
+   }
+   if(normalized == "+" or normalized == "sat+" or normalized == "added_satisfied"
+      or normalized == "[sat+]") {
+      return GoalSatisfaction::added_satisfied;
+   }
+   if(normalized == "-" or normalized == "sat-" or normalized == "added_unsatisfied"
+      or normalized == "[sat-]") {
+      return GoalSatisfaction::added_unsatisfied;
+   }
+   return std::nullopt;
+}
+
+inline GoalSatisfaction cast_goal_satisfaction(std::string_view key, const nb::handle value)
+{
+   if(nb::isinstance< nb::str >(value)) {
+      const std::string token = nb::str(value).c_str();
+      if(const auto parsed = parse_goal_satisfaction_alias(token); parsed.has_value()) {
+         return *parsed;
+      }
+      throw std::invalid_argument(
+         fmt::format(
+            "Invalid value '{}' for kwarg '{}'; expected GoalSatisfaction alias "
+            "('none', 'true', 'false', '+', '-') or GoalSatisfaction enum.",
+            token,
+            key
+         )
+      );
+   }
+   try {
+      return nb::cast< GoalSatisfaction >(value);
+   } catch(const std::exception&) {
+      throw std::invalid_argument(
+         fmt::format(
+            "Invalid value for kwarg '{}'; expected GoalSatisfaction alias "
+            "('none', 'true', 'false', '+', '-') or GoalSatisfaction enum.",
+            key
+         )
+      );
+   }
+}
+
+template < typename T >
+T cast_config_value(std::string_view key, const nb::handle value)
+{
+   if constexpr(std::is_same_v< T, std::set< GoalSatisfaction > >) {
+      if(nb::isinstance< nb::iterable >(value) and not nb::isinstance< nb::str >(value)
+         and not nb::isinstance< nb::bytes >(value)) {
+         std::set< GoalSatisfaction > out;
+         for(nb::handle entry : nb::borrow< nb::object >(value)) {
+            out.insert(cast_goal_satisfaction(key, entry));
+         }
+         return out;
+      }
+      return {cast_goal_satisfaction(key, value)};
+   } else {
+      return nb::cast< T >(value);
+   }
+}
+
+}  // namespace detail
 
 template < typename Config >
 bool try_set_config_kwarg(Config& config, std::string_view key, const nb::handle value)
@@ -31,7 +122,7 @@ bool try_set_config_kwarg(Config& config, std::string_view key, const nb::handle
       if constexpr(std::is_same_v< member_t, std::string >) {
          config.*desc_t::pointer = nb::str(value).c_str();
       } else {
-         config.*desc_t::pointer = nb::cast< member_t >(value);
+         config.*desc_t::pointer = detail::cast_config_value< member_t >(key, value);
       }
       matched = true;
    });
