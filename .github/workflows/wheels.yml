@@ -178,7 +178,7 @@ jobs:
         CIBW_SKIP: ${{ matrix.cibw_skip }}
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -r /project/requirements/constraints-ci.txt
-        CIBW_BEFORE_BUILD_MACOS: python -m pip install -r {project}/requirements/build.txt && python -m pip install delocate
+        CIBW_BEFORE_BUILD_MACOS: python -m pip install -r {project}/requirements/constraints-ci.txt && python -m pip install delocate
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
