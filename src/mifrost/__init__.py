@@ -95,7 +95,7 @@ else:
                 raise ModuleNotFoundError(
                     "mifrost encoder wrappers require optional dependencies. "
                     "Install with `pip install mifrost[test]` (for tests) or "
-                    "`pip install mifrost[perf]` / `pip install torch torch-geometric`."
+                    "`pip install mifrost[torch]` / `pip install mifrost[perf]`."
                 ) from _encoders_import_error
             raise AttributeError(name)
 
