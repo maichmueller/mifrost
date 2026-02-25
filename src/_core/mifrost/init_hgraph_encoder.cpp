@@ -13,6 +13,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -269,6 +270,26 @@ void init_hgraph_encoder(nb::module_& m)
          "history_subgoals"_a,
          "history_max_steps"_a = std::nullopt,
          "builder"_a
+      )
+      .def(
+         "encode_batch",
+         [](HGraphEncoderEngine& encoder,
+            nb::object states,
+            nb::object goals,
+            nb::object actions,
+            nb::object subgoal_layers,
+            nb::object history_subgoals,
+            std::optional< int > history_max_steps) {
+            return batch_input::hgraph_encode_batch(
+               encoder, states, goals, actions, subgoal_layers, history_subgoals, history_max_steps
+            );
+         },
+         "states"_a,
+         "goals"_a = nb::none(),
+         "actions"_a = nb::none(),
+         "subgoal_layers"_a = nb::none(),
+         "history_subgoals"_a = nb::none(),
+         "history_max_steps"_a = std::nullopt
       );
 
    nb::class_< HGraphMutableStreamEncoder >(m, "HGraphMutableStreamEncoder")

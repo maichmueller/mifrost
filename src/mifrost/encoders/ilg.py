@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData
 
+from .. import _core
 from .._core import BatchBuilder, DEFAULT_LGAN_NN_EDGE_POS, DEFAULT_SYMBOL_TYPE_ID
 from .accessors import (
     action_arity,
@@ -30,12 +31,6 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
-)
-from ._batch_contract import (
-    parse_actions_batch_param,
-    parse_goals_batch_param,
-    parse_states_batch,
-    parse_subgoal_layers_batch_param,
 )
 from .common import (
     _advanced_action,
@@ -464,25 +459,23 @@ class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode one or many states into ILG batch format."""
-        state_list = parse_states_batch(states)
-        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
-        actions_per_state = parse_actions_batch_param(
-            actions, state_count=len(state_list)
-        )
-        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
-            subgoal_layers,
-            state_count=len(state_list),
+        state_list, goals_per_state, actions_per_state, subgoal_layers_per_state = (
+            _core._parse_ilg_batch_inputs(
+                states,
+                goals=goals,
+                actions=actions,
+                subgoal_layers=subgoal_layers,
+            )
         )
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
-            actions_for_state = actions_per_state[idx]
             self._encode_to_builder(
                 builder,
                 state,
                 goals=goals_per_state[idx],
-                actions=actions_for_state,
+                actions=actions_per_state[idx],
                 subgoal_layers=subgoal_layers_per_state[idx],
             )
             builder.next_graph()

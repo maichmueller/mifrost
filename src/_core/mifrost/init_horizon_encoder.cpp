@@ -21,6 +21,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -110,6 +111,36 @@ void init_horizon_encoder(nb::module_& m)
          "goals"_a,
          "builder"_a,
          nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "encode_batch",
+         [](HorizonHGraphEncoderEngine& encoder,
+            nb::object roots,
+            nb::object dags,
+            nb::object goals,
+            nb::object actions,
+            nb::object subgoal_layers,
+            nb::object history_subgoals,
+            std::optional< int > history_max_steps) {
+            return batch_input::horizon_encode_batch(
+               encoder,
+               "HorizonEncoder",
+               roots,
+               dags,
+               goals,
+               actions,
+               subgoal_layers,
+               history_subgoals,
+               history_max_steps
+            );
+         },
+         "roots"_a,
+         "dags"_a = nb::none(),
+         "goals"_a = nb::none(),
+         "actions"_a = nb::none(),
+         "subgoal_layers"_a = nb::none(),
+         "history_subgoals"_a = nb::none(),
+         "history_max_steps"_a = std::nullopt
       );
 
    nb::class_< HorizonStreamEncoder >(m, "HorizonStreamEncoder")

@@ -8,6 +8,7 @@
 
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/color_encoder.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 
@@ -125,6 +126,22 @@ void init_color_encoder(nb::module_& m)
          "goals"_a,
          "actions"_a,
          "builder"_a
+      )
+      .def(
+         "encode_batch",
+         [](ColorEncoderEngine& encoder,
+            nb::object states,
+            nb::object goals,
+            nb::object actions,
+            nb::object subgoal_layers) {
+            return batch_input::color_encode_batch(
+               encoder, "ColorEncoder", states, goals, actions, subgoal_layers
+            );
+         },
+         "states"_a,
+         "goals"_a = nb::none(),
+         "actions"_a = nb::none(),
+         "subgoal_layers"_a = nb::none()
       );
 
    nb::class_< ColorStreamEncoder >(m, "ColorStreamEncoder")

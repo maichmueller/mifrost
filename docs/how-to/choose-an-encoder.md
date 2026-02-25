@@ -38,6 +38,7 @@
 
 - `encode_batch(states, *, ...)` is kwargs-based (no tuple/sample batch payloads).
 - Batch-capable kwargs accept either shared payloads or per-state sequences.
+- Batch paths are C++-parsed and native-only (adapter-backed objects are rejected).
 - Encoder support:
   - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
   - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` rejected)

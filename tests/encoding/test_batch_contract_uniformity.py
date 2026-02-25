@@ -231,3 +231,78 @@ def test_ilg_batch_accepts_per_state_goals_actions_and_subgoal_layers(small_bloc
     assert encoding.num_graphs == 2
     assert "action" in data.node_types
     assert data["action"].num_nodes == 1
+
+
+def test_batch_rejects_state_adapters(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    encoder = HGraphEncoder(domain)
+
+    class WrappedState:
+        pass
+
+    mifrost.register_state_adapter(
+        WrappedState,
+        lambda _: adv_state(state),
+    )
+    try:
+        with pytest.raises(
+            TypeError,
+            match="Batch parsing does not support state adapters",
+        ):
+            encoder.encode_batch([WrappedState()])
+    finally:
+        mifrost.unregister_state_adapter(WrappedState)
+
+
+def test_batch_rejects_literal_adapters(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+
+    encoder = HGraphEncoder(domain)
+
+    class WrappedLiteral:
+        pass
+
+    mifrost.register_literal_adapter(
+        WrappedLiteral,
+        lambda _: getattr(goals[0], "_advanced_ground_literal", goals[0]),
+    )
+    try:
+        with pytest.raises(
+            TypeError,
+            match="Batch parsing does not support literal adapters",
+        ):
+            encoder.encode_batch([state], goals=[WrappedLiteral()])
+    finally:
+        mifrost.unregister_literal_adapter(WrappedLiteral)
+
+
+def test_batch_rejects_action_adapters(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    transitions = _first_transitions(space, state, count=1)
+    if not transitions:
+        pytest.skip("Fixture does not provide forward transitions.")
+    action0, _ = transitions[0]
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+
+    class WrappedAction:
+        pass
+
+    mifrost.register_action_adapter(
+        WrappedAction,
+        lambda _: adv_action(action0),
+    )
+    try:
+        with pytest.raises(
+            TypeError,
+            match="Batch parsing does not support action adapters",
+        ):
+            encoder.encode_batch([state], actions=[WrappedAction()])
+    finally:
+        mifrost.unregister_action_adapter(WrappedAction)

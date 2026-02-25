@@ -226,6 +226,8 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
   - `states` is always the batch axis.
   - Each extra batch argument is either shared (applies to all states) or a per-state
     sequence of length `len(states)` with optional `None` entries.
+  - Batch parsing/execution is C++-backed across encoders.
+  - Batch accepts native planning objects only (`wf/ase` states, native literals/actions, `TransitionDAG`).
   - Unsupported batch fields now raise explicit `TypeError` on each encoder.
   - Per-state argument length mismatches raise `ValueError`.
   - Example:
@@ -236,6 +238,8 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
 
   - Migration notes (hard break):
     - Old encoder-specific inference/ignoring of batch kwargs was removed.
+    - Adapter-registered custom Python types are no longer accepted in batch paths.
+      - Adapter APIs still apply to single-item `encode(...)`.
     - `Transition*Encoder` now requires aligned `successors` and rejects `actions`.
     - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers` and rejects action/history batch kwargs.
     - `ColorEncoder` rejects `actions` in batch mode.
@@ -275,6 +279,10 @@ mifrost.register_action_adapter(MyActionType, lambda a: a.to_advanced_action())
 ```
 
 Adapters are matched by **exact concrete type**.
+
+Batch hard-break note:
+- `encode_batch(...)` / `encode_batch_pyg(...)` do not use adapter registries.
+- Passing adapter-backed objects to batch APIs raises `TypeError`.
 
 ## Development
 

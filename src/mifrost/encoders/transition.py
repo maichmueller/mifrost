@@ -5,7 +5,6 @@ from typing import Any, Mapping
 from torch_geometric.data import HeteroData
 
 from .._core import (
-    BatchBuilder,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
     SuccessorEncoderConfig,
@@ -24,13 +23,6 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
-)
-from ._batch_contract import (
-    parse_goals_batch_param,
-    parse_states_batch,
-    parse_subgoal_layers_batch_param,
-    parse_successors_batch_param,
-    reject_unsupported_batch_field,
 )
 from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
@@ -138,40 +130,20 @@ class _TransitionEncoderBase(HGraphEncoder):
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
-        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
-        reject_unsupported_batch_field(
+        if successors is None:
+            raise ValueError(
+                "successors must be provided for transition batch encoding"
+            )
+        return self._engine.encode_batch(
             self.__class__.__name__,
-            "history_subgoals",
+            states,
+            successors,
+            goals,
+            actions,
+            subgoal_layers,
             history_subgoals,
-        )
-        reject_unsupported_batch_field(
-            self.__class__.__name__,
-            "history_max_steps",
             history_max_steps,
         )
-        state_list = parse_states_batch(states)
-        succ_list = parse_successors_batch_param(
-            successors, state_count=len(state_list)
-        )
-        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
-        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
-            subgoal_layers,
-            state_count=len(state_list),
-        )
-
-        builder = BatchBuilder()
-        builder.set_graph_kind("hetero")
-        for idx, state in enumerate(state_list):
-            adv_state = _advanced_state(state)
-            adv_successor = _advanced_state(succ_list[idx])
-            goals_for_state = goals_per_state[idx]
-            subgoal_layers_for_state = subgoal_layers_per_state[idx]
-            if goals_for_state is None:
-                goals_for_state = default_goals_from_state(state)
-            inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
-            self._engine.encode(adv_state, adv_successor, inputs, builder)
-            builder.next_graph()
-        return builder.build()
 
     def _dict_to_pyg(
         self,

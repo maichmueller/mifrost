@@ -24,12 +24,6 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import (
-    parse_goals_batch_param,
-    parse_states_batch,
-    parse_subgoal_layers_batch_param,
-    reject_unsupported_batch_field,
-)
 from .common import _advanced_domain, _advanced_state, _split_goals, _to_tensor
 from .types import (
     EncodingDict,
@@ -301,29 +295,12 @@ class ColorEncoder(EncoderBase[Data, HomoEncoding]):
         subgoal_layers: SubgoalLayersBatchParam = None,
     ) -> HomoEncoding:
         """Encode one or many states into homogeneous batch encoding_dict."""
-        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
-        state_list = parse_states_batch(states)
-        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
-        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
-            subgoal_layers,
-            state_count=len(state_list),
+        return self._engine.encode_batch(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
         )
-
-        builder = BatchBuilder()
-        builder.set_graph_kind("homo")
-        for idx, state in enumerate(state_list):
-            adv_state = _advanced_state(state)
-            goals_for_state = goals_per_state[idx]
-            subgoal_layers_for_state = subgoal_layers_per_state[idx]
-            if goals_for_state is None and subgoal_layers_for_state is None:
-                self._engine.encode(adv_state, builder)
-            else:
-                if goals_for_state is None:
-                    goals_for_state = default_goals_from_state(state)
-                inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
-                self._engine.encode(adv_state, inputs, builder)
-            builder.next_graph()
-        return builder.build()
 
     def encode_batch(
         self,

@@ -9,7 +9,6 @@ import torch
 from torch_geometric.data import HeteroData
 
 from .._core import (
-    BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
@@ -29,13 +28,6 @@ from .base import (
     StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
-)
-from ._batch_contract import (
-    parse_dags_batch_param,
-    parse_goals_batch_param,
-    parse_states_batch,
-    parse_subgoal_layers_batch_param,
-    reject_unsupported_batch_field,
 )
 from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
@@ -238,37 +230,6 @@ class HorizonEncoder(HGraphEncoder):
             **kwargs,
         )
 
-    def __encode_batch(
-        self,
-        roots: StateBatchInput,
-        dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
-        *,
-        goals: GoalBatchParam = None,
-        subgoal_layers: SubgoalLayersBatchParam = None,
-    ) -> HeteroEncoding:
-        """Internal batch implementation shared by public batch APIs."""
-        root_list = parse_states_batch(roots)
-        dag_list = parse_dags_batch_param(dags, state_count=len(root_list))
-        goals_per_state = parse_goals_batch_param(goals, state_count=len(root_list))
-        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
-            subgoal_layers,
-            state_count=len(root_list),
-        )
-
-        builder = BatchBuilder()
-        builder.set_graph_kind("hetero")
-        for idx, root in enumerate(root_list):
-            adv_root = _advanced_state(root)
-            dag = _ensure_dag(root, dag_list[idx])
-            goals_for_state = goals_per_state[idx]
-            subgoal_layers_for_state = subgoal_layers_per_state[idx]
-            if goals_for_state is None:
-                goals_for_state = default_goals_from_state(root)
-            inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
-            self._engine.encode(adv_root, dag, inputs, builder)
-            builder.next_graph()
-        return builder.build()
-
     def encode_batch(
         self,
         roots: StateBatchInput,
@@ -322,19 +283,14 @@ class HorizonEncoder(HGraphEncoder):
         history_max_steps: int | None = None,
     ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
-        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
-        reject_unsupported_batch_field(
-            self.__class__.__name__,
-            "history_subgoals",
-            history_subgoals,
-        )
-        reject_unsupported_batch_field(
-            self.__class__.__name__,
-            "history_max_steps",
-            history_max_steps,
-        )
-        return self.__encode_batch(
-            roots, dags, goals=goals, subgoal_layers=subgoal_layers
+        return self._engine.encode_batch(
+            roots,
+            dags=dags,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
         )
 
     def stream(self) -> HorizonEncoderStream:

@@ -7,6 +7,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -69,6 +70,72 @@ void init_common(nb::module_& m)
             );
          }
       });
+
+   m.def(
+      "_parse_states_batch",
+      [](nb::object states) { return batch_input::parse_states_batch_python(states); },
+      "states"_a
+   );
+   m.def(
+      "_parse_goals_batch_param",
+      [](nb::object goals, size_t state_count) {
+         return batch_input::parse_goals_batch_param_python(goals, state_count);
+      },
+      "goals"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_actions_batch_param",
+      [](nb::object actions, size_t state_count) {
+         return batch_input::parse_actions_batch_param_python(actions, state_count);
+      },
+      "actions"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_subgoal_layers_batch_param",
+      [](nb::object subgoal_layers, size_t state_count) {
+         return batch_input::parse_subgoal_layers_batch_param_python(subgoal_layers, state_count);
+      },
+      "subgoal_layers"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_history_subgoals_batch_param",
+      [](nb::object history_subgoals, size_t state_count) {
+         return batch_input::parse_history_subgoals_batch_param_python(
+            history_subgoals, state_count
+         );
+      },
+      "history_subgoals"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_successors_batch_param",
+      [](nb::object successors, size_t state_count) {
+         return batch_input::parse_successors_batch_param_python(successors, state_count);
+      },
+      "successors"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_dags_batch_param",
+      [](nb::object dags, size_t state_count) {
+         return batch_input::parse_dags_batch_param_python(dags, state_count);
+      },
+      "dags"_a,
+      "state_count"_a
+   );
+   m.def(
+      "_parse_ilg_batch_inputs",
+      [](nb::object states, nb::object goals, nb::object actions, nb::object subgoal_layers) {
+         return batch_input::parse_ilg_batch_inputs_python(states, goals, actions, subgoal_layers);
+      },
+      "states"_a,
+      "goals"_a = nb::none(),
+      "actions"_a = nb::none(),
+      "subgoal_layers"_a = nb::none()
+   );
 }
 
 }  // namespace mifrost

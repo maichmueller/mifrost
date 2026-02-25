@@ -24,6 +24,7 @@ Use `mutable_stream()` when you need stable IDs and update/remove semantics.
 - For batch-capable kwargs, pass either:
   - one shared payload (reused for all states), or
   - a per-state sequence with `len(...) == len(states)` and optional `None` entries.
+- Batch parsing is C++-backed and expects native planning objects (adapter-backed objects are rejected).
 - Example:
   - shared: `encoder.encode_batch(states, goals=goals, actions=actions)`
   - per-state: `encoder.encode_batch(states, goals=[g0, g1], actions=[[a0], None])`

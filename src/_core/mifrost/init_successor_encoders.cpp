@@ -21,6 +21,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -103,6 +104,38 @@ void init_successor_encoders(nb::module_& m)
          "goals"_a,
          "builder"_a,
          nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "encode_batch",
+         [](SuccessorHGraphEncoderEngine& encoder,
+            std::string encoder_name,
+            nb::handle states,
+            nb::handle successors,
+            nb::handle goals,
+            nb::handle actions,
+            nb::handle subgoal_layers,
+            nb::handle history_subgoals,
+            std::optional< int > history_max_steps) {
+            return batch_input::successor_encode_batch(
+               encoder,
+               encoder_name,
+               states,
+               successors,
+               goals,
+               actions,
+               subgoal_layers,
+               history_subgoals,
+               history_max_steps
+            );
+         },
+         "encoder_name"_a,
+         "states"_a,
+         "successors"_a,
+         "goals"_a = nb::none(),
+         "actions"_a = nb::none(),
+         "subgoal_layers"_a = nb::none(),
+         "history_subgoals"_a = nb::none(),
+         "history_max_steps"_a = std::nullopt
       );
 
    nb::class_< TransitionStreamEncoder >(m, "TransitionStreamEncoder")

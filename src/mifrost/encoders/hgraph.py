@@ -8,6 +8,7 @@ import networkx as nx
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
 
+from src.mifrost import BatchEncoding
 from .. import _core
 from ..graph_fields import GraphFieldSpec
 from .._core import (
@@ -41,13 +42,6 @@ from .common import (
 )
 from ._action_contract import (
     parse_flat_actions,
-)
-from ._batch_contract import (
-    parse_actions_batch_param,
-    parse_goals_batch_param,
-    parse_history_subgoals_batch_param,
-    parse_states_batch,
-    parse_subgoal_layers_batch_param,
 )
 from .types import (
     EncodingDict,
@@ -798,7 +792,7 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         subgoal_layers: SubgoalLayersInput = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one state to normalized batch encoding."""
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
@@ -847,60 +841,16 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         subgoal_layers: SubgoalLayersBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one or many states to one native batch encoding."""
-        state_list = parse_states_batch(states)
-        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
-        actions_per_state = parse_actions_batch_param(
-            actions, state_count=len(state_list)
+        return self._engine.encode_batch(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
         )
-        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
-            subgoal_layers,
-            state_count=len(state_list),
-        )
-        history_per_state = parse_history_subgoals_batch_param(
-            history_subgoals,
-            state_count=len(state_list),
-        )
-
-        builder = BatchBuilder()
-        builder.set_graph_kind("hetero")
-        for idx, state in enumerate(state_list):
-            goals_for_builder = goals_per_state[idx]
-            actions_for_state = actions_per_state[idx]
-            actions_for_builder = (
-                actions_for_state if actions_for_state is not None else []
-            )
-            subgoal_layers_for_builder = subgoal_layers_per_state[idx]
-            history_for_builder = history_per_state[idx]
-
-            if goals_for_builder is None and (
-                subgoal_layers_for_builder is not None
-                or bool(actions_for_builder)
-                or bool(history_for_builder)
-            ):
-                goals_for_builder = default_goals_from_state(state)
-
-            if (
-                goals_for_builder is None
-                and subgoal_layers_for_builder is None
-                and not actions_for_builder
-                and not history_for_builder
-            ):
-                goals_for_builder = None
-
-            self._encode_one_into_builder(
-                state,
-                builder,
-                goals=goals_for_builder,
-                actions=actions_for_builder,
-                subgoal_layers=subgoal_layers_for_builder,
-                history_subgoals=history_for_builder,
-                history_max_steps=history_max_steps,
-            )
-            builder.next_graph()
-
-        return builder.build()
 
     def encode_batch(
         self,
