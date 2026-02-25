@@ -6,11 +6,9 @@ Uses the test PDDL problems bundled in this repository.
 
 from __future__ import annotations
 
-from matplotlib import pyplot as plt
-
 from mifrost.encoders import HGraphEncoder, ILGEncoder
 
-from _helpers import load_space
+from _helpers import begin_plot, load_space, save_plot
 
 
 def main():
@@ -21,13 +19,15 @@ def main():
     drawer = HGraphEncoder(domain)
 
     # Plot the ILG heterogeneous graph
+    begin_plot(figsize=(14, 10))
     drawer.draw(
         graph,
         with_labels=True,
         edge_labels=True,
         label_node_types=[encoder.symbol_type_id],
     )
-    plt.show()
+    out_path = save_plot("ilg_hetero_encoder.png")
+    print(f"Saved ILG encoder plot to {out_path}")
 
 
 if __name__ == "__main__":

@@ -7,12 +7,10 @@ Uses the test PDDL problems bundled in this repository.
 
 from __future__ import annotations
 
-from matplotlib import pyplot as plt
-
 import mifrost
 from mifrost.encoders import TransitionEffectsHGraphEncoder
 
-from _helpers import first_transition, load_space
+from _helpers import begin_plot, first_transition, load_space, save_plot
 
 
 def main():
@@ -24,13 +22,15 @@ def main():
     graph = encoder.encode_pyg(state=state, successor=successor)
 
     # Plot the transition-delta heterogeneous graph
+    begin_plot(figsize=(14, 10))
     encoder.draw(
         graph,
         with_labels=True,
         edge_labels=True,
         label_node_types=[mifrost.DEFAULT_SYMBOL_TYPE_ID],
     )
-    plt.show()
+    out_path = save_plot("transition_change_hetero_encoder.png")
+    print(f"Saved transition effects encoder plot to {out_path}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from matplotlib import pyplot as plt
 import pymimir
 
 
@@ -45,3 +46,20 @@ def first_transition(
     if not transitions:
         raise RuntimeError("No successor found from state.")
     return transitions[0]
+
+
+def plot_output_dir() -> Path:
+    out_dir = Path(__file__).resolve().parent / "_plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
+def save_plot(name: str) -> Path:
+    out_path = plot_output_dir() / name
+    plt.savefig(out_path, dpi=180)
+    plt.close()
+    return out_path
+
+
+def begin_plot(*, figsize: tuple[float, float] = (14, 10)) -> None:
+    plt.figure(figsize=figsize)

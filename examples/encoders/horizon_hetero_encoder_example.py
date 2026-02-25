@@ -3,23 +3,14 @@
 from __future__ import annotations
 
 from collections import deque
-from pathlib import Path
 
 import pymimir
 from matplotlib import pyplot as plt
 
 import mifrost
 from mifrost.encoders import HorizonEncoder
-from mifrost.encoders.types import to_advanced_state
-
-
-def _load_problem() -> tuple[pymimir.Domain, pymimir.Problem]:
-    repo_root = Path(__file__).resolve().parents[2]
-    domain_path = repo_root / "data" / "pddl" / "blocks" / "domain.pddl"
-    problem_path = repo_root / "data" / "pddl" / "blocks" / "medium.pddl"
-    domain = pymimir.Domain(domain_path)
-    problem = pymimir.Problem(domain, problem_path, mode="lifted")
-    return domain, problem
+from mifrost.encoders.types import to_advanced_action, to_advanced_state
+from _helpers import begin_plot, load_problem, save_plot
 
 
 def _build_dag(
@@ -43,12 +34,13 @@ def _build_dag(
         if depth >= max_depth:
             continue
         transitions = list(space.get_forward_transitions(state))
-        for _, successor in transitions[:max_branch]:
+        for action, successor in transitions[:max_branch]:
             if successor in seen:
                 continue
             dag.register_transition(
                 to_advanced_state(state),
                 to_advanced_state(successor),
+                to_advanced_action(action),
             )
             seen.add(successor)
             queue.append((successor, depth + 1))
@@ -56,7 +48,7 @@ def _build_dag(
 
 
 def main() -> None:
-    domain, problem = _load_problem()
+    domain, problem, _ = load_problem(domain="blocks", problem="medium")
     root, dag = _build_dag(problem, max_depth=2, max_branch=3)
     goals = list(problem.get_goal_condition().get_literals())
 
@@ -71,28 +63,25 @@ def main() -> None:
         (True, True, True),
     ]
 
-    for name, mode in variants:
-        fig, axes = plt.subplots(2, 2, figsize=(13, 10))
-        fig.suptitle(f"HorizonEncoder mode={name}", fontsize=12)
-        for ax, (use_parent, use_sibling, use_cousin) in zip(
-            axes.flat, relation_flags, strict=True
-        ):
+    for mode_name, mode in variants:
+        for use_parent, use_sibling, use_cousin in relation_flags:
+            begin_plot(figsize=(16, 12))
             encoder = HorizonEncoder(
                 domain,
                 transition_mode=mode,
+                ignore_actions=False,
                 enable_parent_relation=use_parent,
                 enable_sibling_relation=use_sibling,
                 enable_cousin_relation=use_cousin,
             )
             data = encoder.encode_pyg(root, dag=dag, goals=goals)
-            label = (
+            relation_label = (
                 f"P={'on' if use_parent else 'off'} "
                 f"S={'on' if use_sibling else 'off'} "
                 f"C={'on' if use_cousin else 'off'}"
             )
             encoder.draw(
                 data,
-                ax=ax,
                 with_labels=True,
                 edge_labels=True,
                 label_node_types=[encoder.symbol_type_id],
@@ -100,9 +89,13 @@ def main() -> None:
                 target_x_spacing=4.0,
                 target_y_spacing=2.0,
             )
-            ax.set_title(label, fontsize=10)
-        plt.tight_layout()
-        plt.show()
+            plt.title(f"HorizonEncoder mode={mode_name} {relation_label}")
+            filename = (
+                f"horizon_encoder_{mode_name}_"
+                f"p{int(use_parent)}_s{int(use_sibling)}_c{int(use_cousin)}.png"
+            )
+            out_path = save_plot(filename)
+            print(f"Saved horizon plot to {out_path}")
 
 
 if __name__ == "__main__":
