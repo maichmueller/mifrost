@@ -62,7 +62,7 @@ void HGraphEncoderEngine::initialize_from_domain()
    if(not config_.ignore_actions) {
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
-   relation_dict_ = RelationDict::build(domain_, actions, rel_config);
+   relation_dict_ = RelationDict(domain_, actions, rel_config);
    rebuild_all_edge_types();
 }
 

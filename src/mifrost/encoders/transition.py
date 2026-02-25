@@ -8,7 +8,6 @@ from .._core import (
     BatchBuilder,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    GoalInputs,
     SuccessorEncoderConfig,
     SuccessorEncoderMode,
     SuccessorHGraphEncoderEngine,
@@ -18,10 +17,20 @@ from dataclasses import dataclass
 
 from .base import (
     ActionBatchInput,
+    ActionBatchParam,
     GoalBatchInput,
+    GoalBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
+    SubgoalLayersBatchParam,
+)
+from ._batch_contract import (
+    parse_goals_batch_param,
+    parse_states_batch,
+    parse_subgoal_layers_batch_param,
+    parse_successors_batch_param,
+    reject_unsupported_batch_field,
 )
 from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
@@ -31,7 +40,6 @@ from .types import (
     NativeEncodingInput,
     StateInput,
     default_goals_from_state,
-    is_state_input,
 )
 
 
@@ -85,7 +93,7 @@ class _TransitionEncoderBase(HGraphEncoder):
 
     def _accepted_kwargs(self) -> set[str]:
         """Accept successor/successors kwargs in generic base API calls."""
-        return {"successor", "successors"}
+        return {"successor", "successors", "history_subgoals", "history_max_steps"}
 
     def _encode(
         self,
@@ -95,11 +103,21 @@ class _TransitionEncoderBase(HGraphEncoder):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         successor: StateInput | None = None,
+        history_subgoals=None,
+        history_max_steps: int | None = None,
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
+        if history_subgoals is not None:
+            raise TypeError(
+                f"{self.__class__.__name__} does not accept 'history_subgoals' in encode"
+            )
+        if history_max_steps is not None:
+            raise TypeError(
+                f"{self.__class__.__name__} does not accept 'history_max_steps' in encode"
+            )
         adv_state = _advanced_state(state)
         adv_successor = _advanced_state(successor)
         if goals is None:
@@ -111,43 +129,46 @@ class _TransitionEncoderBase(HGraphEncoder):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
         successors: StateBatchInput | None = None,
+        history_subgoals=None,
+        history_max_steps: int | None = None,
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
-        if is_state_input(states):
-            state_list = [states]
-        else:
-            state_list = list(states)
-
-        if successors is None:
-            raise ValueError(
-                "successors must be provided for transition batch encoding"
-            )
-        if is_state_input(successors):
-            succ_list = [successors]
-        else:
-            succ_list = list(successors)
-        if len(succ_list) != len(state_list):
-            raise ValueError("successors length must match states length")
-
-        shared_inputs: GoalInputs | None = None
-        if goals is not None:
-            shared_inputs = _split_goals(goals, subgoal_layers)
+        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
+        reject_unsupported_batch_field(
+            self.__class__.__name__,
+            "history_subgoals",
+            history_subgoals,
+        )
+        reject_unsupported_batch_field(
+            self.__class__.__name__,
+            "history_max_steps",
+            history_max_steps,
+        )
+        state_list = parse_states_batch(states)
+        succ_list = parse_successors_batch_param(
+            successors, state_count=len(state_list)
+        )
+        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
+        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
+            subgoal_layers,
+            state_count=len(state_list),
+        )
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
             adv_state = _advanced_state(state)
             adv_successor = _advanced_state(succ_list[idx])
-            if goals is None:
+            goals_for_state = goals_per_state[idx]
+            subgoal_layers_for_state = subgoal_layers_per_state[idx]
+            if goals_for_state is None:
                 goals_for_state = default_goals_from_state(state)
-                inputs = _split_goals(goals_for_state, subgoal_layers)
-            else:
-                inputs = shared_inputs
+            inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
             self._engine.encode(adv_state, adv_successor, inputs, builder)
             builder.next_graph()
         return builder.build()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mifrost
+import pytest
 
 from .test_utils import (
     adv_action,
@@ -116,3 +117,33 @@ def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
         assert name in symbol_nodes, (
             f"Missing object symbol node in networkx graph: {name}"
         )
+
+
+def test_horizon_encode_batch_rejects_actions_and_history(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))[:1]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 transition")
+
+    action, target = transitions[0]
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+    )
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+
+    with pytest.raises(
+        TypeError, match="HorizonEncoder does not accept 'actions' in encode_batch"
+    ):
+        encoder.encode_batch([root], dags=[dag], goals=[goals], actions=[])
+
+    with pytest.raises(
+        TypeError,
+        match="HorizonEncoder does not accept 'history_subgoals' in encode_batch",
+    ):
+        encoder.encode_batch([root], dags=[dag], goals=[goals], history_subgoals=[])

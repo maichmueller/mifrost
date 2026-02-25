@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from numbers import Integral
-from typing import Generic, Iterable, Mapping, TypeAlias, TypeGuard, TypeVar
+from typing import Generic, Iterable, Mapping, Sequence, TypeAlias, TypeGuard, TypeVar
 
 from torch_geometric.data import Data, HeteroData
 
@@ -11,6 +11,7 @@ from .types import (
     EncodingDict,
     GoalLiteralInput,
     GroundActionInput,
+    HistorySubgoalInput,
     NativeEncoding,
     NativeEncodingInput,
     StateInput,
@@ -22,6 +23,20 @@ StateBatchInput: TypeAlias = Iterable[StateInput] | StateInput
 GoalBatchInput: TypeAlias = Iterable[GoalLiteralInput] | None
 SubgoalLayersInput: TypeAlias = Iterable[Iterable[GoalLiteralInput]] | None
 ActionBatchInput: TypeAlias = Iterable[GroundActionInput] | None
+GoalBatchParam: TypeAlias = (
+    Iterable[GoalLiteralInput] | Sequence[Iterable[GoalLiteralInput] | None] | None
+)
+ActionBatchParam: TypeAlias = (
+    Iterable[GroundActionInput] | Sequence[Iterable[GroundActionInput] | None] | None
+)
+SubgoalLayersBatchParam: TypeAlias = (
+    Iterable[Iterable[GoalLiteralInput]]
+    | Sequence[Iterable[Iterable[GoalLiteralInput]] | None]
+    | None
+)
+HistorySubgoalsBatchParam: TypeAlias = (
+    HistorySubgoalInput | Sequence[HistorySubgoalInput | None] | None
+)
 
 
 def _is_native_encoding(value: object) -> TypeGuard[NativeEncoding]:
@@ -57,7 +72,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> EncodingT:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode(
@@ -72,11 +87,11 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> EncodingT:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode_batch(
@@ -95,7 +110,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> PygDataT:
         encoding = self.encode(
             state,
@@ -111,11 +126,11 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> PygDataT:
         encoding = self.encode_batch(
             states,
@@ -135,7 +150,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs: object,
+        **kwargs,
     ) -> EncodingT:
         """Encode one input into native batch encoding."""
         ...
@@ -145,10 +160,10 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        **kwargs: object,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        **kwargs,
     ) -> EncodingT:
         """Encode one or many inputs into native batch encoding."""
         ...
@@ -189,7 +204,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT, EncodingT]):
     """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
-    def append(self, *args: object, **kwargs: object) -> int:
+    def append(self, *args: object, **kwargs) -> int:
         """Append one item to the in-memory stream and return its stream id."""
         ...
 
@@ -214,7 +229,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT, EncodingT]):
             )
         stream.set_reuse_removed(bool(value))
 
-    def update(self, _stream_id: int, *args: object, **kwargs: object) -> None:
+    def update(self, stream_id: int, *args: object, **kwargs) -> None:
         """Re-encode and replace a previously appended item in the stream."""
         raise NotImplementedError("update is not implemented for this stream")
 

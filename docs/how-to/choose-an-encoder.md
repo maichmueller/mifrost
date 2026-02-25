@@ -33,3 +33,14 @@
 - `HGraphEncoder` expects flat action inputs (single action list or per-state flat lists).
 - Nested/tuple action payloads are rejected by design.
 - For IW lookahead/macro-transition outputs, use `HorizonEncoder` with `TransitionDAG`.
+
+## Batch Contract
+
+- `encode_batch(states, *, ...)` is kwargs-based (no tuple/sample batch payloads).
+- Batch-capable kwargs accept either shared payloads or per-state sequences.
+- Encoder support:
+  - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
+  - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` rejected)
+  - `ILGEncoder`: per-state `goals`, `actions`, `subgoal_layers`
+  - `Transition*Encoder`: aligned `successors`, per-state `goals`, `subgoal_layers` (`actions` rejected)
+  - `HorizonEncoder`: per-state `dags`, `goals`, `subgoal_layers` (`actions`/history rejected)

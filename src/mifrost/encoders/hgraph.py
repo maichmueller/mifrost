@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numbers
 from dataclasses import dataclass
-from numbers import Integral
 from typing import Any, Iterable, Mapping, Sequence
 
 import networkx as nx
@@ -22,11 +21,15 @@ from .._core import (
 )
 from .base import (
     ActionBatchInput,
+    ActionBatchParam,
     EncoderBase,
     GoalBatchInput,
+    GoalBatchParam,
+    HistorySubgoalsBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
+    SubgoalLayersBatchParam,
 )
 from .common import (
     _advanced_domain,
@@ -37,19 +40,24 @@ from .common import (
     _split_goals,
 )
 from ._action_contract import (
-    normalize_batch_actions,
-    normalize_flat_actions,
+    parse_flat_actions,
+)
+from ._batch_contract import (
+    parse_actions_batch_param,
+    parse_goals_batch_param,
+    parse_history_subgoals_batch_param,
+    parse_states_batch,
+    parse_subgoal_layers_batch_param,
 )
 from .types import (
     EncodingDict,
-    GroundActionInput,
-    GoalLiteralInput,
     DomainInput,
+    GoalLiteralInput,
+    GroundActionInput,
     HeteroEncoding,
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
-    is_state_input,
 )
 
 _HGraphMutableStreamEncoder = getattr(
@@ -428,7 +436,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         If goals/actions are omitted, the engine uses the state's problem goals.
         """
         adv_state = _advanced_state(state)
-        action_inputs = normalize_flat_actions(actions)
+        action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
@@ -472,7 +480,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_inputs = normalize_flat_actions(actions)
+        action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
@@ -540,7 +548,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> int:
         adv_state = _advanced_state(state)
-        action_inputs = normalize_flat_actions(actions)
+        action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
@@ -682,7 +690,7 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_inputs = normalize_flat_actions(actions)
+        action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
@@ -834,93 +842,48 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: (
-            Iterable[GroundActionInput]
-            | Sequence[Iterable[GroundActionInput] | None]
-            | None
-        ) = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        history_subgoals: (
-            HistorySubgoalInput | Sequence[HistorySubgoalInput] | None
-        ) = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ) -> HeteroEncoding:
-        """
-        Encode one or many states to one native batch encoding.
-
-        Supports either shared actions or per-state action sequences.
-        """
-        if is_state_input(states):
-            state_list = [states]
-        else:
-            if isinstance(states, (str, bytes)):
-                raise TypeError("encode_batch expects a state or an iterable of states")
-            state_list = list(states)
-
-        shared_action_list: list[object] = []
-        per_state_actions: list[list[GroundActionInput] | None] | None = None
-        action_plan = normalize_batch_actions(actions, state_count=len(state_list))
-        if action_plan.per_state_actions is not None:
-            per_state_actions = action_plan.per_state_actions
-        else:
-            shared_action_list = _prepare_actions(action_plan.shared_actions)
-
-        history_per_state: list[list[tuple[int, list[object]]]] | None = None
-        if history_subgoals is not None:
-
-            def is_history_item(value: object) -> bool:
-                return (
-                    isinstance(value, tuple)
-                    and len(value) == 2
-                    and isinstance(value[0], Integral)
-                )
-
-            if isinstance(history_subgoals, Sequence) and history_subgoals:
-                if is_history_item(history_subgoals[0]):
-                    prepared = _prepare_history_subgoals(history_subgoals)
-                    history_per_state = [prepared for _ in state_list]
-                else:
-                    history_per_state = [
-                        _prepare_history_subgoals(item) for item in history_subgoals
-                    ]
-            else:
-                prepared = _prepare_history_subgoals(history_subgoals)
-                history_per_state = [prepared for _ in state_list]
-
-            if history_per_state is not None and len(history_per_state) != len(
-                state_list
-            ):
-                raise ValueError("history_subgoals length must match states length")
+        """Encode one or many states to one native batch encoding."""
+        state_list = parse_states_batch(states)
+        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
+        actions_per_state = parse_actions_batch_param(
+            actions, state_count=len(state_list)
+        )
+        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
+            subgoal_layers,
+            state_count=len(state_list),
+        )
+        history_per_state = parse_history_subgoals_batch_param(
+            history_subgoals,
+            state_count=len(state_list),
+        )
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, state in enumerate(state_list):
-            if per_state_actions is not None:
-                actions_for_state = per_state_actions[idx]
-                actions_for_builder = (
-                    actions_for_state if actions_for_state is not None else []
-                )
-            else:
-                actions_for_builder = shared_action_list
+            goals_for_builder = goals_per_state[idx]
+            actions_for_state = actions_per_state[idx]
+            actions_for_builder = (
+                actions_for_state if actions_for_state is not None else []
+            )
+            subgoal_layers_for_builder = subgoal_layers_per_state[idx]
+            history_for_builder = history_per_state[idx]
 
-            history_for_builder: HistorySubgoalInput | None = None
-            if history_per_state is not None:
-                history_for_builder = history_per_state[idx]
-
-            goals_for_builder: GoalBatchInput = goals
-            if goals is None and subgoal_layers is not None:
-                goals_for_builder = default_goals_from_state(state)
-            elif goals is None and history_for_builder:
-                goals_for_builder = default_goals_from_state(state)
-            elif goals is None and (
-                per_state_actions is not None or shared_action_list
+            if goals_for_builder is None and (
+                subgoal_layers_for_builder is not None
+                or bool(actions_for_builder)
+                or bool(history_for_builder)
             ):
                 goals_for_builder = default_goals_from_state(state)
 
             if (
-                goals is None
-                and subgoal_layers is None
+                goals_for_builder is None
+                and subgoal_layers_for_builder is None
                 and not actions_for_builder
                 and not history_for_builder
             ):
@@ -931,7 +894,7 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
                 builder,
                 goals=goals_for_builder,
                 actions=actions_for_builder,
-                subgoal_layers=subgoal_layers,
+                subgoal_layers=subgoal_layers_for_builder,
                 history_subgoals=history_for_builder,
                 history_max_steps=history_max_steps,
             )
@@ -943,16 +906,10 @@ class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: (
-            Iterable[GroundActionInput]
-            | Sequence[Iterable[GroundActionInput] | None]
-            | None
-        ) = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        history_subgoals: (
-            HistorySubgoalInput | Sequence[HistorySubgoalInput] | None
-        ) = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,

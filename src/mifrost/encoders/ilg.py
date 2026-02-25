@@ -22,11 +22,20 @@ from .accessors import (
 )
 from .base import (
     ActionBatchInput,
+    ActionBatchParam,
     EncoderBase,
     GoalBatchInput,
+    GoalBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
+    SubgoalLayersBatchParam,
+)
+from ._batch_contract import (
+    parse_actions_batch_param,
+    parse_goals_batch_param,
+    parse_states_batch,
+    parse_subgoal_layers_batch_param,
 )
 from .common import (
     _advanced_action,
@@ -38,8 +47,8 @@ from .types import (
     ATOM_TYPES,
     HeteroEncoding,
     NativeEncodingInput,
-    WRAPPER_STATE_TYPES,
     StateInput,
+    WRAPPER_STATE_TYPES,
     is_action_input,
     is_goal_literal_input,
     is_state_input,
@@ -449,26 +458,32 @@ class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode one or many states into ILG batch format."""
-        if isinstance(states, WRAPPER_STATE_TYPES):
-            state_list = [states]
-        else:
-            state_list = list(states)
+        state_list = parse_states_batch(states)
+        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
+        actions_per_state = parse_actions_batch_param(
+            actions, state_count=len(state_list)
+        )
+        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
+            subgoal_layers,
+            state_count=len(state_list),
+        )
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
-        for state in state_list:
+        for idx, state in enumerate(state_list):
+            actions_for_state = actions_per_state[idx]
             self._encode_to_builder(
                 builder,
                 state,
-                goals=goals,
-                actions=actions,
-                subgoal_layers=subgoal_layers,
+                goals=goals_per_state[idx],
+                actions=actions_for_state,
+                subgoal_layers=subgoal_layers_per_state[idx],
             )
             builder.next_graph()
         return builder.build()

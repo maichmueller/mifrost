@@ -222,6 +222,24 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
 - `encode_batch_pyg(states, *, ...) -> HeteroDataBatch`
   - Many graphs, explicit PyG conversion path.
 
+- `encode_batch` argument semantics
+  - `states` is always the batch axis.
+  - Each extra batch argument is either shared (applies to all states) or a per-state
+    sequence of length `len(states)` with optional `None` entries.
+  - Unsupported batch fields now raise explicit `TypeError` on each encoder.
+  - Per-state argument length mismatches raise `ValueError`.
+  - Example:
+    - Shared goals/actions:
+      - `encoder.encode_batch(states, goals=goals, actions=actions)`
+    - Per-state goals/actions:
+      - `encoder.encode_batch(states, goals=[goals0, goals1], actions=[[a0], None])`
+
+  - Migration notes (hard break):
+    - Old encoder-specific inference/ignoring of batch kwargs was removed.
+    - `Transition*Encoder` now requires aligned `successors` and rejects `actions`.
+    - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers` and rejects action/history batch kwargs.
+    - `ColorEncoder` rejects `actions` in batch mode.
+
 - `stream() -> HGraphEncoderStream`
   - Create an append-only stream encoder backed by the same C++ engine.
 

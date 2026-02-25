@@ -24,11 +24,37 @@ HorizonHGraphEncoderEngine::Config normalize_horizon_config(
    return config;
 }
 
+RelationDict build_horizon_relation_dict(
+   const mimir::formalism::DomainImpl& domain,
+   const HGraphEncoderEngine::Config& config
+)
+{
+   RelationDictConfig rel_config;
+   rel_config.max_goal_level = static_cast< int >(config.max_goal_level);
+   rel_config.support_literals = config.support_literals;
+   rel_config.goal_satisfaction_derivations = config.goal_satisfaction_derivations;
+   rel_config.top_type_predicates.insert(config.symbol_type_id);
+
+   std::vector< mimir::formalism::Action > actions;
+   if(not config.ignore_actions) {
+      actions.assign(domain.get_actions().begin(), domain.get_actions().end());
+   }
+
+   return RelationDict(
+      domain,
+      actions,
+      rel_config,
+      /*predicate_arity_offset=*/1,
+      /*action_arity_offset=*/1
+   );
+}
+
 }  // namespace
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
     : HGraphEncoderEngine(domain), horizon_config_()
 {
+   relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
 }
 
@@ -39,12 +65,14 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
       horizon_config_(normalize_horizon_config(std::move(config)))
 {
+   relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(mimir::formalism::Domain domain)
     : HGraphEncoderEngine(domain), horizon_config_()
 {
+   relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
 }
 
@@ -55,6 +83,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
       horizon_config_(normalize_horizon_config(std::move(config)))
 {
+   relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
 }
 
@@ -1080,18 +1109,13 @@ void HorizonHGraphEncoderEngine::configure_relations()
    if(horizon_config_.enable_cousin_relation) {
       register_relation_type(horizon_config_.cousin_relation);
    }
+
+   rebuild_all_edge_types();
 }
 
 void HorizonHGraphEncoderEngine::register_relation_type(const std::string& relation)
 {
    relation_dict_.arity[relation] = 2;
-   for(int pos = 0; pos < 2; ++pos) {
-      const std::string pos_str = std::to_string(pos);
-      all_edge_types_.emplace_back(config_.symbol_type_id, pos_str, relation);
-      all_edge_types_.emplace_back(relation, pos_str, config_.symbol_type_id);
-   }
-   std::ranges::sort(all_edge_types_);
-   all_edge_types_.erase(std::ranges::unique(all_edge_types_).begin(), all_edge_types_.end());
 }
 
 std::string HorizonHGraphEncoderEngine::target_node_key(int idx) const

@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <mimir/formalism/action.hpp>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/predicate.hpp>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "default_relations.hpp"
@@ -46,86 +48,104 @@ struct RelationDict {
    /// Satisfaction derivations that are materialized.
    std::set< GoalSatisfaction > goal_satisfaction_derivations;
 
+   RelationDict() = default;
+
+   explicit RelationDict(std::map< std::string, int > arity_) : arity(std::move(arity_)) {}
+
+   RelationDict(
+      std::map< std::string, int > arity_,
+      int max_goal_level_,
+      bool support_literals_,
+      std::set< GoalSatisfaction > goal_satisfaction_derivations_
+   )
+       : arity(std::move(arity_)),
+         max_goal_level(max_goal_level_),
+         support_literals(support_literals_),
+         goal_satisfaction_derivations(std::move(goal_satisfaction_derivations_))
+   {
+   }
+
    /**
     * @brief Build a relation dictionary from a domain and action list.
+    *
+    * @param predicate_arity_offset Applied to all predicate-based relations.
+    * @param action_arity_offset Applied to all action-schema relations.
     */
-   static RelationDict build(
+   RelationDict(
       const mimir::formalism::DomainImpl& domain,
       const std::vector< mimir::formalism::Action >& actions,
-      const RelationDictConfig& config
+      const RelationDictConfig& config,
+      int predicate_arity_offset = 0,
+      int action_arity_offset = 1
    )
    {
-      RelationDict out;
-      out.max_goal_level = std::max(0, config.max_goal_level);
-      out.support_literals = config.support_literals;
-      out.goal_satisfaction_derivations = config.goal_satisfaction_derivations;
-      out.goal_satisfaction_derivations.insert(GoalSatisfaction::none);
+      max_goal_level = std::max(0, config.max_goal_level);
+      support_literals = config.support_literals;
+      goal_satisfaction_derivations = config.goal_satisfaction_derivations;
+      goal_satisfaction_derivations.insert(GoalSatisfaction::none);
 
       std::vector< std::pair< std::string, int > > regular_predicates;
-      auto collect_predicates = [&]([[maybe_unused]] auto tag) {
-         using Tag = decltype(tag);
+      auto collect_predicates = [&]< typename Tag >(Tag) {
          for(auto pred : domain.get_predicates< Tag >()) {
             const auto& name = pred->get_name();
-            const int arity = static_cast< int >(pred->get_arity());
-            out.arity[RelationFormatter::format_predicate(pred)] = arity;
+            const int pred_arity = std::max(
+               0, static_cast< int >(pred->get_arity()) + predicate_arity_offset
+            );
+            arity[RelationFormatter::format_predicate(name)] = pred_arity;
             if(config.top_type_predicates.contains(name)) {
                continue;
             }
-            regular_predicates.emplace_back(name, arity);
+            regular_predicates.emplace_back(name, pred_arity);
          }
       };
       collect_predicates(mimir::formalism::StaticTag{});
       collect_predicates(mimir::formalism::FluentTag{});
       collect_predicates(mimir::formalism::DerivedTag{});
 
-      for(const auto& [name, arity] : regular_predicates) {
-         for(int level = 0; level <= out.max_goal_level; ++level) {
+      for(const auto& [name, pred_arity] : regular_predicates) {
+         for(int level = 0; level <= max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
-               const std::string rel = RelationFormatter::format_predicate(
+               arity[RelationFormatter::format_predicate(
                   name, goal_level, std::nullopt, polarity
-               );
-               out.arity[rel] = arity;
+               )] = pred_arity;
             }
          }
-         if(out.support_literals) {
+         if(support_literals) {
             for(bool polarity : {true, false}) {
-               const std::string rel = RelationFormatter::format_predicate(
+               arity[RelationFormatter::format_predicate(
                   name, std::nullopt, std::nullopt, polarity
-               );
-               out.arity[rel] = arity;
+               )] = pred_arity;
             }
          }
       }
 
-      for(const auto& goal_sat : out.goal_satisfaction_derivations) {
-         for(const auto& [name, arity] : regular_predicates) {
-            for(int level = 0; level <= out.max_goal_level; ++level) {
+      for(const auto& goal_sat : goal_satisfaction_derivations) {
+         for(const auto& [name, pred_arity] : regular_predicates) {
+            for(int level = 0; level <= max_goal_level; ++level) {
                const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
-                  const std::string rel = RelationFormatter::format_predicate(
+                  arity[RelationFormatter::format_predicate(
                      name, goal_level, goal_sat, polarity
-                  );
-                  out.arity[rel] = arity;
+                  )] = pred_arity;
                }
             }
-            if(out.support_literals) {
+            if(support_literals) {
                for(bool polarity : {true, false}) {
-                  const std::string rel = RelationFormatter::format_predicate(
+                  arity[RelationFormatter::format_predicate(
                      name, std::nullopt, goal_sat, polarity
-                  );
-                  out.arity[rel] = arity;
+                  )] = pred_arity;
                }
             }
          }
       }
 
       for(const auto& action : actions) {
-         const int arity = static_cast< int >(action->get_arity()) + 1;
-         out.arity[RelationFormatter::format_action_schema(*action)] = arity;
+         const int act_arity = std::max(
+            0, static_cast< int >(action->get_arity()) + action_arity_offset
+         );
+         arity[RelationFormatter::format_action_schema(*action)] = act_arity;
       }
-
-      return out;
    }
 };
 

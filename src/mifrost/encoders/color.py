@@ -12,22 +12,29 @@ from .._core import (
     ColorEncoderConfig,
     ColorEncoderEngine,
     ColorStreamEncoder as _ColorStreamEncoder,
-    GoalInputs,
 )
 from .base import (
     ActionBatchInput,
+    ActionBatchParam,
     EncoderBase,
     GoalBatchInput,
+    GoalBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
+    SubgoalLayersBatchParam,
+)
+from ._batch_contract import (
+    parse_goals_batch_param,
+    parse_states_batch,
+    parse_subgoal_layers_batch_param,
+    reject_unsupported_batch_field,
 )
 from .common import _advanced_domain, _advanced_state, _split_goals, _to_tensor
 from .types import (
     EncodingDict,
     HomoEncoding,
     NativeEncodingInput,
-    STATE_TYPES,
     DomainInput,
     GoalLiteralInput,
     StateInput,
@@ -289,34 +296,31 @@ class ColorEncoder(EncoderBase[Data, HomoEncoding]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        actions: ActionBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
     ) -> HomoEncoding:
         """Encode one or many states into homogeneous batch encoding_dict."""
-        if isinstance(states, STATE_TYPES):
-            state_list = [states]
-        else:
-            if isinstance(states, (str, bytes)):
-                raise TypeError("encode_batch expects a state or an iterable of states")
-            state_list = list(states)
+        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
+        state_list = parse_states_batch(states)
+        goals_per_state = parse_goals_batch_param(goals, state_count=len(state_list))
+        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
+            subgoal_layers,
+            state_count=len(state_list),
+        )
 
         builder = BatchBuilder()
         builder.set_graph_kind("homo")
-        shared_inputs: GoalInputs | None = None
-        if goals is not None:
-            shared_inputs = _split_goals(goals, subgoal_layers)
-
-        for state in state_list:
+        for idx, state in enumerate(state_list):
             adv_state = _advanced_state(state)
-            if goals is None and subgoal_layers is None:
+            goals_for_state = goals_per_state[idx]
+            subgoal_layers_for_state = subgoal_layers_per_state[idx]
+            if goals_for_state is None and subgoal_layers_for_state is None:
                 self._engine.encode(adv_state, builder)
             else:
-                if goals is None:
+                if goals_for_state is None:
                     goals_for_state = default_goals_from_state(state)
-                    inputs = _split_goals(goals_for_state, subgoal_layers)
-                else:
-                    inputs = shared_inputs
+                inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
                 self._engine.encode(adv_state, inputs, builder)
             builder.next_graph()
         return builder.build()
@@ -325,8 +329,9 @@ class ColorEncoder(EncoderBase[Data, HomoEncoding]):
         self,
         states: StateBatchInput,
         *,
-        goals: GoalBatchInput = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HomoEncoding:
@@ -334,6 +339,7 @@ class ColorEncoder(EncoderBase[Data, HomoEncoding]):
         return super().encode_batch(
             states,
             goals=goals,
+            actions=actions,
             subgoal_layers=subgoal_layers,
             include_metadata=include_metadata,
             **kwargs,

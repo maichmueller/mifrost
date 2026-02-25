@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Mapping
 
 import networkx as nx
 import torch
@@ -21,10 +21,21 @@ from .._core import (
 )
 from .base import (
     ActionBatchInput,
+    ActionBatchParam,
     GoalBatchInput,
+    GoalBatchParam,
+    HistorySubgoalsBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
+    SubgoalLayersBatchParam,
+)
+from ._batch_contract import (
+    parse_dags_batch_param,
+    parse_goals_batch_param,
+    parse_states_batch,
+    parse_subgoal_layers_batch_param,
+    reject_unsupported_batch_field,
 )
 from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
 from .hgraph import HGraphEncoder
@@ -35,8 +46,6 @@ from .types import (
     GoalLiteralInput,
     StateInput,
     default_goals_from_state,
-    is_goal_literal_input,
-    is_state_input,
 )
 
 
@@ -58,11 +67,6 @@ def _prepare_horizon_goals(
         goals = default_goals_from_state(root)
     inputs = _split_goals(goals, subgoal_layers)
     return inputs
-
-
-def _is_literal(value: object) -> bool:
-    """Best-effort literal type probe for per-state goal detection."""
-    return is_goal_literal_input(value)
 
 
 @dataclass
@@ -239,53 +243,28 @@ class HorizonEncoder(HGraphEncoder):
         roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
     ) -> HeteroEncoding:
         """Internal batch implementation shared by public batch APIs."""
-        if is_state_input(roots):
-            root_list = [roots]
-        else:
-            if isinstance(roots, (str, bytes)):
-                raise TypeError("encode_batch expects a state or an iterable of states")
-            root_list = list(roots)
-
-        if dags is None:
-            dag_list = [None] * len(root_list)
-        elif isinstance(dags, TransitionDAG):
-            dag_list = [dags]
-        else:
-            dag_list = list(dags)
-        if len(dag_list) != len(root_list):
-            raise ValueError("dags length must match roots length")
-
-        goals_per_state: list[Iterable[GoalLiteralInput]] | None = None
-        if (
-            goals is not None
-            and isinstance(goals, Sequence)
-            and len(goals) == len(root_list)
-        ):
-            first = goals[0] if goals else None
-            if first is not None and not _is_literal(first):
-                goals_per_state = list(goals)
-
-        shared_inputs: GoalInputs | None = None
-        if goals is not None and goals_per_state is None:
-            shared_inputs = _split_goals(goals, subgoal_layers)
+        root_list = parse_states_batch(roots)
+        dag_list = parse_dags_batch_param(dags, state_count=len(root_list))
+        goals_per_state = parse_goals_batch_param(goals, state_count=len(root_list))
+        subgoal_layers_per_state = parse_subgoal_layers_batch_param(
+            subgoal_layers,
+            state_count=len(root_list),
+        )
 
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
         for idx, root in enumerate(root_list):
             adv_root = _advanced_state(root)
             dag = _ensure_dag(root, dag_list[idx])
-            if goals_per_state is not None:
-                inputs = _split_goals(goals_per_state[idx], subgoal_layers)
-            else:
-                inputs = (
-                    shared_inputs
-                    if shared_inputs is not None
-                    else _prepare_horizon_goals(root, None, subgoal_layers)
-                )
+            goals_for_state = goals_per_state[idx]
+            subgoal_layers_for_state = subgoal_layers_per_state[idx]
+            if goals_for_state is None:
+                goals_for_state = default_goals_from_state(root)
+            inputs = _split_goals(goals_for_state, subgoal_layers_for_state)
             self._engine.encode(adv_root, dag, inputs, builder)
             builder.next_graph()
         return builder.build()
@@ -295,8 +274,11 @@ class HorizonEncoder(HGraphEncoder):
         roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
-        subgoal_layers: SubgoalLayersInput = None,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HeteroEncoding:
@@ -304,7 +286,10 @@ class HorizonEncoder(HGraphEncoder):
         return super().encode_batch(
             roots,
             goals=goals,
+            actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             dags=dags,
             include_metadata=include_metadata,
             **kwargs,
@@ -312,7 +297,7 @@ class HorizonEncoder(HGraphEncoder):
 
     def _accepted_kwargs(self) -> set[str]:
         """Accept transition DAG kwargs in the generic base API."""
-        return {"dag", "dags"}
+        return {"dag", "dags", "history_subgoals", "history_max_steps"}
 
     def _dict_to_pyg(
         self,
@@ -330,19 +315,24 @@ class HorizonEncoder(HGraphEncoder):
         roots: StateBatchInput,
         dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
         *,
-        goals: GoalBatchInput | Sequence[Iterable[GoalLiteralInput]] = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        actions=None,
-        history_subgoals=None,
+        goals: GoalBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        actions: ActionBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
-        if actions is not None:
-            raise ValueError("HorizonEncoder does not accept actions in encode_batch")
-        if history_subgoals is not None or history_max_steps is not None:
-            raise ValueError(
-                "HorizonEncoder does not accept history_subgoals/history_max_steps in encode_batch"
-            )
+        reject_unsupported_batch_field(self.__class__.__name__, "actions", actions)
+        reject_unsupported_batch_field(
+            self.__class__.__name__,
+            "history_subgoals",
+            history_subgoals,
+        )
+        reject_unsupported_batch_field(
+            self.__class__.__name__,
+            "history_max_steps",
+            history_max_steps,
+        )
         return self.__encode_batch(
             roots, dags, goals=goals, subgoal_layers=subgoal_layers
         )

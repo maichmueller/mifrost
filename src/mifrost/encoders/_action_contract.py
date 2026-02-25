@@ -39,7 +39,7 @@ class BatchActionPlan:
     per_state_actions: list[list[GroundActionInput] | None] | None = None
 
 
-def normalize_flat_actions(
+def parse_flat_actions(
     actions: Iterable[GroundActionInput] | None,
 ) -> list[GroundActionInput]:
     if actions is None:
@@ -47,7 +47,7 @@ def normalize_flat_actions(
     return validate_no_nested_actions(actions)
 
 
-def normalize_batch_actions(
+def parse_actions_batch_plan(
     actions: (
         Iterable[GroundActionInput]
         | Sequence[Iterable[GroundActionInput] | None]
@@ -71,9 +71,7 @@ def normalize_batch_actions(
 
     if per_state_like:
         if len(outer) != state_count:
-            raise ValueError(
-                "actions length must match states when providing per-state actions"
-            )
+            raise ValueError("actions length must match states length")
         per_state: list[list[GroundActionInput] | None] = []
         for entry in outer:
             if entry is None:

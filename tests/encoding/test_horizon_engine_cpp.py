@@ -19,6 +19,10 @@ def _adv_domain(obj):
     return getattr(obj, "_advanced_domain", obj)
 
 
+def _adv_action(obj):
+    return getattr(obj, "_advanced_ground_action", obj)
+
+
 def _build_dag(space, root, *, max_depth: int = 2, branch_factor: int = 2):
     dag = mifrost.TransitionDAG(_adv(root))
     queue = deque([(root, 0)])
@@ -142,3 +146,52 @@ def test_horizon_encoder_batch_collates_target_fields_with_ptrs(horizon_cases):
     batched_positions = target_positions.tolist()
     second_graph_positions = batched_positions[pos_ptr[1] : pos_ptr[2]]
     assert all(int(value) >= int(symbol_n0) for value in second_graph_positions)
+
+
+def test_horizon_relation_dict_arities_match_emitted_positions(horizon_cases):
+    space, domain, problem = horizon_cases
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))
+    if not transitions:
+        import pytest
+
+        pytest.skip("Need at least one transition to validate horizon arities")
+
+    action, target = transitions[0]
+    dag = mifrost.TransitionDAG(_adv(root))
+    dag.register_transition(_adv(root), _adv(target), _adv_action(action))
+
+    config = mifrost.HorizonEncoderConfig()
+    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.ignore_actions = False
+    encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
+
+    goals = goal_inputs_from_problem(problem)
+    data = encoding_dict_to_pyg(encoder.encode(_adv(root), dag, goals))
+    arity_by_relation = encoder.relation_dict.arity
+    symbol_type = config.symbol_type_id
+
+    checked = 0
+    for node_type in data.node_types:
+        if node_type == symbol_type:
+            continue
+        observed_positions: set[int] = set()
+        for src_type, pos, dst_type in data.edge_types:
+            if src_type != symbol_type or dst_type != node_type:
+                continue
+            try:
+                pos_idx = int(pos)
+            except (TypeError, ValueError):
+                continue
+            edge_index = data[(src_type, pos, dst_type)].edge_index
+            if edge_index.numel() == 0:
+                continue
+            observed_positions.add(pos_idx)
+
+        if not observed_positions:
+            continue
+        assert node_type in arity_by_relation
+        assert arity_by_relation[node_type] == max(observed_positions) + 1
+        checked += 1
+
+    assert checked > 0
