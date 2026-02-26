@@ -8,6 +8,7 @@ from torch_geometric.data import Data, HeteroData
 
 from .common import _encoding_dict_to_pyg
 from .types import (
+    BatchParam,
     EncodingDict,
     GoalLiteralInput,
     GroundActionInput,
@@ -24,18 +25,28 @@ GoalBatchInput: TypeAlias = Iterable[GoalLiteralInput] | None
 SubgoalLayersInput: TypeAlias = Iterable[Iterable[GoalLiteralInput]] | None
 ActionBatchInput: TypeAlias = Iterable[GroundActionInput] | None
 GoalBatchParam: TypeAlias = (
-    Iterable[GoalLiteralInput] | Sequence[Iterable[GoalLiteralInput] | None] | None
+    BatchParam[Iterable[GoalLiteralInput]]
+    | Iterable[GoalLiteralInput]
+    | Sequence[Iterable[GoalLiteralInput] | None]
+    | None
 )
 ActionBatchParam: TypeAlias = (
-    Iterable[GroundActionInput] | Sequence[Iterable[GroundActionInput] | None] | None
+    BatchParam[Iterable[GroundActionInput]]
+    | Iterable[GroundActionInput]
+    | Sequence[Iterable[GroundActionInput] | None]
+    | None
 )
 SubgoalLayersBatchParam: TypeAlias = (
-    Iterable[Iterable[GoalLiteralInput]]
+    BatchParam[Iterable[Iterable[GoalLiteralInput]]]
+    | Iterable[Iterable[GoalLiteralInput]]
     | Sequence[Iterable[Iterable[GoalLiteralInput]] | None]
     | None
 )
 HistorySubgoalsBatchParam: TypeAlias = (
-    HistorySubgoalInput | Sequence[HistorySubgoalInput | None] | None
+    BatchParam[HistorySubgoalInput]
+    | HistorySubgoalInput
+    | Sequence[HistorySubgoalInput | None]
+    | None
 )
 
 

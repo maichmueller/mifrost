@@ -15,6 +15,8 @@
 #include <type_traits>
 #include <variant>
 
+#include "mifrost/input_handling/batch_input_parser.hpp"
+
 namespace mifrost {
 void HGraphEncoderEngine::append_edges(
    BatchBuilder& builder,
@@ -1072,5 +1074,68 @@ int64_t HGraphEncoderEngine::get_or_add_node(
    }
    builder.add_nodes(node_type, idx + 1);
    return idx;
+}
+
+BatchBuilder::BatchEncoding HGraphEncoderEngine::encode_batch(
+   const batch_input::parsed::HGraphBatchInputs& inputs,
+   std::optional< int > history_max_steps
+)
+{
+   const batch_input::parsed::ActionPayload empty_actions{};
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+
+   const size_t state_count = inputs.states.states.size();
+   for(size_t idx = 0; idx < state_count; ++idx) {
+      const auto& state_entry = inputs.states.states[idx];
+      const auto& goals_entry = inputs.goals.at(idx);
+      const auto& actions_entry = inputs.actions.at(idx);
+      const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
+      const auto& history_entry = inputs.history_subgoals.at(idx);
+
+      const batch_input::parsed::ActionPayload& actions_payload = actions_entry.has_value()
+                                                                     ? *actions_entry
+                                                                     : empty_actions;
+      const bool has_aux_payload = subgoal_layers_entry.has_value() or not actions_payload.empty()
+                                   or history_entry.has_value();
+
+      if(not goals_entry.has_value() and not has_aux_payload) {
+         encode(state_entry.state, builder);
+         builder.next_graph();
+         continue;
+      }
+
+      GoalInputs goal_inputs;
+      if(goals_entry.has_value()) {
+         const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
+                                                                   : nullptr;
+         goal_inputs = batch_input::compose_goal_inputs(*goals_entry, layers_ptr);
+      } else {
+         goal_inputs = batch_input::default_goal_inputs_for_batch_state(state_entry);
+         if(subgoal_layers_entry.has_value()) {
+            size_t level = 1;
+            for(const auto& layer : *subgoal_layers_entry) {
+               goal_inputs.extend(layer, level);
+               ++level;
+            }
+         }
+      }
+
+      if(history_entry.has_value()) {
+         encode(
+            state_entry.state,
+            goal_inputs,
+            actions_payload,
+            *history_entry,
+            history_max_steps,
+            builder
+         );
+      } else {
+         encode(state_entry.state, goal_inputs, actions_payload, builder);
+      }
+      builder.next_graph();
+   }
+
+   return builder.build();
 }
 }  // namespace mifrost

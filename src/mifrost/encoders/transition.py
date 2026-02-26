@@ -24,7 +24,12 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
+from .common import (
+    _advanced_state,
+    _convert_batch_payload,
+    _encoding_dict_to_pyg,
+    _split_goals,
+)
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -32,6 +37,10 @@ from .types import (
     NativeEncodingInput,
     StateInput,
     default_goals_from_state,
+    is_goal_literal_input,
+    is_state_input,
+    to_advanced_literal,
+    to_advanced_state,
 )
 
 
@@ -102,14 +111,11 @@ class _TransitionEncoderBase(HGraphEncoder):
         """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
-        if history_subgoals is not None:
-            raise TypeError(
-                f"{self.__class__.__name__} does not accept 'history_subgoals' in encode"
-            )
-        if history_max_steps is not None:
-            raise TypeError(
-                f"{self.__class__.__name__} does not accept 'history_max_steps' in encode"
-            )
+        # Transition encoders ignore action/history kwargs.
+        _ = actions
+        _ = history_subgoals
+        _ = history_max_steps
+        _ = kwargs
         adv_state = _advanced_state(state)
         adv_successor = _advanced_state(successor)
         if goals is None:
@@ -134,15 +140,40 @@ class _TransitionEncoderBase(HGraphEncoder):
             raise ValueError(
                 "successors must be provided for transition batch encoding"
             )
+        # Transition encoders ignore action/history kwargs.
+        _ = actions
+        _ = history_subgoals
+        _ = history_max_steps
+        _ = kwargs
+        states_for_core = _convert_batch_payload(
+            states,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        )
+        successors_for_core = _convert_batch_payload(
+            successors,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        )
+        goals_for_core = _convert_batch_payload(
+            goals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        subgoal_layers_for_core = _convert_batch_payload(
+            subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
         return self._engine.encode_batch(
             self.__class__.__name__,
-            states,
-            successors,
-            goals,
-            actions,
-            subgoal_layers,
-            history_subgoals,
-            history_max_steps,
+            states_for_core,
+            successors_for_core,
+            goals_for_core,
+            None,
+            subgoal_layers_for_core,
+            None,
+            None,
         )
 
     def _dict_to_pyg(

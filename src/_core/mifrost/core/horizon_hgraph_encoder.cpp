@@ -9,6 +9,8 @@
 #include <sstream>
 #include <utility>
 
+#include "mifrost/input_handling/batch_input_parser.hpp"
+
 namespace mifrost {
 
 namespace {
@@ -1096,6 +1098,46 @@ void HorizonHGraphEncoderEngine::encode_impl(
    }
 
    finalize_hetero_encoding(builder, workspace, object_names_override_ptr);
+}
+
+BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
+   const batch_input::parsed::HorizonBatchInputs& inputs
+)
+{
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+
+   const size_t state_count = inputs.roots.states.size();
+   for(size_t idx = 0; idx < state_count; ++idx) {
+      const auto& root_entry = inputs.roots.states[idx];
+      const auto& dag_entry = inputs.dags.at(idx);
+      const auto& goals_entry = inputs.goals.at(idx);
+      const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
+
+      const TransitionDAG default_dag(root_entry.state);
+      const TransitionDAG& dag_ref = dag_entry.has_value() ? *dag_entry : default_dag;
+
+      GoalInputs goal_inputs;
+      if(goals_entry.has_value()) {
+         const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
+                                                                   : nullptr;
+         goal_inputs = batch_input::compose_goal_inputs(*goals_entry, layers_ptr);
+      } else {
+         goal_inputs = batch_input::default_goal_inputs_for_batch_state(root_entry);
+         if(subgoal_layers_entry.has_value()) {
+            size_t level = 1;
+            for(const auto& layer : *subgoal_layers_entry) {
+               goal_inputs.extend(layer, level);
+               ++level;
+            }
+         }
+      }
+
+      encode(root_entry.state, dag_ref, goal_inputs, builder);
+      builder.next_graph();
+   }
+
+   return builder.build();
 }
 
 void HorizonHGraphEncoderEngine::configure_relations()

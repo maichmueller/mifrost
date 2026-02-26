@@ -38,10 +38,13 @@
 
 - `encode_batch(states, *, ...)` is kwargs-based (no tuple/sample batch payloads).
 - Batch-capable kwargs accept either shared payloads or per-state sequences.
-- Batch paths are C++-parsed and native-only (adapter-backed objects are rejected).
+- High-level encoder batch paths preprocess wrapper/adapter inputs in Python, then
+  dispatch to strict advanced-only C++ batch parsing.
+- Direct low-level `_core._parse_*` batch helpers stay advanced-only and reject
+  adapter-backed objects.
 - Encoder support:
   - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
-  - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` rejected)
+  - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` ignored)
   - `ILGEncoder`: per-state `goals`, `actions`, `subgoal_layers`
-  - `Transition*Encoder`: aligned `successors`, per-state `goals`, `subgoal_layers` (`actions` rejected)
-  - `HorizonEncoder`: per-state `dags`, `goals`, `subgoal_layers` (`actions`/history rejected)
+  - `Transition*Encoder`: aligned `successors`, per-state `goals`, `subgoal_layers` (`actions`/history ignored)
+  - `HorizonEncoder`: per-state `dags`, `goals`, `subgoal_layers` (`actions`/history ignored)

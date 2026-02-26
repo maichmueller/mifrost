@@ -77,16 +77,13 @@ def test_hgraph_batch_rejects_per_state_length_mismatch(small_blocks):
         encoder.encode_batch([state, state], goals=[_problem_goals(problem)])
 
 
-def test_color_batch_rejects_actions(small_blocks):
+def test_color_batch_ignores_actions(small_blocks):
     _space, domain, problem = small_blocks
     state = problem.get_initial_state()
     encoder = ColorEncoder(domain)
 
-    with pytest.raises(
-        TypeError,
-        match="ColorEncoder does not accept 'actions' in encode_batch",
-    ):
-        encoder.encode_batch([state], actions=[])
+    encoding = encoder.encode_batch([state], actions=[object()])
+    assert encoding.num_graphs == 1
 
 
 def test_color_batch_accepts_per_state_goals_and_subgoal_layers(small_blocks):
@@ -115,23 +112,20 @@ def test_transition_batch_requires_successors(small_blocks):
         encoder.encode_batch([state], goals=_problem_goals(problem))
 
 
-def test_transition_batch_rejects_actions(small_blocks):
+def test_transition_batch_ignores_unsupported_kwargs(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
     (_action0, successor), _ = _first_transitions(space, state, count=2)
     encoder = TransitionHGraphEncoder(domain)
 
-    with pytest.raises(
-        TypeError,
-        match="TransitionHGraphEncoder does not accept 'actions' in encode_batch",
-    ):
-        encoder.encode_batch([state], successors=[successor], actions=[])
-
-    with pytest.raises(
-        TypeError,
-        match="TransitionHGraphEncoder does not accept 'history_subgoals' in encode_batch",
-    ):
-        encoder.encode_batch([state], successors=[successor], history_subgoals=[])
+    encoding = encoder.encode_batch(
+        [state],
+        successors=[successor],
+        actions=[object()],
+        history_subgoals=[object()],
+        history_max_steps=7,
+    )
+    assert encoding.num_graphs == 1
 
 
 def test_transition_batch_accepts_per_state_goals_subgoal_layers(small_blocks):
@@ -177,30 +171,21 @@ def test_horizon_batch_accepts_per_state_goals_and_dags(small_blocks):
     assert encoding.num_graphs == 2
 
 
-def test_horizon_batch_rejects_unsupported_fields(small_blocks):
+def test_horizon_batch_ignores_unsupported_fields(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
     (action0, succ0), _ = _first_transitions(space, root, count=2)
     dag = _single_transition_dag(root, action0, succ0)
     encoder = HorizonEncoder(domain)
 
-    with pytest.raises(
-        TypeError,
-        match="HorizonEncoder does not accept 'actions' in encode_batch",
-    ):
-        encoder.encode_batch([root], dags=[dag], actions=[])
-
-    with pytest.raises(
-        TypeError,
-        match="HorizonEncoder does not accept 'history_subgoals' in encode_batch",
-    ):
-        encoder.encode_batch([root], dags=[dag], history_subgoals=[])
-
-    with pytest.raises(
-        TypeError,
-        match="HorizonEncoder does not accept 'history_max_steps' in encode_batch",
-    ):
-        encoder.encode_batch([root], dags=[dag], history_max_steps=1)
+    encoding = encoder.encode_batch(
+        [root],
+        dags=[dag],
+        actions=[object()],
+        history_subgoals=[object()],
+        history_max_steps=1,
+    )
+    assert encoding.num_graphs == 1
 
 
 def test_horizon_batch_rejects_dag_length_mismatch(small_blocks):
@@ -233,7 +218,87 @@ def test_ilg_batch_accepts_per_state_goals_actions_and_subgoal_layers(small_bloc
     assert data["action"].num_nodes == 1
 
 
-def test_batch_rejects_state_adapters(small_blocks):
+def test_hgraph_advanced_batch_derives_default_goals_with_aux_payload(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    transitions = _first_transitions(space, state, count=1)
+    if not transitions:
+        pytest.skip("Fixture does not provide forward transitions.")
+    action0, _ = transitions[0]
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    encoding = encoder.encode_batch(
+        [adv_state(state)],
+        actions=[adv_action(action0)],
+    )
+    assert encoding.num_graphs == 1
+    assert encoding.num_nodes > 0
+
+
+def test_wrapper_and_advanced_batch_parity_across_encoders(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+    goals_adv = [getattr(goal, "_advanced_ground_literal", goal) for goal in goals]
+    (action0, succ0), _ = _first_transitions(space, state, count=2)
+
+    hgraph = HGraphEncoder(domain, ignore_actions=False)
+    hgraph_wrapper = hgraph.encode_batch([state], goals=goals, actions=[action0])
+    hgraph_advanced = hgraph.encode_batch(
+        [adv_state(state)],
+        goals=goals_adv,
+        actions=[adv_action(action0)],
+    )
+    assert hgraph_wrapper.num_nodes == hgraph_advanced.num_nodes
+    assert hgraph_wrapper.num_edges == hgraph_advanced.num_edges
+
+    color = ColorEncoder(domain)
+    color_wrapper = color.encode_batch([state], goals=goals)
+    color_advanced = color.encode_batch([adv_state(state)], goals=goals_adv)
+    assert color_wrapper.num_nodes == color_advanced.num_nodes
+    assert color_wrapper.num_edges == color_advanced.num_edges
+
+    transition = TransitionHGraphEncoder(domain)
+    transition_wrapper = transition.encode_batch(
+        [state],
+        successors=[succ0],
+        goals=[goals],
+        subgoal_layers=[None],
+    )
+    transition_advanced = transition.encode_batch(
+        [adv_state(state)],
+        successors=[adv_state(succ0)],
+        goals=[goals_adv],
+        subgoal_layers=[None],
+    )
+    assert transition_wrapper.num_nodes == transition_advanced.num_nodes
+    assert transition_wrapper.num_edges == transition_advanced.num_edges
+
+    horizon = HorizonEncoder(domain, ignore_actions=False)
+    dag = _single_transition_dag(state, action0, succ0)
+    horizon_wrapper = horizon.encode_batch([state], dags=[dag], goals=[goals])
+    horizon_advanced = horizon.encode_batch(
+        [adv_state(state)],
+        dags=[dag],
+        goals=[goals_adv],
+    )
+    assert horizon_wrapper.num_nodes == horizon_advanced.num_nodes
+    assert horizon_wrapper.num_edges == horizon_advanced.num_edges
+
+    ilg = ILGEncoder(domain)
+    ilg_wrapper = ilg.encode_batch([state], goals=[goals], actions=[[action0]])
+    ilg_advanced = ilg.encode_batch(
+        [state],
+        goals=[goals_adv],
+        actions=[[adv_action(action0)]],
+    )
+    assert ilg_wrapper.num_nodes == ilg_advanced.num_nodes
+    assert ilg_wrapper.num_edges == ilg_advanced.num_edges
+
+
+def test_batch_accepts_state_adapters(small_blocks):
     _space, domain, problem = small_blocks
     state = problem.get_initial_state()
     encoder = HGraphEncoder(domain)
@@ -246,16 +311,13 @@ def test_batch_rejects_state_adapters(small_blocks):
         lambda _: adv_state(state),
     )
     try:
-        with pytest.raises(
-            TypeError,
-            match="Batch parsing does not support state adapters",
-        ):
-            encoder.encode_batch([WrappedState()])
+        encoding = encoder.encode_batch([WrappedState()])
+        assert encoding.num_graphs == 1
     finally:
         mifrost.unregister_state_adapter(WrappedState)
 
 
-def test_batch_rejects_literal_adapters(small_blocks):
+def test_batch_accepts_literal_adapters(small_blocks):
     _space, domain, problem = small_blocks
     state = problem.get_initial_state()
     goals = _problem_goals(problem)
@@ -272,16 +334,13 @@ def test_batch_rejects_literal_adapters(small_blocks):
         lambda _: getattr(goals[0], "_advanced_ground_literal", goals[0]),
     )
     try:
-        with pytest.raises(
-            TypeError,
-            match="Batch parsing does not support literal adapters",
-        ):
-            encoder.encode_batch([state], goals=[WrappedLiteral()])
+        encoding = encoder.encode_batch([state], goals=[WrappedLiteral()])
+        assert encoding.num_graphs == 1
     finally:
         mifrost.unregister_literal_adapter(WrappedLiteral)
 
 
-def test_batch_rejects_action_adapters(small_blocks):
+def test_batch_accepts_action_adapters(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
     transitions = _first_transitions(space, state, count=1)
@@ -299,10 +358,96 @@ def test_batch_rejects_action_adapters(small_blocks):
         lambda _: adv_action(action0),
     )
     try:
+        encoding = encoder.encode_batch([state], actions=[WrappedAction()])
+        assert encoding.num_graphs == 1
+    finally:
+        mifrost.unregister_action_adapter(WrappedAction)
+
+
+def test_core_parse_states_rejects_state_adapters(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+
+    class WrappedState:
+        pass
+
+    mifrost.register_state_adapter(
+        WrappedState,
+        lambda _: adv_state(state),
+    )
+    try:
+        with pytest.raises(
+            TypeError,
+            match="Batch parsing does not support state adapters",
+        ):
+            mifrost._core._parse_states_batch([WrappedState()])
+    finally:
+        mifrost.unregister_state_adapter(WrappedState)
+
+
+def test_core_parse_goals_rejects_literal_adapters(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+
+    class WrappedLiteral:
+        pass
+
+    mifrost.register_literal_adapter(
+        WrappedLiteral,
+        lambda _: getattr(goals[0], "_advanced_ground_literal", goals[0]),
+    )
+    try:
+        with pytest.raises(
+            TypeError,
+            match="Batch parsing does not support literal adapters",
+        ):
+            mifrost._core._parse_goals_batch_param([WrappedLiteral()], 1)
+    finally:
+        mifrost.unregister_literal_adapter(WrappedLiteral)
+
+
+def test_core_parse_actions_rejects_action_adapters(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    transitions = _first_transitions(space, state, count=1)
+    if not transitions:
+        pytest.skip("Fixture does not provide forward transitions.")
+    action0, _ = transitions[0]
+
+    class WrappedAction:
+        pass
+
+    mifrost.register_action_adapter(
+        WrappedAction,
+        lambda _: adv_action(action0),
+    )
+    try:
         with pytest.raises(
             TypeError,
             match="Batch parsing does not support action adapters",
         ):
-            encoder.encode_batch([state], actions=[WrappedAction()])
+            mifrost._core._parse_actions_batch_param([WrappedAction()], 1)
     finally:
         mifrost.unregister_action_adapter(WrappedAction)
+
+
+def test_core_parse_states_rejects_wrapper_states(small_blocks):
+    _space, _domain, problem = small_blocks
+    state = problem.get_initial_state()
+
+    with pytest.raises(
+        TypeError,
+        match="states entry at index 0 has invalid type",
+    ):
+        mifrost._core._parse_states_batch([state])
+
+
+def test_core_parse_goals_rejects_invalid_literal_types():
+    with pytest.raises(
+        TypeError,
+        match="has invalid goal literal type",
+    ):
+        mifrost._core._parse_goals_batch_param([object()], 1)

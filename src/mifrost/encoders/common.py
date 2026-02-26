@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable as IterableABC
+from collections.abc import Sequence as SequenceABC
+from typing import Any, Callable, Iterable, Mapping
 
 import pymimir.advanced.formalism as af
 import torch
 from torch_geometric.data import Batch, HeteroData
 
 from .types import (
+    BatchParam,
     EncodingDict,
     DomainInput,
     GoalLiteralInput,
@@ -123,6 +126,84 @@ def _prepare_history_subgoals(
         adv_literals = [_advanced_literal(literal) for literal in literals]
         out.append((int(dt), adv_literals))
     return out
+
+
+def _convert_batch_payload(
+    value: object,
+    *,
+    is_leaf: Callable[[object], bool],
+    convert_leaf: Callable[[object], object],
+) -> object:
+    if value is None:
+        return None
+    if isinstance(value, BatchParam):
+        if value.kind == "none":
+            return BatchParam.none()
+        if value.kind == "shared":
+            return BatchParam.shared(
+                _convert_batch_payload(
+                    value.value,
+                    is_leaf=is_leaf,
+                    convert_leaf=convert_leaf,
+                )
+            )
+        if value.kind == "separate":
+            if not isinstance(value.value, SequenceABC) or isinstance(
+                value.value, (str, bytes, bytearray)
+            ):
+                raise TypeError("BatchParam(separate) value must be a sequence")
+            return BatchParam.separate(
+                _convert_batch_payload(
+                    entry,
+                    is_leaf=is_leaf,
+                    convert_leaf=convert_leaf,
+                )
+                if entry is not None
+                else None
+                for entry in value.value
+            )
+        raise ValueError("BatchParam.kind must be 'shared', 'separate', or 'none'")
+    if is_leaf(value):
+        return convert_leaf(value)
+    if isinstance(value, (str, bytes, bytearray)):
+        return value
+    if isinstance(value, tuple):
+        return tuple(
+            _convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        )
+    if isinstance(value, list):
+        return [
+            _convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        ]
+    if isinstance(value, SequenceABC):
+        return [
+            _convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        ]
+    if isinstance(value, IterableABC):
+        return (
+            _convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        )
+    return value
 
 
 def _coerce_encoding_dict(encoding: NativeEncodingInput | Any) -> EncodingDict:

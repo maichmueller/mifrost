@@ -280,7 +280,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
         assert (edge_index[0] == placeholder_idx).all()
 
 
-def test_transition_encode_batch_rejects_actions(small_blocks):
+def test_transition_encode_batch_ignores_actions(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
     transitions = list(space.get_forward_transitions(state))
@@ -289,8 +289,11 @@ def test_transition_encode_batch_rejects_actions(small_blocks):
 
     action, successor = transitions[0]
     encoder = TransitionHGraphEncoder(domain)
-    with pytest.raises(
-        TypeError,
-        match="TransitionHGraphEncoder does not accept 'actions' in encode_batch",
-    ):
-        encoder.encode_batch([state], successors=[successor], actions=[action])
+    encoding = encoder.encode_batch(
+        [state],
+        successors=[successor],
+        actions=[action],
+        history_subgoals=[object()],
+        history_max_steps=2,
+    )
+    assert encoding.num_graphs == 1

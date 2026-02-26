@@ -21,7 +21,6 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -29,6 +28,7 @@
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/core/successor_hgraph_encoder.hpp"
 #include "mifrost/core/transition_dag.hpp"
+#include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -116,9 +116,7 @@ void init_successor_encoders(nb::module_& m)
             nb::handle subgoal_layers,
             nb::handle history_subgoals,
             std::optional< int > history_max_steps) {
-            return batch_input::successor_encode_batch(
-               encoder,
-               encoder_name,
+            auto parsed = batch_input::parse_successor_batch_inputs(
                states,
                successors,
                goals,
@@ -127,6 +125,8 @@ void init_successor_encoders(nb::module_& m)
                history_subgoals,
                history_max_steps
             );
+            (void) encoder_name;
+            return encoder.encode_batch(parsed);
          },
          "encoder_name"_a,
          "states"_a,

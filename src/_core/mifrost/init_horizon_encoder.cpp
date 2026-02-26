@@ -21,7 +21,6 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
@@ -29,6 +28,7 @@
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/core/successor_hgraph_encoder.hpp"
 #include "mifrost/core/transition_dag.hpp"
+#include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -122,17 +122,10 @@ void init_horizon_encoder(nb::module_& m)
             nb::object subgoal_layers,
             nb::object history_subgoals,
             std::optional< int > history_max_steps) {
-            return batch_input::horizon_encode_batch(
-               encoder,
-               "HorizonEncoder",
-               roots,
-               dags,
-               goals,
-               actions,
-               subgoal_layers,
-               history_subgoals,
-               history_max_steps
+            auto parsed = batch_input::parse_horizon_batch_inputs(
+               roots, dags, goals, actions, subgoal_layers, history_subgoals, history_max_steps
             );
+            return encoder.encode_batch(parsed);
          },
          "roots"_a,
          "dags"_a = nb::none(),

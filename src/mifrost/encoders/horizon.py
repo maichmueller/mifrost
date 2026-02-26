@@ -29,7 +29,12 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from .common import _advanced_state, _encoding_dict_to_pyg, _split_goals
+from .common import (
+    _advanced_state,
+    _convert_batch_payload,
+    _encoding_dict_to_pyg,
+    _split_goals,
+)
 from .hgraph import HGraphEncoder
 from .types import (
     HeteroEncoding,
@@ -38,6 +43,10 @@ from .types import (
     GoalLiteralInput,
     StateInput,
     default_goals_from_state,
+    is_goal_literal_input,
+    is_state_input,
+    to_advanced_literal,
+    to_advanced_state,
 )
 
 
@@ -283,14 +292,33 @@ class HorizonEncoder(HGraphEncoder):
         history_max_steps: int | None = None,
     ) -> HeteroEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
-        return self._engine.encode_batch(
+        # Horizon batch encoding ignores action/history kwargs.
+        _ = actions
+        _ = history_subgoals
+        _ = history_max_steps
+        roots_for_core = _convert_batch_payload(
             roots,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        )
+        goals_for_core = _convert_batch_payload(
+            goals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        subgoal_layers_for_core = _convert_batch_payload(
+            subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        return self._engine.encode_batch(
+            roots_for_core,
             dags=dags,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
-            history_subgoals=history_subgoals,
-            history_max_steps=history_max_steps,
+            goals=goals_for_core,
+            actions=None,
+            subgoal_layers=subgoal_layers_for_core,
+            history_subgoals=None,
+            history_max_steps=None,
         )
 
     def stream(self) -> HorizonEncoderStream:

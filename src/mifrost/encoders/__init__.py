@@ -17,6 +17,7 @@ from .transition import (
 from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
 from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
 from .types import (
+    BatchParam,
     register_action_adapter,
     register_domain_adapter,
     register_literal_adapter,
@@ -49,6 +50,7 @@ __all__ = [
     "_encoding_dict_to_pyg",
     "_split_goals",
     "encoding_to_tensors",
+    "BatchParam",
     "register_state_adapter",
     "unregister_state_adapter",
     "register_domain_adapter",

@@ -227,8 +227,10 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
   - Each extra batch argument is either shared (applies to all states) or a per-state
     sequence of length `len(states)` with optional `None` entries.
   - Batch parsing/execution is C++-backed across encoders.
-  - Batch accepts native planning objects only (`wf/ase` states, native literals/actions, `TransitionDAG`).
-  - Unsupported batch fields now raise explicit `TypeError` on each encoder.
+  - High-level `encode_batch(...)` accepts wrapper/native planning inputs and converts
+    wrapper/adapter-backed values in Python before entering the C++ batch parser.
+  - Low-level `_core._parse_*` helpers and C++ batch internals are strict advanced-only.
+  - Unsupported batch kwargs are ignored silently by encoder batch APIs.
   - Per-state argument length mismatches raise `ValueError`.
   - Example:
     - Shared goals/actions:
@@ -238,11 +240,12 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
 
   - Migration notes (hard break):
     - Old encoder-specific inference/ignoring of batch kwargs was removed.
-    - Adapter-registered custom Python types are no longer accepted in batch paths.
-      - Adapter APIs still apply to single-item `encode(...)`.
-    - `Transition*Encoder` now requires aligned `successors` and rejects `actions`.
-    - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers` and rejects action/history batch kwargs.
-    - `ColorEncoder` rejects `actions` in batch mode.
+    - Low-level `_core._parse_*` batch parser helpers no longer accept adapter-backed
+      custom Python types.
+      - High-level encoder `encode_batch(...)` now performs Python-side adapter conversion.
+    - `Transition*Encoder` requires aligned `successors`; unsupported kwargs are ignored.
+    - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers`; unsupported kwargs are ignored.
+    - `ColorEncoder` ignores `actions` in batch mode.
 
 - `stream() -> HGraphEncoderStream`
   - Create an append-only stream encoder backed by the same C++ engine.
@@ -281,8 +284,10 @@ mifrost.register_action_adapter(MyActionType, lambda a: a.to_advanced_action())
 Adapters are matched by **exact concrete type**.
 
 Batch hard-break note:
-- `encode_batch(...)` / `encode_batch_pyg(...)` do not use adapter registries.
-- Passing adapter-backed objects to batch APIs raises `TypeError`.
+- High-level `encode_batch(...)` / `encode_batch_pyg(...)` use adapter registries
+  during Python-side preprocessing before calling strict C++ batch parsing.
+- Direct low-level `_core._parse_*` batch helper calls remain advanced-only and
+  reject adapter-backed objects.
 
 ## Development
 

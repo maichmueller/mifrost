@@ -27,6 +27,12 @@
 
 namespace mifrost {
 
+namespace batch_input {
+namespace parsed {
+struct HGraphBatchInputs;
+}
+}  // namespace batch_input
+
 /**
  * @brief Heterogeneous graph encoder engine.
  *
@@ -219,6 +225,12 @@ class HGraphEncoderEngine {
    {
       encode_state(state, builder);
    }
+
+   /// Encode a parsed batch input plan into one batch encoding.
+   BatchBuilder::BatchEncoding encode_batch(
+      const batch_input::parsed::HGraphBatchInputs& inputs,
+      std::optional< int > history_max_steps
+   );
 
    /// Return the effective runtime configuration.
    const Config& get_config() const { return config_; }

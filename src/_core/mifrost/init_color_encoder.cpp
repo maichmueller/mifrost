@@ -8,9 +8,9 @@
 
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/color_encoder.hpp"
 #include "mifrost/core/goal_inputs.hpp"
+#include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -134,9 +134,10 @@ void init_color_encoder(nb::module_& m)
             nb::object goals,
             nb::object actions,
             nb::object subgoal_layers) {
-            return batch_input::color_encode_batch(
-               encoder, "ColorEncoder", states, goals, actions, subgoal_layers
+            auto parsed = batch_input::parse_color_batch_inputs(
+               states, goals, actions, subgoal_layers
             );
+            return encoder.encode_batch(parsed);
          },
          "states"_a,
          "goals"_a = nb::none(),

@@ -18,6 +18,12 @@
 
 namespace mifrost {
 
+namespace batch_input {
+namespace parsed {
+struct ColorBatchInputs;
+}
+}  // namespace batch_input
+
 /**
  * @brief Color-encoding engine producing homogeneous graph payloads.
  */
@@ -65,6 +71,9 @@ class ColorEncoderEngine {
    {
       encode_impl(state, goals, actions, builder);
    }
+
+   /// Encode a parsed batch input plan into one batch encoding.
+   BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::ColorBatchInputs& inputs);
 
    /// Return effective engine config.
    const Config& get_config() const { return config_; }

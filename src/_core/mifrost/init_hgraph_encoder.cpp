@@ -13,10 +13,10 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/batch_input_parser.hpp"
 #include "mifrost/core/default_relations.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
+#include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -280,9 +280,10 @@ void init_hgraph_encoder(nb::module_& m)
             nb::object subgoal_layers,
             nb::object history_subgoals,
             std::optional< int > history_max_steps) {
-            return batch_input::hgraph_encode_batch(
-               encoder, states, goals, actions, subgoal_layers, history_subgoals, history_max_steps
+            auto parsed = batch_input::parse_hgraph_batch_inputs(
+               states, goals, actions, subgoal_layers, history_subgoals
             );
+            return encoder.encode_batch(parsed, history_max_steps);
          },
          "states"_a,
          "goals"_a = nb::none(),

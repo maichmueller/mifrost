@@ -36,6 +36,7 @@ from .common import (
     _advanced_action,
     _advanced_literal,
     _advanced_state,
+    _convert_batch_payload,
     _encoding_dict_to_pyg,
 )
 from .types import (
@@ -47,6 +48,9 @@ from .types import (
     is_action_input,
     is_goal_literal_input,
     is_state_input,
+    to_advanced_action,
+    to_advanced_literal,
+    to_advanced_state,
 )
 
 
@@ -459,12 +463,37 @@ class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode one or many states into ILG batch format."""
-        state_list, goals_per_state, actions_per_state, subgoal_layers_per_state = (
+        if is_state_input(states):
+            state_list = [states]
+        else:
+            state_list = list(states)
+
+        states_for_core = _convert_batch_payload(
+            state_list,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        )
+        goals_for_core = _convert_batch_payload(
+            goals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        actions_for_core = _convert_batch_payload(
+            actions,
+            is_leaf=is_action_input,
+            convert_leaf=to_advanced_action,
+        )
+        subgoal_layers_for_core = _convert_batch_payload(
+            subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        _, goals_per_state, actions_per_state, subgoal_layers_per_state = (
             _core._parse_ilg_batch_inputs(
-                states,
-                goals=goals,
-                actions=actions,
-                subgoal_layers=subgoal_layers,
+                states_for_core,
+                goals=goals_for_core,
+                actions=actions_for_core,
+                subgoal_layers=subgoal_layers_for_core,
             )
         )
 

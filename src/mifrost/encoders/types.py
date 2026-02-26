@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
+    Generic,
     Literal,
     Mapping,
     Protocol,
     Sequence,
     TYPE_CHECKING,
     TypeAlias,
+    TypeVar,
     runtime_checkable,
 )
 
@@ -40,6 +43,29 @@ PredicateInput: TypeAlias = (
     wf.Predicate | af.StaticPredicate | af.FluentPredicate | af.DerivedPredicate
 )
 ObjectInput: TypeAlias = wf.Object | af.Object
+
+_BatchT = TypeVar("_BatchT")
+
+
+@dataclass(frozen=True)
+class BatchParam(Generic[_BatchT]):
+    """Explicit shared/separate wrapper for batch inputs."""
+
+    kind: Literal["shared", "separate", "none"]
+    value: object | None = None
+
+    @classmethod
+    def shared(cls, value: _BatchT) -> "BatchParam[_BatchT]":
+        return cls(kind="shared", value=value)
+
+    @classmethod
+    def separate(cls, values: Iterable[_BatchT | None]) -> "BatchParam[_BatchT]":
+        return cls(kind="separate", value=list(values))
+
+    @classmethod
+    def none(cls) -> "BatchParam[_BatchT]":
+        return cls(kind="none", value=None)
+
 
 STATE_TYPES = (wf.State, ase.State)
 WRAPPER_STATE_TYPES = (wf.State,)

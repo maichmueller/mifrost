@@ -4,6 +4,12 @@
 
 namespace mifrost {
 
+namespace batch_input {
+namespace parsed {
+struct SuccessorBatchInputs;
+}
+}  // namespace batch_input
+
 /**
  * @brief Encoder that handles state + immediate successor with delta or full representation.
  *
@@ -36,6 +42,11 @@ class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
       const mimir::search::State& successor,
       const GoalInputs& goals,
       BatchBuilder& builder
+   );
+
+   /// Encode a parsed batch input plan into one batch encoding.
+   BatchBuilder::BatchEncoding encode_batch(
+      const batch_input::parsed::SuccessorBatchInputs& inputs
    );
 
    /// Return effective successor config (includes inherited hgraph fields).

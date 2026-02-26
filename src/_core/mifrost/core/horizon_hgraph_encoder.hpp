@@ -6,6 +6,12 @@
 
 namespace mifrost {
 
+namespace batch_input {
+namespace parsed {
+struct HorizonBatchInputs;
+}
+}  // namespace batch_input
+
 /**
  * @brief Encoder that handles lookahead transition graphs (OR-graphs) using HGraph semantics.
  *
@@ -46,6 +52,9 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       const GoalInputs& goals,
       BatchBuilder& builder
    );
+
+   /// Encode a parsed batch input plan into one batch encoding.
+   BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::HorizonBatchInputs& inputs);
 
    /// Return effective horizon config (includes inherited hgraph fields).
    const Config& get_config() const { return horizon_config_; }
