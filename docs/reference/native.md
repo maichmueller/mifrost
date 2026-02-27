@@ -13,7 +13,7 @@ Primary methods/properties include:
 - `as_hetero()`, `as_homo()` (lazy tensor facades without PyG materialization)
 - `has_field(key)`, `get_field(key)`
 - `set_field(key, value)`, `set_fields({...})`
-- `field_specs()`, `register_field_specs({...})`
+- `collate_spec()` (read-only batching metadata)
 - `keys()`, `items()` (lightweight runtime introspection)
 - `schema_fingerprint()`
 - `dumps(include_metadata=True)`, `loads(payload)`
@@ -35,7 +35,15 @@ Collision policy:
 
 - During `as_pyg(...)`, native graph fields still win over python attrs for the same key.
 - Registering python collation specs that collide with native graph-field keys now raises `ValueError`
-  (both on `register_field_specs(...)` and `batch_encodings(..., field_specs=...)`).
+  when passed via `batch_encodings(..., collate_spec=...)`.
+
+Python-side collation notes:
+
+- `collate_spec()` is informational metadata stored on already-batched outputs.
+- It is not a public registration surface and is not implicitly reused when re-batching.
+- To control dynamic-attr collation, pass `collate_spec=...` explicitly to:
+  - `mifrost.batch_encodings([...], collate_spec=...)`
+  - `encoder.encode_batch(..., batch_attrs=..., collate_spec=...)`
 
 ## Native Helpers
 
