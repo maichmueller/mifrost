@@ -129,6 +129,7 @@ def test_as_homo_parity_with_as_pyg_batch(small_blocks):
 
     view = encoding.as_homo()
     batch = encoding.as_pyg(as_batch=True)
+    assert not hasattr(batch, "node_types")
 
     assert view.graph_kind == "homo"
     assert view.num_graphs == encoding.num_graphs
@@ -140,18 +141,17 @@ def test_as_homo_parity_with_as_pyg_batch(small_blocks):
     assert view.edge_index is not None
     assert view.batch is not None
     assert view.ptr is not None
-    node_type = view.node_types[0]
     edge_type = view.edge_types[0] if view.edge_types else None
-    _assert_tensor_equal(view.x, batch[node_type].x)
+    _assert_tensor_equal(view.x, batch.x)
     if edge_type is not None:
-        _assert_tensor_equal(view.edge_index, batch[edge_type].edge_index)
-    _assert_tensor_equal(view.batch, batch[node_type].batch)
-    _assert_tensor_equal(view.ptr, batch[node_type].ptr)
-    if edge_type is None or "edge_attr" not in batch[edge_type]:
+        _assert_tensor_equal(view.edge_index, batch.edge_index)
+    _assert_tensor_equal(view.batch, batch.batch)
+    _assert_tensor_equal(view.ptr, batch.ptr)
+    if edge_type is None or getattr(batch, "edge_attr", None) is None:
         assert view.edge_attr is None
     else:
         assert view.edge_attr is not None
-        _assert_tensor_equal(view.edge_attr, batch[edge_type].edge_attr)
+        _assert_tensor_equal(view.edge_attr, batch.edge_attr)
 
 
 def test_facade_kind_gates_raise_on_mismatch(small_blocks):

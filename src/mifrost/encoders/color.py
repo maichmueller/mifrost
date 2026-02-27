@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 import networkx as nx
 import torch
-from torch_geometric.data import Batch, Data
+from torch_geometric.data import Data
 
 from .._core import (
     BatchBuilder,
@@ -29,12 +29,9 @@ from .common import (
     _advanced_state,
     _convert_batch_payload,
     _split_goals,
-    _to_tensor,
 )
 from .types import (
-    EncodingDict,
     HomoEncoding,
-    NativeEncodingInput,
     DomainInput,
     GoalLiteralInput,
     StateInput,
@@ -44,129 +41,6 @@ from .types import (
     to_advanced_literal,
     to_advanced_state,
 )
-
-
-def _encoding_dict_to_pyg_homo(
-    encoding_dict: NativeEncodingInput | Any,
-    *,
-    as_batch: bool | None = None,
-    include_metadata: bool = True,
-    undirected: bool = True,
-) -> Data:
-    """
-    Convert color-encoder encoding_dict into homogeneous PyG ``Data``/``Batch``.
-
-    This adapter expects the standard encoding_dict schema and uses a single node type.
-    """
-    if not isinstance(encoding_dict, Mapping):
-        if hasattr(encoding_dict, "as_dict"):
-            encoding_dict = encoding_dict.as_dict()
-        else:
-            raise TypeError(
-                f"Expected encoding_dict mapping or BatchEncoding-like object, got {type(encoding_dict)}"
-            )
-
-    raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
-    schema_obj = encoding_dict.get("schema")
-    if schema_obj is None:
-        raise ValueError(
-            "encoding_dict schema missing; rebuild the extension to emit schema"
-        )
-    if hasattr(schema_obj, "to_dict"):
-        schema_obj = schema_obj.to_dict()
-    if not isinstance(schema_obj, Mapping):
-        raise TypeError(
-            f"encoding_dict schema must be a mapping, got {type(schema_obj)}"
-        )
-    schema: Mapping[str, Any] = schema_obj
-
-    node_names_map: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
-    num_graphs = int(encoding_dict.get("num_graphs", 0))
-
-    if as_batch is None:
-        as_batch = num_graphs > 1
-
-    data: Data
-    if as_batch:
-        data = Batch(_base_cls=Data)
-    else:
-        data = Data()
-
-    tensors: dict[str, Any] = {}
-    tensors_torch: dict[str, torch.Tensor] = {}
-    for key_obj, value in raw_tensors.items():
-        key = key_obj if isinstance(key_obj, str) else str(key_obj)
-        tensors[key] = value
-
-    def get_tensor(key: str, value: Any | None = None) -> torch.Tensor:
-        cached = tensors_torch.get(key)
-        if cached is not None:
-            return cached
-        if value is None:
-            value = tensors[key]
-        tensor = _to_tensor(value)
-        tensors_torch[key] = tensor
-        return tensor
-
-    node_types = schema.get("node_types", [])
-    node_type = node_types[0] if node_types else "node"
-
-    for entry in schema.get("node_tensors", []):
-        key = entry["key"]
-        if key not in tensors:
-            raise KeyError(f"Schema references missing tensor key: {key}")
-        if entry["node_type"] != node_type:
-            continue
-        attr = entry["attr"]
-        data[attr] = get_tensor(key, tensors[key])
-
-    edge_components: dict[str, torch.Tensor] = {}
-    edge_attr: torch.Tensor | None = None
-    for entry in schema.get("edge_tensors", []):
-        key = entry["key"]
-        if key not in tensors:
-            raise KeyError(f"Schema references missing tensor key: {key}")
-        attr = entry["attr"]
-        if attr == "edge_index":
-            component = str(entry.get("part", ""))
-            if component == "":
-                raise ValueError(f"Missing edge_index component for key: {key}")
-            edge_components[component] = get_tensor(key, tensors[key])
-        elif attr == "edge_attr":
-            edge_attr = get_tensor(key, tensors[key])
-
-    if "0" in edge_components and "1" in edge_components:
-        edge_index = torch.stack((edge_components["0"], edge_components["1"]), dim=0)
-        if undirected and edge_index.numel() > 0:
-            src = edge_index[0]
-            dst = edge_index[1]
-            mask = src != dst
-            rev = torch.stack((dst[mask], src[mask]), dim=0)
-            edge_index = torch.cat((edge_index, rev), dim=1)
-            if edge_attr is not None:
-                edge_attr = torch.cat((edge_attr, edge_attr[mask]), dim=0)
-        data.edge_index = edge_index
-
-    if edge_attr is not None:
-        data.edge_attr = edge_attr
-
-    if include_metadata:
-        names = node_names_map.get(node_type, [])
-        data.node_names = names if isinstance(names, list) else list(names)
-
-    if as_batch and num_graphs > 0:
-        data._num_graphs = num_graphs
-        batch_key = f"{node_type}/batch"
-        if batch_key in tensors:
-            data.batch = get_tensor(batch_key, tensors[batch_key]).long()
-
-    if getattr(data, "x", None) is None:
-        if hasattr(data, "num_nodes") and data.num_nodes:
-            pass
-        elif hasattr(data, "node_names"):
-            data.num_nodes = len(data.node_names)
-
-    return data
 
 
 @dataclass
@@ -220,17 +94,6 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
         self._stream.reset()
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> Data:
-        return _encoding_dict_to_pyg_homo(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class ColorEncoder(EncoderBase[Data]):
@@ -349,17 +212,6 @@ class ColorEncoder(EncoderBase[Data]):
             **kwargs,
         )
 
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> Data:
-        return _encoding_dict_to_pyg_homo(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
-
     def stream(self) -> ColorEncoderStream:
         """Create a streaming encoder sharing this encoder's C++ engine."""
         return ColorEncoderStream(self)
@@ -375,8 +227,15 @@ class ColorEncoder(EncoderBase[Data]):
                 count = data.num_nodes
             node_names = [str(i) for i in range(count)]
 
+        has_scalar_x = (
+            hasattr(data, "x")
+            and data.x is not None
+            and torch.is_tensor(data.x)
+            and data.x.dim() == 2
+            and data.x.size(1) > 0
+        )
         for i, name in enumerate(node_names):
-            val = data.x[i] if hasattr(data, "x") and data.x is not None else 0
+            val = data.x[i] if has_scalar_x else 0
             attrs = {"type": val.item() if torch.is_tensor(val) else val}
             if hasattr(data, "goal_level") and data.goal_level is not None:
                 gval = data.goal_level[i]

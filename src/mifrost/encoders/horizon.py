@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Iterable, Mapping
+from typing import Iterable
 
 import networkx as nx
 import torch
@@ -33,13 +33,11 @@ from .base import (
 from .common import (
     _advanced_state,
     _convert_batch_payload,
-    _encoding_dict_to_pyg,
     _split_goals,
 )
 from .hgraph import HGraphEncoder
 from .types import (
     HeteroEncoding,
-    NativeEncodingInput,
     DomainInput,
     GoalLiteralInput,
     StateInput,
@@ -116,17 +114,6 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
         self._stream.reset()
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class HorizonEncoder(HGraphEncoder):
@@ -269,17 +256,6 @@ class HorizonEncoder(HGraphEncoder):
     def _accepted_kwargs(self) -> set[str]:
         """Accept transition DAG kwargs in the generic base API."""
         return {"dag", "dags", "history_subgoals", "history_max_steps"}
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
     def _encode_batch(
         self,

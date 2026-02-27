@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Collection, Iterable, Mapping, Sequence
+from typing import Any, Collection, Iterable, Sequence
 
 import numpy as np
 import torch
@@ -42,12 +42,10 @@ from .common import (
     _advanced_literal,
     _advanced_state,
     _convert_batch_payload,
-    _encoding_dict_to_pyg,
 )
 from .types import (
     ATOM_TYPES,
     HeteroEncoding,
-    NativeEncodingInput,
     StateInput,
     WRAPPER_STATE_TYPES,
     is_action_input,
@@ -164,17 +162,6 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class ILGEncoder(EncoderBase[HeteroData]):

@@ -285,7 +285,6 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         """Create/reset the internal builder used by ``append``."""
         ...
 
-    @abstractmethod
     def _dict_to_pyg(
         self,
         encoding_dict: EncodingDict,
@@ -293,8 +292,9 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        """Convert dictionary encoding into PyG output for stream flush."""
-        ...
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
 
     def _to_pyg(
         self,

@@ -924,9 +924,25 @@ nb::object BatchBuilder::build_pyg()
       if(slash == std::string::npos) {
          continue;
       }
-      const std::string node_type = key.substr(0, slash);
+      const std::string type_key = key.substr(0, slash);
       const std::string attr = key.substr(slash + 1);
-      nb::object store = batch.attr("__getitem__")(node_type);
+
+      const auto first = type_key.find('|');
+      const auto second = first == std::string::npos ? std::string::npos
+                                                     : type_key.find('|', first + 1);
+      const auto third = second == std::string::npos ? std::string::npos
+                                                     : type_key.find('|', second + 1);
+      const bool is_edge_type = first != std::string::npos and second != std::string::npos
+                                and third == std::string::npos;
+      nb::object store;
+      if(is_edge_type) {
+         const std::string src = type_key.substr(0, first);
+         const std::string rel = type_key.substr(first + 1, second - first - 1);
+         const std::string dst = type_key.substr(second + 1);
+         store = batch.attr("__getitem__")(nb::make_tuple(src, rel, dst));
+      } else {
+         store = batch.attr("__getitem__")(type_key);
+      }
       nb::object tensor = py::to_torch_tensor(nb::borrow< nb::object >(value_handle));
       store.attr("__setitem__")(attr, tensor);
    }

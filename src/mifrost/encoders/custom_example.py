@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 import numpy as np
 from torch_geometric.data import HeteroData
 
 from .._core import BatchBuilder
 from .base import EncoderBase, StreamEncoderBase
-from .common import _encoding_dict_to_pyg
-from .types import HeteroEncoding, NativeEncodingInput
+from .types import HeteroEncoding
 
 
 @dataclass
@@ -38,17 +37,6 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._builder = BatchBuilder()
         self._builder.set_graph_kind("hetero")
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput | Mapping[str, Any],
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class ExampleConstantEncoder(EncoderBase[HeteroData]):

@@ -554,6 +554,48 @@ void copy_global_attrs_for_single(nb::object& dst, nb::object& src)
    }
 }
 
+void copy_global_attrs_for_batch(nb::object& dst, nb::object& src)
+{
+   nb::object global_store = src.attr("_global_store");
+   for(auto key_obj : global_store.attr("keys")()) {
+      const std::string key = py::to_std_string(key_obj);
+      nb::object value = global_store.attr("__getitem__")(key_obj);
+      dst.attr(key.c_str()) = value;
+   }
+}
+
+void make_homo_edge_index_undirected_in_place(nb::object& out)
+{
+   // Keep homo Data semantics aligned with Python fallback conversion:
+   // duplicate non-self-loop edges to expose an undirected edge_index.
+   if(not nb::cast< bool >(out.attr("__contains__")("edge_index"))) {
+      return;
+   }
+
+   nb::object edge_index = out.attr("__getitem__")("edge_index");
+   if(nb::cast< int64_t >(edge_index.attr("numel")()) <= 0) {
+      return;
+   }
+
+   nb::object src = edge_index.attr("__getitem__")(0);
+   nb::object dst = edge_index.attr("__getitem__")(1);
+   nb::object mask = src.attr("__ne__")(dst);
+   nb::object rev = py::torch_stack_fn()(
+      nb::make_tuple(dst.attr("__getitem__")(mask), src.attr("__getitem__")(mask)),
+      nb::arg("dim") = 0
+   );
+   nb::object cat = py::torch_module().attr("cat");
+   out.attr("__setitem__")("edge_index", cat(nb::make_tuple(edge_index, rev), nb::arg("dim") = 1));
+
+   if(nb::cast< bool >(out.attr("__contains__")("edge_attr"))) {
+      nb::object edge_attr = out.attr("__getitem__")("edge_attr");
+      out.attr("__setitem__")(
+         "edge_attr",
+         cat(nb::make_tuple(edge_attr, edge_attr.attr("__getitem__")(mask)), nb::arg("dim") = 0)
+      );
+   }
+}
+
 nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
 {
    nb::object out = py::torch_geometric_heterodata_ctor()();
@@ -581,6 +623,43 @@ nb::object batch_to_single_hetero_data(nb::object& pyg_batch)
    }
 
    copy_global_attrs_for_single(out, pyg_batch);
+   return out;
+}
+
+nb::object batch_to_batch_homo_data(nb::object& pyg_batch)
+{
+   nb::object out = py::torch_geometric_batch_ctor()(
+      nb::arg("_base_cls") = py::torch_geometric_data_ctor()
+   );
+
+   nb::list node_types = nb::cast< nb::list >(pyg_batch.attr("node_types"));
+   if(nb::len(node_types) > 1) {
+      throw std::invalid_argument(
+         "BatchEncoding.as_pyg(as_batch=True) for homo expects a single node type"
+      );
+   }
+   if(nb::len(node_types) == 1) {
+      std::string node_type = py::to_std_string(node_types[0]);
+      nb::object src_store = pyg_batch.attr("__getitem__")(node_type);
+      for(auto key_obj : src_store.attr("keys")()) {
+         out.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+      }
+   }
+
+   nb::list edge_types = nb::cast< nb::list >(pyg_batch.attr("edge_types"));
+   if(nb::len(edge_types) > 1) {
+      throw std::invalid_argument(
+         "BatchEncoding.as_pyg(as_batch=True) for homo expects a single edge type"
+      );
+   }
+   if(nb::len(edge_types) == 1) {
+      nb::object src_store = pyg_batch.attr("__getitem__")(edge_types[0]);
+      for(auto key_obj : src_store.attr("keys")()) {
+         out.attr("__setitem__")(key_obj, src_store.attr("__getitem__")(key_obj));
+      }
+   }
+
+   copy_global_attrs_for_batch(out, pyg_batch);
    return out;
 }
 
@@ -626,6 +705,7 @@ nb::object batch_to_single_homo_data(nb::object& pyg_batch)
       }
    }
 
+   make_homo_edge_index_undirected_in_place(out);
    copy_global_attrs_for_single(out, pyg_batch);
    return out;
 }
@@ -1150,6 +1230,9 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
       return batch_to_single_hetero_data(pyg_batch);
    }
 
+   if(encoding.graph_kind == "homo") {
+      return batch_to_batch_homo_data(pyg_batch);
+   }
    return pyg_batch;
 }
 

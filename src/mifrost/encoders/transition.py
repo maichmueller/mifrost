@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from torch_geometric.data import HeteroData
 
@@ -28,14 +28,12 @@ from .base import (
 from .common import (
     _advanced_state,
     _convert_batch_payload,
-    _encoding_dict_to_pyg,
     _split_goals,
 )
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
     HeteroEncoding,
-    NativeEncodingInput,
     StateInput,
     default_goals_from_state,
     is_goal_literal_input,
@@ -177,17 +175,6 @@ class _TransitionEncoderBase(HGraphEncoder):
             None,
         )
 
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
-
     def stream(self) -> "_TransitionEncoderStream":
         """Create a stream wrapper for transition encoding."""
         return _TransitionEncoderStream(self)
@@ -248,17 +235,6 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
         self._stream.reset()
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: NativeEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class TransitionHGraphEncoder(_TransitionEncoderBase):

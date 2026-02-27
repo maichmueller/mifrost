@@ -7,7 +7,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import pymimir.advanced.formalism as af
 import torch
-from torch_geometric.data import Batch, HeteroData
+from torch_geometric.data import Batch, Data, HeteroData
 
 from .types import (
     BatchParam,
@@ -17,6 +17,7 @@ from .types import (
     HistorySubgoalInput,
     GroundActionInput,
     NativeEncodingInput,
+    PygDataLike,
     StateInput,
     to_advanced_action,
     to_advanced_domain,
@@ -221,7 +222,25 @@ def _coerce_encoding_dict(encoding: NativeEncodingInput | Any) -> EncodingDict:
     )
 
 
-def _encoding_dict_to_pyg(
+def _coerce_schema_dict(encoding_dict: EncodingDict) -> Mapping[str, Any]:
+    schema_obj = encoding_dict.get("schema")
+    if schema_obj is None:
+        raise ValueError(
+            "Encoding schema missing; rebuild the extension to emit schema"
+        )
+    if hasattr(schema_obj, "to_dict"):
+        schema_obj = schema_obj.to_dict()
+    if not isinstance(schema_obj, Mapping):
+        raise TypeError(f"Encoding schema must be a mapping, got {type(schema_obj)}")
+    schema: Mapping[str, Any] = schema_obj
+    if "flags" not in schema:
+        raise ValueError("Schema missing required 'flags' entry")
+    if "extensions" not in schema:
+        raise ValueError("Schema missing required 'extensions' entry")
+    return schema
+
+
+def _encoding_dict_to_pyg_hetero(
     encoding: NativeEncodingInput | Any,
     *,
     as_batch: bool | None = None,
@@ -237,16 +256,7 @@ def _encoding_dict_to_pyg(
     """
     encoding_dict = _coerce_encoding_dict(encoding)
     raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
-    schema_obj = encoding_dict.get("schema")
-    if schema_obj is None:
-        raise ValueError(
-            "Encoding schema missing; rebuild the extension to emit schema"
-        )
-    if hasattr(schema_obj, "to_dict"):
-        schema_obj = schema_obj.to_dict()
-    if not isinstance(schema_obj, Mapping):
-        raise TypeError(f"Encoding schema must be a mapping, got {type(schema_obj)}")
-    schema: Mapping[str, Any] = schema_obj
+    schema = _coerce_schema_dict(encoding_dict)
     node_names: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
     node_feature_dims: Mapping[str, int] = encoding_dict.get("node_feature_dims", {})
     object_names_raw = encoding_dict.get("object_names", [])
@@ -287,13 +297,10 @@ def _encoding_dict_to_pyg(
         return tensor
 
     graph_kind = schema.get("graph_kind")
-    if graph_kind not in ("hetero", "homo"):
-        raise ValueError(f"Unsupported graph_kind in schema: {graph_kind!r}")
-    if "flags" not in schema:
-        raise ValueError("Schema missing required 'flags' entry")
-    if "extensions" not in schema:
-        raise ValueError("Schema missing required 'extensions' entry")
-
+    if graph_kind != "hetero":
+        raise ValueError(
+            f"_encoding_dict_to_pyg_hetero expects graph_kind='hetero', got {graph_kind!r}"
+        )
     edge_type_list: list[tuple[str, str, str]] = []
     for entry in schema.get("edge_types", []):
         edge_type_list.append((entry["src"], entry["rel"], entry["dst"]))
@@ -421,6 +428,133 @@ def _encoding_dict_to_pyg(
                 del store["batch"]
 
     return data
+
+
+def _encoding_dict_to_pyg_homo(
+    encoding: NativeEncodingInput | Any,
+    *,
+    as_batch: bool | None = None,
+    include_metadata: bool = True,
+    undirected: bool = True,
+) -> Data:
+    """
+    Convert homogeneous encoding dictionaries into PyG ``Data``/``Batch``.
+    """
+    encoding_dict = _coerce_encoding_dict(encoding)
+    raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
+    schema = _coerce_schema_dict(encoding_dict)
+    node_names_map: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
+    num_graphs = int(encoding_dict.get("num_graphs", 0))
+
+    if as_batch is None:
+        as_batch = num_graphs > 1
+
+    data: Data
+    if as_batch:
+        data = Batch(_base_cls=Data)
+    else:
+        data = Data()
+
+    tensors: dict[str, Any] = {}
+    tensors_torch: dict[str, torch.Tensor] = {}
+    for key_obj, value in raw_tensors.items():
+        key = key_obj if isinstance(key_obj, str) else str(key_obj)
+        tensors[key] = value
+
+    def get_tensor(key: str, value: Any | None = None) -> torch.Tensor:
+        cached = tensors_torch.get(key)
+        if cached is not None:
+            return cached
+        if value is None:
+            value = tensors[key]
+        tensor = _to_tensor(value)
+        tensors_torch[key] = tensor
+        return tensor
+
+    node_types = schema.get("node_types", [])
+    node_type = node_types[0] if node_types else "node"
+
+    for entry in schema.get("node_tensors", []):
+        key = entry["key"]
+        if key not in tensors:
+            raise KeyError(f"Schema references missing tensor key: {key}")
+        if entry["node_type"] != node_type:
+            continue
+        attr = entry["attr"]
+        data[attr] = get_tensor(key, tensors[key])
+
+    edge_components: dict[str, torch.Tensor] = {}
+    edge_attr: torch.Tensor | None = None
+    for entry in schema.get("edge_tensors", []):
+        key = entry["key"]
+        if key not in tensors:
+            raise KeyError(f"Schema references missing tensor key: {key}")
+        attr = entry["attr"]
+        if attr == "edge_index":
+            component = str(entry.get("part", ""))
+            if component == "":
+                raise ValueError(f"Missing edge_index component for key: {key}")
+            edge_components[component] = get_tensor(key, tensors[key])
+        elif attr == "edge_attr":
+            edge_attr = get_tensor(key, tensors[key])
+
+    if "0" in edge_components and "1" in edge_components:
+        edge_index = torch.stack((edge_components["0"], edge_components["1"]), dim=0)
+        if undirected and edge_index.numel() > 0:
+            src = edge_index[0]
+            dst = edge_index[1]
+            mask = src != dst
+            rev = torch.stack((dst[mask], src[mask]), dim=0)
+            edge_index = torch.cat((edge_index, rev), dim=1)
+            if edge_attr is not None:
+                edge_attr = torch.cat((edge_attr, edge_attr[mask]), dim=0)
+        data.edge_index = edge_index
+
+    if edge_attr is not None:
+        data.edge_attr = edge_attr
+
+    if include_metadata:
+        names = node_names_map.get(node_type, [])
+        data.node_names = names if isinstance(names, list) else list(names)
+
+    if as_batch and num_graphs > 0:
+        data._num_graphs = num_graphs
+        batch_key = f"{node_type}/batch"
+        if batch_key in tensors:
+            data.batch = get_tensor(batch_key, tensors[batch_key]).long()
+
+    if getattr(data, "x", None) is None:
+        if hasattr(data, "num_nodes") and data.num_nodes:
+            pass
+        elif hasattr(data, "node_names"):
+            data.num_nodes = len(data.node_names)
+
+    return data
+
+
+def _encoding_dict_to_pyg(
+    encoding: NativeEncodingInput | Any,
+    *,
+    as_batch: bool | None = None,
+    include_metadata: bool = True,
+) -> PygDataLike:
+    """
+    Convert normalized encoder dictionaries into PyG output.
+
+    Conversion dispatches on ``schema["graph_kind"]``.
+    """
+    encoding_dict = _coerce_encoding_dict(encoding)
+    schema = _coerce_schema_dict(encoding_dict)
+    graph_kind = schema.get("graph_kind")
+    if graph_kind == "homo":
+        return _encoding_dict_to_pyg_homo(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
+    if graph_kind == "hetero":
+        return _encoding_dict_to_pyg_hetero(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
+    raise ValueError(f"Unsupported graph_kind in schema: {graph_kind!r}")
 
 
 def encoding_to_tensors(

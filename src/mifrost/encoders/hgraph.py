@@ -36,7 +36,6 @@ from .common import (
     _advanced_domain,
     _advanced_state,
     _convert_batch_payload,
-    _encoding_dict_to_pyg,
     _prepare_actions,
     _prepare_history_subgoals,
     _split_goals,
@@ -45,7 +44,6 @@ from ._action_contract import (
     parse_flat_actions,
 )
 from .types import (
-    EncodingDict,
     DomainInput,
     GoalLiteralInput,
     GroundActionInput,
@@ -516,17 +514,6 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         """Reset stream accumulation state."""
         self._stream.reset()
 
-    def _dict_to_pyg(
-        self,
-        encoding_dict: Mapping[str, object],
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
-
 
 @dataclass
 class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
@@ -578,17 +565,6 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
 
     def _reset_builder(self) -> None:
         self._stream.reset()
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: Mapping[str, object],
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
 
 class HGraphEncoder(EncoderBase[HeteroData]):
@@ -906,17 +882,6 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             history_max_steps=history_max_steps,
             include_metadata=include_metadata,
             **kwargs,
-        )
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: EncodingDict,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> HeteroData:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
 
     def stream(self) -> HGraphEncoderStream:
