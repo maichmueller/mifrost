@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
 import networkx as nx
 import torch
@@ -22,6 +22,7 @@ from .._core import (
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
+    CollateSpecParam,
     GoalBatchInput,
     GoalBatchParam,
     HistorySubgoalsBatchParam,
@@ -216,7 +217,7 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one root/DAG pair into native ``BatchEncoding``."""
         return super().encode(
             root,
@@ -237,9 +238,11 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into native ``BatchEncoding``."""
         return super().encode_batch(
             roots,
@@ -248,6 +251,8 @@ class HorizonEncoder(HGraphEncoder):
             subgoal_layers=subgoal_layers,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
             dags=dags,
             include_metadata=include_metadata,
             **kwargs,

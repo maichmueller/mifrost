@@ -5,6 +5,7 @@
 #include <nanobind/stl/string.h>
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -19,7 +20,7 @@ using namespace nb::literals;
 
 namespace mifrost {
 
-constexpr std::string_view kPythonFieldSpecsAttr = "__mifrost_field_specs__";
+constexpr std::string_view kPythonCollateSpecAttr = "__mifrost_collate_spec__";
 constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
 constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
@@ -194,7 +195,7 @@ PythonFieldDType python_field_dtype_from_name(std::string_view dtype)
    if(ascii_iequals(dtype, "i64") or ascii_iequals(dtype, "int64") or ascii_iequals(dtype, "int")) {
       return PythonFieldDType::I64;
    }
-   throw std::invalid_argument("Python field spec dtype must be one of {pyobj, str, f32, i64}");
+   throw std::invalid_argument("Python collate_spec dtype must be one of {pyobj, str, f32, i64}");
 }
 
 const char* python_field_dtype_name(PythonFieldDType dtype)
@@ -355,7 +356,7 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
    }
    if(not nb::isinstance< nb::dict >(spec_obj)) {
       throw std::invalid_argument(
-         fmt::format("Field spec for '{}' must be a dict or mode string", key)
+         fmt::format("Collate spec for '{}' must be a dict or mode string", key)
       );
    }
 
@@ -375,7 +376,7 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
       const auto name = nb::str(name_obj);
       if(not kAllowed.contains(name.c_str())) {
          throw std::invalid_argument(
-            fmt::format("Unsupported field spec key '{}' for field '{}'", name.c_str(), key)
+            fmt::format("Unsupported collate spec key '{}' for field '{}'", name.c_str(), key)
          );
       }
    }
@@ -429,100 +430,6 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
    spec.inferred = false;
    validate_field_spec_shape_rules(key, spec);
    return spec;
-}
-
-std::optional< PythonFieldSpec >
-infer_field_spec_from_value(const std::string& key, nb::handle value)
-{
-   (void) key;
-   if(value.is_none()) {
-      return std::nullopt;
-   }
-   if(nb::isinstance< nb::str >(value)) {
-      return PythonFieldSpec{
-         .dtype = PythonFieldDType::STR,
-         .mode = GraphFieldMode::STACK,
-         .dim = 1,
-         .cat_dim = 0,
-         .inc = {},
-         .inferred = true,
-      };
-   }
-
-   if(nb::isinstance< nb::list >(value) or nb::isinstance< nb::tuple >(value)) {
-      bool all_strings = true;
-      size_t count = 0;
-      for(nb::handle entry : nb::borrow< nb::object >(value)) {
-         count += 1;
-         if(not nb::isinstance< nb::str >(entry)) {
-            all_strings = false;
-            break;
-         }
-      }
-      if(count > 0 and all_strings) {
-         return PythonFieldSpec{
-            .dtype = PythonFieldDType::STR,
-            .mode = GraphFieldMode::RAGGED_CAT,
-            .dim = 1,
-            .cat_dim = 0,
-            .inc = {},
-            .inferred = true,
-         };
-      }
-   }
-
-   if(is_numeric_scalar(value) or is_torch_tensor(value) or is_numpy_array(value)
-      or (nb::isinstance< nb::iterable >(value) and not is_string_like(value))) {
-      nb::handle torch = py::torch_module();
-      nb::object tensor = torch.attr("as_tensor")(value);
-      PythonFieldSpec spec;
-      spec.dtype = infer_numeric_dtype_from_tensor(tensor);
-      spec.mode = GraphFieldMode::STACK;
-      spec.dim = 1;
-      spec.cat_dim = 0;
-      spec.inferred = true;
-
-      const auto ndim = nb::cast< int64_t >(tensor.attr("ndim"));
-      if(ndim == 0) {
-         return spec;
-      }
-      if(ndim == 1) {
-         spec.mode = GraphFieldMode::CAT;
-         spec.dim = 1;
-         spec.cat_dim = 0;
-         return spec;
-      }
-      if(ndim == 2) {
-         const auto rows = nb::cast< int64_t >(tensor.attr("shape").attr("__getitem__")(0));
-         const auto cols = nb::cast< int64_t >(tensor.attr("shape").attr("__getitem__")(1));
-         if(rows > 1 and cols > 1) {
-            throw std::invalid_argument(
-               "Cannot infer cat_dim for 2D field; provide explicit field_specs entry"
-            );
-         }
-         spec.mode = GraphFieldMode::CAT;
-         if(rows == 1) {
-            spec.cat_dim = 0;
-            spec.dim = static_cast< int >(cols);
-         } else {
-            spec.cat_dim = 1;
-            spec.dim = static_cast< int >(rows);
-         }
-         return spec;
-      }
-      throw std::invalid_argument(
-         "Cannot infer field spec from tensors with ndim > 2; provide explicit field_specs"
-      );
-   }
-
-   return PythonFieldSpec{
-      .dtype = PythonFieldDType::PYOBJ,
-      .mode = GraphFieldMode::STACK,
-      .dim = 1,
-      .cat_dim = 0,
-      .inc = {},
-      .inferred = true,
-   };
 }
 
 bool try_get_python_attr(const nb::dict& attrs, nb::handle key_obj, nb::object& out)
@@ -609,55 +516,6 @@ nb::object collate_python_const_value(
    return first;
 }
 
-void seed_default_python_field_specs_from_attrs(
-   PythonFieldSpecMap& field_specs,
-   const std::vector< nb::dict >& source_attrs
-)
-{
-   std::vector< std::string > keys;
-   for(const auto& attrs : source_attrs) {
-      for(auto [key_obj, value_obj] : attrs) {
-         (void) value_obj;
-         const auto key = nb::str(key_obj);
-         if(is_reserved_python_attr_key(key.c_str()) or field_specs.contains(key.c_str())) {
-            continue;
-         }
-         if(std::ranges::find(keys, key.c_str()) == keys.end()) {
-            keys.push_back(key.c_str());
-         }
-      }
-   }
-   for(const auto& key : keys) {
-      std::optional< PythonFieldSpec > inferred;
-      for(const auto& attrs : source_attrs) {
-         if(not attrs.contains(key.c_str())) {
-            continue;
-         }
-         inferred = infer_field_spec_from_value(key, nb::borrow< nb::object >(attrs[key.c_str()]));
-         if(inferred.has_value()) {
-            break;
-         }
-      }
-      if(inferred.has_value()) {
-         field_specs.emplace(key, *inferred);
-      } else {
-         field_specs.emplace(key, PythonFieldSpec{.inferred = true});
-      }
-   }
-}
-
-bool has_non_reserved_python_attrs(const nb::dict& attrs)
-{
-   for(auto [key_obj, value_obj] : attrs) {
-      (void) value_obj;
-      const auto key = nb::str(key_obj);
-      if(not is_reserved_python_attr_key(key.c_str())) {
-         return true;
-      }
-   }
-   return false;
-}
-
 nb::dict batch_encoding_python_attrs(nb::handle self)
 {
    return nb::cast< nb::dict >(self.attr("__dict__"));
@@ -675,8 +533,34 @@ nb::dict batch_encoding_python_attrs_copy(nb::handle self)
 
 bool is_reserved_python_attr_key(std::string_view key)
 {
-   return key == kPythonFieldSpecsAttr or key == kPythonTensorDeviceAttr
-          or key == kPythonTensorCacheAttr;
+   return key.starts_with("__mifrost_") or key == kPythonCollateSpecAttr
+          or key == kPythonTensorDeviceAttr or key == kPythonTensorCacheAttr;
+}
+
+bool is_pyg_structural_attr_key(std::string_view key)
+{
+   static constexpr std::array< std::string_view, 10 > kReserved{
+      "x",
+      "edge_index",
+      "edge_attr",
+      "batch",
+      "ptr",
+      "x_dict",
+      "edge_index_dict",
+      "edge_attr_dict",
+      "batch_dict",
+      "ptr_dict",
+   };
+   return std::ranges::find(kReserved, key) != kReserved.end();
+}
+
+bool is_forbidden_dynamic_attr_key(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+)
+{
+   return is_reserved_python_attr_key(key) or is_pyg_structural_attr_key(key)
+          or batch_encoding_has_native_tensor(encoding, key);
 }
 
 void batch_encoding_clear_python_attrs(nb::handle self)
@@ -685,15 +569,15 @@ void batch_encoding_clear_python_attrs(nb::handle self)
    attrs.clear();
 }
 
-nb::dict batch_encoding_field_specs(nb::handle self)
+nb::dict batch_encoding_collate_spec(nb::handle self)
 {
    auto attrs = nb::cast< nb::dict >(self.attr("__dict__"));
-   if(not attrs.contains(kPythonFieldSpecsAttr.data())) {
+   if(not attrs.contains(kPythonCollateSpecAttr.data())) {
       return {};
    }
-   auto raw_specs = nb::borrow< nb::object >(attrs[kPythonFieldSpecsAttr.data()]);
+   auto raw_specs = nb::borrow< nb::object >(attrs[kPythonCollateSpecAttr.data()]);
    if(not nb::isinstance< nb::dict >(raw_specs)) {
-      throw std::invalid_argument("BatchEncoding internal field specs must be a dict");
+      throw std::invalid_argument("BatchEncoding internal collate_spec must be a dict");
    }
    return nb::cast< nb::dict >(raw_specs);
 }
@@ -720,32 +604,32 @@ void batch_encoding_apply_python_attrs_from_state(nb::handle self, const nb::dic
    batch_encoding_apply_python_attrs_from_state(self, state, dst);
 }
 
-PythonFieldSpecMap canonicalize_python_field_specs(const nb::dict& specs)
+PythonFieldSpecMap canonicalize_python_collate_spec(const nb::dict& specs)
 {
    PythonFieldSpecMap out;
    for(auto [key_obj, spec_obj] : specs) {
       const auto key = nb::str(key_obj);
       auto key_view = std::string_view{key.c_str()};
       if(key_view.empty()) {
-         throw std::invalid_argument("Python field spec keys must be non-empty");
+         throw std::invalid_argument("Python collate_spec keys must be non-empty");
       }
       try {
          out[key_view] = parse_python_field_spec(key_view, nb::borrow< nb::object >(spec_obj));
       } catch(const std::exception& ex) {
          throw std::invalid_argument(
-            fmt::format("Failed to parse field spec for key '{}': {}", key_view, ex.what())
+            fmt::format("Failed to parse collate_spec entry for key '{}': {}", key_view, ex.what())
          );
       }
    }
    return out;
 }
 
-void merge_python_field_specs(PythonFieldSpecMap& dst, const PythonFieldSpecMap& src)
+void merge_python_collate_spec(PythonFieldSpecMap& dst, const PythonFieldSpecMap& src)
 {
    for(const auto& [key, incoming_spec] : src) {
       if(const auto it = dst.find(key); it != dst.end()) {
          if(it->second != incoming_spec) {
-            throw std::invalid_argument("Conflicting Python field spec for key '" + key + "'");
+            throw std::invalid_argument("Conflicting Python collate_spec for key '" + key + "'");
          }
       } else {
          dst.emplace(key, incoming_spec);
@@ -753,7 +637,7 @@ void merge_python_field_specs(PythonFieldSpecMap& dst, const PythonFieldSpecMap&
    }
 }
 
-nb::dict python_field_specs_to_dict(const PythonFieldSpecMap& specs)
+nb::dict python_collate_spec_to_dict(const PythonFieldSpecMap& specs)
 {
    nb::dict out;
    for(const auto& [key, spec] : specs) {
@@ -775,66 +659,175 @@ nb::dict python_field_specs_to_dict(const PythonFieldSpecMap& specs)
    return out;
 }
 
-std::tuple< PythonFieldSpecMap, std::vector< nanobind::dict > >
-build_python_collation_inputs(const nb::sequence& source_objects, const nb::object& field_specs_obj)
+std::tuple< PythonFieldSpecMap, std::vector< nanobind::dict > > build_python_collation_inputs(
+   const nb::sequence& source_objects,
+   const nb::object& collate_spec_obj
+)
 {
    std::vector< nanobind::dict > source_attrs;
-   PythonFieldSpecMap field_specs;
+   PythonFieldSpecMap collate_spec;
    source_attrs.reserve(nb::len(source_objects));
-   if(field_specs_obj.is_none()) {
-      bool has_any_python_attrs = false;
+   if(collate_spec_obj.is_none()) {
       for(const auto& source : source_objects) {
-         nb::dict attrs = batch_encoding_python_attrs(source);
-         if(attrs.contains(kPythonFieldSpecsAttr.data())) {
-            try {
-               auto registered_specs = canonicalize_python_field_specs(
-                  batch_encoding_field_specs(source)
-               );
-               merge_python_field_specs(field_specs, registered_specs);
-            } catch(const std::exception& ex) {
-               throw std::invalid_argument(
-                  "Failed to process registered field_specs during batch_encodings: "
-                  + std::string(ex.what())
-               );
-            }
-         }
-         if(not has_any_python_attrs and has_non_reserved_python_attrs(attrs)) {
-            has_any_python_attrs = true;
-         }
-         source_attrs.push_back(std::move(attrs));
-      }
-      if(field_specs.empty() and not has_any_python_attrs) {
-         return std::tuple{std::move(field_specs), std::move(source_attrs)};
+         source_attrs.push_back(batch_encoding_python_attrs(source));
       }
    } else {
-      if(not nb::isinstance< nb::dict >(field_specs_obj)) {
-         throw std::invalid_argument("field_specs must be a dict when provided");
+      if(not nb::isinstance< nb::dict >(collate_spec_obj)) {
+         throw std::invalid_argument("collate_spec must be a dict when provided");
       }
-      field_specs = canonicalize_python_field_specs(nb::cast< nb::dict >(field_specs_obj));
+      collate_spec = canonicalize_python_collate_spec(nb::cast< nb::dict >(collate_spec_obj));
       for(const auto& source : source_objects) {
          source_attrs.push_back(batch_encoding_python_attrs(source));
       }
    }
-   if(field_specs.empty()) {
-      seed_default_python_field_specs_from_attrs(field_specs, source_attrs);
-   }
-   return std::tuple{std::move(field_specs), std::move(source_attrs)};
+   return std::tuple{std::move(collate_spec), std::move(source_attrs)};
 }
 
-PythonFieldSpecMap filter_python_field_specs_for_native_collisions(
-   const PythonFieldSpecMap& field_specs,
+std::vector< std::string > collect_default_python_collation_keys(
+   const std::vector< nb::dict >& source_attrs,
+   const PythonFieldSpecMap& collate_spec
+)
+{
+   std::set< std::string > key_set;
+   for(const auto& attrs : source_attrs) {
+      for(auto [key_obj, value_obj] : attrs) {
+         (void) value_obj;
+         const std::string key = py::to_std_string(key_obj);
+         if(collate_spec.contains(key)) {
+            continue;
+         }
+         if(is_reserved_python_attr_key(key)) {
+            continue;
+         }
+         key_set.insert(key);
+      }
+   }
+
+   std::vector< std::string > out;
+   out.reserve(key_set.size());
+   for(const auto& key : key_set) {
+      if(is_pyg_structural_attr_key(key)) {
+         throw std::invalid_argument(
+            "Default collation key '" + key + "' collides with a reserved key"
+         );
+      }
+      const nb::str key_obj(key.c_str());
+      for(size_t source_idx = 0; source_idx < source_attrs.size(); ++source_idx) {
+         if(not source_attrs[source_idx].contains(key_obj)) {
+            throw std::invalid_argument(
+               "Default collation key '" + key + "' missing value for encoding index "
+               + std::to_string(source_idx)
+            );
+         }
+      }
+      out.push_back(key);
+   }
+   return out;
+}
+
+nb::dict apply_default_python_collation(
+   const std::vector< std::string >& keys,
+   const std::vector< nb::dict >& source_attrs
+)
+{
+   nb::dict out;
+   for(const auto& key : keys) {
+      const nb::str key_obj(key.c_str());
+      std::vector< nb::object > values;
+      values.reserve(source_attrs.size());
+      bool any_dict = false;
+      bool all_dict = true;
+      for(size_t source_idx = 0; source_idx < source_attrs.size(); ++source_idx) {
+         const auto& attrs = source_attrs[source_idx];
+         if(not attrs.contains(key_obj)) {
+            throw std::invalid_argument(
+               "Default collation key '" + key + "' missing value for encoding index "
+               + std::to_string(source_idx)
+            );
+         }
+         nb::object value = nb::borrow< nb::object >(attrs[key_obj]);
+         const bool is_dict = nb::isinstance< nb::dict >(value);
+         any_dict = any_dict or is_dict;
+         all_dict = all_dict and is_dict;
+         values.push_back(std::move(value));
+      }
+
+      if(any_dict and not all_dict) {
+         throw std::invalid_argument(
+            "Default collation key '" + key + "' mixes dict and non-dict values across encodings"
+         );
+      }
+
+      if(not any_dict) {
+         nb::list collated;
+         for(auto& value : values) {
+            collated.append(value);
+         }
+         out[key_obj] = std::move(collated);
+         continue;
+      }
+
+      const nb::dict first = nb::cast< nb::dict >(values.front());
+      std::vector< std::string > nested_keys;
+      nested_keys.reserve(nb::len(first));
+      for(auto [nested_key_obj, nested_value_obj] : first) {
+         (void) nested_value_obj;
+         nested_keys.push_back(py::to_std_string(nested_key_obj));
+      }
+
+      for(size_t idx = 1; idx < values.size(); ++idx) {
+         const nb::dict current = nb::cast< nb::dict >(values[idx]);
+         if(nb::len(current) != nb::len(first)) {
+            throw std::invalid_argument(
+               "Default dict collation key '" + key
+               + "' requires identical key sets across encodings"
+            );
+         }
+         for(const auto& nested_key : nested_keys) {
+            if(not current.contains(nested_key.c_str())) {
+               throw std::invalid_argument(
+                  "Default dict collation key '" + key
+                  + "' requires identical key sets across encodings"
+               );
+            }
+         }
+      }
+
+      nb::dict collated_map;
+      for(const auto& nested_key : nested_keys) {
+         nb::list collated_values;
+         for(auto& value : values) {
+            const nb::dict current = nb::cast< nb::dict >(value);
+            collated_values.append(nb::borrow< nb::object >(current[nested_key.c_str()]));
+         }
+         collated_map[nested_key.c_str()] = std::move(collated_values);
+      }
+      out[key_obj] = std::move(collated_map);
+   }
+   return out;
+}
+
+PythonFieldSpecMap filter_python_collate_spec_for_native_collisions(
+   const PythonFieldSpecMap& collate_spec,
    const std::set< std::string >& reserved_native_keys
 )
 {
    PythonFieldSpecMap out;
-   for(const auto& [key, spec] : field_specs) {
-      if(reserved_native_keys.contains(key)) {
-         continue;
+   for(const auto& [key, spec] : collate_spec) {
+      if(reserved_native_keys.contains(key) or is_reserved_python_attr_key(key)
+         or is_pyg_structural_attr_key(key)) {
+         throw std::invalid_argument(
+            "Python collate_spec key '" + key + "' collides with a reserved/native key"
+         );
       }
       if(spec.mode == GraphFieldMode::RAGGED_CAT) {
          const std::string ptr_key = key + "_ptr";
-         if(reserved_native_keys.contains(ptr_key)) {
-            continue;
+         if(reserved_native_keys.contains(ptr_key) or is_reserved_python_attr_key(ptr_key)
+            or is_pyg_structural_attr_key(ptr_key)) {
+            throw std::invalid_argument(
+               "Python collate_spec key '" + key + "' collides with reserved ptr key '" + ptr_key
+               + "'"
+            );
          }
       }
       out.emplace(key, spec);
@@ -867,33 +860,34 @@ void validate_string_value(const std::string& key, GraphFieldMode mode, nb::hand
    }
 }
 
-void register_batch_encoding_field_specs(nb::handle self, const nb::dict& specs)
+void register_batch_encoding_collate_spec(nb::handle self, const nb::dict& specs)
 {
-   auto normalized = canonicalize_python_field_specs(specs);
+   auto normalized = canonicalize_python_collate_spec(specs);
    auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-      self, "BatchEncoding.register_field_specs called with invalid instance"
+      self, "internal collate_spec registration called with invalid BatchEncoding instance"
    );
-   const auto native_keys = batch_encoding_native_graph_field_keys(*encoding);
+   const auto native_keys = batch_encoding_native_tensor_keys(*encoding);
    for(const auto& [key, spec] : normalized) {
-      if(native_keys.contains(key)) {
+      if(is_forbidden_dynamic_attr_key(*encoding, key)) {
          throw std::invalid_argument(
-            "Python field spec key '" + key + "' collides with native field key"
+            "Python collate_spec key '" + key + "' collides with a reserved/native key"
          );
       }
       if(spec.mode == GraphFieldMode::RAGGED_CAT) {
          const std::string ptr_key = key + "_ptr";
-         if(native_keys.contains(ptr_key)) {
+         if(native_keys.contains(ptr_key) or is_reserved_python_attr_key(ptr_key)
+            or is_pyg_structural_attr_key(ptr_key)) {
             throw std::invalid_argument(
-               "Python field spec key '" + key + "' collides with native field ptr key '" + ptr_key
+               "Python collate_spec key '" + key + "' collides with reserved ptr key '" + ptr_key
                + "'"
             );
          }
       }
    }
-   auto existing = canonicalize_python_field_specs(batch_encoding_field_specs(self));
-   merge_python_field_specs(existing, normalized);
+   auto existing = canonicalize_python_collate_spec(batch_encoding_collate_spec(self));
+   merge_python_collate_spec(existing, normalized);
    nb::dict attrs = nb::cast< nb::dict >(self.attr("__dict__"));
-   attrs[kPythonFieldSpecsAttr.data()] = python_field_specs_to_dict(existing);
+   attrs[kPythonCollateSpecAttr.data()] = python_collate_spec_to_dict(existing);
 }
 
 void copy_python_attrs_to_object(
@@ -905,11 +899,10 @@ void copy_python_attrs_to_object(
 {
    const int64_t num_graphs = encoding.num_graphs;
    const bool want_batch = as_batch.value_or(num_graphs != 1);
-   const auto reserved_native_keys = batch_encoding_native_graph_field_keys(encoding);
    nb::dict attrs = batch_encoding_python_attrs(src);
    for(auto [key_obj, value_obj] : attrs) {
       const auto key = nb::str(key_obj);
-      if(is_reserved_python_attr_key(key.c_str()) or reserved_native_keys.contains(key.c_str())) {
+      if(is_forbidden_dynamic_attr_key(encoding, key.c_str())) {
          continue;
       }
       nb::object value = nb::borrow< nb::object >(value_obj);

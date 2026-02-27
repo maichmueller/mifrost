@@ -10,7 +10,6 @@ from torch_geometric.utils import to_networkx
 
 from .._core import BatchEncoding
 from .. import _core
-from ..graph_fields import GraphFieldSpec
 from .._core import (
     BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
@@ -23,6 +22,7 @@ from .._core import (
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
+    CollateSpecParam,
     EncoderBase,
     GoalBatchInput,
     GoalBatchParam,
@@ -62,54 +62,6 @@ from .types import (
 _HGraphMutableStreamEncoder = getattr(
     _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
 )
-
-
-class EncodedGraph:
-    """Lazy single-graph wrapper with dynamic graph-field assignment."""
-
-    def __init__(
-        self,
-        encoder: "HGraphEncoder",
-        state: StateInput,
-        *,
-        encode_kwargs: Mapping[str, Any] | None = None,
-    ) -> None:
-        object.__setattr__(self, "_encoder", encoder)
-        object.__setattr__(self, "_state", state)
-        object.__setattr__(self, "_encode_kwargs", dict(encode_kwargs or {}))
-        object.__setattr__(self, "_dynamic_values", {})
-        object.__setattr__(self, "_cached_encoding", None)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name.startswith("_"):
-            object.__setattr__(self, name, value)
-            return
-        specs = self._encoder._field_specs
-        if name in specs:
-            self._dynamic_values[name] = value
-            self._cached_encoding = None
-            return
-        object.__setattr__(self, name, value)
-
-    def __getattr__(self, name: str) -> Any:
-        specs = self._encoder._field_specs
-        if name in specs and name in self._dynamic_values:
-            return self._dynamic_values[name]
-        raise AttributeError(name)
-
-    def finalize(self):
-        cached = self._cached_encoding
-        if cached is not None:
-            return cached
-        encoding = self._encoder._finalize_encoded_graph(self)
-        self._cached_encoding = encoding
-        return encoding
-
-    def as_dict(self) -> Mapping[str, Any]:
-        return self.finalize().as_dict()
-
-    def as_pyg(self, *, as_batch: bool | None = None) -> HeteroData:
-        return self.finalize().as_pyg(as_batch=as_batch)
 
 
 def _build_config(config_cls, **kwargs: object):
@@ -617,7 +569,6 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         **extra_config_kwargs: object,
     ) -> None:
         """Create an HGraph encoder for one domain."""
-        self._field_specs: dict[str, GraphFieldSpec] = {}
         config = self._make_config(
             _config_cls,
             symbol_type_id=symbol_type_id,
@@ -635,25 +586,6 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             **extra_config_kwargs,
         )
         self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
-
-    def register_fields(
-        self, specs: Mapping[str, GraphFieldSpec | Mapping[str, object]]
-    ) -> None:
-        """Register strict dynamic graph-field specs used by ``encode_graph`` wrappers."""
-        normalized: dict[str, GraphFieldSpec] = {}
-        for key, spec in specs.items():
-            normalized[str(key)] = GraphFieldSpec.from_spec(spec)
-        self._field_specs = normalized
-
-    @property
-    def field_specs(self) -> Mapping[str, GraphFieldSpec]:
-        """Return registered dynamic graph-field specs (copy)."""
-        return dict(self._field_specs)
-
-    @property
-    def field_keys(self) -> list[str]:
-        """Return registered dynamic graph-field keys (sorted)."""
-        return sorted(self._field_specs.keys())
 
     def _encode_one_into_builder(
         self,
@@ -687,54 +619,6 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             )
             return
         self._engine.encode(adv_state, inputs, action_list, builder)
-
-    def encode_graph(
-        self,
-        state: StateInput,
-        *,
-        goals: GoalBatchInput = None,
-        actions: Iterable[GroundActionInput] | None = None,
-        subgoal_layers: SubgoalLayersInput = None,
-        history_subgoals: HistorySubgoalInput | None = None,
-        history_max_steps: int | None = None,
-    ) -> EncodedGraph:
-        return EncodedGraph(
-            self,
-            state,
-            encode_kwargs={
-                "goals": goals,
-                "actions": actions,
-                "subgoal_layers": subgoal_layers,
-                "history_subgoals": history_subgoals,
-                "history_max_steps": history_max_steps,
-            },
-        )
-
-    def _finalize_encoded_graph(self, graph: EncodedGraph) -> HeteroEncoding:
-        builder = BatchBuilder()
-        builder.set_graph_kind("hetero")
-        for key, spec in self._field_specs.items():
-            builder.register_field(key, spec.to_core_dict())
-
-        self._encode_one_into_builder(graph._state, builder, **graph._encode_kwargs)
-        if graph._dynamic_values:
-            builder.set_fields(graph._dynamic_values)
-        builder.next_graph()
-        return builder.build()
-
-    def batch_graphs(self, graphs: Sequence[EncodedGraph]) -> HeteroEncoding:
-        encodings = []
-        for idx, graph in enumerate(graphs):
-            if not isinstance(graph, EncodedGraph):
-                raise TypeError(
-                    f"batch_graphs expects EncodedGraph entries, got {type(graph)} at {idx}"
-                )
-            if graph._encoder is not self:
-                raise ValueError(
-                    "batch_graphs received EncodedGraph from a different encoder"
-                )
-            encodings.append(graph.finalize())
-        return _core.batch_encodings(encodings)
 
     @property
     def engine(self) -> HGraphEncoderEngine:
@@ -802,7 +686,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one state into native ``BatchEncoding``."""
         return super().encode(
             state,
@@ -869,9 +753,11 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         subgoal_layers: SubgoalLayersBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(
             states,
@@ -880,6 +766,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             subgoal_layers=subgoal_layers,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
             include_metadata=include_metadata,
             **kwargs,
         )

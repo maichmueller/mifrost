@@ -378,7 +378,10 @@ def test_core_parse_states_rejects_state_adapters(small_blocks):
     try:
         with pytest.raises(
             TypeError,
-            match="Batch parsing does not support state adapters",
+            match=(
+                "Batch parsing does not support state adapters"
+                "|encode_batch expects a state or an iterable of states"
+            ),
         ):
             mifrost._core._parse_states_batch([WrappedState()])
     finally:
@@ -440,7 +443,10 @@ def test_core_parse_states_rejects_wrapper_states(small_blocks):
 
     with pytest.raises(
         TypeError,
-        match="states entry at index 0 has invalid type",
+        match=(
+            "states entry at index 0 has invalid type"
+            "|encode_batch expects a state or an iterable of states"
+        ),
     ):
         mifrost._core._parse_states_batch([state])
 

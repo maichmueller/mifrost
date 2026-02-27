@@ -38,7 +38,7 @@ bool is_reserved_python_attr_key(std::string_view key);
 
 void batch_encoding_clear_python_attrs(nanobind::handle self);
 
-nanobind::dict batch_encoding_field_specs(nanobind::handle self);
+nanobind::dict batch_encoding_collate_spec(nanobind::handle self);
 
 void batch_encoding_apply_python_attrs_from_state(
    nanobind::handle self,
@@ -51,19 +51,19 @@ void batch_encoding_apply_python_attrs_from_state(
    const nanobind::dict& state
 );
 
-PythonFieldSpecMap canonicalize_python_field_specs(const nanobind::dict& specs);
+PythonFieldSpecMap canonicalize_python_collate_spec(const nanobind::dict& specs);
 
-void merge_python_field_specs(PythonFieldSpecMap& dst, const PythonFieldSpecMap& src);
+void merge_python_collate_spec(PythonFieldSpecMap& dst, const PythonFieldSpecMap& src);
 
-nanobind::dict python_field_specs_to_dict(const PythonFieldSpecMap& specs);
+nanobind::dict python_collate_spec_to_dict(const PythonFieldSpecMap& specs);
 
 std::tuple< PythonFieldSpecMap, std::vector< nanobind::dict > > build_python_collation_inputs(
    const nb::sequence& source_objects,
-   const nb::object& field_specs_obj
+   const nb::object& collate_spec_obj
 );
 
-PythonFieldSpecMap filter_python_field_specs_for_native_collisions(
-   const PythonFieldSpecMap& field_specs,
+PythonFieldSpecMap filter_python_collate_spec_for_native_collisions(
+   const PythonFieldSpecMap& collate_spec,
    const std::set< std::string >& reserved_native_keys
 );
 
@@ -72,7 +72,20 @@ inline bool is_torch_tensor(nb::handle value)
    return nb::isinstance(value, py::torch_tensor_type());
 }
 
-void register_batch_encoding_field_specs(nanobind::handle self, const nanobind::dict& specs);
+void register_batch_encoding_collate_spec(nanobind::handle self, const nanobind::dict& spec);
+bool is_pyg_structural_attr_key(std::string_view key);
+bool is_forbidden_dynamic_attr_key(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+);
+std::vector< std::string > collect_default_python_collation_keys(
+   const std::vector< nb::dict >& source_attrs,
+   const PythonFieldSpecMap& collate_spec
+);
+nb::dict apply_default_python_collation(
+   const std::vector< std::string >& keys,
+   const std::vector< nb::dict >& source_attrs
+);
 
 void copy_python_attrs_to_object(
    nanobind::handle src,
@@ -243,13 +256,13 @@ nb::object collate_numeric_field(
 template < typename BERange >
    requires BatchEncodingPointerRange< BERange >
 nb::dict apply_python_collation(
-   const PythonFieldSpecMap& field_specs,
+   const PythonFieldSpecMap& collate_spec,
    const std::vector< nb::dict >& source_attrs,
    const BERange& source_encodings
 )
 {
    nb::dict out_attrs;
-   for(const auto& [key, spec] : field_specs) {
+   for(const auto& [key, spec] : collate_spec) {
       const nb::str key_obj(key.c_str());
       if(spec.dtype == PythonFieldDType::F32 or spec.dtype == PythonFieldDType::I64) {
          nb::object ptr = nb::none();

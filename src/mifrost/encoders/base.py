@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from numbers import Integral
 from typing import (
+    Any,
     TYPE_CHECKING,
     Generic,
     Iterable,
@@ -14,6 +15,7 @@ from typing import (
 )
 
 from .common import _encoding_dict_to_pyg
+from ..graph_fields import CollateSpec
 from .types import (
     BatchParam,
     EncodingDict,
@@ -60,10 +62,22 @@ HistorySubgoalsBatchParam: TypeAlias = (
     | Sequence[HistorySubgoalInput | None]
     | None
 )
+CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, object]] | None
 
 
 def _is_native_encoding(value: object) -> TypeGuard[NativeEncoding]:
     return hasattr(value, "as_dict") and hasattr(value, "as_pyg")
+
+
+def _normalize_collate_spec(
+    collate_spec: CollateSpecParam,
+) -> dict[str, dict[str, object]] | None:
+    if collate_spec is None:
+        return None
+    out: dict[str, dict[str, object]] = {}
+    for key, spec in collate_spec.items():
+        out[str(key)] = CollateSpec.from_spec(spec).to_core_dict()
+    return out
 
 
 class EncoderBase(ABC, Generic[PygDataT]):
@@ -113,17 +127,30 @@ class EncoderBase(ABC, Generic[PygDataT]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs,
     ) -> BatchEncoding:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
-        return self._encode_batch(
+        encoding = self._encode_batch(
             states,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
             **self._filter_kwargs(kwargs),
         )
+        if batch_attrs:
+            for key, value in batch_attrs.items():
+                setattr(encoding, str(key), value)
+        normalized_collate_spec = _normalize_collate_spec(collate_spec)
+        if normalized_collate_spec:
+            from .. import _core as _core_module
+
+            _core_module._set_batch_encoding_collate_spec(
+                encoding, normalized_collate_spec
+            )
+        return encoding
 
     def encode_pyg(
         self,
@@ -152,6 +179,8 @@ class EncoderBase(ABC, Generic[PygDataT]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs,
     ) -> PygDataT:
@@ -160,6 +189,8 @@ class EncoderBase(ABC, Generic[PygDataT]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
             include_metadata=include_metadata,
             **kwargs,
         )

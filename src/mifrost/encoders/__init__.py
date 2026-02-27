@@ -16,6 +16,7 @@ from .transition import (
 )
 from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
 from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
+from ..graph_fields import CollateSpec
 from .types import (
     BatchParam,
     register_action_adapter,
@@ -50,6 +51,7 @@ __all__ = [
     "_encoding_dict_to_pyg",
     "_split_goals",
     "encoding_to_tensors",
+    "CollateSpec",
     "BatchParam",
     "register_state_adapter",
     "unregister_state_adapter",

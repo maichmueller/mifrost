@@ -340,7 +340,7 @@ def test_batch_encodings_collates_python_fields_with_specs():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={
+        collate_spec={
             "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
             "transition_label": {"dtype": "pyobj", "mode": "stack"},
             "domain_path": {"dtype": "pyobj", "mode": "const"},
@@ -351,11 +351,11 @@ def test_batch_encodings_collates_python_fields_with_specs():
     assert batched.targets_ptr == [0, 2, 3]
     assert batched.transition_label == ["left", "right"]
     assert batched.domain_path == "domain.pddl"
-    assert batched.field_specs()["targets"]["mode"] == "ragged_cat"
-    assert batched.field_specs()["domain_path"]["dtype"] == "pyobj"
+    assert batched.collate_spec()["targets"]["mode"] == "ragged_cat"
+    assert batched.collate_spec()["domain_path"]["dtype"] == "pyobj"
 
 
-def test_batch_encodings_collates_registered_python_field_specs():
+def test_batch_encodings_collates_explicit_python_collate_spec():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
 
@@ -368,15 +368,12 @@ def test_batch_encodings_collates_registered_python_field_specs():
         "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
         "returns": {"mode": "stack"},
     }
-    enc0.register_field_specs(specs)
-    enc1.register_field_specs(specs)
-
-    batched = mifrost.batch_encodings([enc0, enc1])
+    batched = mifrost.batch_encodings([enc0, enc1], collate_spec=specs)
     assert batched.targets == ["a0", "a1", "b0"]
     assert batched.targets_ptr == [0, 2, 3]
     assert batched.returns == [3.0, 4.0]
-    assert batched.field_specs()["targets"]["dtype"] == "pyobj"
-    assert batched.field_specs()["returns"]["mode"] == "stack"
+    assert batched.collate_spec()["targets"]["dtype"] == "pyobj"
+    assert batched.collate_spec()["returns"]["mode"] == "stack"
 
 
 def test_batch_encodings_accepts_python_str_builtin_dtype():
@@ -387,10 +384,10 @@ def test_batch_encodings_accepts_python_str_builtin_dtype():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={"label": {"dtype": str, "mode": "stack"}},
+        collate_spec={"label": {"dtype": str, "mode": "stack"}},
     )
     assert batched.label == ["left", "right"]
-    assert batched.field_specs()["label"]["dtype"] == "str"
+    assert batched.collate_spec()["label"]["dtype"] == "str"
 
 
 def test_batch_encodings_accepts_python_int_float_builtin_dtypes():
@@ -403,15 +400,15 @@ def test_batch_encodings_accepts_python_int_float_builtin_dtypes():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={
+        collate_spec={
             "steps": {"dtype": int, "mode": "stack", "dim": 1},
             "value": {"dtype": float, "mode": "stack", "dim": 1},
         },
     )
     assert torch.equal(batched.steps, torch.tensor([3, 7], dtype=torch.int64))
     assert torch.allclose(batched.value, torch.tensor([1.5, 2.5], dtype=torch.float32))
-    assert batched.field_specs()["steps"]["dtype"] == "i64"
-    assert batched.field_specs()["value"]["dtype"] == "f32"
+    assert batched.collate_spec()["steps"]["dtype"] == "i64"
+    assert batched.collate_spec()["value"]["dtype"] == "f32"
 
 
 def test_batch_builder_register_field_accepts_python_int_float_builtin_dtypes():
@@ -436,7 +433,7 @@ def test_batch_encodings_accepts_py_field_specs_for_ragged_fields():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
+        collate_spec={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
     )
     assert batched.targets == ["a0", "b0", "b1"]
     assert batched.targets_ptr == [0, 1, 3]
@@ -447,32 +444,75 @@ def test_batch_encodings_without_python_attrs_keeps_python_specs_empty():
     enc1 = _single_graph_with_stack_field(2.0)
 
     batched = mifrost.batch_encodings([enc0, enc1])
-    assert batched.field_specs() == {}
-    assert "__mifrost_field_specs__" not in batched.__dict__
+    assert batched.collate_spec() == {}
+    assert "__mifrost_collate_spec__" not in batched.__dict__
 
 
-def test_batch_encodings_mixed_python_attrs_infers_stack_and_pads_missing():
+def test_batch_encodings_default_collation_requires_presence_on_all_inputs():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
 
     enc0.transition_label = "left"
 
+    with pytest.raises(ValueError, match="missing value for encoding index 1"):
+        mifrost.batch_encodings([enc0, enc1])
+
+
+def test_batch_encodings_default_collation_lists_non_dict_values():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.transition_label = "left"
+    enc1.transition_label = "right"
+
     batched = mifrost.batch_encodings([enc0, enc1])
-    assert batched.transition_label == ["left", None]
-    assert batched.field_specs()["transition_label"]["mode"] == "stack"
+    assert batched.transition_label == ["left", "right"]
 
 
-def test_batch_encodings_mixed_registered_ragged_spec_handles_missing_values():
+def test_batch_encodings_default_collation_shallow_dict_values():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.transition_info = {"depth": 0, "score": 1.5}
+    enc1.transition_info = {"depth": 1, "score": 2.5}
+
+    batched = mifrost.batch_encodings([enc0, enc1])
+    assert batched.transition_info == {
+        "depth": [0, 1],
+        "score": [1.5, 2.5],
+    }
+
+
+def test_batch_encodings_default_collation_rejects_dict_key_mismatch():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.transition_info = {"depth": 0}
+    enc1.transition_info = {"depth": 1, "score": 2.5}
+
+    with pytest.raises(ValueError, match="requires identical key sets"):
+        mifrost.batch_encodings([enc0, enc1])
+
+
+def test_batch_encodings_default_collation_rejects_mixed_dict_and_non_dict():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.transition_info = {"depth": 0}
+    enc1.transition_info = "not-a-dict"
+
+    with pytest.raises(ValueError, match="mixes dict and non-dict values"):
+        mifrost.batch_encodings([enc0, enc1])
+
+
+def test_batch_encodings_explicit_ragged_spec_handles_missing_values():
     enc0 = _single_graph_with_stack_field(1.0)
     enc1 = _single_graph_with_stack_field(2.0)
 
     enc0.targets = ["a0", "a1"]
-    enc0.register_field_specs({"targets": {"dtype": "pyobj", "mode": "ragged_cat"}})
-
-    batched = mifrost.batch_encodings([enc0, enc1])
+    batched = mifrost.batch_encodings(
+        [enc0, enc1],
+        collate_spec={"targets": {"dtype": "pyobj", "mode": "ragged_cat"}},
+    )
     assert batched.targets == ["a0", "a1"]
     assert batched.targets_ptr == [0, 2, 2]
-    assert batched.field_specs()["targets"]["mode"] == "ragged_cat"
+    assert batched.collate_spec()["targets"]["mode"] == "ragged_cat"
 
 
 def test_batch_encodings_mixed_explicit_specs_collate_per_mode():
@@ -487,7 +527,7 @@ def test_batch_encodings_mixed_explicit_specs_collate_per_mode():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={
+        collate_spec={
             "targets": {"dtype": "pyobj", "mode": "ragged_cat"},
             "transition_label": {"dtype": "pyobj", "mode": "stack"},
             "domain_path": {"dtype": "pyobj", "mode": "const"},
@@ -508,7 +548,7 @@ def test_batch_encodings_const_python_field_requires_presence_on_all_inputs():
     with pytest.raises(ValueError, match="missing value for encoding index 1"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            field_specs={"domain_path": {"dtype": "pyobj", "mode": "const"}},
+            collate_spec={"domain_path": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
@@ -521,7 +561,7 @@ def test_batch_encodings_collates_const_tensor_python_field():
 
     batched = mifrost.batch_encodings(
         [enc0, enc1],
-        field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+        collate_spec={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
     )
 
     assert torch.equal(
@@ -539,7 +579,7 @@ def test_batch_encodings_const_tensor_field_requires_exact_structure():
     with pytest.raises(ValueError, match="non-constant values"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+            collate_spec={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
@@ -553,30 +593,26 @@ def test_batch_encodings_const_numpy_field_requires_exact_structure():
     with pytest.raises(ValueError, match="non-constant values"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            field_specs={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
+            collate_spec={"reward_signature": {"dtype": "pyobj", "mode": "const"}},
         )
 
 
 def test_batch_encoding_as_pyg_copies_python_attrs():
     encoding = _single_graph_with_stack_field(3.0)
     encoding.sample_labels = ["label-0"]
-    encoding.register_field_specs(
-        {"sample_labels": {"dtype": "pyobj", "mode": "stack"}}
-    )
 
     as_single = encoding.as_pyg(as_batch=False)
     as_batch = encoding.as_pyg(as_batch=True)
 
     assert as_single.sample_labels == "label-0"
     assert as_batch.sample_labels == ["label-0"]
-    assert not hasattr(as_single, "__mifrost_field_specs__")
-    assert not hasattr(as_batch, "__mifrost_field_specs__")
+    assert not hasattr(as_single, "__mifrost_collate_spec__")
+    assert not hasattr(as_batch, "__mifrost_collate_spec__")
 
 
 def test_batch_encoding_field_accessors_and_introspection():
     encoding = _single_graph_with_ragged_i64_field([5, 6])
     encoding.label = "demo"
-    encoding.register_field_specs({"label": {"dtype": "pyobj", "mode": "stack"}})
 
     assert encoding.has_field("target_indices")
     assert encoding.has_field("target_indices_ptr")
@@ -595,7 +631,7 @@ def test_batch_encoding_field_accessors_and_introspection():
     assert "target_indices" in keys
     assert "target_indices_ptr" in keys
     assert "label" in keys
-    assert "__mifrost_field_specs__" not in keys
+    assert "__mifrost_collate_spec__" not in keys
 
     items = dict(encoding.items())
     assert torch.equal(items["target_indices"], torch.tensor([5, 6], dtype=torch.int64))
@@ -766,12 +802,9 @@ def test_batch_encoding_ragged_ptr_attr_is_read_only_snapshot():
         batched.target_indices_ptr = [0, 1, 3]
 
 
-def test_register_field_specs_raises_on_native_key_collision():
+def test_batch_encoding_has_no_public_register_collate_spec():
     encoding = _single_graph_with_stack_field(1.0)
-    with pytest.raises(ValueError, match="collides with native field key"):
-        encoding.register_field_specs(
-            {"goal_distance": {"dtype": "pyobj", "mode": "stack"}}
-        )
+    assert not hasattr(encoding, "register_collate_spec")
 
 
 def test_batch_encodings_raises_on_python_specs_colliding_with_native_fields():
@@ -782,14 +815,24 @@ def test_batch_encodings_raises_on_python_specs_colliding_with_native_fields():
     enc0.tag = "a"
     enc1.tag = "b"
 
-    with pytest.raises(ValueError, match="collides with native field key"):
+    with pytest.raises(ValueError, match="collides with (a )?reserved/native key"):
         mifrost.batch_encodings(
             [enc0, enc1],
-            field_specs={
+            collate_spec={
                 "target_indices": {"dtype": "pyobj", "mode": "ragged_cat"},
                 "tag": {"dtype": "pyobj", "mode": "stack"},
             },
         )
+
+
+def test_batch_encodings_default_collation_rejects_reserved_structural_key():
+    enc0 = _single_graph_with_stack_field(1.0)
+    enc1 = _single_graph_with_stack_field(2.0)
+    enc0.__dict__["x"] = [1]
+    enc1.__dict__["x"] = [2]
+
+    with pytest.raises(ValueError, match="collides with a reserved key"):
+        mifrost.batch_encodings([enc0, enc1])
 
 
 def test_batch_encoding_consumption_validates_malformed_field_state():

@@ -15,6 +15,7 @@ class Mode(str, Enum):
 class DType(str, Enum):
     F32 = "f32"
     I64 = "i64"
+    STR = "str"
     PYOBJ = "pyobj"
 
 
@@ -53,10 +54,10 @@ class GraphFieldSpec:
     def __post_init__(self) -> None:
         if self.dim <= 0:
             raise ValueError("GraphFieldSpec.dim must be > 0")
-        if self.dtype is DType.PYOBJ:
+        if self.dtype in (DType.PYOBJ, DType.STR):
             raise ValueError(
-                "GraphFieldSpec dtype='pyobj' is only supported for Python-side "
-                "batch_encodings field_specs, not native HGraph dynamic fields"
+                "GraphFieldSpec dtype is only supported for Python-side "
+                "batch_encodings collate_spec, not native HGraph dynamic fields"
             )
         normalized_cat_dim = 1 if self.cat_dim == -1 else int(self.cat_dim)
         if self.mode in (Mode.CAT, Mode.RAGGED_CAT):
@@ -101,6 +102,63 @@ class GraphFieldSpec:
         return cls(mode=mode, dtype=dtype, dim=dim, cat_dim=cat_dim, inc=inc)
 
 
+@dataclass(frozen=True)
+class CollateSpec:
+    mode: Mode
+    dtype: DType
+    dim: int = 1
+    cat_dim: int = 0
+    inc: Inc = field(default_factory=Inc.none)
+
+    def __post_init__(self) -> None:
+        if self.dim <= 0:
+            raise ValueError("CollateSpec.dim must be > 0")
+        normalized_cat_dim = 1 if self.cat_dim == -1 else int(self.cat_dim)
+        if self.dtype in (DType.F32, DType.I64):
+            if self.mode in (Mode.CAT, Mode.RAGGED_CAT):
+                if normalized_cat_dim not in (0, 1):
+                    raise ValueError(
+                        "CollateSpec.cat_dim must be 0, 1, or -1 for CAT/RAGGED_CAT"
+                    )
+            elif normalized_cat_dim != 0:
+                raise ValueError("CollateSpec.cat_dim must be 0 for STACK/CONST")
+            if self.inc.kind == "node_offset" and self.dtype is not DType.I64:
+                raise ValueError("NODE_OFFSET increment requires dtype=DType.I64")
+        else:
+            if self.mode is Mode.CAT:
+                raise ValueError("CollateSpec CAT mode requires numeric dtype")
+            if normalized_cat_dim != 0 or self.dim != 1 or self.inc.kind != "none":
+                raise ValueError(
+                    "Non-numeric CollateSpec only supports dim=1, cat_dim=0, inc=none"
+                )
+        object.__setattr__(self, "cat_dim", normalized_cat_dim)
+
+    def to_core_dict(self) -> dict[str, object]:
+        out: dict[str, object] = {"mode": self.mode.value, "dtype": self.dtype.value}
+        if self.dtype in (DType.F32, DType.I64):
+            out["dim"] = int(self.dim)
+            out["cat_dim"] = int(self.cat_dim)
+            out["inc"] = self.inc.to_core_dict()
+        return out
+
+    @classmethod
+    def from_spec(cls, spec: "CollateSpec | Mapping[str, Any]") -> "CollateSpec":
+        if isinstance(spec, cls):
+            return spec
+        if not isinstance(spec, Mapping):
+            raise TypeError(
+                f"Collate spec must be CollateSpec or mapping, got {type(spec)!r}"
+            )
+        mode_raw = spec.get("mode", Mode.STACK)
+        dtype_raw = spec.get("dtype", DType.PYOBJ)
+        mode = _normalize_mode(mode_raw)
+        dtype = _normalize_dtype(dtype_raw)
+        dim = int(spec.get("dim", 1))
+        cat_dim = int(spec.get("cat_dim", 0))
+        inc = _normalize_inc(spec.get("inc", {"kind": "none"}))
+        return cls(mode=mode, dtype=dtype, dim=dim, cat_dim=cat_dim, inc=inc)
+
+
 def _normalize_mode(mode: Mode | str) -> Mode:
     if isinstance(mode, Mode):
         return mode
@@ -109,9 +167,16 @@ def _normalize_mode(mode: Mode | str) -> Mode:
     raise TypeError(f"Graph field mode must be Mode or str, got {type(mode)!r}")
 
 
-def _normalize_dtype(dtype: DType | str) -> DType:
+def _normalize_dtype(dtype: DType | str | type) -> DType:
     if isinstance(dtype, DType):
         return dtype
+    if isinstance(dtype, type):
+        if dtype is str:
+            return DType.STR
+        if dtype is float:
+            return DType.F32
+        if dtype is int:
+            return DType.I64
     if isinstance(dtype, str):
         return DType(dtype.lower())
     raise TypeError(f"Graph field dtype must be DType or str, got {type(dtype)!r}")
@@ -132,4 +197,4 @@ def _normalize_inc(inc: Inc | Mapping[str, Any]) -> Inc:
     raise ValueError(f"Unsupported graph field inc kind: {kind!r}")
 
 
-__all__ = ["Mode", "DType", "Inc", "GraphFieldSpec"]
+__all__ = ["Mode", "DType", "Inc", "GraphFieldSpec", "CollateSpec"]

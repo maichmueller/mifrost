@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import networkx as nx
 import torch
@@ -16,6 +16,7 @@ from .._core import (
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
+    CollateSpecParam,
     EncoderBase,
     GoalBatchInput,
     GoalBatchParam,
@@ -199,6 +200,8 @@ class ColorEncoder(EncoderBase[Data]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HomoEncoding:
@@ -208,6 +211,8 @@ class ColorEncoder(EncoderBase[Data]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
             include_metadata=include_metadata,
             **kwargs,
         )

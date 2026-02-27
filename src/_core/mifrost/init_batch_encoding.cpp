@@ -1784,10 +1784,9 @@ void init_batch_encoding(nb::module_& m)
                set_owner_target_device(self, device);
                nb::object normalized = owner_target_device(self);
                nb::dict attrs = batch_encoding_python_attrs(self);
-               const auto native_keys = batch_encoding_native_graph_field_keys(*encoding);
                for(auto [key_obj, value_obj] : attrs) {
                   const std::string key = py::to_std_string(key_obj);
-                  if(is_reserved_python_attr_key(key) or native_keys.contains(key)) {
+                  if(is_forbidden_dynamic_attr_key(*encoding, key)) {
                      continue;
                   }
                   attrs[key_obj] = move_object_to_device(
@@ -1798,13 +1797,6 @@ void init_batch_encoding(nb::module_& m)
                return nb::borrow< nb::object >(self);
             },
             "device"_a
-         )
-         .def(
-            "register_field_specs",
-            [](nb::handle self, const nb::dict& specs) {
-               register_batch_encoding_field_specs(self, specs);
-            },
-            "specs"_a
          )
          .def(
             "set_field",
@@ -1829,7 +1821,7 @@ void init_batch_encoding(nb::module_& m)
             },
             "values"_a
          )
-         .def("field_specs", [](nb::handle self) { return batch_encoding_field_specs(self); })
+         .def("collate_spec", [](nb::handle self) { return batch_encoding_collate_spec(self); })
          .def(
             "has_field",
             [](nb::handle self, const std::string& key) {
@@ -1881,6 +1873,11 @@ void init_batch_encoding(nb::module_& m)
                   clear_owner_tensor_cache(self);
                   return;
                }
+               if(is_forbidden_dynamic_attr_key(*encoding, key)) {
+                  throw std::invalid_argument(
+                     "Dynamic attribute key '" + key + "' collides with reserved/native key"
+                  );
+               }
                py::set_python_attribute(self, key, value);
             }
          )
@@ -1913,7 +1910,7 @@ void init_batch_encoding(nb::module_& m)
                for(auto [key_obj, value_obj] : attrs) {
                   (void) value_obj;
                   const std::string key = py::to_std_string(key_obj);
-                  if(is_reserved_python_attr_key(key) or key_set.contains(key)) {
+                  if(is_forbidden_dynamic_attr_key(*encoding, key) or key_set.contains(key)) {
                      continue;
                   }
                   key_set.insert(key);
@@ -1936,7 +1933,7 @@ void init_batch_encoding(nb::module_& m)
                for(auto [key_obj, value_obj] : attrs) {
                   (void) value_obj;
                   const std::string key = py::to_std_string(key_obj);
-                  if(is_reserved_python_attr_key(key) or key_set.contains(key)) {
+                  if(is_forbidden_dynamic_attr_key(*encoding, key) or key_set.contains(key)) {
                      continue;
                   }
                   key_set.insert(key);
@@ -2086,8 +2083,17 @@ void init_batch_encoding(nb::module_& m)
    );
 
    m.def(
+      "_set_batch_encoding_collate_spec",
+      [](nb::handle self, const nb::dict& specs) {
+         register_batch_encoding_collate_spec(self, specs);
+      },
+      "encoding"_a,
+      "specs"_a
+   );
+
+   m.def(
       "batch_encodings",
-      [](nb::sequence encodings, nb::object field_specs_obj) -> nb::object {
+      [](nb::sequence encodings, nb::object collate_spec_obj) -> nb::object {
          auto enc_cast = [](const nb::handle& source) -> BatchEncoding* {
             return require_instance_ptr< BatchBuilder::BatchEncoding >(
                source, "batch_encodings expects BatchEncoding inputs"
@@ -2116,52 +2122,46 @@ void init_batch_encoding(nb::module_& m)
          }
 
          BatchEncoding out = builder.build();
-         auto [field_specs, source_attrs] = std::invoke([&] {
+         auto [collate_spec, source_attrs] = std::invoke([&] {
             try {
-               return build_python_collation_inputs(encodings, std::move(field_specs_obj));
+               return build_python_collation_inputs(encodings, std::move(collate_spec_obj));
             } catch(const std::exception& ex) {
                throw std::invalid_argument(
-                  "batch_encodings field_specs preparation failed: " + std::string(ex.what())
+                  "batch_encodings collate_spec preparation failed: " + std::string(ex.what())
                );
             }
          });
-         if(field_specs.empty()) {
-            return nb::cast(out);
-         }
 
-         const auto reserved_native_keys = batch_encoding_native_graph_field_keys(out);
-         for(const auto& [key, spec] : field_specs) {
+         const auto reserved_native_keys = batch_encoding_native_tensor_keys(out);
+         auto filtered_specs = filter_python_collate_spec_for_native_collisions(
+            collate_spec, reserved_native_keys
+         );
+         const auto default_keys = collect_default_python_collation_keys(
+            source_attrs, filtered_specs
+         );
+         for(const auto& key : default_keys) {
             if(reserved_native_keys.contains(key)) {
                throw std::invalid_argument(
-                  "Python field spec key '" + key
-                  + "' collides with native field key during batch_encodings"
+                  "Default collation key '" + key + "' collides with a native field key"
                );
             }
-            if(spec.mode == GraphFieldMode::RAGGED_CAT) {
-               const std::string ptr_key = key + "_ptr";
-               if(reserved_native_keys.contains(ptr_key)) {
-                  throw std::invalid_argument(
-                     "Python field spec key '" + key + "' collides with native field ptr key '"
-                     + ptr_key + "' during batch_encodings"
-                  );
-               }
-            }
          }
-         auto filtered_specs = filter_python_field_specs_for_native_collisions(
-            field_specs, reserved_native_keys
-         );
          auto out_py = nb::cast(out);
-         if(filtered_specs.empty()) {
+         if(filtered_specs.empty() and default_keys.empty()) {
             return out_py;
          }
 
          try {
-            auto out_attrs = apply_python_collation(
+            nb::dict out_attrs = apply_python_collation(
                filtered_specs,
                source_attrs,
                std::views::iota(size_t{0}, nb::len(encodings))
                   | std::views::transform([&](size_t i) { return enc_cast(encodings[i]); })
             );
+            nb::dict default_attrs = apply_default_python_collation(default_keys, source_attrs);
+            for(auto [k, v] : default_attrs) {
+               out_attrs[k] = nb::borrow< nb::object >(v);
+            }
             for(auto [k, v] : out_attrs) {
                py::set_python_attribute(out_py, nb::str(k), v);
             }
@@ -2171,18 +2171,22 @@ void init_batch_encoding(nb::module_& m)
             );
          }
 
-         try {
-            register_batch_encoding_field_specs(out_py, python_field_specs_to_dict(filtered_specs));
-         } catch(const std::exception& ex) {
-            throw std::invalid_argument(
-               "batch_encodings field_specs registration failed: " + std::string(ex.what())
-            );
+         if(not filtered_specs.empty()) {
+            try {
+               register_batch_encoding_collate_spec(
+                  out_py, python_collate_spec_to_dict(filtered_specs)
+               );
+            } catch(const std::exception& ex) {
+               throw std::invalid_argument(
+                  "batch_encodings collate_spec registration failed: " + std::string(ex.what())
+               );
+            }
          }
          return out_py;
       },
-      nb::sig("def batch_encodings(encodings, field_specs=None) -> BatchEncoding"),
+      nb::sig("def batch_encodings(encodings, collate_spec=None) -> BatchEncoding"),
       "encodings"_a,
-      "field_specs"_a = nb::none()
+      "collate_spec"_a = nb::none()
    );
 }
 

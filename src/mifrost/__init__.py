@@ -16,18 +16,39 @@ if _in_stubgen:
     ]
     __all__: list[str] = []
 else:
-    from collections.abc import Mapping as _Mapping
+    from collections.abc import Mapping as _ABCMapping
 
     from . import _core  # make _core cpp module explicitly available to re-export
     from .map_view import MapView, install_map_view_wrappers
 
     install_map_view_wrappers(_core)
-    _Mapping.register(_core.RelationDict)
+    _ABCMapping.register(_core.RelationDict)
     from ._core import *  # noqa: F401,F403
-    from .graph_fields import DType, GraphFieldSpec, Inc, Mode
+    from .graph_fields import CollateSpec, DType, GraphFieldSpec, Inc, Mode
 
     def _batch_encoding_from_payload(payload: bytes):
         return _core.BatchEncoding.loads(payload)
+
+    def _normalize_collate_spec(
+        collate_spec: _ABCMapping[str, CollateSpec | _ABCMapping[str, object]] | None,
+    ) -> dict[str, dict[str, object]] | None:
+        if collate_spec is None:
+            return None
+        if not isinstance(collate_spec, _ABCMapping):
+            raise TypeError(
+                f"batch_encodings collate_spec must be a mapping, got {type(collate_spec)!r}"
+            )
+        out: dict[str, dict[str, object]] = {}
+        for key, spec in collate_spec.items():
+            out[str(key)] = CollateSpec.from_spec(spec).to_core_dict()
+        return out
+
+    def batch_encodings(
+        encodings,
+        collate_spec: _ABCMapping[str, CollateSpec | _ABCMapping[str, object]]
+        | None = None,
+    ):
+        return _core.batch_encodings(encodings, _normalize_collate_spec(collate_spec))
 
     _encoder_exports = [
         "HGraphEncoder",
@@ -108,6 +129,7 @@ else:
         "DType",
         "Inc",
         "GraphFieldSpec",
+        "CollateSpec",
         "MapView",
     ]
 
