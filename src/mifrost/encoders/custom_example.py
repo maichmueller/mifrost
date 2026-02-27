@@ -13,7 +13,7 @@ from .types import HeteroEncoding, NativeEncodingInput
 
 
 @dataclass
-class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData]):
     """Minimal stream encoder example built fully in Python."""
 
     _default_value: float = 1.0
@@ -51,7 +51,7 @@ class ExampleConstantStreamEncoder(StreamEncoderBase[HeteroData, HeteroEncoding]
         )
 
 
-class ExampleConstantEncoder(EncoderBase[HeteroData, HeteroEncoding]):
+class ExampleConstantEncoder(EncoderBase[HeteroData]):
     """
     Minimal pure-Python encoder example.
 

@@ -46,6 +46,7 @@ nanobind::handle pickle_loads();
 nanobind::handle mapping_proxy_type_ctor();
 nanobind::object mapping_proxy(const nanobind::dict& mapping);
 void set_python_attribute(nanobind::handle self, const std::string& key, nanobind::handle value);
+void set_python_attribute(nanobind::handle self, nb::str key, nanobind::handle value);
 nanobind::object flatten_single_graph_metadata_list(nanobind::handle value);
 
 nanobind::handle torch_tensor_type();

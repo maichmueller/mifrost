@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from numbers import Integral
-from typing import Generic, Iterable, Mapping, Sequence, TypeAlias, TypeGuard, TypeVar
-
-from torch_geometric.data import Data, HeteroData
+from typing import (
+    TYPE_CHECKING,
+    Generic,
+    Iterable,
+    Mapping,
+    Sequence,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+)
 
 from .common import _encoding_dict_to_pyg
 from .types import (
@@ -17,9 +24,14 @@ from .types import (
     NativeEncodingInput,
     StateInput,
 )
+from .._core import BatchEncoding
 
-PygDataT = TypeVar("PygDataT", Data, HeteroData)
-EncodingT = TypeVar("EncodingT", bound=NativeEncoding)
+if TYPE_CHECKING:
+    from torch_geometric.data import Data, HeteroData
+
+    PygDataT = TypeVar("PygDataT", Data, HeteroData)
+else:
+    PygDataT = TypeVar("PygDataT")
 StateBatchInput: TypeAlias = Iterable[StateInput] | StateInput
 GoalBatchInput: TypeAlias = Iterable[GoalLiteralInput] | None
 SubgoalLayersInput: TypeAlias = Iterable[Iterable[GoalLiteralInput]] | None
@@ -54,7 +66,7 @@ def _is_native_encoding(value: object) -> TypeGuard[NativeEncoding]:
     return hasattr(value, "as_dict") and hasattr(value, "as_pyg")
 
 
-class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
+class EncoderBase(ABC, Generic[PygDataT]):
     """
     Base class for all non-stream encoders.
 
@@ -84,7 +96,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> EncodingT:
+    ) -> BatchEncoding:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode(
             state,
@@ -103,7 +115,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         subgoal_layers: SubgoalLayersBatchParam = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> EncodingT:
+    ) -> BatchEncoding:
         # Native encodings are unchanged by include_metadata; conversion controls metadata.
         return self._encode_batch(
             states,
@@ -162,7 +174,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs,
-    ) -> EncodingT:
+    ) -> BatchEncoding:
         """Encode one input into native batch encoding."""
         ...
 
@@ -175,7 +187,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
         **kwargs,
-    ) -> EncodingT:
+    ) -> BatchEncoding:
         """Encode one or many inputs into native batch encoding."""
         ...
 
@@ -211,7 +223,7 @@ class EncoderBase(ABC, Generic[PygDataT, EncodingT]):
         )
 
 
-class StreamEncoderBase(ABC, Generic[PygDataT, EncodingT]):
+class StreamEncoderBase(ABC, Generic[PygDataT]):
     """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
@@ -244,7 +256,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT, EncodingT]):
         """Re-encode and replace a previously appended item in the stream."""
         raise NotImplementedError("update is not implemented for this stream")
 
-    def flush(self) -> EncodingT:
+    def flush(self) -> BatchEncoding:
         """Flush accumulated items and return native batch encoding."""
         stream = getattr(self, "_stream", None)
         if stream is not None and hasattr(stream, "flush"):

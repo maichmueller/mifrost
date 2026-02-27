@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     from torch_geometric.data import Data, HeteroData
     from mifrost._core import HeteroBatchEncodingView, HomoBatchEncodingView
 
+    PygDataLike: TypeAlias = Data | HeteroData
+else:
+    PygDataLike: TypeAlias = Any
+
 # Canonical input types supported by mifrost encoders.
 DomainInput: TypeAlias = wf.Domain | af.Domain
 StateInput: TypeAlias = wf.State | ase.State
@@ -154,7 +158,7 @@ class NativeEncoding(Protocol):
 
     def as_dict(self) -> EncodingDict: ...
 
-    def as_pyg(self, *, as_batch: bool | None = None) -> Any: ...
+    def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
 
     def as_hetero(self) -> "HeteroBatchEncodingView": ...
 
@@ -171,7 +175,7 @@ class HeteroEncoding(NativeEncoding, Protocol):
 
     graph_kind: Literal["hetero"]
 
-    def as_pyg(self, *, as_batch: bool | None = None) -> "HeteroData": ...
+    def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
 
 
 @runtime_checkable
@@ -180,7 +184,7 @@ class HomoEncoding(NativeEncoding, Protocol):
 
     graph_kind: Literal["homo"]
 
-    def as_pyg(self, *, as_batch: bool | None = None) -> "Data": ...
+    def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
 
 
 NativeEncodingInput: TypeAlias = NativeEncoding | EncodingDict

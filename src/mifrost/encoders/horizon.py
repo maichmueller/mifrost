@@ -17,6 +17,7 @@ from .._core import (
     HorizonHGraphEncoderEngine,
     HorizonStreamEncoder as _HorizonStreamEncoder,
     TransitionDAG,
+    BatchEncoding,
 )
 from .base import (
     ActionBatchInput,
@@ -71,7 +72,7 @@ def _prepare_horizon_goals(
 
 
 @dataclass
-class HorizonEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     """Streaming wrapper for ``HorizonHGraphEncoderEngine``."""
 
     _engine: HorizonHGraphEncoderEngine
@@ -209,7 +210,7 @@ class HorizonEncoder(HGraphEncoder):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **_: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one root/DAG pair."""
         if actions is not None:
             # Horizon encoding does not consume actions directly.
@@ -290,7 +291,7 @@ class HorizonEncoder(HGraphEncoder):
         actions: ActionBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
         # Horizon batch encoding ignores action/history kwargs.
         _ = actions

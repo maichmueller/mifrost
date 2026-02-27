@@ -8,7 +8,12 @@ import torch
 from torch_geometric.data import HeteroData
 
 from .. import _core
-from .._core import BatchBuilder, DEFAULT_LGAN_NN_EDGE_POS, DEFAULT_SYMBOL_TYPE_ID
+from .._core import (
+    BatchBuilder,
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_SYMBOL_TYPE_ID,
+    BatchEncoding,
+)
 from .accessors import (
     action_arity,
     action_objects,
@@ -125,7 +130,7 @@ def _goal_levels(
 
 
 @dataclass
-class ILGEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class ILGEncoderStream(StreamEncoderBase[HeteroData]):
     """Streaming wrapper for the pure-Python ``ILGEncoder``."""
 
     _encoder: "ILGEncoder"
@@ -172,7 +177,7 @@ class ILGEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         )
 
 
-class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
+class ILGEncoder(EncoderBase[HeteroData]):
     """
     Instance‑Learning Graph encoder (ILG) implemented in Python.
 
@@ -444,7 +449,7 @@ class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one state into ILG format."""
         builder = BatchBuilder()
         builder.set_graph_kind("hetero")
@@ -461,7 +466,7 @@ class ILGEncoder(EncoderBase[HeteroData, HeteroEncoding]):
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one or many states into ILG batch format."""
         if is_state_input(states):
             state_list = [states]

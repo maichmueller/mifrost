@@ -26,6 +26,7 @@
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 #include "mifrost/batch_encoding_python_collation.hpp"
@@ -1182,11 +1183,6 @@ void clear_owner_tensor_cache(nb::handle owner)
    }
 }
 
-bool is_torch_tensor(nb::handle value)
-{
-   return nb::isinstance(value, py::torch_tensor_type());
-}
-
 nb::object move_object_to_device(nb::handle value, nb::handle device)
 {
    if(device.is_none()) {
@@ -1888,6 +1884,10 @@ void init_batch_encoding(nb::module_& m)
                }
                return out;
             },
+            nb::sig(
+               "def as_pyg(self, as_batch: bool | None = None, include_python_attrs: bool = "
+               "True) -> mifrost.encoders.types.PygDataLike"
+            ),
             "as_batch"_a = nb::none(),
             "include_python_attrs"_a = true
          )
@@ -2004,56 +2004,50 @@ void init_batch_encoding(nb::module_& m)
 
    m.def(
       "batch_encodings",
-      [](nb::iterable encodings_obj, nb::object field_specs_obj) {
-         std::vector< const BatchBuilder::BatchEncoding* > encodings;
-         std::vector< nb::object > source_objects;
-         for(nb::handle item : encodings_obj) {
-            nb::object source = nb::borrow< nb::object >(item);
-            auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+      [](nb::sequence encodings, nb::object field_specs_obj) -> nb::object {
+         auto enc_cast = [](const nb::handle& source) -> BatchEncoding* {
+            return require_instance_ptr< BatchBuilder::BatchEncoding >(
                source, "batch_encodings expects BatchEncoding inputs"
             );
-            encodings.push_back(encoding);
-            source_objects.push_back(std::move(source));
-         }
+         };
 
-         if(encodings.empty()) {
+         if(nb::len(encodings) == 0) {
             return nb::cast(BatchBuilder::BatchEncoding{});
          }
-
-         const auto expected_fp = schema_fingerprint(*encodings.front());
+         const BatchEncoding* zeroth_entry = enc_cast(encodings[0]);
+         const auto expected_fp = schema_fingerprint(*zeroth_entry);
          BatchBuilder builder;
-         builder.set_graph_kind(encodings.front()->graph_kind);
-         for(const auto* encoding : encodings) {
+         builder.set_graph_kind(zeroth_entry->graph_kind);
+         int counter = 0;
+         for(const nb::handle encoding_py : encodings) {
+            const BatchEncoding* encoding = enc_cast(encoding_py);
             if(encoding->num_graphs != 1) {
                throw std::invalid_argument("batch_encodings expects inputs with num_graphs == 1");
             }
             validate_batch_encoding_graph_fields(*encoding, "batch_encodings input validation");
-            if(schema_fingerprint(*encoding) != expected_fp) {
+            if(counter > 0 and schema_fingerprint(*encoding) != expected_fp) {
                throw std::invalid_argument("batch_encodings schema_fingerprint mismatch");
             }
             builder.append_batch_encoding(*encoding);
+            counter++;
          }
 
-         nb::object out = nb::cast(builder.build());
-         PythonCollationInputs collation_inputs;
-         try {
-            collation_inputs = build_python_collation_inputs(
-               source_objects, encodings, field_specs_obj
-            );
-         } catch(const std::exception& ex) {
-            throw std::invalid_argument(
-               "batch_encodings field_specs preparation failed: " + std::string(ex.what())
-            );
-         }
-         if(collation_inputs.field_specs.empty()) {
-            return out;
+         BatchEncoding out = builder.build();
+         auto [field_specs, source_attrs] = std::invoke([&] {
+            try {
+               return build_python_collation_inputs(encodings, std::move(field_specs_obj));
+            } catch(const std::exception& ex) {
+               throw std::invalid_argument(
+                  "batch_encodings field_specs preparation failed: " + std::string(ex.what())
+               );
+            }
+         });
+         if(field_specs.empty()) {
+            return nb::cast(out);
          }
 
-         auto* out_encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-            out, "batch_encodings failed to materialize BatchEncoding output instance"
-         );
-         const auto reserved_native_keys = batch_encoding_native_graph_field_keys(*out_encoding);
-         for(const auto& [key, spec] : collation_inputs.field_specs) {
+         const auto reserved_native_keys = batch_encoding_native_graph_field_keys(out);
+         for(const auto& [key, spec] : field_specs) {
             if(reserved_native_keys.contains(key)) {
                throw std::invalid_argument(
                   "Python field spec key '" + key
@@ -2071,16 +2065,23 @@ void init_batch_encoding(nb::module_& m)
             }
          }
          auto filtered_specs = filter_python_field_specs_for_native_collisions(
-            collation_inputs.field_specs, reserved_native_keys
+            field_specs, reserved_native_keys
          );
+         auto out_py = nb::cast(out);
          if(filtered_specs.empty()) {
-            return out;
+            return out_py;
          }
 
          try {
-            apply_python_collation_to_output(
-               out, filtered_specs, collation_inputs.source_attrs, collation_inputs.source_encodings
+            auto out_attrs = apply_python_collation(
+               filtered_specs,
+               source_attrs,
+               std::views::iota(size_t{0}, nb::len(encodings))
+                  | std::views::transform([&](size_t i) { return enc_cast(encodings[i]); })
             );
+            for(auto [k, v] : out_attrs) {
+               py::set_python_attribute(out_py, nb::str(k), v);
+            }
          } catch(const std::exception& ex) {
             throw std::invalid_argument(
                "batch_encodings python collation failed: " + std::string(ex.what())
@@ -2088,14 +2089,15 @@ void init_batch_encoding(nb::module_& m)
          }
 
          try {
-            register_batch_encoding_field_specs(out, python_field_specs_to_dict(filtered_specs));
+            register_batch_encoding_field_specs(out_py, python_field_specs_to_dict(filtered_specs));
          } catch(const std::exception& ex) {
             throw std::invalid_argument(
                "batch_encodings field_specs registration failed: " + std::string(ex.what())
             );
          }
-         return out;
+         return out_py;
       },
+      nb::sig("def batch_encodings(encodings, field_specs=None) -> BatchEncoding"),
       "encodings"_a,
       "field_specs"_a = nb::none()
    );

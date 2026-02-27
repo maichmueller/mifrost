@@ -158,9 +158,13 @@ nb::object mapping_proxy(const nb::dict& mapping)
    return mapping_proxy_type_ctor()(mapping);
 }
 
+void set_python_attribute(nb::handle self, nb::str key, nb::handle value)
+{
+   builtins_object_setattr()(self, std::move(key), value);
+}
 void set_python_attribute(nb::handle self, const std::string& key, nb::handle value)
 {
-   builtins_object_setattr()(self, nb::str(key.c_str()), value);
+   set_python_attribute(self, nb::str(key.c_str()), value);
 }
 
 nb::object flatten_single_graph_metadata_list(nb::handle value)

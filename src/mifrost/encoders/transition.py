@@ -11,6 +11,7 @@ from .._core import (
     SuccessorEncoderMode,
     SuccessorHGraphEncoderEngine,
     TransitionStreamEncoder as _TransitionStreamEncoder,
+    BatchEncoding,
 )
 from dataclasses import dataclass
 
@@ -107,7 +108,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         history_subgoals=None,
         history_max_steps: int | None = None,
         **kwargs: object,
-    ) -> HeteroEncoding:
+    ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
@@ -197,7 +198,7 @@ class _TransitionEncoderBase(HGraphEncoder):
 
 
 @dataclass
-class _TransitionEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
     """Shared stream implementation for transition encoders."""
 
     _encoder: _TransitionEncoderBase

@@ -170,7 +170,7 @@ def _encoding_dict_to_pyg_homo(
 
 
 @dataclass
-class ColorEncoderStream(StreamEncoderBase[Data, HomoEncoding]):
+class ColorEncoderStream(StreamEncoderBase[Data]):
     """Streaming wrapper for ``ColorEncoder``."""
 
     _encoder: "ColorEncoder"
@@ -233,7 +233,7 @@ class ColorEncoderStream(StreamEncoderBase[Data, HomoEncoding]):
         )
 
 
-class ColorEncoder(EncoderBase[Data, HomoEncoding]):
+class ColorEncoder(EncoderBase[Data]):
     """
     Homogeneous color encoder backed by ``ColorEncoderEngine``.
 

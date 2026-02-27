@@ -153,13 +153,15 @@ def _convert_batch_payload(
             ):
                 raise TypeError("BatchParam(separate) value must be a sequence")
             return BatchParam.separate(
-                _convert_batch_payload(
-                    entry,
-                    is_leaf=is_leaf,
-                    convert_leaf=convert_leaf,
+                (
+                    _convert_batch_payload(
+                        entry,
+                        is_leaf=is_leaf,
+                        convert_leaf=convert_leaf,
+                    )
+                    if entry is not None
+                    else None
                 )
-                if entry is not None
-                else None
                 for entry in value.value
             )
         raise ValueError("BatchParam.kind must be 'shared', 'separate', or 'none'")
@@ -208,6 +210,7 @@ def _convert_batch_payload(
 
 def _coerce_encoding_dict(encoding: NativeEncodingInput | Any) -> EncodingDict:
     if isinstance(encoding, Mapping):
+        # already is an EncodingDict
         return encoding
     if hasattr(encoding, "as_dict"):
         coerced = encoding.as_dict()

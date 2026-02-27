@@ -8,7 +8,7 @@ import networkx as nx
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
 
-from .. import BatchEncoding
+from .._core import BatchEncoding
 from .. import _core
 from ..graph_fields import GraphFieldSpec
 from .._core import (
@@ -412,7 +412,7 @@ def _draw_hgraph_graph(
 
 
 @dataclass
-class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
     """Mutable streaming wrapper (append/update/remove) for ``HGraphEncoderEngine``."""
 
     _engine: HGraphEncoderEngine
@@ -529,7 +529,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
 
 
 @dataclass
-class HGraphEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
+class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
     """Append-only streaming wrapper for ``HGraphEncoderEngine``."""
 
     _engine: HGraphEncoderEngine
@@ -591,7 +591,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData, HeteroEncoding]):
         )
 
 
-class HGraphEncoder(EncoderBase[HeteroData, HeteroEncoding]):
+class HGraphEncoder(EncoderBase[HeteroData]):
     """
     General heterogeneous graph encoder backed by ``HGraphEncoderEngine``.
 
