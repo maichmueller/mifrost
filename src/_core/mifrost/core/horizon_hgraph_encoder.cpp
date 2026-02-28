@@ -7,6 +7,7 @@
 #include <mimir/search/formatter.hpp>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 
 #include "mifrost/input_handling/batch_input_parser.hpp"
@@ -96,6 +97,9 @@ void HorizonHGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
+   if(dag.root() != root) {
+      throw std::invalid_argument("dag root must match root state");
+   }
    encode_impl(root, dag, goals, builder);
 }
 

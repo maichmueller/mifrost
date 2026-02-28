@@ -63,6 +63,16 @@ def _single_transition_dag(root, action, successor):
     return dag
 
 
+def _single_transition_pygraph(root, action, successor):
+    rx = pytest.importorskip("rustworkx")
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node(root)
+    succ_idx = graph.add_node(successor)
+    graph.add_edge(root_idx, succ_idx, action)
+    return graph
+
+
 def _successor_node_names(encoding) -> list[str]:
     data = encoding.as_pyg(as_batch=True)
     names: list[str] = []
@@ -263,3 +273,88 @@ def test_horizon_batch_param_supports_shared_and_separate_dags(small_blocks):
     assert explicit_none.num_nodes == implicit_none.num_nodes
     assert explicit_none.num_edges == implicit_none.num_edges
     assert explicit_none.get_field("target_indices").numel() == 0
+
+
+def test_horizon_batch_accepts_rustworkx_dags(small_blocks):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    (action0, succ0), _ = _distinct_changed_transitions(space, root, count=2)
+    dag0 = _single_transition_dag(root, action0, succ0)
+    graph0 = _single_transition_pygraph(root, action0, succ0)
+
+    encoder = HorizonEncoder(domain, ignore_actions=False)
+
+    direct_shared = encoder.encode_batch(
+        [root, root],
+        dags=graph0,
+        goals=[goals, goals],
+    )
+    repeated_shared = encoder.encode_batch(
+        [root, root],
+        dags=[dag0, dag0],
+        goals=[goals, goals],
+    )
+    assert hetero_data_equal(direct_shared, repeated_shared)
+
+    wrapped_shared = encoder.encode_batch(
+        [root, root],
+        dags=BatchParam.shared(graph0),
+        goals=[goals, goals],
+    )
+    assert hetero_data_equal(wrapped_shared, repeated_shared)
+
+    per_entry_graphs = encoder.encode_batch(
+        [root, root],
+        dags=[graph0, None],
+        goals=[goals, goals],
+    )
+    per_entry_dags = encoder.encode_batch(
+        [root, root],
+        dags=[dag0, None],
+        goals=[goals, goals],
+    )
+    assert hetero_data_equal(per_entry_graphs, per_entry_dags)
+
+    wrapped_per_entry = encoder.encode_batch(
+        [root, root],
+        dags=BatchParam.separate([graph0, None]),
+        goals=[goals, goals],
+    )
+    assert hetero_data_equal(wrapped_per_entry, per_entry_dags)
+
+    generator_per_entry = encoder.encode_batch(
+        [root, root],
+        dags=(entry for entry in [graph0, None]),
+        goals=[goals, goals],
+    )
+    assert hetero_data_equal(generator_per_entry, per_entry_dags)
+
+
+def test_horizon_batch_rustworkx_dags_enforce_root_match(small_blocks):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    (_action0, succ0), _ = _distinct_changed_transitions(space, root, count=2)
+
+    encoder = HorizonEncoder(domain, ignore_actions=False)
+    mismatched_graph = _single_transition_pygraph(succ0, _action0, root)
+
+    with pytest.raises(ValueError, match="dag root must match root state"):
+        encoder.encode_batch(
+            [root, root],
+            dags=mismatched_graph,
+            goals=[goals, goals],
+        )
+
+    matching_graph = _single_transition_pygraph(root, _action0, succ0)
+    with pytest.raises(ValueError, match="dag root must match root state"):
+        encoder.encode_batch(
+            [root, root],
+            dags=[matching_graph, mismatched_graph],
+            goals=[goals, goals],
+        )

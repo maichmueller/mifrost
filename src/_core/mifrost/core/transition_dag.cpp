@@ -15,47 +15,64 @@ TransitionDAG::TransitionDAG(mimir::search::State root) : root_(std::move(root))
    );
 }
 
+int TransitionDAG::get_or_add_node(
+   const mimir::search::State& state,
+   const std::optional< mimir::formalism::GroundAction >& action_for_new_node
+)
+{
+   auto it = state_to_index_.find(state);
+   if(it != state_to_index_.end()) {
+      const int existing_idx = it->second;
+      if(action_for_new_node.has_value() and not nodes_ordered_[existing_idx].action.has_value()) {
+         nodes_ordered_[existing_idx].action = action_for_new_node;
+      }
+      return existing_idx;
+   }
+
+   const int idx = next_index_++;
+   Node node{
+      .state = state,
+      .index = idx,
+      .depth = -1,
+      .action = action_for_new_node,
+   };
+   state_to_index_.emplace(state, idx);
+   nodes_ordered_.push_back(std::move(node));
+   return idx;
+}
+
+std::pair< int, int > TransitionDAG::register_transition_impl(
+   const mimir::search::State& parent,
+   const mimir::search::State& child,
+   const std::optional< mimir::formalism::GroundAction >& action,
+   const bool recompute_depths,
+   const bool require_parent_exists
+)
+{
+   if(require_parent_exists and not contains(parent)) {
+      throw std::invalid_argument("Parent state not in DAG");
+   }
+
+   const int parent_idx = require_parent_exists ? state_to_index_.at(parent)
+                                                : get_or_add_node(parent, std::nullopt);
+   const int child_idx = get_or_add_node(child, action);
+
+   adjacency_[parent_idx].push_back(child_idx);
+
+   if(recompute_depths) {
+      finalize_depths();
+   }
+
+   return {parent_idx, child_idx};
+}
+
 std::pair< int, int > TransitionDAG::register_transition(
    const mimir::search::State& parent,
    const mimir::search::State& child,
    const std::optional< mimir::formalism::GroundAction > action
 )
 {
-   // Ensure parent exists
-   if(not contains(parent)) {
-      throw std::invalid_argument("Parent state not in DAG");
-   }
-
-   int parent_idx = state_to_index_.at(parent);
-
-   // Add child if it doesn't exist
-   int child_idx;
-   if(not contains(child)) {
-      child_idx = next_index_++;
-      Node child_node{
-         .state = child,
-         .index = child_idx,
-         .depth = -1,  // Will be computed later
-         .action = action
-      };
-
-      state_to_index_.emplace(child, child_idx);
-      nodes_ordered_.push_back(std::move(child_node));
-   } else {
-      child_idx = state_to_index_.at(child);
-      // Update action if not already set
-      if(action.has_value() and not nodes_ordered_[child_idx].action.has_value()) {
-         nodes_ordered_[child_idx].action = action;
-      }
-   }
-
-   // Add edge
-   adjacency_[parent_idx].push_back(child_idx);
-
-   // Recompute depths after adding edge
-   finalize_depths();
-
-   return {parent_idx, child_idx};
+   return register_transition_impl(parent, child, action, true, true);
 }
 
 int TransitionDAG::index(const mimir::search::State& state) const
@@ -129,11 +146,19 @@ bool TransitionDAG::contains(const mimir::search::State& state) const
 
 void TransitionDAG::finalize_depths()
 {
-   // BFS to compute shortest path from root
+   if(nodes_ordered_.empty()) {
+      return;
+   }
+
+   for(auto& node : nodes_ordered_) {
+      node.depth = -1;
+   }
+
+   // BFS to compute shortest path from root.
    std::queue< int > queue;
    hash_set< int > visited;
 
-   queue.push(0);  // Root index
+   queue.push(0);
    visited.insert(0);
    nodes_ordered_[0].depth = 0;
 
@@ -147,7 +172,6 @@ void TransitionDAG::finalize_depths()
       if(it != adjacency_.end()) {
          for(int child_idx : it->second) {
             if(visited.contains(child_idx)) {
-               // If already visited, update depth if we found a shorter path
                nodes_ordered_[child_idx].depth = std::min(
                   nodes_ordered_[child_idx].depth, current_depth + 1
                );

@@ -149,5 +149,81 @@ def test_transition_dag_dag_property(test_setup):
     assert dag.children(2) == [3]
 
 
+def test_transition_dag_register_transitions_bulk_matches_incremental(test_setup):
+    prob = test_setup
+    domain = prob.get_domain()
+    root = prob.get_initial_state()
+    root_adv = root._advanced_state
+
+    obj_a = prob.get_object("a")
+    obj_b = prob.get_object("b")
+    action_schema = domain.get_action("test-action")
+
+    action_a = prob.new_ground_action(action_schema, [obj_a])
+    action_b = prob.new_ground_action(action_schema, [obj_b])
+    action_a_adv = action_a._advanced_ground_action
+    action_b_adv = action_b._advanced_ground_action
+
+    state_a = action_a.apply(root)
+    state_b = action_b.apply(root)
+    state_a_adv = state_a._advanced_state
+    state_b_adv = state_b._advanced_state
+
+    incremental = mifrost.TransitionDAG(root_adv)
+    incremental.register_transition(root_adv, state_a_adv, action_a_adv)
+    incremental.register_transition(root_adv, state_b_adv, action_b_adv)
+
+    bulk = mifrost.TransitionDAG(root_adv)
+    bulk.register_transitions(
+        [
+            (root_adv, state_a_adv, action_a_adv),
+            (root_adv, state_b_adv, action_b_adv),
+        ]
+    )
+
+    assert bulk.transitions() == incremental.transitions()
+    assert [node.depth for node in bulk.nodes()] == [
+        node.depth for node in incremental.nodes()
+    ]
+    assert [node.action for node in bulk.nodes()] == [
+        node.action for node in incremental.nodes()
+    ]
+
+
+def test_transition_dag_register_transitions_accepts_unordered_edges(test_setup):
+    prob = test_setup
+    domain = prob.get_domain()
+    root = prob.get_initial_state()
+    root_adv = root._advanced_state
+
+    obj_a = prob.get_object("a")
+    obj_b = prob.get_object("b")
+    action_schema = domain.get_action("test-action")
+
+    action_a = prob.new_ground_action(action_schema, [obj_a])
+    action_b = prob.new_ground_action(action_schema, [obj_b])
+    action_a_adv = action_a._advanced_ground_action
+    action_b_adv = action_b._advanced_ground_action
+
+    state_a = action_a.apply(root)
+    state_b = action_b.apply(root)
+    state_a_adv = state_a._advanced_state
+    state_b_adv = state_b._advanced_state
+
+    bulk = mifrost.TransitionDAG(root_adv)
+    bulk.register_transitions(
+        [
+            (state_a_adv, state_b_adv, action_b_adv),
+            (root_adv, state_a_adv, action_a_adv),
+        ]
+    )
+
+    # Edge order is preserved by insertion; index assignment stays deterministic.
+    assert bulk.transitions() == [(0, 1), (1, 2)]
+    assert bulk.depth(0) == 0
+    assert bulk.depth(1) == 1
+    assert bulk.depth(2) == 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -38,6 +38,11 @@ from .common import (
     _prepare_history_subgoals,
     _split_goals,
 )
+from ._rustworkx_dag import (
+    RXStateDAG,
+    _normalize_dag_batch_payload,
+    _normalize_dag_leaf,
+)
 from ._action_contract import parse_flat_actions
 from .hgraph import HGraphEncoder
 from .types import (
@@ -56,10 +61,18 @@ from .types import (
 )
 
 
-def _ensure_dag(root: StateInput, dag: TransitionDAG | None) -> TransitionDAG:
+def _ensure_dag(
+    root: StateInput, dag: TransitionDAG | RXStateDAG | None
+) -> TransitionDAG:
     """Return an explicit DAG or create a default single-root DAG."""
     if dag is not None:
-        return dag
+        normalized = _normalize_dag_leaf(dag)
+        if isinstance(normalized, TransitionDAG):
+            return normalized
+        raise TypeError(
+            "dag must be a TransitionDAG, rustworkx.PyDiGraph, or None, "
+            f"got {type(dag)!r}"
+        )
     adv_root = _advanced_state(root)
     return TransitionDAG(adv_root)
 
@@ -90,7 +103,7 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     def append(
         self,
         root: StateInput,
-        dag: TransitionDAG | None = None,
+        dag: TransitionDAG | RXStateDAG | None = None,
         *,
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
@@ -108,7 +121,7 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         self,
         stream_id: int,
         root: StateInput,
-        dag: TransitionDAG | None = None,
+        dag: TransitionDAG | RXStateDAG | None = None,
         *,
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
@@ -198,7 +211,7 @@ class HorizonEncoder(HGraphEncoder):
     def _encode(
         self,
         root: StateInput,
-        dag: TransitionDAG | None = None,
+        dag: TransitionDAG | RXStateDAG | None = None,
         *,
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
@@ -224,7 +237,7 @@ class HorizonEncoder(HGraphEncoder):
     def encode(
         self,
         root: StateInput,
-        dag: TransitionDAG | None = None,
+        dag: TransitionDAG | RXStateDAG | None = None,
         *,
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
@@ -318,9 +331,10 @@ class HorizonEncoder(HGraphEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
+        dags_for_core = _normalize_dag_batch_payload(dags)
         return self._engine.encode_batch(
             roots_for_core,
-            dags=dags,
+            dags=dags_for_core,
             goals=goals_for_core,
             actions=actions_for_core,
             subgoal_layers=subgoal_layers_for_core,

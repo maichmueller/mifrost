@@ -1,12 +1,16 @@
 #pragma once
 
+#include <concepts>
 #include <loki/details/utils/hash.hpp>
 #include <mimir/formalism/ground_action.hpp>
 #include <mimir/search/state.hpp>
 #include <optional>
+#include <ranges>
+#include <type_traits>
 #include <vector>
 
 #include "common_types.hpp"
+#include "mifrost/core/utils/type_traits.hpp"
 
 // Delegate to mimir's existing loki::Hash<State> specialization
 namespace std {
@@ -37,6 +41,13 @@ namespace mifrost {
  */
 class TransitionDAG {
   public:
+   /// One bulk transition import record.
+   struct TransitionRecord {
+      mimir::search::State parent;
+      mimir::search::State child;
+      std::optional< mimir::formalism::GroundAction > action;
+   };
+
    /// One transition DAG node.
    struct Node {
       /// State represented by this node.
@@ -69,6 +80,30 @@ class TransitionDAG {
       const mimir::search::State& child,
       std::optional< mimir::formalism::GroundAction > action = std::nullopt
    );
+
+   /**
+    * @brief Register many transitions and recompute depths once.
+    *
+    * This accepts any input range of transition-like records exposing
+    * ``parent``, ``child``, and ``action`` members.
+    */
+   template < std::ranges::input_range R >
+      requires requires(detail::raw_t< std::ranges::range_reference_t< R > > rec) {
+         { rec.parent } -> std::convertible_to< mimir::search::State >;
+         { rec.child } -> std::convertible_to< mimir::search::State >;
+         { rec.action } -> std::convertible_to< std::optional< mimir::formalism::GroundAction > >;
+      }
+   void register_transitions(R&& transitions)
+   {
+      bool has_records = false;
+      for(auto&& rec : transitions) {
+         has_records = true;
+         register_transition_impl(rec.parent, rec.child, rec.action, false, false);
+      }
+      if(has_records) {
+         finalize_depths();
+      }
+   }
 
    /**
     * @brief Get the index of a state in the DAG.
@@ -127,6 +162,19 @@ class TransitionDAG {
    bool contains(const mimir::search::State& state) const;
 
   private:
+   int get_or_add_node(
+      const mimir::search::State& state,
+      const std::optional< mimir::formalism::GroundAction >& action_for_new_node
+   );
+
+   std::pair< int, int > register_transition_impl(
+      const mimir::search::State& parent,
+      const mimir::search::State& child,
+      const std::optional< mimir::formalism::GroundAction >& action,
+      bool recompute_depths,
+      bool require_parent_exists
+   );
+
    /// Recompute depth labels from current adjacency.
    void finalize_depths();
 

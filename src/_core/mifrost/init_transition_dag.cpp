@@ -2,6 +2,7 @@
 #include <nanobind/stl/bind_vector.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
 #include "mifrost/bindings.hpp"
@@ -31,6 +32,27 @@ void init_transition_dag(nb::module_& m)
                         "parent"_a,
                         "child"_a,
                         "action"_a = std::nullopt
+                     )
+                     .def(
+                        "register_transitions",
+                        [](TransitionDAG& dag, nb::iterable transitions) {
+                           std::vector< TransitionDAG::TransitionRecord > records;
+                           for(const auto entry : transitions) {
+                              auto [parent, child, action] = nb::cast< std::tuple<
+                                 mimir::search::State,
+                                 mimir::search::State,
+                                 std::optional< mimir::formalism::GroundAction > > >(entry);
+                              records.push_back(
+                                 TransitionDAG::TransitionRecord{
+                                    .parent = std::move(parent),
+                                    .child = std::move(child),
+                                    .action = std::move(action),
+                                 }
+                              );
+                           }
+                           dag.register_transitions(records);
+                        },
+                        "transitions"_a
                      )
                      .def("index", &TransitionDAG::index, "state"_a)
                      .def("depth", &TransitionDAG::depth, "idx"_a)

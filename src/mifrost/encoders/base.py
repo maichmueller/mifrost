@@ -15,6 +15,7 @@ from typing import (
 )
 
 from .common import _encoding_dict_to_pyg
+from ._rustworkx_dag import RXStateDAG
 from ..graph_fields import CollateSpec
 from .types import (
     BatchParam,
@@ -64,7 +65,11 @@ HistorySubgoalsBatchParam: TypeAlias = (
 )
 SuccessorBatchParam: TypeAlias = BatchParam[StateInput] | StateBatchInput | None
 DagBatchParam: TypeAlias = (
-    BatchParam[TransitionDAG] | Iterable[TransitionDAG | None] | TransitionDAG | None
+    BatchParam[TransitionDAG | RXStateDAG]
+    | Iterable[TransitionDAG | RXStateDAG | None]
+    | TransitionDAG
+    | RXStateDAG
+    | None
 )
 CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, object]] | None
 

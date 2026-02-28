@@ -7,6 +7,7 @@ from .test_utils import (
     adv_action,
     adv_domain,
     adv_state,
+    hetero_data_equal,
     goal_inputs_from_problem,
     encoding_dict_to_pyg,
 )
@@ -117,6 +118,75 @@ def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
         assert name in symbol_nodes, (
             f"Missing object symbol node in networkx graph: {name}"
         )
+
+
+def test_horizon_encode_accepts_rustworkx_digraph(small_blocks):
+    rx = pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = [
+        (action, target)
+        for action, target in space.get_forward_transitions(root)
+        if target is not None and target.get_index() != root.get_index()
+    ][:1]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 changed transition")
+
+    action, target = transitions[0]
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+    )
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node(root)
+    target_idx = graph.add_node(target)
+    graph.add_edge(root_idx, target_idx, action)
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+
+    assert hetero_data_equal(
+        encoder.encode(root, dag=graph, goals=goals),
+        encoder.encode(root, dag=dag, goals=goals),
+    )
+
+    single_root_graph = rx.PyDiGraph()
+    single_root_graph.add_node(root)
+    assert hetero_data_equal(
+        encoder.encode(root, dag=single_root_graph, goals=goals),
+        encoder.encode(root, goals=goals),
+    )
+
+
+def test_horizon_encode_rejects_mismatched_dag_roots(small_blocks):
+    rx = pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = [
+        (_action, target)
+        for _action, target in space.get_forward_transitions(root)
+        if target is not None and target.get_index() != root.get_index()
+    ]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 changed successor")
+
+    target = transitions[0][1]
+    goals = list(problem.get_goal_condition().get_literals())
+    encoder = mifrost.HorizonEncoder(domain)
+
+    mismatched_dag = mifrost.TransitionDAG(adv_state(target))
+    with pytest.raises(ValueError, match="dag root must match root state"):
+        encoder.encode(root, dag=mismatched_dag, goals=goals)
+
+    mismatched_graph = rx.PyDiGraph()
+    mismatched_graph.add_node(target)
+    with pytest.raises(ValueError, match="dag root must match root state"):
+        encoder.encode(root, dag=mismatched_graph, goals=goals)
 
 
 def test_horizon_encode_batch_rejects_actions_and_history(small_blocks):

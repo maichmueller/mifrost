@@ -48,6 +48,16 @@ def _horizon_dags(space, root):
     pytest.skip("No successor transition available for horizon stream tests.")
 
 
+def _horizon_pygraph(root, action, target):
+    rx = pytest.importorskip("rustworkx")
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node(root)
+    target_idx = graph.add_node(target)
+    graph.add_edge(root_idx, target_idx, action)
+    return graph
+
+
 def test_stream_remove_matches_direct_encode(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
@@ -144,6 +154,75 @@ def test_horizon_stream_update_replaces_graph(small_blocks):
     data = encoding_dict_to_pyg(encoding_dict)
     expected = encoder.encode(root, successor_dag, goals=goals)
     assert hetero_data_equal(data, expected)
+
+
+def test_horizon_stream_accepts_rustworkx_digraphs(small_blocks):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = [
+        (action, target)
+        for action, target in space.get_forward_transitions(root)
+        if action is not None
+        and target is not None
+        and target.get_index() != root.get_index()
+    ]
+    if not transitions:
+        pytest.skip("No successor transition available for horizon stream tests.")
+
+    action, target = transitions[0]
+    successor_dag = mifrost.TransitionDAG(adv_state(root))
+    successor_dag.register_transition(
+        adv_state(root), adv_state(target), adv_action(action)
+    )
+    successor_graph = _horizon_pygraph(root, action, target)
+    goals = list(problem.get_goal_condition().get_literals())
+
+    encoder = HorizonEncoder(domain)
+    stream = HorizonEncoderStream(encoder.engine)
+    stream.append(root, successor_graph, goals=goals)
+
+    encoding_dict = stream.flush()
+    data = encoding_dict_to_pyg(encoding_dict)
+    expected = encoder.encode(root, successor_dag, goals=goals)
+    assert hetero_data_equal(data, expected)
+
+    stream = HorizonEncoderStream(encoder.engine)
+    empty_id = stream.append(root, goals=goals)
+    full_id = stream.append(root, successor_dag, goals=goals)
+    stream.update(empty_id, root, successor_graph, goals=goals)
+    stream.remove(full_id)
+
+    encoding_dict = stream.flush()
+    data = encoding_dict_to_pyg(encoding_dict)
+    assert hetero_data_equal(data, expected)
+
+
+def test_horizon_stream_rejects_mismatched_rustworkx_dag_root(small_blocks):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = [
+        (action, target)
+        for action, target in space.get_forward_transitions(root)
+        if action is not None
+        and target is not None
+        and target.get_index() != root.get_index()
+    ]
+    if not transitions:
+        pytest.skip("No successor transition available for horizon stream tests.")
+
+    action, target = transitions[0]
+    goals = list(problem.get_goal_condition().get_literals())
+    mismatched_graph = _horizon_pygraph(target, action, root)
+
+    encoder = HorizonEncoder(domain)
+    stream = HorizonEncoderStream(encoder.engine)
+
+    with pytest.raises(ValueError, match="dag root must match root state"):
+        stream.append(root, mismatched_graph, goals=goals)
 
 
 def test_hgraph_append_only_stream_matches_encode_batch(small_blocks):

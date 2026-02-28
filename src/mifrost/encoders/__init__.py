@@ -4,6 +4,7 @@ Exports concrete encoders, stream variants, and shared base/helpers.
 """
 
 from .base import EncoderBase, StreamEncoderBase
+from ._rustworkx_dag import transition_dag_from_rustworkx
 from .common import _encoding_dict_to_pyg, _split_goals, encoding_to_tensors
 from .hgraph import HGraphEncoder, HGraphEncoderStream, HGraphMutableEncoderStream
 from .horizon import HorizonEncoder, HorizonEncoderStream
@@ -48,6 +49,7 @@ __all__ = [
     "ExampleConstantStreamEncoder",
     "EncoderBase",
     "StreamEncoderBase",
+    "transition_dag_from_rustworkx",
     "_encoding_dict_to_pyg",
     "_split_goals",
     "encoding_to_tensors",
