@@ -280,7 +280,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
         assert (edge_index[0] == placeholder_idx).all()
 
 
-def test_transition_encode_batch_ignores_actions(small_blocks):
+def test_transition_encode_batch_rejects_actions_and_history(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
     transitions = list(space.get_forward_transitions(state))
@@ -288,12 +288,26 @@ def test_transition_encode_batch_ignores_actions(small_blocks):
         pytest.skip("Fixture does not provide forward transitions.")
 
     action, successor = transitions[0]
+    goals = list(problem.get_goal_condition().get_literals())
     encoder = TransitionHGraphEncoder(domain)
-    encoding = encoder.encode_batch(
-        [state],
-        successors=[successor],
-        actions=[action],
-        history_subgoals=[object()],
-        history_max_steps=2,
-    )
-    assert encoding.num_graphs == 1
+    with pytest.raises(
+        ValueError,
+        match="Transition batch encoding does not support explicit action payloads",
+    ):
+        encoder.encode_batch(
+            [state],
+            successors=[successor],
+            actions=[action],
+        )
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="Transition batch encoding does not support history_subgoals payloads",
+        ):
+            encoder.encode_batch(
+                [state],
+                successors=[successor],
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=2,
+            )

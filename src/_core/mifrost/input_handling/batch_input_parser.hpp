@@ -91,6 +91,7 @@ using ActionBatch = BatchParam< ActionPayload >;
 using SubgoalLayersBatch = BatchParam< SubgoalLayersPayload >;
 using HistoryBatch = BatchParam< HistoryPayload >;
 using DagBatch = BatchParam< TransitionDAG >;
+using SuccessorBatch = BatchParam< StateEntry >;
 
 struct HGraphBatchInputs {
    StateBatch states;
@@ -108,7 +109,7 @@ struct ColorBatchInputs {
 
 struct SuccessorBatchInputs {
    StateBatch states;
-   std::vector< StateEntry > successors;
+   SuccessorBatch successors;
    GoalBatch goals;
    SubgoalLayersBatch subgoal_layers;
 };
@@ -135,8 +136,7 @@ parse_subgoal_layers_batch_param(nb::handle subgoal_layers, size_t state_count);
 parsed::HistoryBatch
 parse_history_subgoals_batch_param(nb::handle history_subgoals, size_t state_count);
 
-std::vector< parsed::StateEntry >
-parse_successors_batch_param(nb::handle successors, size_t state_count);
+parsed::SuccessorBatch parse_successors_batch_param(nb::handle successors, size_t state_count);
 
 parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count);
 

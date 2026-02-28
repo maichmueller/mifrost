@@ -252,7 +252,7 @@ BatchBuilder::BatchEncoding SuccessorHGraphEncoderEngine::encode_batch(
    const size_t state_count = inputs.states.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
       const auto& state_entry = inputs.states.states[idx];
-      const auto& successor_entry = inputs.successors[idx];
+      const auto& successor_entry = inputs.successors.at(idx);
       const auto& goals_entry = inputs.goals.at(idx);
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
 
@@ -272,7 +272,7 @@ BatchBuilder::BatchEncoding SuccessorHGraphEncoderEngine::encode_batch(
          }
       }
 
-      encode(state_entry.state, successor_entry.state, goal_inputs, builder);
+      encode(state_entry.state, successor_entry->state, goal_inputs, builder);
       builder.next_graph();
    }
 

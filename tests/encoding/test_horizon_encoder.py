@@ -119,7 +119,7 @@ def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
         )
 
 
-def test_horizon_encode_batch_ignores_actions_and_history(small_blocks):
+def test_horizon_encode_batch_rejects_actions_and_history(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
     transitions = list(space.get_forward_transitions(root))[:1]
@@ -137,12 +137,26 @@ def test_horizon_encode_batch_ignores_actions_and_history(small_blocks):
     encoder = mifrost.HorizonEncoder(domain)
     goals = list(problem.get_goal_condition().get_literals())
 
-    encoding = encoder.encode_batch(
-        [root],
-        dags=[dag],
-        goals=[goals],
-        actions=[object()],
-        history_subgoals=[object()],
-        history_max_steps=3,
-    )
-    assert encoding.num_graphs == 1
+    with pytest.raises(
+        ValueError,
+        match="Horizon batch encoding does not support explicit action payloads",
+    ):
+        encoder.encode_batch(
+            [root],
+            dags=[dag],
+            goals=[goals],
+            actions=[action],
+        )
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="Horizon batch encoding does not support history_subgoals payloads",
+        ):
+            encoder.encode_batch(
+                [root],
+                dags=[dag],
+                goals=[goals],
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=3,
+            )

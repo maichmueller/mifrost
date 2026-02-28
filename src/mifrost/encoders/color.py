@@ -29,16 +29,20 @@ from .common import (
     _advanced_domain,
     _advanced_state,
     _convert_batch_payload,
+    _prepare_actions,
     _split_goals,
 )
+from ._action_contract import parse_flat_actions
 from .types import (
     HomoEncoding,
     DomainInput,
     GoalLiteralInput,
     StateInput,
     default_goals_from_state,
+    is_action_input,
     is_goal_literal_input,
     is_state_input,
+    to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
@@ -135,18 +139,21 @@ class ColorEncoder(EncoderBase[Data]):
     ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
         adv_state = _advanced_state(state)
-        if goals is None and subgoal_layers is None:
+        action_inputs = parse_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
+        if goals is None and subgoal_layers is None and not action_list:
             return self._engine.encode(adv_state)
         if goals is None:
             goals = default_goals_from_state(state)
         inputs = _split_goals(goals, subgoal_layers)
-        return self._engine.encode(adv_state, inputs)
+        return self._engine.encode(adv_state, inputs, action_list)
 
     def encode(
         self,
         state: StateInput,
         *,
         goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
         **kwargs: object,
@@ -155,6 +162,7 @@ class ColorEncoder(EncoderBase[Data]):
         return super().encode(
             state,
             goals=goals,
+            actions=actions,
             subgoal_layers=subgoal_layers,
             include_metadata=include_metadata,
             **kwargs,
@@ -169,8 +177,6 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersBatchParam = None,
     ) -> HomoEncoding:
         """Encode one or many states into homogeneous batch encoding_dict."""
-        # Color batch encoding ignores action kwargs by design.
-        _ = actions
         states_for_core = _convert_batch_payload(
             states,
             is_leaf=is_state_input,
@@ -181,6 +187,11 @@ class ColorEncoder(EncoderBase[Data]):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
+        actions_for_core = _convert_batch_payload(
+            actions,
+            is_leaf=is_action_input,
+            convert_leaf=to_advanced_action,
+        )
         subgoal_layers_for_core = _convert_batch_payload(
             subgoal_layers,
             is_leaf=is_goal_literal_input,
@@ -189,7 +200,7 @@ class ColorEncoder(EncoderBase[Data]):
         return self._engine.encode_batch(
             states_for_core,
             goals=goals_for_core,
-            actions=None,
+            actions=actions_for_core,
             subgoal_layers=subgoal_layers_for_core,
         )
 

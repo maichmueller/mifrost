@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from torch_geometric.data import HeteroData
 
@@ -18,26 +18,34 @@ from dataclasses import dataclass
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
+    CollateSpecParam,
     GoalBatchInput,
     GoalBatchParam,
+    HistorySubgoalsBatchParam,
     StateBatchInput,
     StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
+    SuccessorBatchParam,
 )
 from .common import (
     _advanced_state,
     _convert_batch_payload,
+    _prepare_history_subgoals,
     _split_goals,
 )
+from ._action_contract import parse_flat_actions
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
     HeteroEncoding,
+    HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
+    is_action_input,
     is_goal_literal_input,
     is_state_input,
+    to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
@@ -103,24 +111,86 @@ class _TransitionEncoderBase(HGraphEncoder):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         successor: StateInput | None = None,
-        history_subgoals=None,
+        history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         **kwargs: object,
     ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition."""
         if successor is None:
             raise ValueError("successor must be provided for transition encoding")
-        # Transition encoders ignore action/history kwargs.
-        _ = actions
-        _ = history_subgoals
-        _ = history_max_steps
         _ = kwargs
+        action_list = parse_flat_actions(actions)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if action_list:
+            raise ValueError(
+                "Transition encoders do not support explicit action payloads"
+            )
+        if history_list or history_max_steps is not None:
+            raise ValueError(
+                "Transition encoders do not support history_subgoals payloads"
+            )
         adv_state = _advanced_state(state)
         adv_successor = _advanced_state(successor)
         if goals is None:
             goals = default_goals_from_state(state)
         inputs = _split_goals(goals, subgoal_layers)
         return self._engine.encode(adv_state, adv_successor, inputs)
+
+    def encode(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        successor: StateInput | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+        include_metadata: bool = True,
+        **kwargs: object,
+    ) -> BatchEncoding:
+        """Encode one ``state -> successor`` transition into native ``BatchEncoding``."""
+        return super().encode(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            successor=successor,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
+
+    def encode_batch(
+        self,
+        states: StateBatchInput,
+        *,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        successors: SuccessorBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
+        include_metadata: bool = True,
+        **kwargs: object,
+    ) -> HeteroEncoding:
+        """Encode one or many ``state -> successor`` transitions into native ``BatchEncoding``."""
+        return super().encode_batch(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            successors=successors,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
 
     def _encode_batch(
         self,
@@ -129,8 +199,8 @@ class _TransitionEncoderBase(HGraphEncoder):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
-        successors: StateBatchInput | None = None,
-        history_subgoals=None,
+        successors: SuccessorBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
         **kwargs: object,
     ) -> HeteroEncoding:
@@ -139,10 +209,6 @@ class _TransitionEncoderBase(HGraphEncoder):
             raise ValueError(
                 "successors must be provided for transition batch encoding"
             )
-        # Transition encoders ignore action/history kwargs.
-        _ = actions
-        _ = history_subgoals
-        _ = history_max_steps
         _ = kwargs
         states_for_core = _convert_batch_payload(
             states,
@@ -159,8 +225,18 @@ class _TransitionEncoderBase(HGraphEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
+        actions_for_core = _convert_batch_payload(
+            actions,
+            is_leaf=is_action_input,
+            convert_leaf=to_advanced_action,
+        )
         subgoal_layers_for_core = _convert_batch_payload(
             subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        history_subgoals_for_core = _convert_batch_payload(
+            history_subgoals,
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
@@ -169,10 +245,10 @@ class _TransitionEncoderBase(HGraphEncoder):
             states_for_core,
             successors_for_core,
             goals_for_core,
-            None,
+            actions_for_core,
             subgoal_layers_for_core,
-            None,
-            None,
+            history_subgoals_for_core,
+            history_max_steps,
         )
 
     def stream(self) -> "_TransitionEncoderStream":

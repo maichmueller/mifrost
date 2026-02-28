@@ -26,7 +26,7 @@ from .types import (
     NativeEncodingInput,
     StateInput,
 )
-from .._core import BatchEncoding
+from .._core import BatchEncoding, TransitionDAG
 
 if TYPE_CHECKING:
     from torch_geometric.data import Data, HeteroData
@@ -61,6 +61,10 @@ HistorySubgoalsBatchParam: TypeAlias = (
     | HistorySubgoalInput
     | Sequence[HistorySubgoalInput | None]
     | None
+)
+SuccessorBatchParam: TypeAlias = BatchParam[StateInput] | StateBatchInput | None
+DagBatchParam: TypeAlias = (
+    BatchParam[TransitionDAG] | Iterable[TransitionDAG | None] | TransitionDAG | None
 )
 CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, object]] | None
 

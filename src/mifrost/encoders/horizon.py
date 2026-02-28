@@ -23,6 +23,7 @@ from .base import (
     ActionBatchInput,
     ActionBatchParam,
     CollateSpecParam,
+    DagBatchParam,
     GoalBatchInput,
     GoalBatchParam,
     HistorySubgoalsBatchParam,
@@ -34,17 +35,22 @@ from .base import (
 from .common import (
     _advanced_state,
     _convert_batch_payload,
+    _prepare_history_subgoals,
     _split_goals,
 )
+from ._action_contract import parse_flat_actions
 from .hgraph import HGraphEncoder
 from .types import (
     HeteroEncoding,
     DomainInput,
     GoalLiteralInput,
+    HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
+    is_action_input,
     is_goal_literal_input,
     is_state_input,
+    to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
@@ -197,12 +203,19 @@ class HorizonEncoder(HGraphEncoder):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
         **_: object,
     ) -> BatchEncoding:
         """Encode one root/DAG pair."""
-        if actions is not None:
-            # Horizon encoding does not consume actions directly.
-            _ = actions
+        action_list = parse_flat_actions(actions)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if action_list:
+            raise ValueError("HorizonEncoder does not support explicit action payloads")
+        if history_list or history_max_steps is not None:
+            raise ValueError(
+                "HorizonEncoder does not support history_subgoals payloads"
+            )
         adv_root = _advanced_state(root)
         dag = _ensure_dag(root, dag)
         inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
@@ -214,7 +227,10 @@ class HorizonEncoder(HGraphEncoder):
         dag: TransitionDAG | None = None,
         *,
         goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> BatchEncoding:
@@ -222,7 +238,10 @@ class HorizonEncoder(HGraphEncoder):
         return super().encode(
             root,
             goals=goals,
+            actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             dag=dag,
             include_metadata=include_metadata,
             **kwargs,
@@ -231,7 +250,7 @@ class HorizonEncoder(HGraphEncoder):
     def encode_batch(
         self,
         roots: StateBatchInput,
-        dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
+        dags: DagBatchParam = None,
         *,
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
@@ -265,7 +284,7 @@ class HorizonEncoder(HGraphEncoder):
     def _encode_batch(
         self,
         roots: StateBatchInput,
-        dags: Iterable[TransitionDAG] | TransitionDAG | None = None,
+        dags: DagBatchParam = None,
         *,
         goals: GoalBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
@@ -274,10 +293,6 @@ class HorizonEncoder(HGraphEncoder):
         history_max_steps: int | None = None,
     ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
-        # Horizon batch encoding ignores action/history kwargs.
-        _ = actions
-        _ = history_subgoals
-        _ = history_max_steps
         roots_for_core = _convert_batch_payload(
             roots,
             is_leaf=is_state_input,
@@ -288,8 +303,18 @@ class HorizonEncoder(HGraphEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
+        actions_for_core = _convert_batch_payload(
+            actions,
+            is_leaf=is_action_input,
+            convert_leaf=to_advanced_action,
+        )
         subgoal_layers_for_core = _convert_batch_payload(
             subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
+        history_subgoals_for_core = _convert_batch_payload(
+            history_subgoals,
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
@@ -297,10 +322,10 @@ class HorizonEncoder(HGraphEncoder):
             roots_for_core,
             dags=dags,
             goals=goals_for_core,
-            actions=None,
+            actions=actions_for_core,
             subgoal_layers=subgoal_layers_for_core,
-            history_subgoals=None,
-            history_max_steps=None,
+            history_subgoals=history_subgoals_for_core,
+            history_max_steps=history_max_steps,
         )
 
     def stream(self) -> HorizonEncoderStream:

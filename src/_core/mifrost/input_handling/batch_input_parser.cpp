@@ -785,21 +785,117 @@ parse_history_subgoals_batch_param(nb::handle history_subgoals, size_t state_cou
    );
 }
 
-std::vector< parsed::StateEntry >
-parse_successors_batch_param(nb::handle successors, size_t state_count)
+parsed::SuccessorBatch parse_successors_batch_param(nb::handle successors, size_t state_count)
 {
    if(successors.is_none()) {
       throw nb::value_error("successors must be provided for transition batch encoding");
    }
+
+   auto parse_shared = [](nb::handle value) {
+      if(value.is_none()) {
+         throw nb::value_error("successors must be provided for transition batch encoding");
+      }
+      return parse_state_entry(value, "successors", 0);
+   };
+
+   auto parse_separate = [&](nb::handle value) {
+      if(not is_sequence_like_but_not_str_bytes(value)) {
+         throw nb::type_error("BatchParam(separate) value must be a sequence");
+      }
+      auto parsed = parse_states_batch_param(value, "successors");
+      if(parsed.states.size() != state_count) {
+         throw nb::value_error("successors length must match states length");
+      }
+
+      std::vector< std::optional< parsed::StateEntry > > values;
+      values.reserve(state_count);
+      for(auto& entry : parsed.states) {
+         values.emplace_back(std::move(entry));
+      }
+      return parsed::SuccessorBatch::per_state(std::move(values));
+   };
+
+   if(is_batch_param(successors)) {
+      const std::string kind = batch_param_kind(successors);
+      nb::handle payload = batch_param_value(successors);
+
+      if(kind == "none") {
+         throw nb::value_error("successors must be provided for transition batch encoding");
+      }
+      if(kind == "shared") {
+         return parsed::SuccessorBatch::shared(parse_shared(payload));
+      }
+      if(kind == "separate") {
+         return parse_separate(payload);
+      }
+      throw nb::value_error("BatchParam.kind must be 'shared', 'separate', or 'none'");
+   }
+
+   if(is_native_state_object(successors)) {
+      return parsed::SuccessorBatch::shared(parse_shared(successors));
+   }
+
    auto parsed = parse_states_batch_param(successors, "successors");
    if(parsed.states.size() != state_count) {
       throw nb::value_error("successors length must match states length");
    }
-   return std::move(parsed.states);
+
+   std::vector< std::optional< parsed::StateEntry > > values;
+   values.reserve(state_count);
+   for(auto& entry : parsed.states) {
+      values.emplace_back(std::move(entry));
+   }
+   return parsed::SuccessorBatch::per_state(std::move(values));
 }
 
 parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count)
 {
+   if(is_batch_param(dags)) {
+      const std::string kind = batch_param_kind(dags);
+      nb::handle payload = batch_param_value(dags);
+
+      if(kind == "none") {
+         return parsed::DagBatch::none();
+      }
+      if(kind == "shared") {
+         if(not nb::isinstance< TransitionDAG >(payload)) {
+            throw nb::type_error("BatchParam(shared) value for dags must be a TransitionDAG");
+         }
+         return parsed::DagBatch::shared(nb::cast< TransitionDAG >(payload));
+      }
+      if(kind == "separate") {
+         if(not is_sequence_like_but_not_str_bytes(payload)) {
+            throw nb::type_error("BatchParam(separate) value must be a sequence");
+         }
+
+         const nb::list outer = nb::list(payload);
+         if(nb::len(outer) != state_count) {
+            throw nb::value_error("dags length must match states length");
+         }
+
+         std::vector< std::optional< TransitionDAG > > values;
+         values.reserve(state_count);
+         for(size_t idx = 0; idx < state_count; ++idx) {
+            nb::handle entry = outer[idx];
+            if(entry.is_none()) {
+               values.emplace_back(std::nullopt);
+               continue;
+            }
+            if(not nb::isinstance< TransitionDAG >(entry)) {
+               throw nb::type_error(
+                  fmt::format(
+                     "dags entry at index {} has invalid type: {}", idx, py_type_repr(entry)
+                  )
+                     .c_str()
+               );
+            }
+            values.emplace_back(nb::cast< TransitionDAG >(entry));
+         }
+         return parsed::DagBatch::per_state(std::move(values));
+      }
+      throw nb::value_error("BatchParam.kind must be 'shared', 'separate', or 'none'");
+   }
+
    if(dags.is_none()) {
       return parsed::DagBatch::none();
    }
@@ -907,8 +1003,24 @@ nb::list parse_successors_batch_param_python(nb::handle successors, size_t state
 {
    const auto parsed = parse_successors_batch_param(successors, state_count);
    nb::list out;
-   for(const auto& successor : parsed) {
-      out.append(successor.source);
+   if(parsed.is_per_state()) {
+      for(const auto& entry : parsed.per_state()) {
+         if(entry.has_value()) {
+            out.append(entry->source);
+         } else {
+            out.append(nb::none());
+         }
+      }
+      return out;
+   }
+
+   for(size_t idx = 0; idx < state_count; ++idx) {
+      (void) idx;
+      if(parsed.is_shared()) {
+         out.append(parsed.shared()->source);
+      } else {
+         out.append(nb::none());
+      }
    }
    return out;
 }

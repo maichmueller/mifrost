@@ -77,13 +77,30 @@ def test_hgraph_batch_rejects_per_state_length_mismatch(small_blocks):
         encoder.encode_batch([state, state], goals=[_problem_goals(problem)])
 
 
-def test_color_batch_ignores_actions(small_blocks):
-    _space, domain, problem = small_blocks
+def test_color_encode_rejects_actions(small_blocks):
+    space, domain, problem = small_blocks
     state = problem.get_initial_state()
+    (action0, _succ0), _ = _first_transitions(space, state, count=2)
     encoder = ColorEncoder(domain)
 
-    encoding = encoder.encode_batch([state], actions=[object()])
-    assert encoding.num_graphs == 1
+    with pytest.raises(
+        ValueError,
+        match="ColorEncoderEngine does not support action encoding",
+    ):
+        encoder.encode(state, actions=[action0])
+
+
+def test_color_batch_rejects_actions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    (action0, _succ0), _ = _first_transitions(space, state, count=2)
+    encoder = ColorEncoder(domain)
+
+    with pytest.raises(
+        ValueError,
+        match="Color batch encoding does not support explicit action payloads",
+    ):
+        encoder.encode_batch([state], actions=[action0])
 
 
 def test_color_batch_accepts_per_state_goals_and_subgoal_layers(small_blocks):
@@ -112,20 +129,64 @@ def test_transition_batch_requires_successors(small_blocks):
         encoder.encode_batch([state], goals=_problem_goals(problem))
 
 
-def test_transition_batch_ignores_unsupported_kwargs(small_blocks):
+def test_transition_encode_rejects_unsupported_payloads(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
-    (_action0, successor), _ = _first_transitions(space, state, count=2)
+    goals = _problem_goals(problem)
+    (action0, successor), _ = _first_transitions(space, state, count=2)
     encoder = TransitionHGraphEncoder(domain)
 
-    encoding = encoder.encode_batch(
-        [state],
-        successors=[successor],
-        actions=[object()],
-        history_subgoals=[object()],
-        history_max_steps=7,
-    )
-    assert encoding.num_graphs == 1
+    with pytest.raises(
+        ValueError,
+        match="Transition encoders do not support explicit action payloads",
+    ):
+        encoder.encode(
+            state,
+            successor=successor,
+            actions=[action0],
+        )
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="Transition encoders do not support history_subgoals payloads",
+        ):
+            encoder.encode(
+                state,
+                successor=successor,
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=7,
+            )
+
+
+def test_transition_batch_rejects_unsupported_payloads(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    (action0, successor), _ = _first_transitions(space, state, count=2)
+    encoder = TransitionHGraphEncoder(domain)
+
+    with pytest.raises(
+        ValueError,
+        match="Transition batch encoding does not support explicit action payloads",
+    ):
+        encoder.encode_batch(
+            [state],
+            successors=[successor],
+            actions=[action0],
+        )
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="Transition batch encoding does not support history_subgoals payloads",
+        ):
+            encoder.encode_batch(
+                [state],
+                successors=[successor],
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=7,
+            )
 
 
 def test_transition_batch_accepts_per_state_goals_subgoal_layers(small_blocks):
@@ -171,21 +232,62 @@ def test_horizon_batch_accepts_per_state_goals_and_dags(small_blocks):
     assert encoding.num_graphs == 2
 
 
-def test_horizon_batch_ignores_unsupported_fields(small_blocks):
+def test_horizon_encode_rejects_unsupported_payloads(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
+    goals = _problem_goals(problem)
     (action0, succ0), _ = _first_transitions(space, root, count=2)
     dag = _single_transition_dag(root, action0, succ0)
     encoder = HorizonEncoder(domain)
 
-    encoding = encoder.encode_batch(
-        [root],
-        dags=[dag],
-        actions=[object()],
-        history_subgoals=[object()],
-        history_max_steps=1,
-    )
-    assert encoding.num_graphs == 1
+    with pytest.raises(
+        ValueError,
+        match="HorizonEncoder does not support explicit action payloads",
+    ):
+        encoder.encode(root, dag=dag, actions=[action0])
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="HorizonEncoder does not support history_subgoals payloads",
+        ):
+            encoder.encode(
+                root,
+                dag=dag,
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=1,
+            )
+
+
+def test_horizon_batch_rejects_unsupported_payloads(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    (action0, succ0), _ = _first_transitions(space, root, count=2)
+    dag = _single_transition_dag(root, action0, succ0)
+    encoder = HorizonEncoder(domain)
+
+    with pytest.raises(
+        ValueError,
+        match="Horizon batch encoding does not support explicit action payloads",
+    ):
+        encoder.encode_batch(
+            [root],
+            dags=[dag],
+            actions=[action0],
+        )
+
+    if goals:
+        with pytest.raises(
+            ValueError,
+            match="Horizon batch encoding does not support history_subgoals payloads",
+        ):
+            encoder.encode_batch(
+                [root],
+                dags=[dag],
+                history_subgoals=[(-1, [goals[0]])],
+                history_max_steps=1,
+            )
 
 
 def test_horizon_batch_rejects_dag_length_mismatch(small_blocks):
