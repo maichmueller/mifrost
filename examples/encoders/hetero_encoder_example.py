@@ -23,13 +23,15 @@ def main():
         ("state_with_action", False, [action]),
     ]
     for name, ignore_actions, actions in variants:
-        begin_plot(figsize=(14, 10))
+        fig = begin_plot(figsize=(14, 10))
+        ax = fig.add_subplot(1, 1, 1)
         encoder = HGraphEncoder(domain, ignore_actions=ignore_actions)
         graph = encoder.encode_pyg(state, actions=actions)
 
         # Plot the produced heterogeneous graph
         encoder.draw(
             graph,
+            ax=ax,
             with_labels=True,
             edge_labels=True,
             label_node_types=[

@@ -19,9 +19,11 @@ def main():
     drawer = HGraphEncoder(domain)
 
     # Plot the ILG heterogeneous graph
-    begin_plot(figsize=(14, 10))
+    fig = begin_plot(figsize=(14, 10))
+    ax = fig.add_subplot(111)
     drawer.draw(
         graph,
+        ax=ax,
         with_labels=True,
         edge_labels=True,
         label_node_types=[encoder.symbol_type_id],

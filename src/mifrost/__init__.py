@@ -45,9 +45,10 @@ else:
 
     def batch_encodings(
         encodings,
-        collate_spec: _ABCMapping[str, CollateSpec | _ABCMapping[str, object]]
-        | None = None,
-    ):
+        collate_spec: (
+            _ABCMapping[str, CollateSpec | _ABCMapping[str, object]] | None
+        ) = None,
+    ) -> BatchEncoding:
         return _core.batch_encodings(encodings, _normalize_collate_spec(collate_spec))
 
     _encoder_exports = [

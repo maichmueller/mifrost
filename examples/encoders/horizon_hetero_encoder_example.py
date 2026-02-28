@@ -65,7 +65,8 @@ def main() -> None:
 
     for mode_name, mode in variants:
         for use_parent, use_sibling, use_cousin in relation_flags:
-            begin_plot(figsize=(16, 12))
+            fig = begin_plot(figsize=(16, 12))
+            ax = fig.add_subplot(1, 1, 1)
             encoder = HorizonEncoder(
                 domain,
                 transition_mode=mode,
@@ -82,6 +83,7 @@ def main() -> None:
             )
             encoder.draw(
                 data,
+                ax=ax,
                 with_labels=True,
                 edge_labels=True,
                 label_node_types=[encoder.symbol_type_id],

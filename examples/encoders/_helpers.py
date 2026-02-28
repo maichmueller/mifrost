@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
 from matplotlib import pyplot as plt
 import pymimir
 
@@ -54,12 +55,13 @@ def plot_output_dir() -> Path:
     return out_dir
 
 
-def save_plot(name: str) -> Path:
+def save_plot(name: str, dpi=300) -> Path:
     out_path = plot_output_dir() / name
-    plt.savefig(out_path, dpi=180)
+    # plt.tight_layout()
+    plt.savefig(out_path, dpi=dpi)
     plt.close()
     return out_path
 
 
-def begin_plot(*, figsize: tuple[float, float] = (14, 10)) -> None:
-    plt.figure(figsize=figsize)
+def begin_plot(*, figsize: tuple[float, float] = (14, 10)) -> matplotlib.figure.Figure:
+    return plt.figure(figsize=figsize)

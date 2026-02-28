@@ -23,9 +23,11 @@ def main():
     graph = encoder.encode_pyg(state)
 
     # Plot the produced colored graph
-    begin_plot(figsize=(14, 10))
+    fig = begin_plot(figsize=(14, 10))
+    ax = fig.add_subplot(111)
     encoder.draw(
         graph,
+        ax=ax,
         with_labels=True,
         edge_labels=True,
     )

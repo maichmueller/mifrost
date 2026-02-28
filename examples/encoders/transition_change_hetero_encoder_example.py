@@ -22,9 +22,11 @@ def main():
     graph = encoder.encode_pyg(state=state, successor=successor)
 
     # Plot the transition-delta heterogeneous graph
-    begin_plot(figsize=(14, 10))
+    fig = begin_plot(figsize=(14, 10))
+    ax = fig.add_subplot(111)
     encoder.draw(
         graph,
+        ax=ax,
         with_labels=True,
         edge_labels=True,
         label_node_types=[mifrost.DEFAULT_SYMBOL_TYPE_ID],
