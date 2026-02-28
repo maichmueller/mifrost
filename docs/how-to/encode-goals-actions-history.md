@@ -39,11 +39,21 @@ enc = encoder.encode(
 
 ## Notes
 
-- `HorizonEncoder` takes a root plus `TransitionDAG`. In batch mode, `dags` may be passed as:
+- `HorizonEncoder` takes a root plus `TransitionDAG` (or `rustworkx.PyDiGraph`).
+  Use `mifrost.transition_dag_from_rustworkx(...)` if you want an explicit conversion step.
+  In batch mode, `dags` may be passed as:
   - one shared DAG,
-  - an aligned iterable of `TransitionDAG | None`,
+  - an aligned iterable of `TransitionDAG | rustworkx.PyDiGraph | None`,
   - `BatchParam.shared(dag)`, or
   - `BatchParam.separate([dag0, None, ...])`
+- `rustworkx` interop is Python-level only. There is no raw/native graph handoff:
+  `PyDiGraph` inputs are converted into `TransitionDAG` before encoding.
+- `PyDiGraph` inputs are treated as already-valid horizon DAGs. `mifrost` does not
+  pre-verify the incoming graph shape beyond the minimal import constraints needed to
+  build a `TransitionDAG`; malformed inputs are treated as input errors and may fail
+  during import or downstream encoding.
+- Horizon `target_indices` refer to `TransitionDAG` insertion-order node indices, not
+  the original `rustworkx` node IDs.
 - Transition encoders require successor inputs (`successor` or `successors`). In batch mode,
   `successors` may be passed as:
   - one shared successor state,

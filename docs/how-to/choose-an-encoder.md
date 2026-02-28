@@ -32,7 +32,8 @@
 
 - `HGraphEncoder` expects flat action inputs (single action list or per-state flat lists).
 - Nested/tuple action payloads are rejected by design.
-- For IW lookahead/macro-transition outputs, use `HorizonEncoder` with `TransitionDAG`.
+- For IW lookahead/macro-transition outputs, use `HorizonEncoder` with `TransitionDAG`
+  or a `rustworkx.PyDiGraph`.
 
 ## Batch Contract
 
@@ -41,12 +42,19 @@
 - For specialized encoder kwargs, the same shared/per-entry rule applies:
   - transition encoders: `successors` accepts a single shared successor, an aligned iterable,
     `BatchParam.shared(...)`, or `BatchParam.separate([...])`
-  - horizon encoder: `dags` accepts a shared DAG, an aligned iterable of `TransitionDAG | None`,
+  - horizon encoder: `dags` accepts a shared DAG, an aligned iterable of
+    `TransitionDAG | rustworkx.PyDiGraph | None`,
     `BatchParam.shared(...)`, or `BatchParam.separate([...])`
 - High-level encoder batch paths preprocess wrapper/adapter inputs in Python, then
   dispatch to strict advanced-only C++ batch parsing.
 - Direct low-level `_core._parse_*` batch helpers stay advanced-only and reject
   adapter-backed objects.
+- `mifrost.transition_dag_from_rustworkx(...)` is the explicit conversion helper when
+  you want to pre-normalize a `PyDiGraph` yourself. The integration is Python-level;
+  there is no raw/native graph handoff into the C++ core.
+- `PyDiGraph` interop assumes the graph is already a valid horizon DAG/tree. The
+  converter imports it directly into `TransitionDAG` and treats malformed graph
+  structure as an input error.
 - Encoder support:
   - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
   - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` are accepted as inputs but non-empty payloads are rejected)
