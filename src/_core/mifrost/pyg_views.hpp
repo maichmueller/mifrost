@@ -38,6 +38,8 @@ class HeteroBatchEncodingView {
    [[nodiscard]] nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
    /// @brief Object names attached to the batch, if present.
    [[nodiscard]] std::vector< std::string > object_names() const { return encoding_->object_names; }
+   /// @brief Original ``BatchEncoding`` backing this view.
+   [[nodiscard]] nb::object base() const { return owner_; }
 
    /// @brief Mapping `node_type -> x` tensor.
    nb::object x_dict();
@@ -110,6 +112,8 @@ class HomoBatchEncodingView {
    [[nodiscard]] nb::list edge_types() const { return batch_encoding_edge_types(*encoding_); }
    /// @brief Object names attached to the batch, if present.
    [[nodiscard]] std::vector< std::string > object_names() const { return encoding_->object_names; }
+   /// @brief Original ``BatchEncoding`` backing this view.
+   [[nodiscard]] nb::object base() const { return owner_; }
 
    /// @brief Node feature tensor (`x`) or `None` if unavailable.
    nb::object x();

@@ -1645,6 +1645,9 @@ void init_batch_encoding(nb::module_& m)
       .def_prop_ro("edge_types", &HeteroBatchEncodingView::edge_types)
       .def_prop_ro("object_names", &HeteroBatchEncodingView::object_names)
       .def_prop_ro(
+         "base", &HeteroBatchEncodingView::base, nb::sig("def base(self) -> BatchEncoding")
+      )
+      .def_prop_ro(
          "x_dict",
          &HeteroBatchEncodingView::x_dict,
          nb::sig("def x_dict(self) -> collections.abc.Mapping[str, torch.Tensor]")
@@ -1693,6 +1696,7 @@ void init_batch_encoding(nb::module_& m)
       .def_prop_ro("node_types", &HomoBatchEncodingView::node_types)
       .def_prop_ro("edge_types", &HomoBatchEncodingView::edge_types)
       .def_prop_ro("object_names", &HomoBatchEncodingView::object_names)
+      .def_prop_ro("base", &HomoBatchEncodingView::base, nb::sig("def base(self) -> BatchEncoding"))
       .def_prop_ro("x", &HomoBatchEncodingView::x, nb::sig("def x(self) -> torch.Tensor | None"))
       .def_prop_ro(
          "edge_index",

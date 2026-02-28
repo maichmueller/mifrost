@@ -116,6 +116,7 @@ EdgeType: TypeAlias = tuple[str, str, str]
 @runtime_checkable
 class HeteroBatchEncodingViewLike(Protocol):
     object_names: Sequence[str]
+    base: NativeEncoding
     x_dict: Mapping[str, "torch.Tensor"]
     edge_index_dict: Mapping[EdgeType, "torch.Tensor"]
     batch_dict: Mapping[str, "torch.Tensor"]
@@ -128,6 +129,7 @@ class HeteroBatchEncodingViewLike(Protocol):
 @runtime_checkable
 class HomoBatchEncodingViewLike(Protocol):
     object_names: Sequence[str]
+    base: NativeEncoding
     x: "torch.Tensor | None"
     edge_index: "torch.Tensor | None"
     batch: "torch.Tensor | None"

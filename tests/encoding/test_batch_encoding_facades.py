@@ -154,6 +154,27 @@ def test_as_homo_parity_with_as_pyg_batch(small_blocks):
         _assert_tensor_equal(view.edge_attr, batch.edge_attr)
 
 
+def test_facades_expose_underlying_batch_encoding(small_blocks):
+    space, domain, problem = small_blocks
+
+    hetero_encoder = HGraphEncoder(domain)
+    hetero_encoding = hetero_encoder.encode_batch(
+        [
+            problem.get_initial_state(),
+            space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+        ]
+    )
+    hetero_view = hetero_encoding.as_hetero()
+    assert hetero_view.base is hetero_encoding
+
+    homo_encoder = ColorEncoder(domain)
+    homo_encoding = homo_encoder.encode_batch(
+        [problem.get_initial_state(), problem.get_initial_state()]
+    )
+    homo_view = homo_encoding.as_homo()
+    assert homo_view.base is homo_encoding
+
+
 def test_facade_kind_gates_raise_on_mismatch(small_blocks):
     _space, domain, problem = small_blocks
     hetero_encoding = HGraphEncoder(domain).encode(problem.get_initial_state())
