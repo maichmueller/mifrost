@@ -39,5 +39,17 @@ enc = encoder.encode(
 
 ## Notes
 
-- `HorizonEncoder` takes a root plus `TransitionDAG`; it does not consume action lists directly in its encoding path.
-- Transition encoders require successor inputs (`successor` or `successors`).
+- `HorizonEncoder` takes a root plus `TransitionDAG`. In batch mode, `dags` may be passed as:
+  - one shared DAG,
+  - an aligned iterable of `TransitionDAG | None`,
+  - `BatchParam.shared(dag)`, or
+  - `BatchParam.separate([dag0, None, ...])`
+- Transition encoders require successor inputs (`successor` or `successors`). In batch mode,
+  `successors` may be passed as:
+  - one shared successor state,
+  - an aligned iterable of successor states,
+  - `BatchParam.shared(successor)`, or
+  - `BatchParam.separate([succ0, succ1, ...])`
+- `HorizonEncoder` and transition encoders currently expose `actions` / `history_subgoals`
+  parameters for API consistency, but non-empty payloads are rejected by their current encoding
+  implementations.

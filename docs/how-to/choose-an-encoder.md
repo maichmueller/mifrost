@@ -38,13 +38,18 @@
 
 - `encode_batch(states, *, ...)` is kwargs-based (no tuple/sample batch payloads).
 - Batch-capable kwargs accept either shared payloads or per-state sequences.
+- For specialized encoder kwargs, the same shared/per-entry rule applies:
+  - transition encoders: `successors` accepts a single shared successor, an aligned iterable,
+    `BatchParam.shared(...)`, or `BatchParam.separate([...])`
+  - horizon encoder: `dags` accepts a shared DAG, an aligned iterable of `TransitionDAG | None`,
+    `BatchParam.shared(...)`, or `BatchParam.separate([...])`
 - High-level encoder batch paths preprocess wrapper/adapter inputs in Python, then
   dispatch to strict advanced-only C++ batch parsing.
 - Direct low-level `_core._parse_*` batch helpers stay advanced-only and reject
   adapter-backed objects.
 - Encoder support:
   - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
-  - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` ignored)
+  - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` are accepted as inputs but non-empty payloads are rejected)
   - `ILGEncoder`: per-state `goals`, `actions`, `subgoal_layers`
-  - `Transition*Encoder`: aligned `successors`, per-state `goals`, `subgoal_layers` (`actions`/history ignored)
-  - `HorizonEncoder`: per-state `dags`, `goals`, `subgoal_layers` (`actions`/history ignored)
+  - `Transition*Encoder`: shared or per-entry `successors`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)
+  - `HorizonEncoder`: shared or per-entry `dags`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)
