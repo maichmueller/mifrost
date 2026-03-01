@@ -24,6 +24,10 @@ Native graph fields are also exposed as attributes (`encoding.target_indices`).
 If a key is native, assignment is routed to native graph-field storage rather than
 stored as a python shadow attribute.
 
+`target_indices` semantics are encoder-dependent:
+- `HorizonEncoder`: `TransitionDAG` node indices.
+- `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
+
 Ragged field notes:
 
 - Ragged values are keyed at `<key>`, with ptr metadata at `<key>_ptr`.

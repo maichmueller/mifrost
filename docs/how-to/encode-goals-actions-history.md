@@ -20,6 +20,20 @@ Action inputs are supported in `HGraphEncoder` state-step workflows:
 enc = encoder.encode(state, goals=goals, actions=actions)
 ```
 
+If you want Horizon-like target metadata for encoded action targets, enable
+`export_action_targets` on `HGraphEncoder`:
+
+```python
+encoder = mifrost.HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+enc = encoder.encode_batch(states, actions=per_state_actions)
+data = enc.as_pyg(as_batch=True)
+```
+
+When enabled, HGraph emits:
+- `target_positions` (symbol-node positions with batch node-offset semantics)
+- `target_indices` (input action positions `0..n-1` per graph)
+- `target_names` and `target_symbol_prefix`
+
 `HGraphEncoder` action inputs must be flat. Nested or tuple/macro action payloads are rejected.
 If your planner emits lookahead or macro-transition structures (for example from IW), use
 `HorizonEncoder` with a `TransitionDAG` instead of passing nested action payloads to `HGraphEncoder`.
