@@ -30,8 +30,9 @@ TEST_P(TransitionDAGTest, RegistersTransitionsAndDepths)
    EXPECT_EQ(action.value()->get_index(), succ_action->get_index());
 
    const auto children = dag.children(parent_idx);
-   EXPECT_EQ(children.size(), 1u);
-   EXPECT_EQ(children.front(), child_idx);
+   EXPECT_NE(children, nullptr);
+   EXPECT_EQ(children->size(), 1u);
+   EXPECT_EQ(children->front(), child_idx);
 
    const auto transitions = dag.transitions();
    ASSERT_EQ(transitions.size(), 1u);

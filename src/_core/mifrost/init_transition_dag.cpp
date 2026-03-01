@@ -35,7 +35,7 @@ void init_transition_dag(nb::module_& m)
                      )
                      .def(
                         "register_transitions",
-                        [](TransitionDAG& dag, nb::iterable transitions) {
+                        [](TransitionDAG& dag, const nb::iterable& transitions) {
                            std::vector< TransitionDAG::TransitionRecord > records;
                            for(const auto entry : transitions) {
                               auto [parent, child, action] = nb::cast< std::tuple<
@@ -58,7 +58,16 @@ void init_transition_dag(nb::module_& m)
                      .def("depth", &TransitionDAG::depth, "idx"_a)
                      .def("action", &TransitionDAG::action, "idx"_a)
                      .def("state", &TransitionDAG::state, "idx"_a)
-                     .def("children", &TransitionDAG::children, "parent_idx"_a)
+                     .def(
+                        "children",
+                        [](const TransitionDAG& self, int parent_idx) {
+                           if(const auto* children_ptr = self.children(parent_idx); children_ptr) {
+                              return nb::cast< nb::list >(nb::cast(*children_ptr));
+                           }
+                           return nb::list();
+                        },
+                        "parent_idx"_a
+                     )
                      .def("nodes", &TransitionDAG::nodes, nb::rv_policy::reference_internal)
                      .def("successors", &TransitionDAG::successors)
                      .def("transitions", &TransitionDAG::transitions)

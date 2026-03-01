@@ -129,7 +129,7 @@ class TransitionDAG {
    /**
     * @brief Get children indices of a node.
     */
-   std::vector< int > children(int parent_idx) const;
+   const std::vector< int >* children(int parent_idx) const;
 
    /**
     * @brief Get all nodes in insertion order.

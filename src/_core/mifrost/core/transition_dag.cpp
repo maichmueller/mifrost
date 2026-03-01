@@ -108,13 +108,13 @@ mimir::search::State TransitionDAG::state(int idx) const
    return nodes_ordered_[idx].state;
 }
 
-std::vector< int > TransitionDAG::children(int parent_idx) const
+const std::vector< int >* TransitionDAG::children(int parent_idx) const
 {
    auto it = adjacency_.find(parent_idx);
    if(it == adjacency_.end()) {
-      return {};
+      return nullptr;
    }
-   return it->second;
+   return &(it->second);
 }
 
 std::vector< TransitionDAG::Node > TransitionDAG::successors() const
