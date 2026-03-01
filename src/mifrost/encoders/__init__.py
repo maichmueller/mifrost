@@ -18,6 +18,18 @@ from .transition import (
 from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
 from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
 from ..graph_fields import CollateSpec
+from ..schema_keys import (
+    BATCH_ATTR,
+    EDGE_INDEX_ATTR_PREFIX,
+    EDGE_INDEX_DST_COMPONENT,
+    EDGE_INDEX_KEY_PREFIX,
+    EDGE_INDEX_SRC_COMPONENT,
+    EDGE_TYPE_SEPARATOR,
+    PTR_ATTR,
+    TYPE_ATTR_SEPARATOR,
+    make_edge_type_key,
+    make_type_attr_key,
+)
 from .types import (
     BatchParam,
     register_action_adapter,
@@ -54,6 +66,16 @@ __all__ = [
     "_split_goals",
     "encoding_to_tensors",
     "CollateSpec",
+    "TYPE_ATTR_SEPARATOR",
+    "EDGE_TYPE_SEPARATOR",
+    "EDGE_INDEX_ATTR_PREFIX",
+    "EDGE_INDEX_KEY_PREFIX",
+    "EDGE_INDEX_SRC_COMPONENT",
+    "EDGE_INDEX_DST_COMPONENT",
+    "PTR_ATTR",
+    "BATCH_ATTR",
+    "make_type_attr_key",
+    "make_edge_type_key",
     "BatchParam",
     "register_state_adapter",
     "unregister_state_adapter",

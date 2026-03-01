@@ -42,6 +42,7 @@
 #include "mifrost/core/map_view.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/core/nb_instance.hpp"
+#include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/core/successor_hgraph_encoder.hpp"
 #include "mifrost/core/transition_dag.hpp"
 #include "mifrost/pyg_views.hpp"
@@ -127,6 +128,16 @@ constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__"
 constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
 void clear_owner_tensor_cache(nb::handle owner);
+
+std::string make_type_attr_key(std::string_view type_key, std::string_view attr)
+{
+   std::string key;
+   key.reserve(type_key.size() + attr.size() + 1);
+   key.append(type_key);
+   key.push_back(schema_key::kTypeAttrSeparator);
+   key.append(attr);
+   return key;
+}
 
 GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
 {
@@ -1091,7 +1102,12 @@ int64_t batch_encoding_num_edges(const BatchBuilder::BatchEncoding& encoding)
 {
    int64_t total = 0;
    for(const auto& [key, col] : encoding.columns) {
-      if(key.find("/edge_index_0") == std::string::npos) {
+      const auto edge_index_pos = key.find(schema_key::kEdgeIndexKeyPrefix);
+      if(edge_index_pos == std::string::npos) {
+         continue;
+      }
+      const auto component_pos = edge_index_pos + schema_key::kEdgeIndexKeyPrefix.size();
+      if(component_pos >= key.size() or key[component_pos] != schema_key::kEdgeIndexSrcComponent) {
          continue;
       }
       std::visit([&](const auto& data) { total += static_cast< int64_t >(data.size()); }, col.data);
@@ -1118,7 +1134,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
    nb::dict tensors;
 
    for(auto& [key, col] : encoding.columns) {
-      const bool is_edge_index = key.find("/edge_index_") != std::string::npos;
+      const bool is_edge_index = key.find(schema_key::kEdgeIndexKeyPrefix) != std::string::npos;
       std::visit(
          [&]< typename T >(std::vector< T >& data) {
             if(is_edge_index) {
@@ -1140,8 +1156,10 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
          continue;
       }
       exported_ptr = true;
-      tensors[(node_type + "/ptr").c_str()] = vector_to_1d_tensor_view(ptr, owner);
-      tensors[(node_type + "/batch").c_str()] = vector_to_1d_tensor_owned(ptr_to_batch(ptr));
+      tensors[make_type_attr_key(node_type, schema_key::kPtrAttr)
+                 .c_str()] = vector_to_1d_tensor_view(ptr, owner);
+      tensors[make_type_attr_key(node_type, schema_key::kBatchAttr)
+                 .c_str()] = vector_to_1d_tensor_owned(ptr_to_batch(ptr));
    }
    if(not exported_ptr) {
       for(const auto& [node_type, count] : encoding.node_counts) {
@@ -1149,15 +1167,15 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
             continue;
          }
          std::vector< int64_t > ptr{0, count};
-         tensors[(node_type + "/ptr").c_str()] = vector_to_1d_tensor_owned(std::move(ptr));
-         tensors[(node_type + "/batch").c_str()] = vector_to_1d_tensor_owned(
-            std::vector< int64_t >(count, 0)
-         );
+         tensors[make_type_attr_key(node_type, schema_key::kPtrAttr)
+                    .c_str()] = vector_to_1d_tensor_owned(std::move(ptr));
+         tensors[make_type_attr_key(node_type, schema_key::kBatchAttr)
+                    .c_str()] = vector_to_1d_tensor_owned(std::vector< int64_t >(count, 0));
       }
    }
 
    for(auto& [attr, field] : encoding.graph_fields) {
-      const std::string key = "__graph__/" + attr;
+      const std::string key = make_type_attr_key("__graph__", attr);
       std::visit(
          [&]< typename T >(std::vector< T >& data) {
             if(field.spec.dim == 1) {
@@ -1176,7 +1194,9 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
          field.values
       );
       if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
-         tensors[(key + "/ptr").c_str()] = vector_to_1d_tensor_view(field.ptr, owner);
+         tensors[make_type_attr_key(key, schema_key::kPtrAttr).c_str()] = vector_to_1d_tensor_view(
+            field.ptr, owner
+         );
       }
    }
 

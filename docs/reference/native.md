@@ -28,6 +28,10 @@ stored as a python shadow attribute.
 - `HorizonEncoder`: `TransitionDAG` node indices.
 - `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
 
+`BatchEncoding.as_pyg(...)` exposes native graph attrs as top-level PyG attrs
+(`data.target_names`, `data.target_symbol_prefix`, etc.). Collisions with
+reserved/structural PyG keys raise an error.
+
 Ragged field notes:
 
 - Ragged values are keyed at `<key>`, with ptr metadata at `<key>_ptr`.

@@ -7,6 +7,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <range/v3/view/enumerate.hpp>
 #include <set>
@@ -16,6 +17,7 @@
 
 #include "mifrost/common.hpp"
 #include "mifrost/core/dlpack_utils.hpp"
+#include "mifrost/core/schema_key_separators.hpp"
 #include "schema.hpp"
 #include "utils/macro.hpp"
 
@@ -41,6 +43,153 @@ const std::vector< T >& expect_column(const NumericColumnData& data, const std::
       throw std::invalid_argument("Graph field '" + key + "' dtype mismatch");
    }
    return *ptr;
+}
+
+bool is_reserved_pyg_graph_attr_key(std::string_view key)
+{
+   static constexpr std::array< std::string_view, 14 > kReserved{
+      "x",
+      "edge_index",
+      "edge_attr",
+      "batch",
+      "ptr",
+      "x_dict",
+      "edge_index_dict",
+      "edge_attr_dict",
+      "batch_dict",
+      "ptr_dict",
+      "_num_graphs",
+      "object_names",
+      "node_names",
+      "num_nodes",
+   };
+   return key.starts_with("__mifrost_") or std::ranges::find(kReserved, key) != kReserved.end();
+}
+
+bool pyg_global_store_contains_key(nb::object& batch, const std::string& key)
+{
+   nb::object global_store = batch.attr("_global_store");
+   return nb::cast< bool >(global_store.attr("__contains__")(key.c_str()));
+}
+
+std::string make_type_attr_key(std::string_view type_key, std::string_view attr)
+{
+   std::string key;
+   key.reserve(type_key.size() + attr.size() + 1);
+   key.append(type_key);
+   key.push_back(schema_key::kTypeAttrSeparator);
+   key.append(attr);
+   return key;
+}
+
+std::string make_edge_type_base_key(
+   std::string_view src_type,
+   std::string_view rel_type,
+   std::string_view dst_type
+)
+{
+   std::string key;
+   key.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
+   key.append(src_type);
+   key.push_back(schema_key::kEdgeTypeSeparator);
+   key.append(rel_type);
+   key.push_back(schema_key::kEdgeTypeSeparator);
+   key.append(dst_type);
+   return key;
+}
+
+std::string make_edge_index_component_key(std::string_view edge_key_base, char component)
+{
+   std::string key;
+   key.reserve(edge_key_base.size() + schema_key::kEdgeIndexKeyPrefix.size() + 1);
+   key.append(edge_key_base);
+   key.push_back(schema_key::kTypeAttrSeparator);
+   key.append(schema_key::kEdgeIndexAttrPrefix);
+   key.push_back(component);
+   return key;
+}
+
+bool key_has_edge_separator(std::string_view key)
+{
+   return key.find(schema_key::kEdgeTypeSeparator) != std::string_view::npos;
+}
+
+std::string_view::size_type find_type_attr_separator(std::string_view key)
+{
+   return key.find(schema_key::kTypeAttrSeparator);
+}
+
+bool key_has_edge_index_prefix(std::string_view key)
+{
+   return key.find(schema_key::kEdgeIndexKeyPrefix) != std::string_view::npos;
+}
+
+bool key_has_ptr_suffix(std::string_view key)
+{
+   if(key == schema_key::kPtrAttr) {
+      return true;
+   }
+   if(key.size() <= schema_key::kPtrAttr.size()) {
+      return false;
+   }
+   const auto suffix_pos = key.size() - schema_key::kPtrAttr.size();
+   return key[suffix_pos - 1] == schema_key::kTypeAttrSeparator
+          and key.substr(suffix_pos) == schema_key::kPtrAttr;
+}
+
+bool key_has_batch_suffix(std::string_view key)
+{
+   if(key == schema_key::kBatchAttr) {
+      return true;
+   }
+   if(key.size() <= schema_key::kBatchAttr.size()) {
+      return false;
+   }
+   const auto suffix_pos = key.size() - schema_key::kBatchAttr.size();
+   return key[suffix_pos - 1] == schema_key::kTypeAttrSeparator
+          and key.substr(suffix_pos) == schema_key::kBatchAttr;
+}
+
+void set_graph_attrs_on_pyg_batch(
+   nb::object& batch,
+   const hash_map< std::string, BatchBuilder::GraphAttrValue >& graph_attrs,
+   const std::unique_ptr< hash_map< std::string, GraphField > >& graph_fields
+)
+{
+   if(graph_attrs.empty()) {
+      return;
+   }
+
+   auto collides_with_native_graph_field = [&](const std::string& key) {
+      if(not graph_fields) {
+         return false;
+      }
+      if(graph_fields->contains(key)) {
+         return true;
+      }
+      if(key.size() > 4 and key.ends_with("_ptr")) {
+         std::string base_key = key.substr(0, key.size() - 4);
+         if(graph_fields->contains(base_key)) {
+            return true;
+         }
+      }
+      return false;
+   };
+
+   for(const auto& [key, value] : graph_attrs) {
+      if(is_reserved_pyg_graph_attr_key(key) or pyg_global_store_contains_key(batch, key)
+         or collides_with_native_graph_field(key)) {
+         throw std::invalid_argument(
+            "Graph attr key '" + key + "' collides with a reserved/existing PyG key"
+         );
+      }
+      std::visit(
+         [&](const auto& typed_value) {
+            batch.attr("__setattr__")(key.c_str(), nb::cast(typed_value));
+         },
+         value
+      );
+   }
 }
 
 void append_with_inc(
@@ -280,11 +429,7 @@ void BatchBuilder::add_node_features(
 {
    set_node_feature_dim(node_type, feature_dim);
 
-   std::string key;
-   key.reserve(node_type.size() + 1 + attr_name.size());
-   key.append(node_type);
-   key.push_back('/');
-   key.append(attr_name);
+   const std::string key = make_type_attr_key(node_type, attr_name);
    auto& col = get_column< float >(key, feature_dim);
    col.insert(col.end(), data.begin(), data.end());
 
@@ -322,27 +467,13 @@ void BatchBuilder::ensure_edge_type(
    const std::string& dst_type
 )
 {
-   std::string edge_key_base;
-   constexpr std::string_view sep = "|";
-   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2 * sep.size() + 1);
-   edge_key_base.append(src_type);
-   edge_key_base.append(sep);
-   edge_key_base.append(rel_type);
-   edge_key_base.append(sep);
-   edge_key_base.append(dst_type);
-
-   std::string src_key;
-   std::string dst_key;
-   constexpr std::string_view suffix_0 = "/edge_index_0";
-   constexpr std::string_view suffix_1 = "/edge_index_1";
-   // src
-   src_key.reserve(edge_key_base.size() + suffix_0.size() + 1);
-   src_key.append(edge_key_base);
-   src_key.append(suffix_0);
-   // dst
-   dst_key.reserve(edge_key_base.size() + suffix_1.size() + 1);
-   dst_key.append(edge_key_base);
-   dst_key.append(suffix_1);
+   const std::string edge_key_base = make_edge_type_base_key(src_type, rel_type, dst_type);
+   const std::string src_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexSrcComponent
+   );
+   const std::string dst_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexDstComponent
+   );
    get_column< int64_t >(src_key, 1);
    get_column< int64_t >(dst_key, 1);
 }
@@ -628,22 +759,13 @@ void BatchBuilder::add_edges(
 
    // We stick to storing separate src and dst index columns for now as they are easier to build.
    // Construct keys: "src_type|rel_type|dst_type/edge_index_0"
-   std::string edge_key_base;
-   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
-   edge_key_base.append(src_type);
-   edge_key_base.push_back('|');
-   edge_key_base.append(rel_type);
-   edge_key_base.push_back('|');
-   edge_key_base.append(dst_type);
-
-   std::string src_key;
-   src_key.reserve(edge_key_base.size() + 13);
-   src_key.append(edge_key_base);
-   src_key.append("/edge_index_0");
-   std::string dst_key;
-   dst_key.reserve(edge_key_base.size() + 13);
-   dst_key.append(edge_key_base);
-   dst_key.append("/edge_index_1");
+   const std::string edge_key_base = make_edge_type_base_key(src_type, rel_type, dst_type);
+   const std::string src_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexSrcComponent
+   );
+   const std::string dst_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexDstComponent
+   );
 
    auto& col_src = get_column< int64_t >(src_key, 1);
    auto& col_dst = get_column< int64_t >(dst_key, 1);
@@ -669,22 +791,13 @@ void BatchBuilder::add_edge(
    int64_t dst_index
 )
 {
-   std::string edge_key_base;
-   edge_key_base.reserve(src_type.size() + rel_type.size() + dst_type.size() + 2);
-   edge_key_base.append(src_type);
-   edge_key_base.push_back('|');
-   edge_key_base.append(rel_type);
-   edge_key_base.push_back('|');
-   edge_key_base.append(dst_type);
-
-   std::string src_key;
-   src_key.reserve(edge_key_base.size() + 13);
-   src_key.append(edge_key_base);
-   src_key.append("/edge_index_0");
-   std::string dst_key;
-   dst_key.reserve(edge_key_base.size() + 13);
-   dst_key.append(edge_key_base);
-   dst_key.append("/edge_index_1");
+   const std::string edge_key_base = make_edge_type_base_key(src_type, rel_type, dst_type);
+   const std::string src_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexSrcComponent
+   );
+   const std::string dst_key = make_edge_index_component_key(
+      edge_key_base, schema_key::kEdgeIndexDstComponent
+   );
 
    auto& col_src = get_column< int64_t >(src_key, 1);
    auto& col_dst = get_column< int64_t >(dst_key, 1);
@@ -705,15 +818,9 @@ void BatchBuilder::add_edge_features(
    int feature_dim
 )
 {
-   std::string key;
-   key.reserve(src_type.size() + rel_type.size() + dst_type.size() + attr_name.size() + 4);
-   key.append(src_type);
-   key.push_back('|');
-   key.append(rel_type);
-   key.push_back('|');
-   key.append(dst_type);
-   key.push_back('/');
-   key.append(attr_name);
+   const std::string key = make_type_attr_key(
+      make_edge_type_base_key(src_type, rel_type, dst_type), attr_name
+   );
    auto& col = get_column< float >(key, feature_dim);
    col.insert(col.end(), data.begin(), data.end());
 }
@@ -761,7 +868,7 @@ nb::dict BatchBuilder::build_dict()
    nb::dict out;
 
    for(auto& [key, col] : columns) {
-      bool is_edge_index = key.find("/edge_index_") != std::string::npos;
+      const bool is_edge_index = key_has_edge_index_prefix(key);
       std::visit(
          [&]< typename T >(std::vector< T >& vec) {
             size_t size = vec.size();
@@ -784,7 +891,7 @@ nb::dict BatchBuilder::build_dict()
    // essentially)
    for(auto& [ntype, p_vec] : ptrs) {
       auto tensor = vector_to_1d_dlpack(std::move(p_vec));
-      std::string key = ntype + "/ptr";
+      std::string key = make_type_attr_key(ntype, schema_key::kPtrAttr);
       out[key.c_str()] = tensor;
    }
 
@@ -795,10 +902,10 @@ nb::object BatchBuilder::build_pyg()
 {
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
-      if(key.find('|') != std::string::npos) {
+      if(key_has_edge_separator(key)) {
          continue;
       }
-      const auto slash = key.find('/');
+      const auto slash = find_type_attr_separator(key);
       if(slash == std::string::npos) {
          continue;
       }
@@ -890,16 +997,16 @@ nb::object BatchBuilder::build_pyg()
 
    for(auto [key_handle, value_handle] : payload) {
       const std::string key = nb::str(key_handle).c_str();
-      if(key.size() >= 4 and key.compare(key.size() - 4, 4, "/ptr") == 0) {
+      if(key_has_ptr_suffix(key)) {
          continue;
       }
 
-      const auto edge_pos = key.rfind("/edge_index_");
+      const auto edge_pos = key.rfind(schema_key::kEdgeIndexKeyPrefix);
       if(edge_pos != std::string::npos) {
          const std::string base = key.substr(0, edge_pos);
-         const std::string suffix = key.substr(edge_pos + 12);
-         const auto first = base.find('|');
-         const auto second = base.find('|', first + 1);
+         const std::string suffix = key.substr(edge_pos + schema_key::kEdgeIndexKeyPrefix.size());
+         const auto first = base.find(schema_key::kEdgeTypeSeparator);
+         const auto second = base.find(schema_key::kEdgeTypeSeparator, first + 1);
          if(first == std::string::npos or second == std::string::npos) {
             throw std::invalid_argument(fmt::format("Malformed edge key '{}'", key));
          }
@@ -910,9 +1017,9 @@ nb::object BatchBuilder::build_pyg()
          EdgeKey edge_key{src, rel, dst};
          auto& components = edge_components[edge_key];
          nb::object tensor = py::to_torch_tensor(nb::borrow< nb::object >(value_handle));
-         if(suffix == "0") {
+         if(suffix.size() == 1 and suffix.front() == schema_key::kEdgeIndexSrcComponent) {
             components.src = tensor;
-         } else if(suffix == "1") {
+         } else if(suffix.size() == 1 and suffix.front() == schema_key::kEdgeIndexDstComponent) {
             components.dst = tensor;
          } else {
             throw std::invalid_argument(fmt::format("Unexpected edge index suffix '{}'", key));
@@ -920,18 +1027,20 @@ nb::object BatchBuilder::build_pyg()
          continue;
       }
 
-      const auto slash = key.find('/');
+      const auto slash = find_type_attr_separator(key);
       if(slash == std::string::npos) {
          continue;
       }
       const std::string type_key = key.substr(0, slash);
       const std::string attr = key.substr(slash + 1);
 
-      const auto first = type_key.find('|');
-      const auto second = first == std::string::npos ? std::string::npos
-                                                     : type_key.find('|', first + 1);
-      const auto third = second == std::string::npos ? std::string::npos
-                                                     : type_key.find('|', second + 1);
+      const auto first = type_key.find(schema_key::kEdgeTypeSeparator);
+      const auto second = first == std::string::npos
+                             ? std::string::npos
+                             : type_key.find(schema_key::kEdgeTypeSeparator, first + 1);
+      const auto third = second == std::string::npos
+                            ? std::string::npos
+                            : type_key.find(schema_key::kEdgeTypeSeparator, second + 1);
       const bool is_edge_type = first != std::string::npos and second != std::string::npos
                                 and third == std::string::npos;
       nb::object store;
@@ -1058,6 +1167,8 @@ nb::object BatchBuilder::build_pyg()
       }
    }
 
+   set_graph_attrs_on_pyg_batch(batch, graph_attrs, graph_fields);
+
    if(graph_fields) {
       for(auto& [attr, field] : *graph_fields) {
          nb::object value_tensor;
@@ -1127,10 +1238,10 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
 
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
-      if(key.find('|') != std::string::npos) {
+      if(key_has_edge_separator(key)) {
          continue;
       }
-      const auto slash = key.find('/');
+      const auto slash = find_type_attr_separator(key);
       if(slash == std::string::npos) {
          continue;
       }
@@ -1207,11 +1318,11 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
 
    for(const auto& [key, col] : columns) {
       (void) col;
-      const auto slash = key.find('/');
+      const auto slash = find_type_attr_separator(key);
       if(slash == std::string::npos) {
          continue;
       }
-      const bool is_edge = key.find('|') != std::string::npos;
+      const bool is_edge = key_has_edge_separator(key);
       if(not is_edge) {
          node_specs.push_back(
             NodeTensorSpec{
@@ -1224,11 +1335,11 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
       }
       const std::string base = key.substr(0, slash);
       const std::string attr = key.substr(slash + 1);
-      const auto first = base.find('|');
+      const auto first = base.find(schema_key::kEdgeTypeSeparator);
       if(first == std::string::npos) {
          continue;
       }
-      const auto second = base.find('|', first + 1);
+      const auto second = base.find(schema_key::kEdgeTypeSeparator, first + 1);
       if(second == std::string::npos) {
          continue;
       }
@@ -1240,10 +1351,9 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
 
       std::string part;
       std::string attr_name = attr;
-      constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
-      if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+      if(attr.rfind(schema_key::kEdgeIndexAttrPrefix, 0) == 0) {
          attr_name = "edge_index";
-         part = attr.substr(kEdgeIndexPrefix.size());
+         part = attr.substr(schema_key::kEdgeIndexAttrPrefix.size());
       }
       edge_specs.push_back(
          EdgeTensorKeySpec{
@@ -1257,8 +1367,20 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
 
    for(const auto& [node_type, ptr] : ptr_vectors) {
       (void) ptr;
-      node_specs.push_back(NodeTensorSpec{node_type, "ptr", node_type + "/ptr"});
-      node_specs.push_back(NodeTensorSpec{node_type, "batch", node_type + "/batch"});
+      node_specs.push_back(
+         NodeTensorSpec{
+            node_type,
+            std::string(schema_key::kPtrAttr),
+            make_type_attr_key(node_type, schema_key::kPtrAttr),
+         }
+      );
+      node_specs.push_back(
+         NodeTensorSpec{
+            node_type,
+            std::string(schema_key::kBatchAttr),
+            make_type_attr_key(node_type, schema_key::kBatchAttr),
+         }
+      );
    }
 
    std::ranges::sort(node_specs, [](const auto& lhs, const auto& rhs) {
@@ -1306,10 +1428,10 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
    if(graph_fields) {
       graph_tensor_specs.reserve(graph_fields->size());
       for(const auto& [attr, field] : *graph_fields) {
-         std::string key = "__graph__/" + attr;
+         std::string key = make_type_attr_key("__graph__", attr);
          std::string ptr_key;
          if(field.spec.mode == GraphFieldMode::RAGGED_CAT) {
-            ptr_key = key + "/ptr";
+            ptr_key = make_type_attr_key(key, schema_key::kPtrAttr);
          }
          graph_tensor_specs.push_back(
             GraphTensorSpec{
@@ -1414,10 +1536,10 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
    absl::btree_map< std::string, int64_t > node_counts = batch_encoding.node_counts;
    if(node_counts.empty()) {
       for(const auto& [key, col] : batch_encoding.columns) {
-         if(key.find('|') != std::string::npos) {
+         if(key_has_edge_separator(key)) {
             continue;
          }
-         const auto slash = key.find('/');
+         const auto slash = find_type_attr_separator(key);
          if(slash == std::string::npos) {
             continue;
          }
@@ -1547,10 +1669,10 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
    }
 
    for(const auto& [key, col] : batch_encoding.columns) {
-      if(key.size() >= 4 and key.compare(key.size() - 4, 4, "/ptr") == 0) {
+      if(key_has_ptr_suffix(key)) {
          continue;
       }
-      if(key.size() >= 6 and key.compare(key.size() - 6, 6, "/batch") == 0) {
+      if(key_has_batch_suffix(key)) {
          continue;
       }
 
@@ -1563,23 +1685,22 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
       } else {
          // Compatibility fallback for legacy encodings that do not provide edge_tensors schema.
          const std::string_view key_view = key;
-         const auto slash = key_view.find('/');
+         const auto slash = key_view.find(schema_key::kTypeAttrSeparator);
          if(slash != std::string_view::npos) {
             const std::string_view attr = key_view.substr(slash + 1);
-            constexpr std::string_view kEdgeIndexPrefix = "edge_index_";
-            if(attr.rfind(kEdgeIndexPrefix, 0) == 0) {
+            if(attr.rfind(schema_key::kEdgeIndexAttrPrefix, 0) == 0) {
                const std::string_view base = key_view.substr(0, slash);
-               const auto first = base.find('|');
-               const auto second = base.find('|', first + 1);
+               const auto first = base.find(schema_key::kEdgeTypeSeparator);
+               const auto second = base.find(schema_key::kEdgeTypeSeparator, first + 1);
                if(first == std::string_view::npos or second == std::string_view::npos) {
                   throw std::invalid_argument("Malformed edge key in append_batch_encoding");
                }
                const std::string_view src_type = base.substr(0, first);
                const std::string_view dst_type = base.substr(second + 1);
-               const std::string_view part = attr.substr(kEdgeIndexPrefix.size());
-               if(part == "0") {
+               const std::string_view part = attr.substr(schema_key::kEdgeIndexAttrPrefix.size());
+               if(part.size() == 1 and part.front() == schema_key::kEdgeIndexSrcComponent) {
                   edge_index_offset = offset_for(src_type);
-               } else if(part == "1") {
+               } else if(part.size() == 1 and part.front() == schema_key::kEdgeIndexDstComponent) {
                   edge_index_offset = offset_for(dst_type);
                } else {
                   throw std::invalid_argument(

@@ -222,6 +222,7 @@ add_library(
         "_core/mifrost/core/schema.cpp"
         "_core/mifrost/core/color_encoder.cpp"
         "_core/mifrost/core/hgraph_stream_encoder.cpp"
+        "_core/mifrost/core/target_metadata.cpp"
         "_core/mifrost/input_handling/batch_input_parser.cpp"
         "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
         "_core/mifrost/input_handling/batch_input_color_parser.cpp"

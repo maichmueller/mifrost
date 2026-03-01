@@ -34,6 +34,9 @@ When enabled, HGraph emits:
 - `target_indices` (input action positions `0..n-1` per graph)
 - `target_names` and `target_symbol_prefix`
 
+On `as_pyg(...)` outputs these attrs are available directly as top-level PyG attrs
+(for example `data.target_names`, `data.target_symbol_prefix`).
+
 `HGraphEncoder` action inputs must be flat. Nested or tuple/macro action payloads are rejected.
 If your planner emits lookahead or macro-transition structures (for example from IW), use
 `HorizonEncoder` with a `TransitionDAG` instead of passing nested action payloads to `HGraphEncoder`.

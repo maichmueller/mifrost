@@ -26,6 +26,12 @@ from .types import (
 )
 
 from .._core import GoalInputs
+from ..schema_keys import (
+    BATCH_ATTR,
+    EDGE_TYPE_SEPARATOR,
+    PTR_ATTR,
+    make_type_attr_key,
+)
 
 
 def _to_tensor(value: Any) -> torch.Tensor:
@@ -352,7 +358,10 @@ def _encoding_dict_to_pyg_hetero(
 
     for (src, rel, dst), component_map in edge_components.items():
         if "0" not in component_map or "1" not in component_map:
-            raise ValueError(f"Incomplete edge_index components for {src}|{rel}|{dst}")
+            raise ValueError(
+                "Incomplete edge_index components for "
+                f"{src}{EDGE_TYPE_SEPARATOR}{rel}{EDGE_TYPE_SEPARATOR}{dst}"
+            )
         edge_index = torch.stack((component_map["0"], component_map["1"]), dim=0)
         data[(src, rel, dst)].edge_index = edge_index
 
@@ -363,7 +372,7 @@ def _encoding_dict_to_pyg_hetero(
             names_list = names if isinstance(names, list) else list(names)
             node_names_lists[node_type] = names_list
             if as_batch:
-                ptr_key = f"{node_type}/ptr"
+                ptr_key = make_type_attr_key(node_type, PTR_ATTR)
                 if ptr_key in tensors:
                     ptr_tensor = get_tensor(ptr_key).tolist()
                     store.node_names = [
@@ -383,7 +392,7 @@ def _encoding_dict_to_pyg_hetero(
                         symbol_type = node_type
                         break
                 if symbol_type:
-                    ptr_key = f"{symbol_type}/ptr"
+                    ptr_key = make_type_attr_key(symbol_type, PTR_ATTR)
                     if ptr_key in tensors:
                         ptr_tensor = get_tensor(ptr_key).tolist()
                         data.object_names = [
@@ -405,7 +414,7 @@ def _encoding_dict_to_pyg_hetero(
         store = data[node_type]
         if "x" in store:
             continue
-        ptr_key = f"{node_type}/ptr"
+        ptr_key = make_type_attr_key(node_type, PTR_ATTR)
         if ptr_key in tensors:
             ptr_tensor = get_tensor(ptr_key)
             count = int(ptr_tensor[-1].item()) if ptr_tensor.numel() > 0 else 0
@@ -519,7 +528,7 @@ def _encoding_dict_to_pyg_homo(
 
     if as_batch and num_graphs > 0:
         data._num_graphs = num_graphs
-        batch_key = f"{node_type}/batch"
+        batch_key = make_type_attr_key(node_type, BATCH_ATTR)
         if batch_key in tensors:
             data.batch = get_tensor(batch_key, tensors[batch_key]).long()
 

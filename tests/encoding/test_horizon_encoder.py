@@ -85,6 +85,31 @@ def test_horizon_encoder_target_mapping_and_order(small_blocks):
         )
 
 
+def test_horizon_as_pyg_exposes_target_graph_attrs(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))[:2]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 transition")
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    for action, target in transitions:
+        dag.register_transition(
+            adv_state(root),
+            adv_state(target),
+            adv_action(action),
+        )
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+    data = encoder.encode(root, dag=dag, goals=goals).as_pyg(as_batch=True)
+
+    assert hasattr(data, "target_names")
+    assert hasattr(data, "target_symbol_prefix")
+    assert data.target_symbol_prefix == encoder.target_symbol_prefix
+    assert len(list(data.target_names)) == len(data.target_indices.tolist())
+
+
 def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

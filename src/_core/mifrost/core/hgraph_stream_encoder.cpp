@@ -12,23 +12,13 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <variant>
 
+#include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
-
-namespace {
-
-constexpr std::string_view kActionTargetSymbolPrefix = "target:";
-constexpr std::string_view kTargetPositionsField = "target_positions";
-constexpr std::string_view kTargetIndicesField = "target_indices";
-constexpr std::string_view kTargetNamesAttr = "target_names";
-constexpr std::string_view kTargetSymbolPrefixAttr = "target_symbol_prefix";
-
-}  // namespace
 
 void HGraphEncoderEngine::append_edges(
    BatchBuilder& builder,
@@ -123,9 +113,7 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    workspace_.symbol_to_relations.clear();
    workspace_.relation_type_ids.clear();
    workspace_.relation_type_names.clear();
-   workspace_.action_target_positions.clear();
-   workspace_.action_target_indices.clear();
-   workspace_.action_target_names.clear();
+   workspace_.action_targets.clear();
 
    const size_t type_hint = relation_dict_.arity.size() + 4;
    workspace_.node_indices.reserve(type_hint);
@@ -344,41 +332,13 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
    }
 
    if(config_.export_action_targets) {
-      builder.register_field(
-         std::string(kTargetPositionsField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::RAGGED_CAT,
-            .dim = 1,
-            .cat_dim = 0,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::NODE_OFFSET,
-               .node_type = config_.symbol_type_id,
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kTargetIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::RAGGED_CAT,
-            .dim = 1,
-            .cat_dim = 0,
-            .inc = GraphFieldInc{},
-         }
-      );
-      builder.set_field(
-         std::string(kTargetPositionsField),
-         std::span< const int64_t >(workspace.action_target_positions)
-      );
-      builder.set_field(
-         std::string(kTargetIndicesField),
-         std::span< const int64_t >(workspace.action_target_indices)
-      );
-      builder.set_graph_attr(std::string(kTargetNamesAttr), workspace.action_target_names);
-      builder.set_graph_attr(
-         std::string(kTargetSymbolPrefixAttr), std::string(kActionTargetSymbolPrefix)
-      );
+      const TargetMetadataEmitConfig emit_config{
+         .symbol_type_id = config_.symbol_type_id,
+         .symbol_prefix = std::string(kDefaultTargetSymbolPrefix),
+         .include_depth = false,
+         .parent_relation = std::nullopt,
+      };
+      emit_target_metadata(builder, workspace.action_targets, emit_config);
    }
 
    ensure_empty_edge_types(builder);
@@ -635,15 +595,7 @@ void HGraphEncoderEngine::encode_actions(
 )
 {
    if(config_.export_action_targets) {
-      workspace_.action_target_positions.reserve(
-         workspace_.action_target_positions.size() + actions.size()
-      );
-      workspace_.action_target_indices.reserve(
-         workspace_.action_target_indices.size() + actions.size()
-      );
-      workspace_.action_target_names.reserve(
-         workspace_.action_target_names.size() + actions.size()
-      );
+      workspace_.action_targets.reserve(actions.size(), /*include_depth=*/false);
    }
 
    for(size_t action_pos = 0; action_pos < actions.size(); ++action_pos) {
@@ -659,13 +611,14 @@ void HGraphEncoderEngine::encode_actions(
       );
 
       const std::string action_symbol_key = fmt::format(
-         "{}{}", kActionTargetSymbolPrefix, action->get_index()
+         "{}{}", kDefaultTargetSymbolPrefix, action->get_index()
       );
       const std::string action_symbol_name = config_.export_node_names
                                                 ? fmt::format(
-                                                     "{}{}|{}",
-                                                     kActionTargetSymbolPrefix,
+                                                     "{}{}{}{}",
+                                                     kDefaultTargetSymbolPrefix,
                                                      action->get_index(),
+                                                     schema_key::kEdgeTypeSeparator,
                                                      action_name
                                                   )
                                                 : action_symbol_key;
@@ -674,9 +627,15 @@ void HGraphEncoderEngine::encode_actions(
       );
       const auto action_symbol_id = get_or_assign_special_symbol_id(action_symbol_key);
       if(config_.export_action_targets) {
-         workspace_.action_target_positions.push_back(action_symbol_idx);
-         workspace_.action_target_indices.push_back(static_cast< int64_t >(action_pos));
-         workspace_.action_target_names.push_back(action_name);
+         workspace_.action_targets.append(
+            TargetRecord{
+               .position = action_symbol_idx,
+               .index = static_cast< int64_t >(action_pos),
+               .depth = std::nullopt,
+               .name = action_name,
+            },
+            /*include_depth=*/false
+         );
       }
 
       std::vector< int64_t > object_symbol_ids;

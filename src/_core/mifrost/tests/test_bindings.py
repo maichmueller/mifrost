@@ -73,6 +73,31 @@ def test_batch_builder_basics():
     assert torch.equal(ptr, torch.tensor([0, 10, 20], dtype=torch.int64))
 
 
+def test_batch_builder_graph_attrs_are_exposed_as_top_level_pyg_attrs():
+    encoding = _single_graph_with_stack_field(1.0)
+    state = encoding.__getstate__()
+    state["graph_attrs"] = {"my_label": "demo", "my_ids": [3, 4]}
+    with_attrs = mifrost.BatchEncoding()
+    with_attrs.__setstate__(state)
+
+    data = with_attrs.as_pyg(as_batch=True)
+    assert hasattr(data, "my_label")
+    assert hasattr(data, "my_ids")
+    assert data.my_label == "demo"
+    assert list(data.my_ids) == [3, 4]
+
+
+def test_batch_builder_rejects_graph_attr_collision_with_pyg_keys():
+    encoding = _single_graph_with_stack_field(1.0)
+    state = encoding.__getstate__()
+    state["graph_attrs"] = {"x": "invalid"}
+    malformed = mifrost.BatchEncoding()
+    malformed.__setstate__(state)
+
+    with pytest.raises(ValueError, match="collides with a reserved/existing PyG key"):
+        malformed.as_pyg(as_batch=True)
+
+
 def test_batch_builder_exposes_registered_field_specs():
     builder = mifrost.BatchBuilder()
     builder.set_graph_kind("hetero")

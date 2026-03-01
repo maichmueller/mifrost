@@ -24,6 +24,7 @@
 #include "relation_dict.hpp"
 #include "relation_formatter.hpp"
 #include "stream_encoder_base.hpp"
+#include "target_metadata.hpp"
 
 namespace mifrost {
 
@@ -110,9 +111,7 @@ class HGraphEncoderEngine {
       std::vector< std::string > relation_type_names;
 
       /// Optional action-target metadata (input-order aligned) for target_* graph fields.
-      std::vector< int64_t > action_target_positions;
-      std::vector< int64_t > action_target_indices;
-      std::vector< std::string > action_target_names;
+      TargetColumns action_targets;
    };
 
    /// Runtime configuration controlling which relations/nodes/edges are emitted.

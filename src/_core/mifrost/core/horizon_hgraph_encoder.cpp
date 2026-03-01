@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
@@ -129,7 +130,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
       throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
    }
 
-   auto make_prefix = [](const std::string& target_key) { return target_key + "|"; };
+   auto make_prefix = [](const std::string& target_key) {
+      std::string prefix = target_key;
+      prefix.push_back(schema_key::kEdgeTypeSeparator);
+      return prefix;
+   };
 
    // Helpers for horizon-specific encoding (extra_objects first, prefixed node keys)
    auto encode_atoms_with_prefix = [&](
@@ -999,52 +1004,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
    // 6. LGAN edges
    maybe_add_lgan_edges(builder, workspace);
 
-   builder.register_field(
-      "target_positions",
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::RAGGED_CAT,
-         .dim = 1,
-         .cat_dim = 0,
-         .inc = GraphFieldInc{
-            .kind = GraphFieldInc::Kind::NODE_OFFSET,
-            .node_type = config_.symbol_type_id,
-         },
-      }
-   );
-   builder.register_field(
-      "target_indices",
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::RAGGED_CAT,
-         .dim = 1,
-         .cat_dim = 0,
-         .inc = GraphFieldInc{},
-      }
-   );
-   builder.register_field(
-      "target_depths",
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::RAGGED_CAT,
-         .dim = 1,
-         .cat_dim = 0,
-         .inc = GraphFieldInc{},
-      }
-   );
-
+   TargetColumns target_columns;
    if(not nodes.empty()) {
-      std::vector< int64_t > target_positions;
-      std::vector< int64_t > target_indices;
-      std::vector< int64_t > target_depths;
-      std::vector< std::string > target_names;
       const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
                                         ? (nodes.size() - 1)
                                         : nodes.size();
-      target_positions.reserve(candidate_count);
-      target_indices.reserve(candidate_count);
-      target_depths.reserve(candidate_count);
-      target_names.reserve(candidate_count);
+      target_columns.reserve(candidate_count, /*include_depth=*/true);
 
       const int root_index = dag.root_index();
       for(const auto& node : nodes) {
@@ -1060,22 +1025,28 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(it == workspace.symbol_indices.end()) {
             continue;
          }
-         target_positions.push_back(it->second);
-         target_indices.push_back(node.index);
-         target_depths.push_back(node.depth);
 
          std::ostringstream stream;
          stream << node.state;
-         target_names.emplace_back(stream.str());
+         target_columns.append(
+            TargetRecord{
+               .position = it->second,
+               .index = node.index,
+               .depth = node.depth,
+               .name = stream.str(),
+            },
+            /*include_depth=*/true
+         );
       }
-
-      builder.set_field("target_positions", std::span< const int64_t >(target_positions));
-      builder.set_field("target_indices", std::span< const int64_t >(target_indices));
-      builder.set_field("target_depths", std::span< const int64_t >(target_depths));
-      builder.set_graph_attr("target_names", std::move(target_names));
-      builder.set_graph_attr("target_symbol_prefix", horizon_config_.target_symbol_prefix);
-      builder.set_graph_attr("parent_relation", horizon_config_.parent_relation);
    }
+
+   const TargetMetadataEmitConfig target_emit_config{
+      .symbol_type_id = config_.symbol_type_id,
+      .symbol_prefix = horizon_config_.target_symbol_prefix,
+      .include_depth = true,
+      .parent_relation = horizon_config_.parent_relation,
+   };
+   emit_target_metadata(builder, target_columns, target_emit_config);
 
    std::vector< std::string > object_names_override;
    const std::vector< std::string >* object_names_override_ptr = nullptr;

@@ -119,6 +119,10 @@ def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks)
     assert positions[0] >= 0
     assert positions[1] >= 0
     assert data.target_positions_ptr.tolist() == [0, 2]
+    assert hasattr(data, "target_names")
+    assert hasattr(data, "target_symbol_prefix")
+    assert len(list(data.target_names)) == 2
+    assert data.target_symbol_prefix == "target:"
 
 
 def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
@@ -140,6 +144,8 @@ def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
     assert len(positions) == 2
     assert positions[0] == positions[1]
     assert data.target_positions_ptr.tolist() == [0, 2, 2]
+    assert isinstance(list(data.target_names), list)
+    assert data.target_symbol_prefix == "target:"
 
 
 def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_blocks):

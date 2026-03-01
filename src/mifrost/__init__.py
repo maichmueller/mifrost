@@ -20,6 +20,18 @@ else:
 
     from . import _core  # make _core cpp module explicitly available to re-export
     from .map_view import MapView, install_map_view_wrappers
+    from .schema_keys import (
+        BATCH_ATTR,
+        EDGE_INDEX_ATTR_PREFIX,
+        EDGE_INDEX_DST_COMPONENT,
+        EDGE_INDEX_KEY_PREFIX,
+        EDGE_INDEX_SRC_COMPONENT,
+        EDGE_TYPE_SEPARATOR,
+        PTR_ATTR,
+        TYPE_ATTR_SEPARATOR,
+        make_edge_type_key,
+        make_type_attr_key,
+    )
 
     install_map_view_wrappers(_core)
     _ABCMapping.register(_core.RelationDict)
@@ -134,6 +146,16 @@ else:
         "GraphFieldSpec",
         "CollateSpec",
         "MapView",
+        "TYPE_ATTR_SEPARATOR",
+        "EDGE_TYPE_SEPARATOR",
+        "EDGE_INDEX_ATTR_PREFIX",
+        "EDGE_INDEX_KEY_PREFIX",
+        "EDGE_INDEX_SRC_COMPONENT",
+        "EDGE_INDEX_DST_COMPONENT",
+        "PTR_ATTR",
+        "BATCH_ATTR",
+        "make_type_attr_key",
+        "make_edge_type_key",
     ]
 
     if _encoders_import_error is None:
