@@ -32,6 +32,7 @@ data = enc.as_pyg(as_batch=True)
 When enabled, HGraph emits:
 - `target_positions` (symbol-node positions with batch node-offset semantics)
 - `target_indices` (input action positions `0..n-1` per graph)
+- `target_candidate_ids` (row-aligned candidate identity; equals action input position)
 - `target_names` and `target_symbol_prefix`
 
 On `as_pyg(...)` outputs these attrs are available directly as top-level PyG attrs
@@ -58,6 +59,9 @@ enc = encoder.encode(
 
 - `HorizonEncoder` takes a root plus `TransitionDAG` (or `rustworkx.PyDiGraph`).
   Use `mifrost.transition_dag_from_rustworkx(...)` if you want an explicit conversion step.
+  The helper also supports
+  `fallback_missing_candidate_id_to_node_index=True` when importing partial
+  `candidate_id` metadata from `PyDiGraph` node payloads.
   In batch mode, `dags` may be passed as:
   - one shared DAG,
   - an aligned iterable of `TransitionDAG | rustworkx.PyDiGraph | None`,
@@ -69,6 +73,11 @@ enc = encoder.encode(
   pre-verify the incoming graph shape beyond the minimal import constraints needed to
   build a `TransitionDAG`; malformed inputs are treated as input errors and may fail
   during import or downstream encoding.
+- Horizon target metadata is row-aligned:
+  - `target_positions[i]`, `target_indices[i]`, and `target_candidate_ids[i]` refer to the same row.
+  - If no emitted target node has an explicit `candidate_id`, horizon uses DAG node index as
+    fallback candidate identity.
+  - If explicit candidate IDs are present, all emitted targets must provide one and they must be unique.
 - Horizon `target_indices` refer to `TransitionDAG` insertion-order node indices, not
   the original `rustworkx` node IDs.
 - Transition encoders require successor inputs (`successor` or `successors`). In batch mode,

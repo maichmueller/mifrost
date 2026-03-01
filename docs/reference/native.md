@@ -28,6 +28,11 @@ stored as a python shadow attribute.
 - `HorizonEncoder`: `TransitionDAG` node indices.
 - `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
 
+`target_candidate_ids` is row-aligned with `target_indices` and `target_positions`:
+- `HorizonEncoder`: explicit `TransitionDAG` node `candidate_id` values when provided for all
+  emitted targets; otherwise falls back to DAG node indices.
+- `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
+
 `BatchEncoding.as_pyg(...)` exposes native graph attrs as top-level PyG attrs
 (`data.target_names`, `data.target_symbol_prefix`, etc.). Collisions with
 reserved/structural PyG keys raise an error.
@@ -57,6 +62,13 @@ Python-side collation notes:
 
 - `mifrost.batch_encodings([...])`: merge single-graph encodings with schema checks.
 - `mifrost.encoding_to_tensors(encoding.as_dict())`: convert flat tensor payload to torch tensors.
+- `mifrost.transition_dag_from_rustworkx(graph, *, fallback_missing_candidate_id_to_node_index=False)`:
+  convert `rustworkx.PyDiGraph` to native `TransitionDAG`.
+
+`TransitionDAG.register_transition(...)` accepts:
+- `register_transition(parent, child, action=None, candidate_id=None)`
+- `register_transitions(records)` where each record may be either
+  `(parent, child, action)` or `(parent, child, action, candidate_id)`.
 
 Tensor payload note:
 

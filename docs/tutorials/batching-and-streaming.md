@@ -43,8 +43,14 @@ Use `mutable_stream()` when you need stable IDs and update/remove semantics.
 - `rustworkx` support is optional and stays on the Python side:
   `mifrost.transition_dag_from_rustworkx(...)` performs the same conversion explicitly,
   and direct `PyDiGraph` inputs are normalized to `TransitionDAG` before they reach C++.
+- Rustworkx candidate metadata import:
+  - node payload `candidate_id` (mapping key or attribute) maps to `TransitionDAG` node candidate IDs.
+  - partial candidate IDs fail by default; set
+    `fallback_missing_candidate_id_to_node_index=True` on explicit conversion to fill gaps.
 - The interop path assumes the `PyDiGraph` is already the correct single-root horizon
   DAG/tree. `mifrost` does not run a semantic DAG verification pass during conversion.
+- Horizon/HGraph target rows expose aligned identity metadata:
+  `target_positions[i]`, `target_indices[i]`, and `target_candidate_ids[i]` refer to the same target row.
 - Append-only stream intentionally does not provide `update/remove`.
 - Mutable stream provides ID-based mutation and merges cached entries at flush.
 - Both stream variants return native `BatchEncoding` via `flush()`.

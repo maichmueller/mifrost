@@ -52,6 +52,11 @@
 - `mifrost.transition_dag_from_rustworkx(...)` is the explicit conversion helper when
   you want to pre-normalize a `PyDiGraph` yourself. The integration is Python-level;
   there is no raw/native graph handoff into the C++ core.
+- `transition_dag_from_rustworkx(...)` reads per-node candidate identity from payload
+  `candidate_id` (mapping key or attribute). If candidate IDs are only partially present,
+  conversion fails by default; pass
+  `fallback_missing_candidate_id_to_node_index=True` to fill missing values from
+  rustworkx node indices.
 - `PyDiGraph` interop assumes the graph is already a valid horizon DAG/tree. The
   converter imports it directly into `TransitionDAG` and treats malformed graph
   structure as an input error.
