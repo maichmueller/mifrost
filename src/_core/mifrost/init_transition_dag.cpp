@@ -26,28 +26,57 @@ void init_transition_dag(nb::module_& m)
                         [](TransitionDAG& dag,
                            const mimir::search::State& parent,
                            const mimir::search::State& child,
-                           const std::optional< mimir::formalism::GroundAction >& action) {
-                           return dag.register_transition(parent, child, action);
+                           const std::optional< mimir::formalism::GroundAction >& action,
+                           const std::optional< int64_t >& candidate_id) {
+                           return dag.register_transition(parent, child, action, candidate_id);
                         },
                         "parent"_a,
                         "child"_a,
-                        "action"_a = std::nullopt
+                        "action"_a = std::nullopt,
+                        "candidate_id"_a = std::nullopt
                      )
                      .def(
                         "register_transitions",
                         [](TransitionDAG& dag, const nb::iterable& transitions) {
                            std::vector< TransitionDAG::TransitionRecord > records;
                            for(const auto entry : transitions) {
-                              auto [parent, child, action] = nb::cast< std::tuple<
-                                 mimir::search::State,
-                                 mimir::search::State,
-                                 std::optional< mimir::formalism::GroundAction > > >(entry);
-                              records.push_back(
-                                 TransitionDAG::TransitionRecord{
-                                    .parent = std::move(parent),
-                                    .child = std::move(child),
-                                    .action = std::move(action),
-                                 }
+                              if(not nb::isinstance< nb::tuple >(entry)) {
+                                 throw nb::type_error("register_transitions expects tuple records");
+                              }
+                              auto record = nb::cast< nb::tuple >(entry);
+                              if(nb::len(record) == 3) {
+                                 auto [parent, child, action] = nb::cast< std::tuple<
+                                    mimir::search::State,
+                                    mimir::search::State,
+                                    std::optional< mimir::formalism::GroundAction > > >(record);
+                                 records.push_back(
+                                    TransitionDAG::TransitionRecord{
+                                       .parent = std::move(parent),
+                                       .child = std::move(child),
+                                       .action = std::move(action),
+                                       .candidate_id = std::nullopt,
+                                    }
+                                 );
+                                 continue;
+                              }
+                              if(nb::len(record) == 4) {
+                                 auto [parent, child, action, candidate_id] = nb::cast< std::tuple<
+                                    mimir::search::State,
+                                    mimir::search::State,
+                                    std::optional< mimir::formalism::GroundAction >,
+                                    std::optional< int64_t > > >(record);
+                                 records.push_back(
+                                    TransitionDAG::TransitionRecord{
+                                       .parent = std::move(parent),
+                                       .child = std::move(child),
+                                       .action = std::move(action),
+                                       .candidate_id = candidate_id,
+                                    }
+                                 );
+                                 continue;
+                              }
+                              throw nb::type_error(
+                                 "register_transitions expects 3-tuple or 4-tuple records"
                               );
                            }
                            dag.register_transitions(records);
@@ -79,7 +108,8 @@ void init_transition_dag(nb::module_& m)
                       .def_ro("state", &TransitionDAG::Node::state)
                       .def_ro("index", &TransitionDAG::Node::index)
                       .def_ro("depth", &TransitionDAG::Node::depth)
-                      .def_ro("action", &TransitionDAG::Node::action);
+                      .def_ro("action", &TransitionDAG::Node::action)
+                      .def_ro("candidate_id", &TransitionDAG::Node::candidate_id);
 
    dag_cls.attr("Node") = node_cls;
 }

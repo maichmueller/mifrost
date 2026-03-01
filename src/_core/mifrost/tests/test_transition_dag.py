@@ -59,6 +59,7 @@ def test_transition_dag_basics(test_setup):
     assert nodes[0].index == 0
     assert nodes[0].depth == 0
     assert nodes[0].action is None
+    assert nodes[0].candidate_id is None
 
 
 def test_transition_dag_transitions(test_setup):
@@ -97,6 +98,32 @@ def test_transition_dag_transitions(test_setup):
     assert len(s) == 1
     assert s[0].state == succ_adv
     assert s[0].index == 1
+    assert s[0].candidate_id is None
+
+
+def test_transition_dag_candidate_id_assignment_and_conflicts(test_setup):
+    prob = test_setup
+    domain = prob.get_domain()
+    root = prob.get_initial_state()
+    root_adv = root._advanced_state
+
+    obj_a = prob.get_object("a")
+    action_schema = domain.get_action("test-action")
+    action_a = prob.new_ground_action(action_schema, [obj_a])
+    action_a_adv = action_a._advanced_ground_action
+    succ = action_a.apply(root)
+    succ_adv = succ._advanced_state
+
+    dag = mifrost.TransitionDAG(root_adv)
+    dag.register_transition(root_adv, succ_adv, action_a_adv, candidate_id=11)
+    assert dag.nodes()[1].candidate_id == 11
+
+    # Re-registering with the same candidate_id is allowed.
+    dag.register_transition(root_adv, succ_adv, action_a_adv, candidate_id=11)
+    assert dag.nodes()[1].candidate_id == 11
+
+    with pytest.raises(ValueError, match="conflicting candidate_id"):
+        dag.register_transition(root_adv, succ_adv, action_a_adv, candidate_id=12)
 
 
 def test_transition_dag_dag_property(test_setup):
@@ -177,7 +204,7 @@ def test_transition_dag_register_transitions_bulk_matches_incremental(test_setup
     bulk.register_transitions(
         [
             (root_adv, state_a_adv, action_a_adv),
-            (root_adv, state_b_adv, action_b_adv),
+            (root_adv, state_b_adv, action_b_adv, 42),
         ]
     )
 
@@ -188,6 +215,8 @@ def test_transition_dag_register_transitions_bulk_matches_incremental(test_setup
     assert [node.action for node in bulk.nodes()] == [
         node.action for node in incremental.nodes()
     ]
+    assert bulk.nodes()[1].candidate_id is None
+    assert bulk.nodes()[2].candidate_id == 42
 
 
 def test_transition_dag_register_transitions_accepts_unordered_edges(test_setup):
@@ -223,6 +252,8 @@ def test_transition_dag_register_transitions_accepts_unordered_edges(test_setup)
     assert bulk.depth(0) == 0
     assert bulk.depth(1) == 1
     assert bulk.depth(2) == 2
+    assert bulk.nodes()[1].candidate_id is None
+    assert bulk.nodes()[2].candidate_id is None
 
 
 if __name__ == "__main__":

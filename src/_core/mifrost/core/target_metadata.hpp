@@ -13,6 +13,7 @@ namespace mifrost {
 
 inline constexpr std::string_view kTargetPositionsField = "target_positions";
 inline constexpr std::string_view kTargetIndicesField = "target_indices";
+inline constexpr std::string_view kTargetCandidateIdsField = "target_candidate_ids";
 inline constexpr std::string_view kTargetDepthsField = "target_depths";
 inline constexpr std::string_view kTargetNamesAttr = "target_names";
 inline constexpr std::string_view kTargetSymbolPrefixAttr = "target_symbol_prefix";
@@ -22,6 +23,7 @@ inline constexpr std::string_view kParentRelationAttr = "parent_relation";
 struct TargetRecord {
    int64_t position = 0;
    int64_t index = 0;
+   std::optional< int64_t > candidate_id = std::nullopt;
    std::optional< int64_t > depth = std::nullopt;
    std::string name;
 };
@@ -29,6 +31,7 @@ struct TargetRecord {
 struct TargetColumns {
    std::vector< int64_t > positions;
    std::vector< int64_t > indices;
+   std::vector< int64_t > candidate_ids;
    std::vector< int64_t > depths;
    std::vector< std::string > names;
 

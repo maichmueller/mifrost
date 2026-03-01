@@ -13,6 +13,23 @@ from .test_utils import (
 )
 
 
+def _first_distinct_changed_transitions(space, root, count: int = 2):
+    out = []
+    seen_targets: set[str] = set()
+    root_repr = str(adv_state(root))
+    for action, target in space.get_forward_transitions(root):
+        if action is None or target is None:
+            continue
+        target_repr = str(adv_state(target))
+        if target_repr == root_repr or target_repr in seen_targets:
+            continue
+        seen_targets.add(target_repr)
+        out.append((action, target))
+        if len(out) >= count:
+            return out
+    pytest.skip("Fixture should yield enough distinct changed transitions")
+
+
 def test_horizon_encoder_target_mapping_and_order(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
@@ -106,8 +123,101 @@ def test_horizon_as_pyg_exposes_target_graph_attrs(small_blocks):
 
     assert hasattr(data, "target_names")
     assert hasattr(data, "target_symbol_prefix")
+    assert hasattr(data, "target_candidate_ids")
     assert data.target_symbol_prefix == encoder.target_symbol_prefix
     assert len(list(data.target_names)) == len(data.target_indices.tolist())
+    assert len(data.target_candidate_ids.tolist()) == len(data.target_indices.tolist())
+    assert data.target_candidate_ids.tolist() == data.target_indices.tolist()
+
+
+def test_horizon_target_candidate_ids_from_explicit_dag_ids(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, target0), (action1, target1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target0),
+        adv_action(action0),
+        candidate_id=101,
+    )
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target1),
+        adv_action(action1),
+        candidate_id=202,
+    )
+
+    data = (
+        mifrost.HorizonEncoder(domain)
+        .encode(root, dag=dag, goals=list(problem.get_goal_condition().get_literals()))
+        .as_pyg(as_batch=True)
+    )
+    index_to_candidate = dict(
+        zip(
+            data.target_indices.tolist(),
+            data.target_candidate_ids.tolist(),
+            strict=True,
+        )
+    )
+    assert index_to_candidate[dag.index(adv_state(target0))] == 101
+    assert index_to_candidate[dag.index(adv_state(target1))] == 202
+
+
+def test_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, target0), (action1, target1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target0),
+        adv_action(action0),
+        candidate_id=7,
+    )
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target1),
+        adv_action(action1),
+    )
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+    with pytest.raises(ValueError, match="missing candidate_id for target node index"):
+        encoder.encode(root, dag=dag, goals=goals)
+
+
+def test_horizon_rejects_duplicate_explicit_candidate_ids(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, target0), (action1, target1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target0),
+        adv_action(action0),
+        candidate_id=9,
+    )
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target1),
+        adv_action(action1),
+        candidate_id=9,
+    )
+
+    encoder = mifrost.HorizonEncoder(domain)
+    goals = list(problem.get_goal_condition().get_literals())
+    with pytest.raises(ValueError, match="duplicate candidate_id"):
+        encoder.encode(root, dag=dag, goals=goals)
 
 
 def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):

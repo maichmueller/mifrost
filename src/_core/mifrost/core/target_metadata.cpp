@@ -8,6 +8,7 @@ void TargetColumns::clear()
 {
    positions.clear();
    indices.clear();
+   candidate_ids.clear();
    depths.clear();
    names.clear();
 }
@@ -16,6 +17,7 @@ void TargetColumns::reserve(size_t count, bool include_depth)
 {
    positions.reserve(positions.size() + count);
    indices.reserve(indices.size() + count);
+   candidate_ids.reserve(candidate_ids.size() + count);
    names.reserve(names.size() + count);
    if(include_depth) {
       depths.reserve(depths.size() + count);
@@ -26,6 +28,10 @@ void TargetColumns::append(TargetRecord record, bool include_depth)
 {
    positions.push_back(record.position);
    indices.push_back(record.index);
+   if(not record.candidate_id.has_value()) {
+      throw std::invalid_argument("target record candidate_id is required for target metadata");
+   }
+   candidate_ids.push_back(*record.candidate_id);
    if(include_depth) {
       if(not record.depth.has_value()) {
          throw std::invalid_argument("target record depth is required for this target metadata");
@@ -40,6 +46,9 @@ void TargetColumns::validate(bool include_depth) const
    const size_t rows = positions.size();
    if(indices.size() != rows) {
       throw std::invalid_argument("target metadata has mismatched positions/indices lengths");
+   }
+   if(candidate_ids.size() != rows) {
+      throw std::invalid_argument("target metadata has mismatched positions/candidate_ids lengths");
    }
    if(names.size() != rows) {
       throw std::invalid_argument("target metadata has mismatched positions/names lengths");
@@ -85,6 +94,11 @@ GraphFieldSpec make_target_depths_spec()
    return make_target_indices_spec();
 }
 
+GraphFieldSpec make_target_candidate_ids_spec()
+{
+   return make_target_indices_spec();
+}
+
 }  // namespace
 
 void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config)
@@ -93,6 +107,7 @@ void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfi
       std::string(kTargetPositionsField), make_target_positions_spec(config.symbol_type_id)
    );
    builder.register_field(std::string(kTargetIndicesField), make_target_indices_spec());
+   builder.register_field(std::string(kTargetCandidateIdsField), make_target_candidate_ids_spec());
    if(config.include_depth) {
       builder.register_field(std::string(kTargetDepthsField), make_target_depths_spec());
    }
@@ -109,6 +124,9 @@ void set_target_fields(
       std::string(kTargetPositionsField), std::span< const int64_t >(columns.positions)
    );
    builder.set_field(std::string(kTargetIndicesField), std::span< const int64_t >(columns.indices));
+   builder.set_field(
+      std::string(kTargetCandidateIdsField), std::span< const int64_t >(columns.candidate_ids)
+   );
    if(config.include_depth) {
       builder.set_field(
          std::string(kTargetDepthsField), std::span< const int64_t >(columns.depths)

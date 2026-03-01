@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
 #include <loki/details/utils/hash.hpp>
 #include <mimir/formalism/ground_action.hpp>
 #include <mimir/search/state.hpp>
@@ -46,6 +47,7 @@ class TransitionDAG {
       mimir::search::State parent;
       mimir::search::State child;
       std::optional< mimir::formalism::GroundAction > action;
+      std::optional< int64_t > candidate_id;
    };
 
    /// One transition DAG node.
@@ -58,6 +60,8 @@ class TransitionDAG {
       int depth;
       /// Optional incoming action from parent to this node.
       std::optional< mimir::formalism::GroundAction > action;
+      /// Optional caller-provided candidate identity for this node.
+      std::optional< int64_t > candidate_id;
    };
 
    /**
@@ -78,7 +82,8 @@ class TransitionDAG {
    std::pair< int, int > register_transition(
       const mimir::search::State& parent,
       const mimir::search::State& child,
-      std::optional< mimir::formalism::GroundAction > action = std::nullopt
+      std::optional< mimir::formalism::GroundAction > action = std::nullopt,
+      std::optional< int64_t > candidate_id = std::nullopt
    );
 
    /**
@@ -98,7 +103,24 @@ class TransitionDAG {
       bool has_records = false;
       for(auto&& rec : transitions) {
          has_records = true;
-         register_transition_impl(rec.parent, rec.child, rec.action, false, false);
+         const auto candidate_id = [&]() -> std::optional< int64_t > {
+            if constexpr(requires { rec.candidate_id; }) {
+               using candidate_ref_t = detail::raw_t< decltype(rec.candidate_id) >;
+               if constexpr(std::is_convertible_v< candidate_ref_t, std::optional< int64_t > >) {
+                  return static_cast< std::optional< int64_t > >(rec.candidate_id);
+               } else if constexpr(std::is_convertible_v< candidate_ref_t, int64_t >) {
+                  return std::optional< int64_t >{static_cast< int64_t >(rec.candidate_id)};
+               } else {
+                  static_assert(
+                     std::is_convertible_v< candidate_ref_t, std::optional< int64_t > >
+                        or std::is_convertible_v< candidate_ref_t, int64_t >,
+                     "candidate_id must be convertible to optional<int64_t> or int64_t"
+                  );
+               }
+            }
+            return std::nullopt;
+         }();
+         register_transition_impl(rec.parent, rec.child, rec.action, candidate_id, false, false);
       }
       if(has_records) {
          finalize_depths();
@@ -164,13 +186,17 @@ class TransitionDAG {
   private:
    int get_or_add_node(
       const mimir::search::State& state,
-      const std::optional< mimir::formalism::GroundAction >& action_for_new_node
+      const std::optional< mimir::formalism::GroundAction >& action_for_new_node,
+      const std::optional< int64_t >& candidate_id_for_new_node
    );
+
+   void set_or_validate_candidate_id(int node_idx, const std::optional< int64_t >& candidate_id);
 
    std::pair< int, int > register_transition_impl(
       const mimir::search::State& parent,
       const mimir::search::State& child,
       const std::optional< mimir::formalism::GroundAction >& action,
+      const std::optional< int64_t >& candidate_id,
       bool recompute_depths,
       bool require_parent_exists
    );

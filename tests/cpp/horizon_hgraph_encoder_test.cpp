@@ -53,6 +53,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       ASSERT_NE(builder.graph_fields, nullptr);
       EXPECT_TRUE(builder.graph_fields->contains("target_positions"));
       EXPECT_TRUE(builder.graph_fields->contains("target_indices"));
+      EXPECT_TRUE(builder.graph_fields->contains("target_candidate_ids"));
       EXPECT_TRUE(builder.graph_fields->contains("target_depths"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_names"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_symbol_prefix"));
@@ -64,6 +65,9 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       const auto& indices = std::get< std::vector< int64_t > >(
          builder.graph_fields->at("target_indices").values
       );
+      const auto& candidate_ids = std::get< std::vector< int64_t > >(
+         builder.graph_fields->at("target_candidate_ids").values
+      );
       const auto& depths = std::get< std::vector< int64_t > >(
          builder.graph_fields->at("target_depths").values
       );
@@ -72,6 +76,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       );
 
       ASSERT_EQ(positions.size(), indices.size());
+      ASSERT_EQ(positions.size(), candidate_ids.size());
       ASSERT_EQ(positions.size(), depths.size());
       ASSERT_EQ(positions.size(), names.size());
       const size_t expected_candidates = config.exclude_root_candidate
@@ -105,6 +110,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
          ASSERT_NE(sym_it, symbol_indices.end()) << "Missing target symbol node: " << key;
          ASSERT_LT(candidate_pos, positions.size());
          EXPECT_EQ(indices[candidate_pos], node.index);
+         EXPECT_EQ(candidate_ids[candidate_pos], node.index);
          EXPECT_EQ(positions[candidate_pos], sym_it->second);
          EXPECT_EQ(depths[candidate_pos], node.depth);
          ++candidate_pos;
@@ -120,6 +126,115 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
          }
       }
    }
+}
+
+TEST_P(HorizonHGraphEncoderTest, RejectsPartialExplicitCandidateIds)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   std::vector< std::pair< mimir::search::State, mimir::formalism::GroundAction > > successors;
+   for(const auto& action : ctx.actions) {
+      auto [succ_state, _metric] = ctx.repo->get_or_create_successor_state(
+         ctx.root, action, ctx.root_metric
+      );
+      if(succ_state.get_index() == ctx.root.get_index()) {
+         continue;
+      }
+      bool seen = false;
+      for(const auto& existing : successors) {
+         if(existing.first.get_index() == succ_state.get_index()) {
+            seen = true;
+            break;
+         }
+      }
+      if(not seen) {
+         successors.emplace_back(succ_state, action);
+      }
+      if(successors.size() >= 2) {
+         break;
+      }
+   }
+   if(successors.size() < 2) {
+      GTEST_SKIP() << "Need two distinct successors for partial candidate-id validation.";
+   }
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, successors[0].first, successors[0].second, int64_t{101});
+   dag.register_transition(ctx.root, successors[1].first, successors[1].second, std::nullopt);
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain());
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   EXPECT_THROW(
+      {
+         try {
+            engine.encode(ctx.root, dag, goals, builder);
+         } catch(const std::invalid_argument& e) {
+            EXPECT_NE(
+               std::string(e.what()).find("missing candidate_id for target node index"),
+               std::string::npos
+            );
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
+}
+
+TEST_P(HorizonHGraphEncoderTest, RejectsDuplicateExplicitCandidateIds)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   std::vector< std::pair< mimir::search::State, mimir::formalism::GroundAction > > successors;
+   for(const auto& action : ctx.actions) {
+      auto [succ_state, _metric] = ctx.repo->get_or_create_successor_state(
+         ctx.root, action, ctx.root_metric
+      );
+      if(succ_state.get_index() == ctx.root.get_index()) {
+         continue;
+      }
+      bool seen = false;
+      for(const auto& existing : successors) {
+         if(existing.first.get_index() == succ_state.get_index()) {
+            seen = true;
+            break;
+         }
+      }
+      if(not seen) {
+         successors.emplace_back(succ_state, action);
+      }
+      if(successors.size() >= 2) {
+         break;
+      }
+   }
+   if(successors.size() < 2) {
+      GTEST_SKIP() << "Need two distinct successors for duplicate candidate-id validation.";
+   }
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, successors[0].first, successors[0].second, int64_t{9});
+   dag.register_transition(ctx.root, successors[1].first, successors[1].second, int64_t{9});
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain());
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   EXPECT_THROW(
+      {
+         try {
+            engine.encode(ctx.root, dag, goals, builder);
+         } catch(const std::invalid_argument& e) {
+            EXPECT_NE(std::string(e.what()).find("duplicate candidate_id"), std::string::npos);
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
 }
 
 INSTANTIATE_TEST_SUITE_P(

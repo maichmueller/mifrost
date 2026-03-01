@@ -42,6 +42,7 @@ def _assert_same_dag(left: mifrost.TransitionDAG, right: mifrost.TransitionDAG) 
         assert left_node.index == right_node.index
         assert left_node.depth == right_node.depth
         assert left_node.action == right_node.action
+        assert left_node.candidate_id == right_node.candidate_id
 
 
 def test_transition_dag_from_rustworkx_is_reexported():
@@ -227,3 +228,83 @@ def test_transition_dag_from_rustworkx_preserves_parallel_edges_in_transition_li
 
     assert dag.transitions() == [(0, 1), (0, 1)]
     assert dag.action(1) == adv_action(action0)
+
+
+def test_transition_dag_from_rustworkx_reads_candidate_id_from_mapping_payload(
+    small_blocks,
+):
+    space, _domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, succ0), _ = _first_distinct_changed_transitions(space, root, count=2)
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node({"state": root})
+    succ_idx = graph.add_node({"state": succ0, "candidate_id": 123})
+    graph.add_edge(root_idx, succ_idx, action0)
+
+    dag = transition_dag_from_rustworkx(graph)
+    assert dag.nodes()[0].candidate_id is None
+    assert dag.nodes()[dag.index(adv_state(succ0))].candidate_id == 123
+
+
+def test_transition_dag_from_rustworkx_rejects_partial_candidate_id_metadata(
+    small_blocks,
+):
+    space, _domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, succ0), (action1, succ1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node({"state": root})
+    succ0_idx = graph.add_node({"state": succ0, "candidate_id": 1})
+    succ1_idx = graph.add_node({"state": succ1})
+    graph.add_edge(root_idx, succ0_idx, action0)
+    graph.add_edge(root_idx, succ1_idx, action1)
+
+    with pytest.raises(ValueError, match="partial candidate_id coverage"):
+        transition_dag_from_rustworkx(graph)
+
+
+def test_transition_dag_from_rustworkx_can_fill_missing_candidate_ids_with_node_index(
+    small_blocks,
+):
+    space, _domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, succ0), (action1, succ1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node({"state": root})
+    succ0_idx = graph.add_node({"state": succ0, "candidate_id": 7})
+    succ1_idx = graph.add_node({"state": succ1})
+    graph.add_edge(root_idx, succ0_idx, action0)
+    graph.add_edge(root_idx, succ1_idx, action1)
+
+    dag = transition_dag_from_rustworkx(
+        graph, fallback_missing_candidate_id_to_node_index=True
+    )
+    succ0_node_idx = dag.index(adv_state(succ0))
+    succ1_node_idx = dag.index(adv_state(succ1))
+    assert dag.nodes()[succ0_node_idx].candidate_id == 7
+    assert dag.nodes()[succ1_node_idx].candidate_id == succ1_idx
+
+
+def test_transition_dag_from_rustworkx_rejects_duplicate_candidate_ids(small_blocks):
+    space, _domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action0, succ0), (action1, succ1) = _first_distinct_changed_transitions(
+        space, root, count=2
+    )
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node({"state": root})
+    succ0_idx = graph.add_node({"state": succ0, "candidate_id": 5})
+    succ1_idx = graph.add_node({"state": succ1, "candidate_id": 5})
+    graph.add_edge(root_idx, succ0_idx, action0)
+    graph.add_edge(root_idx, succ1_idx, action1)
+
+    with pytest.raises(ValueError, match="duplicate candidate_id"):
+        transition_dag_from_rustworkx(graph)

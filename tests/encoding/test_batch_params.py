@@ -246,12 +246,18 @@ def test_horizon_batch_param_supports_shared_and_separate_dags(small_blocks):
     assert shared.num_graphs == 2
     assert hetero_data_equal(shared, repeated_shared)
     assert shared.get_field("target_indices").numel() == 2
+    assert shared.get_field("target_candidate_ids").numel() == 2
+    assert (
+        shared.get_field("target_candidate_ids").tolist()
+        == shared.get_field("target_indices").tolist()
+    )
     no_dags = encoder.encode_batch(
         [root, root],
         dags=BatchParam.none(),
         goals=[goals, goals],
     )
     assert no_dags.get_field("target_indices").numel() == 0
+    assert no_dags.get_field("target_candidate_ids").numel() == 0
     assert shared.num_nodes > no_dags.num_nodes
     assert shared.num_edges > no_dags.num_edges
 
@@ -263,6 +269,8 @@ def test_horizon_batch_param_supports_shared_and_separate_dags(small_blocks):
     assert separate.num_graphs == 2
     assert separate.get_field("target_indices").numel() == 1
     assert separate.get_field("target_indices_ptr").tolist() == [0, 1, 1]
+    assert separate.get_field("target_candidate_ids").numel() == 1
+    assert separate.get_field("target_candidate_ids_ptr").tolist() == [0, 1, 1]
 
     explicit_none = encoder.encode_batch(
         [root],

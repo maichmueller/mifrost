@@ -1,8 +1,10 @@
 #include "transition_dag.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <queue>
 #include <stdexcept>
+#include <string>
 
 namespace mifrost {
 
@@ -11,13 +13,20 @@ TransitionDAG::TransitionDAG(mimir::search::State root) : root_(std::move(root))
    const auto index = next_index_++;
    state_to_index_.emplace(root_, index);
    nodes_ordered_.push_back(
-      Node{.state = root_, .index = index, .depth = 0, .action = std::nullopt}
+      Node{
+         .state = root_,
+         .index = index,
+         .depth = 0,
+         .action = std::nullopt,
+         .candidate_id = std::nullopt,
+      }
    );
 }
 
 int TransitionDAG::get_or_add_node(
    const mimir::search::State& state,
-   const std::optional< mimir::formalism::GroundAction >& action_for_new_node
+   const std::optional< mimir::formalism::GroundAction >& action_for_new_node,
+   const std::optional< int64_t >& candidate_id_for_new_node
 )
 {
    auto it = state_to_index_.find(state);
@@ -26,6 +35,7 @@ int TransitionDAG::get_or_add_node(
       if(action_for_new_node.has_value() and not nodes_ordered_[existing_idx].action.has_value()) {
          nodes_ordered_[existing_idx].action = action_for_new_node;
       }
+      set_or_validate_candidate_id(existing_idx, candidate_id_for_new_node);
       return existing_idx;
    }
 
@@ -35,16 +45,38 @@ int TransitionDAG::get_or_add_node(
       .index = idx,
       .depth = -1,
       .action = action_for_new_node,
+      .candidate_id = candidate_id_for_new_node,
    };
    state_to_index_.emplace(state, idx);
    nodes_ordered_.push_back(std::move(node));
    return idx;
 }
 
+void TransitionDAG::set_or_validate_candidate_id(
+   const int node_idx,
+   const std::optional< int64_t >& candidate_id
+)
+{
+   if(not candidate_id.has_value()) {
+      return;
+   }
+   auto& node = nodes_ordered_[static_cast< size_t >(node_idx)];
+   if(not node.candidate_id.has_value()) {
+      node.candidate_id = candidate_id;
+      return;
+   }
+   if(node.candidate_id != candidate_id) {
+      throw std::invalid_argument(
+         "conflicting candidate_id for node index " + std::to_string(node_idx)
+      );
+   }
+}
+
 std::pair< int, int > TransitionDAG::register_transition_impl(
    const mimir::search::State& parent,
    const mimir::search::State& child,
    const std::optional< mimir::formalism::GroundAction >& action,
+   const std::optional< int64_t >& candidate_id,
    const bool recompute_depths,
    const bool require_parent_exists
 )
@@ -53,9 +85,10 @@ std::pair< int, int > TransitionDAG::register_transition_impl(
       throw std::invalid_argument("Parent state not in DAG");
    }
 
-   const int parent_idx = require_parent_exists ? state_to_index_.at(parent)
-                                                : get_or_add_node(parent, std::nullopt);
-   const int child_idx = get_or_add_node(child, action);
+   const int parent_idx = require_parent_exists
+                             ? state_to_index_.at(parent)
+                             : get_or_add_node(parent, std::nullopt, std::nullopt);
+   const int child_idx = get_or_add_node(child, action, candidate_id);
 
    adjacency_[parent_idx].push_back(child_idx);
 
@@ -69,10 +102,11 @@ std::pair< int, int > TransitionDAG::register_transition_impl(
 std::pair< int, int > TransitionDAG::register_transition(
    const mimir::search::State& parent,
    const mimir::search::State& child,
-   const std::optional< mimir::formalism::GroundAction > action
+   const std::optional< mimir::formalism::GroundAction > action,
+   const std::optional< int64_t > candidate_id
 )
 {
-   return register_transition_impl(parent, child, action, true, true);
+   return register_transition_impl(parent, child, action, candidate_id, true, true);
 }
 
 int TransitionDAG::index(const mimir::search::State& state) const

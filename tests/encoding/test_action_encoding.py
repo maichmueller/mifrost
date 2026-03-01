@@ -110,10 +110,13 @@ def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks)
 
     assert encoding.has_field("target_positions")
     assert encoding.has_field("target_indices")
+    assert encoding.has_field("target_candidate_ids")
     positions = data.target_positions.tolist()
 
     assert data.target_indices.tolist() == [0, 1]
+    assert data.target_candidate_ids.tolist() == [0, 1]
     assert data.target_indices_ptr.tolist() == [0, 2]
+    assert data.target_candidate_ids_ptr.tolist() == [0, 2]
     assert len(positions) == 2
     assert positions[0] != positions[1]
     assert positions[0] >= 0
@@ -138,9 +141,12 @@ def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
 
     assert encoding.has_field("target_positions")
     assert encoding.has_field("target_indices")
+    assert encoding.has_field("target_candidate_ids")
     positions = data.target_positions.tolist()
     assert data.target_indices.tolist() == [0, 1]
+    assert data.target_candidate_ids.tolist() == [0, 1]
     assert data.target_indices_ptr.tolist() == [0, 2, 2]
+    assert data.target_candidate_ids_ptr.tolist() == [0, 2, 2]
     assert len(positions) == 2
     assert positions[0] == positions[1]
     assert data.target_positions_ptr.tolist() == [0, 2, 2]

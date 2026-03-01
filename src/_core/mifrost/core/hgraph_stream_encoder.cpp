@@ -631,6 +631,7 @@ void HGraphEncoderEngine::encode_actions(
             TargetRecord{
                .position = action_symbol_idx,
                .index = static_cast< int64_t >(action_pos),
+               .candidate_id = static_cast< int64_t >(action_pos),
                .depth = std::nullopt,
                .name = action_name,
             },

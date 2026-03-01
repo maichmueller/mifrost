@@ -1009,9 +1009,17 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
                                         ? (nodes.size() - 1)
                                         : nodes.size();
-      target_columns.reserve(candidate_count, /*include_depth=*/true);
-
       const int root_index = dag.root_index();
+      struct CandidateRow {
+         int64_t position = 0;
+         int64_t index = 0;
+         int64_t depth = 0;
+         std::optional< int64_t > explicit_candidate_id = std::nullopt;
+         std::string name;
+      };
+      std::vector< CandidateRow > candidate_rows;
+      candidate_rows.reserve(candidate_count);
+
       for(const auto& node : nodes) {
          if(horizon_config_.exclude_root_candidate and node.index == root_index) {
             continue;
@@ -1028,12 +1036,49 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
          std::ostringstream stream;
          stream << node.state;
-         target_columns.append(
-            TargetRecord{
+         candidate_rows.push_back(
+            CandidateRow{
                .position = it->second,
                .index = node.index,
                .depth = node.depth,
+               .explicit_candidate_id = node.candidate_id,
                .name = stream.str(),
+            }
+         );
+      }
+
+      bool has_explicit_candidate_ids = false;
+      std::optional< int64_t > first_missing_candidate_id_node = std::nullopt;
+      for(const auto& row : candidate_rows) {
+         if(row.explicit_candidate_id.has_value()) {
+            has_explicit_candidate_ids = true;
+         } else if(not first_missing_candidate_id_node.has_value()) {
+            first_missing_candidate_id_node = row.index;
+         }
+      }
+      if(has_explicit_candidate_ids and first_missing_candidate_id_node.has_value()) {
+         throw std::invalid_argument(
+            "missing candidate_id for target node index "
+            + std::to_string(*first_missing_candidate_id_node)
+         );
+      }
+
+      target_columns.reserve(candidate_rows.size(), /*include_depth=*/true);
+      hash_set< int64_t > seen_candidate_ids;
+      seen_candidate_ids.reserve(candidate_rows.size());
+      for(const auto& row : candidate_rows) {
+         const int64_t candidate_id = has_explicit_candidate_ids ? *row.explicit_candidate_id
+                                                                 : row.index;
+         if(not seen_candidate_ids.emplace(candidate_id).second) {
+            throw std::invalid_argument("duplicate candidate_id " + std::to_string(candidate_id));
+         }
+         target_columns.append(
+            TargetRecord{
+               .position = row.position,
+               .index = row.index,
+               .candidate_id = candidate_id,
+               .depth = row.depth,
+               .name = row.name,
             },
             /*include_depth=*/true
          );
