@@ -57,6 +57,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def_rw("include_lgan_edges", &HGraphEncoderEngine::Config::include_lgan_edges)
       .def_rw("include_empty_edge_types", &HGraphEncoderEngine::Config::include_empty_edge_types)
       .def_rw("export_node_names", &HGraphEncoderEngine::Config::export_node_names)
+      .def_rw("export_action_targets", &HGraphEncoderEngine::Config::export_action_targets)
       .def_rw("history_link_relation", &HGraphEncoderEngine::Config::history_link_relation)
       .def_rw(
          "lgan_nn_edge_pos",

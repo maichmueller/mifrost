@@ -83,6 +83,65 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
             ), f"Missing edge {obj_name} -> {action_node} at position {pos}."
 
 
+def test_hgraph_action_target_metadata_mode_is_opt_in(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    encoding = encoder.encode_batch([state], actions=[[action0]])
+    data = encoding.as_pyg(as_batch=True)
+
+    assert not encoding.has_field("target_positions")
+    assert not encoding.has_field("target_indices")
+    assert not hasattr(data, "target_positions")
+    assert not hasattr(data, "target_indices")
+    assert not hasattr(data, "target_names")
+
+
+def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+    encoding = encoder.encode_batch([state], actions=[[action0, action1]])
+    data = encoding.as_pyg(as_batch=True)
+
+    assert encoding.has_field("target_positions")
+    assert encoding.has_field("target_indices")
+    positions = data.target_positions.tolist()
+
+    assert data.target_indices.tolist() == [0, 1]
+    assert data.target_indices_ptr.tolist() == [0, 2]
+    assert len(positions) == 2
+    assert positions[0] != positions[1]
+    assert positions[0] >= 0
+    assert positions[1] >= 0
+    assert data.target_positions_ptr.tolist() == [0, 2]
+
+
+def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+    encoding = encoder.encode_batch([state, state], actions=[[action0, action0], []])
+    data = encoding.as_pyg(as_batch=True)
+
+    assert encoding.has_field("target_positions")
+    assert encoding.has_field("target_indices")
+    positions = data.target_positions.tolist()
+    assert data.target_indices.tolist() == [0, 1]
+    assert data.target_indices_ptr.tolist() == [0, 2, 2]
+    assert len(positions) == 2
+    assert positions[0] == positions[1]
+    assert data.target_positions_ptr.tolist() == [0, 2, 2]
+
+
 def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

@@ -108,6 +108,11 @@ class HGraphEncoderEngine {
       /// Per-encode node-type interning used by RelationRef.
       hash_map< std::string, uint32_t > relation_type_ids;
       std::vector< std::string > relation_type_names;
+
+      /// Optional action-target metadata (input-order aligned) for target_* graph fields.
+      std::vector< int64_t > action_target_positions;
+      std::vector< int64_t > action_target_indices;
+      std::vector< std::string > action_target_names;
    };
 
    /// Runtime configuration controlling which relations/nodes/edges are emitted.
@@ -124,6 +129,7 @@ class HGraphEncoderEngine {
       bool include_static = true;
       bool include_empty_edge_types = true;
       bool export_node_names = true;
+      bool export_action_targets = false;
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 
@@ -571,6 +577,7 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     include_empty_edge_types,
     export_node_names,
+    export_action_targets,
     goal_satisfaction_derivations)
 )
 

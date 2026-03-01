@@ -9,9 +9,12 @@ import mifrost
 
 
 def test_hgraph_config_accepts_kwargs() -> None:
-    config = mifrost.HGraphEncoderConfig(include_static=False, symbol_type_id="_sym_")
+    config = mifrost.HGraphEncoderConfig(
+        include_static=False, symbol_type_id="_sym_", export_action_targets=True
+    )
     assert config.include_static is False
     assert config.symbol_type_id == "_sym_"
+    assert config.export_action_targets is True
 
 
 def test_hgraph_config_goal_satisfaction_derivations_accepts_string_aliases() -> None:
