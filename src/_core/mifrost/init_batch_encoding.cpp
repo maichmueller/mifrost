@@ -1706,7 +1706,10 @@ void init_batch_encoding(nb::module_& m)
          },
          "device"_a,
          nb::rv_policy::reference_internal
-      );
+      )
+      .def("__getattr__", [](HeteroBatchEncodingView& view, const std::string& key) -> nb::object {
+         return nb::borrow< nb::object >(view.base()).attr(key.c_str());
+      });
 
    nb::class_< HomoBatchEncodingView >(m, "HomoBatchEncodingView")
       .def_prop_ro("num_graphs", &HomoBatchEncodingView::num_graphs)
@@ -1742,7 +1745,10 @@ void init_batch_encoding(nb::module_& m)
          },
          "device"_a,
          nb::rv_policy::reference_internal
-      );
+      )
+      .def("__getattr__", [](HomoBatchEncodingView& view, const std::string& key) -> nb::object {
+         return nb::borrow< nb::object >(view.base()).attr(key.c_str());
+      });
 
    auto batch_encoding_cls =
       nb::class_< BatchBuilder::BatchEncoding >(m, "BatchEncoding", nb::dynamic_attr())
