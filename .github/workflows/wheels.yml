@@ -24,7 +24,7 @@ jobs:
         submodules: true
 
     - name: Download generated stubs
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: mifrost-stubs
         path: src/mifrost
@@ -38,7 +38,7 @@ jobs:
     - name: Check metadata
       run: pipx run twine check dist/*
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: dist-sdist
         path: dist/*.tar.gz
@@ -91,7 +91,7 @@ jobs:
         test -s src/mifrost/_core.pyi
 
     - name: Upload generated stubs
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: mifrost-stubs
         path: src/mifrost/_core.pyi
@@ -138,7 +138,7 @@ jobs:
         python-version: "3.12"
 
     - name: Download generated stubs
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: mifrost-stubs
         path: src/mifrost
@@ -243,7 +243,7 @@ jobs:
         PY
 
     - name: Upload wheels
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         path: wheelhouse/*.whl
         name: dist-${{ matrix.os }}-${{ matrix.flavor }}
@@ -256,7 +256,7 @@ jobs:
 
     steps:
     - uses: actions/setup-python@v6
-    - uses: actions/download-artifact@v7
+    - uses: actions/download-artifact@v8
       with:
         path: dist
         pattern: dist-*

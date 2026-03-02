@@ -58,7 +58,7 @@ jobs:
           key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mifrost-wheel
           path: wheelhouse/*.whl
@@ -79,7 +79,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: mifrost-wheel
           path: wheelhouse
@@ -97,7 +97,7 @@ jobs:
         run: python docs/_scripts/generate_snippet_includes.py
 
       - name: Upload snippet includes
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mifrost-snippet-includes
           path: docs/_includes
@@ -118,7 +118,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download snippet includes
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: mifrost-snippet-includes
           path: docs
