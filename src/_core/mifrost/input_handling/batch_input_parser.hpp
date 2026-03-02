@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "mifrost/core/api.hpp"
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/transition_dag.hpp"
@@ -71,12 +72,12 @@ class BatchParam {
 
 namespace parsed {
 
-struct StateEntry {
+struct MIFROST_LOCAL StateEntry {
    nb::object source;
    mimir::search::State state;
 };
 
-struct StateBatch {
+struct MIFROST_LOCAL StateBatch {
    std::vector< StateEntry > states;
 };
 
@@ -93,7 +94,7 @@ using HistoryBatch = BatchParam< HistoryPayload >;
 using DagBatch = BatchParam< TransitionDAG >;
 using SuccessorBatch = BatchParam< StateEntry >;
 
-struct HGraphBatchInputs {
+struct MIFROST_LOCAL HGraphBatchInputs {
    StateBatch states;
    GoalBatch goals;
    ActionBatch actions;
@@ -101,20 +102,20 @@ struct HGraphBatchInputs {
    HistoryBatch history_subgoals;
 };
 
-struct ColorBatchInputs {
+struct MIFROST_LOCAL ColorBatchInputs {
    StateBatch states;
    GoalBatch goals;
    SubgoalLayersBatch subgoal_layers;
 };
 
-struct SuccessorBatchInputs {
+struct MIFROST_LOCAL SuccessorBatchInputs {
    StateBatch states;
    SuccessorBatch successors;
    GoalBatch goals;
    SubgoalLayersBatch subgoal_layers;
 };
 
-struct HorizonBatchInputs {
+struct MIFROST_LOCAL HorizonBatchInputs {
    StateBatch roots;
    DagBatch dags;
    GoalBatch goals;
@@ -123,31 +124,32 @@ struct HorizonBatchInputs {
 
 }  // namespace parsed
 
-parsed::StateBatch
+MIFROST_LOCAL parsed::StateBatch
 parse_states_batch_param(nb::handle states, std::string_view field_name = "states");
 
-parsed::GoalBatch parse_goals_batch_param(nb::handle goals, size_t state_count);
+MIFROST_LOCAL parsed::GoalBatch parse_goals_batch_param(nb::handle goals, size_t state_count);
 
-parsed::ActionBatch parse_actions_batch_param(nb::handle actions, size_t state_count);
+MIFROST_LOCAL parsed::ActionBatch parse_actions_batch_param(nb::handle actions, size_t state_count);
 
-parsed::SubgoalLayersBatch
+MIFROST_LOCAL parsed::SubgoalLayersBatch
 parse_subgoal_layers_batch_param(nb::handle subgoal_layers, size_t state_count);
 
-parsed::HistoryBatch
+MIFROST_LOCAL parsed::HistoryBatch
 parse_history_subgoals_batch_param(nb::handle history_subgoals, size_t state_count);
 
-parsed::SuccessorBatch parse_successors_batch_param(nb::handle successors, size_t state_count);
+MIFROST_LOCAL parsed::SuccessorBatch
+parse_successors_batch_param(nb::handle successors, size_t state_count);
 
-parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count);
+MIFROST_LOCAL parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count);
 
-GoalInputs compose_goal_inputs(
+MIFROST_LOCAL GoalInputs compose_goal_inputs(
    const parsed::GoalPayload& goals,
    const parsed::SubgoalLayersPayload* subgoal_layers = nullptr
 );
 
-GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_entry);
+MIFROST_LOCAL GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_entry);
 
-parsed::HGraphBatchInputs parse_hgraph_batch_inputs(
+MIFROST_LOCAL parsed::HGraphBatchInputs parse_hgraph_batch_inputs(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,
@@ -155,14 +157,14 @@ parsed::HGraphBatchInputs parse_hgraph_batch_inputs(
    nb::handle history_subgoals
 );
 
-parsed::ColorBatchInputs parse_color_batch_inputs(
+MIFROST_LOCAL parsed::ColorBatchInputs parse_color_batch_inputs(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,
    nb::handle subgoal_layers
 );
 
-parsed::SuccessorBatchInputs parse_successor_batch_inputs(
+MIFROST_LOCAL parsed::SuccessorBatchInputs parse_successor_batch_inputs(
    nb::handle states,
    nb::handle successors,
    nb::handle goals,
@@ -172,7 +174,7 @@ parsed::SuccessorBatchInputs parse_successor_batch_inputs(
    std::optional< int > history_max_steps
 );
 
-parsed::HorizonBatchInputs parse_horizon_batch_inputs(
+MIFROST_LOCAL parsed::HorizonBatchInputs parse_horizon_batch_inputs(
    nb::handle roots,
    nb::handle dags,
    nb::handle goals,
@@ -182,15 +184,17 @@ parsed::HorizonBatchInputs parse_horizon_batch_inputs(
    std::optional< int > history_max_steps
 );
 
-nb::list parse_states_batch_python(nb::handle states);
-nb::tuple parse_goals_batch_param_python(nb::handle goals, size_t state_count);
-nb::tuple parse_actions_batch_param_python(nb::handle actions, size_t state_count);
-nb::tuple parse_subgoal_layers_batch_param_python(nb::handle subgoal_layers, size_t state_count);
-nb::tuple
+MIFROST_LOCAL nb::list parse_states_batch_python(nb::handle states);
+MIFROST_LOCAL nb::tuple parse_goals_batch_param_python(nb::handle goals, size_t state_count);
+MIFROST_LOCAL nb::tuple parse_actions_batch_param_python(nb::handle actions, size_t state_count);
+MIFROST_LOCAL nb::tuple
+parse_subgoal_layers_batch_param_python(nb::handle subgoal_layers, size_t state_count);
+MIFROST_LOCAL nb::tuple
 parse_history_subgoals_batch_param_python(nb::handle history_subgoals, size_t state_count);
-nb::list parse_successors_batch_param_python(nb::handle successors, size_t state_count);
-nb::list parse_dags_batch_param_python(nb::handle dags, size_t state_count);
-nb::tuple parse_ilg_batch_inputs_python(
+MIFROST_LOCAL nb::list
+parse_successors_batch_param_python(nb::handle successors, size_t state_count);
+MIFROST_LOCAL nb::list parse_dags_batch_param_python(nb::handle dags, size_t state_count);
+MIFROST_LOCAL nb::tuple parse_ilg_batch_inputs_python(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,
