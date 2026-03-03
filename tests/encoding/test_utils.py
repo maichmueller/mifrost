@@ -11,7 +11,11 @@ from torch_geometric.data.data import BaseData
 from torch_geometric.utils import to_networkx
 from tests.conftest import load_problem
 from mifrost.encoders import _encoding_dict_to_pyg, _split_goals
-from mifrost import DEFAULT_LGAN_NN_EDGE_POS
+from mifrost import (
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
+)
 
 
 def adv_state(state):
@@ -176,6 +180,7 @@ def to_named_networkx(
     *,
     drop_lgan: bool = False,
     lgan_rel: str = DEFAULT_LGAN_NN_EDGE_POS,
+    lgan_rels: Set[str] | None = None,
 ) -> nx.MultiDiGraph:
     data = as_pyg(data)
     graph = to_networkx(data, node_attrs=["node_names"], edge_attrs=[], to_multi=True)
@@ -223,6 +228,16 @@ def to_named_networkx(
                 edge_attrs["position"] = int(rel)
 
     if drop_lgan:
+        lgan_rel_set = (
+            set(lgan_rels)
+            if lgan_rels is not None
+            else {
+                DEFAULT_LGAN_TN_EDGE_POS,
+                DEFAULT_LGAN_NN_EDGE_POS,
+                DEFAULT_LGAN_RR_EDGE_POS,
+                lgan_rel,
+            }
+        )
         if graph.is_multigraph():
             to_remove = [
                 (u, v, k)
@@ -232,7 +247,7 @@ def to_named_networkx(
                     or edge_attrs.get("type")
                     or (None, None)
                 )[1]
-                == lgan_rel
+                in lgan_rel_set
             ]
             graph.remove_edges_from(to_remove)
         else:
@@ -244,7 +259,7 @@ def to_named_networkx(
                     or edge_attrs.get("type")
                     or (None, None)
                 )[1]
-                == lgan_rel
+                in lgan_rel_set
             ]
             graph.remove_edges_from(to_remove)
 

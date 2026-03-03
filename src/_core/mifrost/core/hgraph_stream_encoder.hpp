@@ -58,7 +58,7 @@ class HGraphEncoderEngine {
     * Lifetime:
     *  - Created once per encode call (see `init_hetero_workspace`).
     *  - Mutated by `encode_objects`, `encode_facts`, goal/action/history encoders.
-    *  - Read by `finalize_hetero_encoding` and (optionally) `add_lgan_nn_edges`.
+    *  - Read by `finalize_hetero_encoding` and (optionally) `add_lgan_edges`.
     *
     * Invariants:
     *  - `node_indices` stores string-keyed dedup maps (used for literal/history-style keys).
@@ -110,6 +110,9 @@ class HGraphEncoderEngine {
       hash_map< std::string, uint32_t > relation_type_ids;
       std::vector< std::string > relation_type_names;
 
+      /// Explicit LGAN target symbol ids (action targets / horizon target nodes).
+      hash_set< int64_t > lgan_target_symbol_ids;
+
       /// Optional action-target metadata (input-order aligned) for target_* graph fields.
       TargetColumns action_targets;
    };
@@ -118,7 +121,9 @@ class HGraphEncoderEngine {
    struct Config {
       std::string symbol_type_id = defaults::symbol_type_id;
       std::string nullary_object_name = "![nullary_symbol]!";
+      std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
       std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
+      std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
       std::string history_link_relation = defaults::history_link_relation;
       size_t max_goal_level = 0;
       bool support_literals = false;
@@ -282,7 +287,7 @@ class HGraphEncoderEngine {
    );
 
    /**
-    * @brief Conditionally add LGAN nearest-neighbor edges.
+    * @brief Conditionally add LGAN TN/NN/RR edges.
     *
     * Uses `workspace.relation_to_symbols` / `workspace.symbol_to_relations` collected during
     * encoding.
@@ -423,15 +428,13 @@ class HGraphEncoderEngine {
    );
 
    /**
-    * @brief Add LGAN-style nearest-neighbor edges.
+    * @brief Add LGAN target-neighbor, neighbor-neighbor, and relation-relation edges.
     *
-    * Uses the relation/symbol incidence maps to connect relation nodes to additional target symbols
-    * whose neighborhood contains all relation arguments.
-    *
-    * Note: This can be O(|relations| * |symbols| * avg_arity) in the worst case.
+    * Targets are explicit target symbols only (action targets / horizon target nodes).
     */
-   void add_lgan_nn_edges(
+   void add_lgan_edges(
       BatchBuilder& builder,
+      const hash_set< int64_t >& lgan_target_symbol_ids,
       const hash_map< int64_t, int64_t >& symbol_indices,
       const hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
       const hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
@@ -566,7 +569,9 @@ BOOST_DESCRIBE_STRUCT(
    (),
    (symbol_type_id,
     nullary_object_name,
+    lgan_tn_edge_pos,
     lgan_nn_edge_pos,
+    lgan_rr_edge_pos,
     history_link_relation,
     max_goal_level,
     support_literals,

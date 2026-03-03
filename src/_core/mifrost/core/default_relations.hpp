@@ -3,7 +3,9 @@
 namespace mifrost::defaults {
 
 inline constexpr const char* symbol_type_id = "_symbol_";
+inline constexpr const char* lgan_tn_edge_pos = "_lgan_tn_";
 inline constexpr const char* lgan_nn_edge_pos = "_lgan_nn_";
+inline constexpr const char* lgan_rr_edge_pos = "_lgan_rr_";
 
 inline constexpr const char* parent_relation = "_parent_";
 inline constexpr const char* sibling_relation = "_sibling_";

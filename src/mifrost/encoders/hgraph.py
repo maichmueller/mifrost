@@ -13,6 +13,8 @@ from .. import _core
 from .._core import (
     BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
     HGraphEncoderConfig,
@@ -74,7 +76,9 @@ def _draw_hgraph_graph(
     graph: nx.Graph,
     *,
     symbol_type_id: str,
+    lgan_tn_edge_pos: str,
     lgan_nn_edge_pos: str,
+    lgan_rr_edge_pos: str,
     include_lgan_edges: bool,
     ax=None,
     with_labels: bool = True,
@@ -206,6 +210,8 @@ def _draw_hgraph_graph(
             graph, pos, labels=labels_to_draw, ax=ax, **label_kwargs
         )
 
+    lgan_edge_positions = {lgan_tn_edge_pos, lgan_nn_edge_pos, lgan_rr_edge_pos}
+
     edge_attr_name = "position"
     standard_edges = []
     standard_colors = []
@@ -244,7 +250,7 @@ def _draw_hgraph_graph(
         pos_value = data_dict.get(edge_attr_name)
         color = edge_pos_to_color.get(pos_value, "#666666")
 
-        if pos_value == lgan_nn_edge_pos:
+        if pos_value in lgan_edge_positions:
             lgan_edges.append((src, dst))
             lgan_colors.append(color)
         else:
@@ -307,12 +313,10 @@ def _draw_hgraph_graph(
                 [0],
                 [0],
                 color=edge_pos_to_color[pos_value],
-                linestyle="dashed" if pos_value == lgan_nn_edge_pos else "solid",
-                label=(
-                    f"pos: {pos_value}"
-                    if pos_value != lgan_nn_edge_pos
-                    else "LGAN (NN)"
-                ),
+                linestyle="dashed" if pos_value in lgan_edge_positions else "solid",
+                label=f"LGAN ({pos_value})"
+                if pos_value in lgan_edge_positions
+                else f"pos: {pos_value}",
             )
             for pos_value in unique_positions
         ]
@@ -543,10 +547,21 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         self._engine = engine_cls(_advanced_domain(domain), config)
         self._config = config
         self.symbol_type_id = config.symbol_type_id
+        self.lgan_tn_edge_pos = getattr(
+            config, "lgan_tn_edge_pos", DEFAULT_LGAN_TN_EDGE_POS
+        )
         self.lgan_nn_edge_pos = getattr(
             config, "lgan_nn_edge_pos", DEFAULT_LGAN_NN_EDGE_POS
         )
+        self.lgan_rr_edge_pos = getattr(
+            config, "lgan_rr_edge_pos", DEFAULT_LGAN_RR_EDGE_POS
+        )
         self.include_lgan_edges = getattr(config, "include_lgan_edges", False)
+        self._lgan_edge_positions = {
+            self.lgan_tn_edge_pos,
+            self.lgan_nn_edge_pos,
+            self.lgan_rr_edge_pos,
+        }
 
     def __init__(
         self,
@@ -563,7 +578,9 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
+        lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
+        lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         history_link_relation: str = DEFAULT_HISTORY_LINK_RELATION,
         _config_cls=HGraphEncoderConfig,
         _engine_cls=HGraphEncoderEngine,
@@ -583,7 +600,9 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
+            lgan_tn_edge_pos=lgan_tn_edge_pos,
             lgan_nn_edge_pos=lgan_nn_edge_pos,
+            lgan_rr_edge_pos=lgan_rr_edge_pos,
             history_link_relation=history_link_relation,
             **extra_config_kwargs,
         )
@@ -1009,7 +1028,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             p_val = data_dict.get(edge_attr_name)
             color = edge_pos_to_color.get(p_val, "#666666")
 
-            if p_val == self.lgan_nn_edge_pos:
+            if p_val in self._lgan_edge_positions:
                 lgan_edges.append((u, v))
                 lgan_colors.append(color)
             else:
@@ -1076,12 +1095,12 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     [0],
                     [0],
                     color=edge_pos_to_color[p_val],
-                    linestyle="dashed" if p_val == self.lgan_nn_edge_pos else "solid",
-                    label=(
-                        f"pos: {p_val}"
-                        if p_val != self.lgan_nn_edge_pos
-                        else "LGAN (NN)"
-                    ),
+                    linestyle="dashed"
+                    if p_val in self._lgan_edge_positions
+                    else "solid",
+                    label=f"LGAN ({p_val})"
+                    if p_val in self._lgan_edge_positions
+                    else f"pos: {p_val}",
                 )
                 for p_val in unique_positions
             ]

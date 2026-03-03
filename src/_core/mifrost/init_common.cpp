@@ -22,7 +22,9 @@ namespace mifrost {
 void init_common(nb::module_& m)
 {
    m.attr("DEFAULT_SYMBOL_TYPE_ID") = defaults::symbol_type_id;
+   m.attr("DEFAULT_LGAN_TN_EDGE_POS") = defaults::lgan_tn_edge_pos;
    m.attr("DEFAULT_LGAN_NN_EDGE_POS") = defaults::lgan_nn_edge_pos;
+   m.attr("DEFAULT_LGAN_RR_EDGE_POS") = defaults::lgan_rr_edge_pos;
    m.attr("DEFAULT_PARENT_RELATION") = defaults::parent_relation;
    m.attr("DEFAULT_SIBLING_RELATION") = defaults::sibling_relation;
    m.attr("DEFAULT_COUSIN_RELATION") = defaults::cousin_relation;

@@ -353,7 +353,7 @@ TEST_P(HGraphEncoderFlagVariantsTest, FlagVariantsRespectStaticAndLganConfig)
          for(const bool add_nullary_predicates : flags) {
             for(const bool support_literals : flags) {
                mifrost::HGraphEncoderEngine::Config config;
-               config.ignore_actions = true;
+               config.ignore_actions = false;
                config.include_static = include_static;
                config.include_lgan_edges = include_lgan_edges;
                config.add_nullary_predicates = add_nullary_predicates;
@@ -365,13 +365,46 @@ TEST_P(HGraphEncoderFlagVariantsTest, FlagVariantsRespectStaticAndLganConfig)
                builder.set_graph_kind("hetero");
 
                auto goals = mifrost_test::make_goal_inputs(ctx.problem);
-               engine.encode(ctx.root, goals, {}, builder);
+               std::vector< mimir::formalism::GroundAction > actions;
+               if(include_lgan_edges) {
+                  if(ctx.actions.empty()) {
+                     GTEST_SKIP() << "Domain has no actions for LGAN target generation.";
+                  }
+                  actions.emplace_back(ctx.actions.front());
+               }
+               engine.encode(ctx.root, goals, actions, builder);
 
                if(not include_lgan_edges) {
                   for(const auto& [key, _] : builder.columns) {
+                     EXPECT_EQ(key.find(config.lgan_tn_edge_pos), std::string::npos)
+                        << "Unexpected lgan edge column: " << key;
                      EXPECT_EQ(key.find(config.lgan_nn_edge_pos), std::string::npos)
                         << "Unexpected lgan edge column: " << key;
+                     EXPECT_EQ(key.find(config.lgan_rr_edge_pos), std::string::npos)
+                        << "Unexpected lgan edge column: " << key;
                   }
+               } else {
+                  bool saw_tn = false;
+                  bool saw_nn_or_rr = false;
+                  for(const auto& [key, _] : builder.columns) {
+                     if(key.find("|" + config.lgan_tn_edge_pos + "|") != std::string::npos) {
+                        saw_tn = true;
+                     }
+                     if(key.find("|" + config.lgan_nn_edge_pos + "|") != std::string::npos
+                        or key.find("|" + config.lgan_rr_edge_pos + "|") != std::string::npos) {
+                        saw_nn_or_rr = true;
+                     }
+                     const std::string tn_reverse_prefix = config.symbol_type_id + "|"
+                                                           + config.lgan_tn_edge_pos + "|";
+                     const std::string nn_reverse_prefix = config.symbol_type_id + "|"
+                                                           + config.lgan_nn_edge_pos + "|";
+                     EXPECT_EQ(key.rfind(tn_reverse_prefix, 0), std::string::npos)
+                        << "Unexpected reverse LGAN TN edge column: " << key;
+                     EXPECT_EQ(key.rfind(nn_reverse_prefix, 0), std::string::npos)
+                        << "Unexpected reverse LGAN NN edge column: " << key;
+                  }
+                  EXPECT_TRUE(saw_tn);
+                  EXPECT_TRUE(saw_nn_or_rr);
                }
 
                bool has_static = false;
@@ -425,6 +458,35 @@ TEST_P(HGraphEncoderFlagVariantsTest, FlagVariantsRespectStaticAndLganConfig)
          }
       }
    }
+}
+
+TEST_P(HGraphEncoderFlagVariantsTest, LganRequiresExplicitTargetSymbols)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   mifrost::HGraphEncoderEngine::Config config;
+   config.include_lgan_edges = true;
+   config.ignore_actions = true;
+
+   mifrost::HGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   EXPECT_THROW(
+      {
+         try {
+            engine.encode(ctx.root, goals, {}, builder);
+         } catch(const std::invalid_argument& e) {
+            EXPECT_NE(
+               std::string(e.what()).find("requires explicit target symbols"), std::string::npos
+            );
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
 }
 
 INSTANTIATE_TEST_SUITE_P(

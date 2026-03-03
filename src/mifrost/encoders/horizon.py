@@ -10,6 +10,8 @@ from torch_geometric.data import HeteroData
 
 from .._core import (
     DEFAULT_HISTORY_LINK_RELATION,
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
     GoalInputs,
@@ -167,7 +169,9 @@ class HorizonEncoder(HGraphEncoder):
         export_node_names: bool | None = None,
         support_literals: bool | None = None,
         nullary_object_name: str | None = None,
+        lgan_tn_edge_pos: str | None = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str | None = DEFAULT_LGAN_NN_EDGE_POS,
+        lgan_rr_edge_pos: str | None = DEFAULT_LGAN_RR_EDGE_POS,
         history_link_relation: str | None = DEFAULT_HISTORY_LINK_RELATION,
     ) -> None:
         """Create a horizon encoder for one domain."""
@@ -183,7 +187,9 @@ class HorizonEncoder(HGraphEncoder):
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
+            lgan_tn_edge_pos=lgan_tn_edge_pos,
             lgan_nn_edge_pos=lgan_nn_edge_pos,
+            lgan_rr_edge_pos=lgan_rr_edge_pos,
             history_link_relation=history_link_relation,
             _config_cls=HorizonEncoderConfig,
             _engine_cls=HorizonHGraphEncoderEngine,

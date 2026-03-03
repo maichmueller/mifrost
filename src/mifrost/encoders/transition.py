@@ -5,6 +5,8 @@ from typing import Any, Mapping
 from torch_geometric.data import HeteroData
 
 from .._core import (
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
     SuccessorEncoderConfig,
@@ -71,7 +73,9 @@ class _TransitionEncoderBase(HGraphEncoder):
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
+        lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
+        lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
     ) -> None:
         """Create a transition encoder C++ engine with the given mode/config."""
         super().__init__(
@@ -86,7 +90,9 @@ class _TransitionEncoderBase(HGraphEncoder):
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,
+            lgan_tn_edge_pos=lgan_tn_edge_pos,
             lgan_nn_edge_pos=lgan_nn_edge_pos,
+            lgan_rr_edge_pos=lgan_rr_edge_pos,
             _config_cls=SuccessorEncoderConfig,
             _engine_cls=SuccessorHGraphEncoderEngine,
             successor_mode=successor_mode,

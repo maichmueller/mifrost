@@ -80,11 +80,10 @@ void HGraphEncoderEngine::rebuild_all_edge_types()
          all_edge_types_.emplace_back(config_.symbol_type_id, pos_str, node_type);
          all_edge_types_.emplace_back(node_type, pos_str, config_.symbol_type_id);
       }
-   }
-   if(config_.include_lgan_edges) {
-      all_edge_types_.emplace_back(
-         config_.lgan_nn_edge_pos, config_.lgan_nn_edge_pos, config_.symbol_type_id
-      );
+      if(config_.include_lgan_edges) {
+         all_edge_types_.emplace_back(node_type, config_.lgan_tn_edge_pos, config_.symbol_type_id);
+         all_edge_types_.emplace_back(node_type, config_.lgan_nn_edge_pos, config_.symbol_type_id);
+      }
    }
    std::ranges::sort(all_edge_types_);
    all_edge_types_.erase(std::ranges::unique(all_edge_types_).begin(), all_edge_types_.end());
@@ -113,6 +112,7 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    workspace_.symbol_to_relations.clear();
    workspace_.relation_type_ids.clear();
    workspace_.relation_type_names.clear();
+   workspace_.lgan_target_symbol_ids.clear();
    workspace_.action_targets.clear();
 
    const size_t type_hint = relation_dict_.arity.size() + 4;
@@ -126,6 +126,7 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    workspace_.relation_type_names.reserve(type_hint);
    workspace_.symbol_indices.reserve(relation_dict_.arity.size() + 8);
    workspace_.symbol_key_to_id.reserve(relation_dict_.arity.size() + 8);
+   workspace_.lgan_target_symbol_ids.reserve(8);
 
    return workspace_;
 }
@@ -287,8 +288,9 @@ void HGraphEncoderEngine::maybe_add_lgan_edges(
 )
 {
    if(config_.include_lgan_edges) {
-      add_lgan_nn_edges(
+      add_lgan_edges(
          builder,
+         workspace.lgan_target_symbol_ids,
          workspace.symbol_indices,
          workspace.relation_to_symbols,
          workspace.symbol_to_relations,
@@ -626,6 +628,9 @@ void HGraphEncoderEngine::encode_actions(
          action_symbol_key, action_symbol_name, builder, node_names
       );
       const auto action_symbol_id = get_or_assign_special_symbol_id(action_symbol_key);
+      if(config_.include_lgan_edges) {
+         workspace_.lgan_target_symbol_ids.insert(action_symbol_id);
+      }
       if(config_.export_action_targets) {
          workspace_.action_targets.append(
             TargetRecord{
@@ -827,82 +832,165 @@ void HGraphEncoderEngine::encode_history(
    }
 }
 
-void HGraphEncoderEngine::add_lgan_nn_edges(
+void HGraphEncoderEngine::add_lgan_edges(
    BatchBuilder& builder,
+   const hash_set< int64_t >& lgan_target_symbol_ids,
    const hash_map< int64_t, int64_t >& symbol_indices,
    const hash_map< RelationRef, hash_set< int64_t > >& relation_to_symbols,
    const hash_map< int64_t, hash_set< RelationRef > >& symbol_to_relations,
    const std::vector< std::string >& relation_type_names
 )
 {
-   if(symbol_indices.empty()) {
+   if(lgan_target_symbol_ids.empty()) {
+      throw std::invalid_argument(
+         "include_lgan_edges=true requires explicit target symbols, but none were encoded. "
+         "For HGraph/Successor, pass actions with ignore_actions=false; for Horizon, ensure "
+         "candidate target symbols exist (exclude_root_candidate may remove all)."
+      );
+   }
+   if(symbol_indices.empty() or relation_to_symbols.empty()) {
       return;
    }
 
-   hash_map< int64_t, hash_set< int64_t > > target_to_tn;
-   for(const auto& [target_id, _] : symbol_indices) {
-      hash_set< int64_t > tn{target_id};
-      auto rels_it = symbol_to_relations.find(target_id);
-      if(rels_it != symbol_to_relations.end()) {
-         for(const auto& rel_ref : rels_it->second) {
-            auto sym_it = relation_to_symbols.find(rel_ref);
-            if(sym_it == relation_to_symbols.end()) {
-               continue;
-            }
-            tn.insert(sym_it->second.begin(), sym_it->second.end());
-         }
-      }
-      target_to_tn.emplace(target_id, std::move(tn));
-   }
-
-   for(const auto& [rel_ref, arg_set] : relation_to_symbols) {
-      if(arg_set.empty()) {
-         continue;
-      }
-
+   auto decode_relation_ref =
+      [&](RelationRef rel_ref) -> std::optional< std::pair< std::string, int64_t > > {
       const auto type_id = static_cast< uint32_t >(rel_ref >> 32);
       const auto relation_idx = static_cast< int64_t >(rel_ref & 0xffffffffULL);
       if(type_id >= relation_type_names.size()) {
+         return std::nullopt;
+      }
+      return std::pair{relation_type_names[type_id], relation_idx};
+   };
+
+   auto emit_rel_to_target =
+      [&](RelationRef rel_ref, const std::string& edge_label, int64_t target_idx) {
+         const auto decoded = decode_relation_ref(rel_ref);
+         if(not decoded.has_value()) {
+            return;
+         }
+         const auto& [rel_type, relation_idx] = *decoded;
+         append_edges(
+            builder, rel_type, edge_label, config_.symbol_type_id, relation_idx, target_idx
+         );
+      };
+
+   hash_map< RelationRef, hash_set< RelationRef > > rr_edges;
+   rr_edges.reserve(relation_to_symbols.size());
+
+   for(const auto target_symbol_id : lgan_target_symbol_ids) {
+      auto target_idx_it = symbol_indices.find(target_symbol_id);
+      if(target_idx_it == symbol_indices.end()) {
          continue;
       }
-      const auto& rel_type = relation_type_names[type_id];
+      const int64_t target_idx = target_idx_it->second;
 
-      for(const auto& [target_id, tn] : target_to_tn) {
-         if(arg_set.contains(target_id)) {
+      auto tn_it = symbol_to_relations.find(target_symbol_id);
+      if(tn_it == symbol_to_relations.end()) {
+         continue;
+      }
+      const auto& tn_relations = tn_it->second;
+      if(tn_relations.empty()) {
+         continue;
+      }
+
+      hash_set< int64_t > local_symbols;
+      for(const auto rel_ref : tn_relations) {
+         auto rel_symbols_it = relation_to_symbols.find(rel_ref);
+         if(rel_symbols_it == relation_to_symbols.end()) {
             continue;
          }
-         bool is_subset = true;
-         for(const auto& sym : arg_set) {
-            if(not tn.contains(sym)) {
-               is_subset = false;
-               break;
+         local_symbols.insert(rel_symbols_it->second.begin(), rel_symbols_it->second.end());
+      }
+      if(local_symbols.empty()) {
+         continue;
+      }
+
+      hash_set< RelationRef > local_relations;
+      for(const auto symbol_id : local_symbols) {
+         auto rels_it = symbol_to_relations.find(symbol_id);
+         if(rels_it == symbol_to_relations.end()) {
+            continue;
+         }
+         for(const auto rel_ref : rels_it->second) {
+            auto rel_symbols_it = relation_to_symbols.find(rel_ref);
+            if(rel_symbols_it == relation_to_symbols.end() or rel_symbols_it->second.empty()) {
+               continue;
+            }
+            bool fully_local = true;
+            for(const auto arg_symbol : rel_symbols_it->second) {
+               if(not local_symbols.contains(arg_symbol)) {
+                  fully_local = false;
+                  break;
+               }
+            }
+            if(fully_local) {
+               local_relations.insert(rel_ref);
             }
          }
-         if(not is_subset) {
-            continue;
-         }
-         auto sym_idx_it = symbol_indices.find(target_id);
-         if(sym_idx_it == symbol_indices.end()) {
-            continue;
-         }
-         const int64_t sym_idx = sym_idx_it->second;
+      }
 
-         append_edges(
-            builder,
-            rel_type,
-            config_.lgan_nn_edge_pos,
-            config_.symbol_type_id,
-            relation_idx,
-            sym_idx
-         );
-         append_edges(
-            builder,
-            config_.symbol_type_id,
-            config_.lgan_nn_edge_pos,
-            rel_type,
-            sym_idx,
-            relation_idx
-         );
+      hash_set< RelationRef > nn_relations;
+      nn_relations.reserve(local_relations.size());
+      for(const auto rel_ref : local_relations) {
+         if(not tn_relations.contains(rel_ref)) {
+            nn_relations.insert(rel_ref);
+         }
+      }
+
+      for(const auto rel_ref : tn_relations) {
+         emit_rel_to_target(rel_ref, config_.lgan_tn_edge_pos, target_idx);
+      }
+      for(const auto rel_ref : nn_relations) {
+         emit_rel_to_target(rel_ref, config_.lgan_nn_edge_pos, target_idx);
+      }
+
+      hash_map< int64_t, std::vector< RelationRef > > local_symbol_to_relations;
+      local_symbol_to_relations.reserve(local_symbols.size());
+      for(const auto rel_ref : local_relations) {
+         auto rel_symbols_it = relation_to_symbols.find(rel_ref);
+         if(rel_symbols_it == relation_to_symbols.end()) {
+            continue;
+         }
+         for(const auto symbol_id : rel_symbols_it->second) {
+            if(local_symbols.contains(symbol_id)) {
+               local_symbol_to_relations[symbol_id].push_back(rel_ref);
+            }
+         }
+      }
+
+      for(auto& [_, rels] : local_symbol_to_relations) {
+         if(rels.size() < 2) {
+            continue;
+         }
+         std::ranges::sort(rels);
+         rels.erase(std::ranges::unique(rels).begin(), rels.end());
+         if(rels.size() < 2) {
+            continue;
+         }
+         for(size_t i = 0; i < rels.size(); ++i) {
+            for(size_t j = i + 1; j < rels.size(); ++j) {
+               const auto src_ref = rels[i];
+               const auto dst_ref = rels[j];
+               rr_edges[src_ref].insert(dst_ref);
+               rr_edges[dst_ref].insert(src_ref);
+            }
+         }
+      }
+   }
+
+   for(const auto& [src_ref, dst_refs] : rr_edges) {
+      const auto src_decoded = decode_relation_ref(src_ref);
+      if(not src_decoded.has_value()) {
+         continue;
+      }
+      const auto& [src_type, src_idx] = *src_decoded;
+      for(const auto dst_ref : dst_refs) {
+         const auto dst_decoded = decode_relation_ref(dst_ref);
+         if(not dst_decoded.has_value()) {
+            continue;
+         }
+         const auto& [dst_type, dst_idx] = *dst_decoded;
+         append_edges(builder, src_type, config_.lgan_rr_edge_pos, dst_type, src_idx, dst_idx);
       }
    }
 }

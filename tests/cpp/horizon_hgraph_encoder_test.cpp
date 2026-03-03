@@ -997,3 +997,77 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDag)
       EXPECT_TRUE(actual_rel1_c.empty());
    }
 }
+
+TEST_P(HorizonHGraphEncoderTest, LganTargetsAreCandidateSymbolsAndRrIsRelationOnly)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, succ_state, succ_action);
+
+   HorizonHGraphEncoderEngine::Config config;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.ignore_actions = false;
+   config.include_lgan_edges = true;
+   config.enable_parent_relation = true;
+
+   HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   engine.encode(ctx.root, dag, goals, builder);
+   builder.next_graph();
+
+   ASSERT_NE(builder.graph_fields, nullptr);
+   const auto target_positions_it = builder.graph_fields->find("target_positions");
+   ASSERT_NE(target_positions_it, builder.graph_fields->end());
+   const auto& target_positions = std::get< std::vector< int64_t > >(
+      target_positions_it->second.values
+   );
+   std::unordered_set< int64_t > target_position_set(
+      target_positions.begin(), target_positions.end()
+   );
+   ASSERT_FALSE(target_position_set.empty());
+
+   const std::string src_suffix = "/edge_index_0";
+   bool saw_tn_or_nn = false;
+   bool saw_rr = false;
+
+   for(const auto& [key, _] : builder.columns) {
+      if(key.size() < src_suffix.size()
+         || key.compare(key.size() - src_suffix.size(), src_suffix.size(), src_suffix) != 0) {
+         continue;
+      }
+      const std::string edge_type = key.substr(0, key.size() - src_suffix.size());
+      const auto first_sep = edge_type.find('|');
+      const auto second_sep = edge_type.rfind('|');
+      ASSERT_NE(first_sep, std::string::npos);
+      ASSERT_NE(second_sep, std::string::npos);
+      ASSERT_GT(second_sep, first_sep);
+
+      const std::string src_type = edge_type.substr(0, first_sep);
+      const std::string rel = edge_type.substr(first_sep + 1, second_sep - first_sep - 1);
+      const std::string dst_type = edge_type.substr(second_sep + 1);
+
+      if(rel == config.lgan_tn_edge_pos or rel == config.lgan_nn_edge_pos) {
+         saw_tn_or_nn = true;
+         EXPECT_NE(src_type, config.symbol_type_id);
+         EXPECT_EQ(dst_type, config.symbol_type_id);
+
+         auto edges = mifrost_test::edge_pairs_for(builder, edge_type);
+         for(const auto& [_, dst_idx] : edges) {
+            EXPECT_TRUE(target_position_set.contains(dst_idx))
+               << "LGAN TN/NN destination is not a target symbol index: " << dst_idx;
+         }
+      } else if(rel == config.lgan_rr_edge_pos) {
+         saw_rr = true;
+         EXPECT_NE(src_type, config.symbol_type_id);
+         EXPECT_NE(dst_type, config.symbol_type_id);
+      }
+   }
+
+   EXPECT_TRUE(saw_tn_or_nn);
+   EXPECT_TRUE(saw_rr);
+}

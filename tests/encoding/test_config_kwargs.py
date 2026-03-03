@@ -10,11 +10,19 @@ import mifrost
 
 def test_hgraph_config_accepts_kwargs() -> None:
     config = mifrost.HGraphEncoderConfig(
-        include_static=False, symbol_type_id="_sym_", export_action_targets=True
+        include_static=False,
+        symbol_type_id="_sym_",
+        export_action_targets=True,
+        lgan_tn_edge_pos="_tn_",
+        lgan_nn_edge_pos="_nn_",
+        lgan_rr_edge_pos="_rr_",
     )
     assert config.include_static is False
     assert config.symbol_type_id == "_sym_"
     assert config.export_action_targets is True
+    assert config.lgan_tn_edge_pos == "_tn_"
+    assert config.lgan_nn_edge_pos == "_nn_"
+    assert config.lgan_rr_edge_pos == "_rr_"
 
 
 def test_hgraph_config_goal_satisfaction_derivations_accepts_string_aliases() -> None:
@@ -85,11 +93,26 @@ def test_transition_encoder_exposes_unified_config(small_blocks) -> None:
         domain,
         successor_suffix="[next]",
         include_lgan_edges=True,
+        lgan_tn_edge_pos="_tn_custom_",
+        lgan_rr_edge_pos="_rr_custom_",
         max_goal_level=1,
     )
     assert encoder.config.successor_suffix == "[next]"
     assert encoder.config.include_lgan_edges is True
+    assert encoder.config.lgan_tn_edge_pos == "_tn_custom_"
+    assert encoder.config.lgan_rr_edge_pos == "_rr_custom_"
     assert encoder.config.max_goal_level == 1
+
+
+def test_hgraph_encoder_lgan_requires_explicit_targets(small_blocks) -> None:
+    _, domain, problem = small_blocks
+    encoder = mifrost.HGraphEncoder(
+        domain,
+        include_lgan_edges=True,
+        ignore_actions=True,
+    )
+    with pytest.raises(ValueError, match="requires explicit target symbols"):
+        encoder.encode(problem.get_initial_state())
 
 
 def test_hgraph_encoder_exposes_relation_dict(small_blocks) -> None:

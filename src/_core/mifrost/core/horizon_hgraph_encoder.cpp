@@ -624,6 +624,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    // 1. Create target nodes first to keep them contiguous in symbol list.
    const auto& nodes = dag.nodes();
+   const int root_index = dag.root_index();
    std::vector< std::string > target_keys(nodes.size());
    for(const auto& node : nodes) {
       if(node.index >= static_cast< int >(target_keys.size())) {
@@ -632,6 +633,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const std::string key = target_node_key(node.index);
       target_keys[node.index] = key;
       get_or_add_symbol_special_node(key, key, builder, node_names);
+      if(config_.include_lgan_edges
+         and not(horizon_config_.exclude_root_candidate and node.index == root_index)) {
+         const auto symbol_id_it = workspace.symbol_key_to_id.find(key);
+         if(symbol_id_it != workspace.symbol_key_to_id.end()) {
+            workspace.lgan_target_symbol_ids.insert(symbol_id_it->second);
+         }
+      }
    }
 
    // 2. Encode root state (objects then facts/goals)
@@ -909,6 +917,26 @@ void HorizonHGraphEncoderEngine::encode_impl(
          append_edges(
             builder, horizon_config_.parent_relation, "1", config_.symbol_type_id, rel_idx, c_node
          );
+         if(config_.include_lgan_edges) {
+            const auto parent_symbol_id_it = workspace.symbol_key_to_id.find(
+               target_keys[parent_idx]
+            );
+            const auto child_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[child_idx]);
+            if(parent_symbol_id_it != workspace.symbol_key_to_id.end()
+               and child_symbol_id_it != workspace.symbol_key_to_id.end()) {
+               const std::array< int64_t, 2 > object_symbol_ids = {
+                  parent_symbol_id_it->second,
+                  child_symbol_id_it->second,
+               };
+               track_relation_symbols_if_enabled(
+                  relation_ref_for(horizon_config_.parent_relation, rel_idx),
+                  std::span{object_symbol_ids},
+                  std::span< const int64_t >{},
+                  relation_to_symbols,
+                  symbol_to_relations
+               );
+            }
+         }
       }
    }
 
@@ -942,6 +970,24 @@ void HorizonHGraphEncoderEngine::encode_impl(
             append_edges(builder, relation, "0", config_.symbol_type_id, rel_idx, a_node);
             append_edges(builder, config_.symbol_type_id, "1", relation, b_node, rel_idx);
             append_edges(builder, relation, "1", config_.symbol_type_id, rel_idx, b_node);
+            if(config_.include_lgan_edges) {
+               const auto src_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[src]);
+               const auto dst_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[dst]);
+               if(src_symbol_id_it != workspace.symbol_key_to_id.end()
+                  and dst_symbol_id_it != workspace.symbol_key_to_id.end()) {
+                  const std::array< int64_t, 2 > object_symbol_ids = {
+                     src_symbol_id_it->second,
+                     dst_symbol_id_it->second,
+                  };
+                  track_relation_symbols_if_enabled(
+                     relation_ref_for(relation, rel_idx),
+                     std::span{object_symbol_ids},
+                     std::span< const int64_t >{},
+                     relation_to_symbols,
+                     symbol_to_relations
+                  );
+               }
+            }
          }
       };
 
@@ -1009,7 +1055,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
                                         ? (nodes.size() - 1)
                                         : nodes.size();
-      const int root_index = dag.root_index();
       struct CandidateRow {
          int64_t position = 0;
          int64_t index = 0;

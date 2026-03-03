@@ -195,3 +195,40 @@ def test_horizon_relation_dict_arities_match_emitted_positions(horizon_cases):
         checked += 1
 
     assert checked > 0
+
+
+def test_horizon_lgan_targets_and_rr_directions(horizon_cases):
+    space, domain, problem = horizon_cases
+    root = problem.get_initial_state()
+    dag = _build_dag(space, root, max_depth=2, branch_factor=2)
+
+    config = mifrost.HorizonEncoderConfig()
+    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.include_lgan_edges = True
+    config.ignore_actions = False
+    config.enable_parent_relation = True
+    encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
+
+    goals = goal_inputs_from_problem(problem)
+    data = encoding_dict_to_pyg(encoder.encode(_adv(root), dag, goals))
+
+    target_positions = set(getattr(data, "target_positions", []).tolist())
+    assert target_positions
+
+    symbol_type = config.symbol_type_id
+    saw_tn_or_nn = False
+    saw_rr = False
+    for edge_type, edge_index in data.edge_index_dict.items():
+        src_type, rel, dst_type = edge_type
+        if rel in {config.lgan_tn_edge_pos, config.lgan_nn_edge_pos}:
+            saw_tn_or_nn = True
+            assert src_type != symbol_type
+            assert dst_type == symbol_type
+            assert set(edge_index[1].tolist()).issubset(target_positions)
+        elif rel == config.lgan_rr_edge_pos:
+            saw_rr = True
+            assert src_type != symbol_type
+            assert dst_type != symbol_type
+
+    assert saw_tn_or_nn
+    assert saw_rr

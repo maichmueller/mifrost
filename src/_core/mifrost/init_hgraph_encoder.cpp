@@ -59,11 +59,9 @@ void init_hgraph_encoder(nb::module_& m)
       .def_rw("export_node_names", &HGraphEncoderEngine::Config::export_node_names)
       .def_rw("export_action_targets", &HGraphEncoderEngine::Config::export_action_targets)
       .def_rw("history_link_relation", &HGraphEncoderEngine::Config::history_link_relation)
-      .def_rw(
-         "lgan_nn_edge_pos",
-         &HGraphEncoderEngine::Config::lgan_nn_edge_pos,
-         "lgan_nn_edge_pos"_a = defaults::lgan_nn_edge_pos
-      );
+      .def_rw("lgan_tn_edge_pos", &HGraphEncoderEngine::Config::lgan_tn_edge_pos)
+      .def_rw("lgan_nn_edge_pos", &HGraphEncoderEngine::Config::lgan_nn_edge_pos)
+      .def_rw("lgan_rr_edge_pos", &HGraphEncoderEngine::Config::lgan_rr_edge_pos);
 
    nb::class_< RelationDict >(m, "RelationDict")
       .def(nb::init<>())
