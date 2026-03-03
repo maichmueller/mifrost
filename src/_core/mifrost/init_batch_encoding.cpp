@@ -2123,7 +2123,7 @@ void init_batch_encoding(nb::module_& m)
 
    m.def(
       "batch_encodings",
-      [](nb::sequence encodings, nb::object collate_spec_obj) -> nb::object {
+      [](nb::sequence encodings, nb::object collate_spec_obj, bool fast_path) -> nb::object {
          auto enc_cast = [](const nb::handle& source) -> BatchEncoding* {
             return require_instance_ptr< BatchBuilder::BatchEncoding >(
                source, "batch_encodings expects BatchEncoding inputs"
@@ -2134,21 +2134,37 @@ void init_batch_encoding(nb::module_& m)
             return nb::cast(BatchBuilder::BatchEncoding{});
          }
          const BatchEncoding* zeroth_entry = enc_cast(encodings[0]);
-         const auto expected_fp = schema_fingerprint(*zeroth_entry);
+
+         std::vector< const BatchEncoding* > entries;
+         entries.reserve(nb::len(encodings));
+         entries.push_back(zeroth_entry);
+         for(size_t i = 1; i < static_cast< size_t >(nb::len(encodings)); ++i) {
+            entries.push_back(enc_cast(encodings[i]));
+         }
+
+         bool use_fast_path = false;
+         if(fast_path and not entries.empty()) {
+            const auto expected_fp = schema_fingerprint(*entries.front());
+            use_fast_path = true;
+            for(size_t i = 1; i < entries.size(); ++i) {
+               if(schema_fingerprint(*entries[i]) != expected_fp) {
+                  use_fast_path = false;
+                  break;
+               }
+            }
+         }
+
          BatchBuilder builder;
          builder.set_graph_kind(zeroth_entry->graph_kind);
-         int counter = 0;
-         for(const nb::handle encoding_py : encodings) {
-            const BatchEncoding* encoding = enc_cast(encoding_py);
+         for(size_t i = 0; i < entries.size(); ++i) {
+            const BatchEncoding* encoding = entries[i];
             if(encoding->num_graphs != 1) {
                throw std::invalid_argument("batch_encodings expects inputs with num_graphs == 1");
             }
-            validate_batch_encoding_graph_fields(*encoding, "batch_encodings input validation");
-            if(counter > 0 and schema_fingerprint(*encoding) != expected_fp) {
-               throw std::invalid_argument("batch_encodings schema_fingerprint mismatch");
+            if(not use_fast_path or i == 0) {
+               validate_batch_encoding_graph_fields(*encoding, "batch_encodings input validation");
             }
             builder.append_batch_encoding(*encoding);
-            counter++;
          }
 
          BatchEncoding out = builder.build();
@@ -2214,9 +2230,12 @@ void init_batch_encoding(nb::module_& m)
          }
          return out_py;
       },
-      nb::sig("def batch_encodings(encodings, collate_spec=None) -> BatchEncoding"),
+      nb::sig(
+         "def batch_encodings(encodings, collate_spec=None, fast_path=False) -> BatchEncoding"
+      ),
       "encodings"_a,
-      "collate_spec"_a = nb::none()
+      "collate_spec"_a = nb::none(),
+      "fast_path"_a = false
    );
 }
 

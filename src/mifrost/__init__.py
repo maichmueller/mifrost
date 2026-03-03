@@ -60,8 +60,13 @@ else:
         collate_spec: (
             _ABCMapping[str, CollateSpec | _ABCMapping[str, object]] | None
         ) = None,
+        fast_path: bool = False,
     ) -> BatchEncoding:
-        return _core.batch_encodings(encodings, _normalize_collate_spec(collate_spec))
+        return _core.batch_encodings(
+            encodings,
+            _normalize_collate_spec(collate_spec),
+            fast_path,
+        )
 
     _encoder_exports = [
         "HGraphEncoder",

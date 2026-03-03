@@ -1239,8 +1239,120 @@ def test_batch_encodings_schema_fingerprint_mismatch_on_cat_dim():
     enc0 = _single_graph_with_matrix_field([[10, 20]], mode="cat", cat_dim=0)
     enc1 = _single_graph_with_matrix_field([[10], [20]], mode="cat", cat_dim=1)
 
-    with pytest.raises(ValueError, match="schema_fingerprint mismatch"):
+    with pytest.raises(ValueError, match="registered with different spec"):
         mifrost.batch_encodings([enc0, enc1])
+
+
+def test_batch_encodings_allows_dynamic_edge_type_union():
+    b0 = mifrost.BatchBuilder()
+    b0.set_graph_kind("hetero")
+    b0.add_node_features("atom", "x", torch.zeros(2, 1))
+    b0.add_edges(
+        "atom",
+        "r0",
+        "atom",
+        torch.tensor([0], dtype=torch.int64),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    b0.next_graph()
+    enc0 = b0.build()
+
+    b1 = mifrost.BatchBuilder()
+    b1.set_graph_kind("hetero")
+    b1.add_node_features("atom", "x", torch.zeros(2, 1))
+    b1.add_edges(
+        "atom",
+        "r0",
+        "atom",
+        torch.tensor([1], dtype=torch.int64),
+        torch.tensor([0], dtype=torch.int64),
+    )
+    b1.add_edges(
+        "atom",
+        "r1",
+        "atom",
+        torch.tensor([0], dtype=torch.int64),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    b1.next_graph()
+    enc1 = b1.build()
+
+    out = mifrost.batch_encodings([enc0, enc1]).as_dict()
+    tensors = out["tensors"]
+
+    assert "atom|r0|atom/edge_index_0" in tensors
+    assert "atom|r0|atom/edge_index_1" in tensors
+    assert "atom|r1|atom/edge_index_0" in tensors
+    assert "atom|r1|atom/edge_index_1" in tensors
+
+    r0_src = _export_to_tensor(tensors["atom|r0|atom/edge_index_0"])
+    r0_dst = _export_to_tensor(tensors["atom|r0|atom/edge_index_1"])
+    r1_src = _export_to_tensor(tensors["atom|r1|atom/edge_index_0"])
+    r1_dst = _export_to_tensor(tensors["atom|r1|atom/edge_index_1"])
+
+    # First graph contributes (0->1), second graph contributes (3->2) after node offset +2.
+    assert torch.equal(r0_src, torch.tensor([0, 3], dtype=torch.int64))
+    assert torch.equal(r0_dst, torch.tensor([1, 2], dtype=torch.int64))
+    # r1 exists only in second graph and still gets node offset +2.
+    assert torch.equal(r1_src, torch.tensor([2], dtype=torch.int64))
+    assert torch.equal(r1_dst, torch.tensor([3], dtype=torch.int64))
+
+
+def test_batch_encodings_fast_path_accepts_equal_schema():
+    enc0 = _single_graph_with_ragged_i64_field([1, 2])
+    enc1 = _single_graph_with_ragged_i64_field([3])
+
+    out = mifrost.batch_encodings(
+        [enc0, enc1],
+        fast_path=True,
+    ).as_dict()
+    values = _export_to_tensor(out["tensors"]["__graph__/target_indices"])
+    ptr = _export_to_tensor(out["tensors"]["__graph__/target_indices/ptr"])
+    assert torch.equal(values, torch.tensor([1, 2, 3], dtype=torch.int64))
+    assert torch.equal(ptr, torch.tensor([0, 2, 3], dtype=torch.int64))
+
+
+def test_batch_encodings_fast_path_falls_back_on_mismatch():
+    b0 = mifrost.BatchBuilder()
+    b0.set_graph_kind("hetero")
+    b0.add_node_features("atom", "x", torch.zeros(2, 1))
+    b0.add_edges(
+        "atom",
+        "r0",
+        "atom",
+        torch.tensor([0], dtype=torch.int64),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    b0.next_graph()
+    enc0 = b0.build()
+
+    b1 = mifrost.BatchBuilder()
+    b1.set_graph_kind("hetero")
+    b1.add_node_features("atom", "x", torch.zeros(2, 1))
+    b1.add_edges(
+        "atom",
+        "r0",
+        "atom",
+        torch.tensor([1], dtype=torch.int64),
+        torch.tensor([0], dtype=torch.int64),
+    )
+    b1.add_edges(
+        "atom",
+        "r1",
+        "atom",
+        torch.tensor([0], dtype=torch.int64),
+        torch.tensor([1], dtype=torch.int64),
+    )
+    b1.next_graph()
+    enc1 = b1.build()
+
+    out = mifrost.batch_encodings(
+        [enc0, enc1],
+        fast_path=True,
+    ).as_dict()
+    tensors = out["tensors"]
+    assert "atom|r0|atom/edge_index_0" in tensors
+    assert "atom|r1|atom/edge_index_0" in tensors
 
 
 def test_append_batch_encoding_edge_index_schema_fallback():
