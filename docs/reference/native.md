@@ -63,7 +63,9 @@ Python-side collation notes:
 - `mifrost.batch_encodings([...])`: merge single-graph encodings with schema checks.
 - `mifrost.encoding_to_tensors(encoding.as_dict())`: convert flat tensor payload to torch tensors.
 - `mifrost.transition_dag_from_rustworkx(graph, *, fallback_missing_candidate_id_to_node_index=False)`:
-  convert `rustworkx.PyDiGraph` to native `TransitionDAG`.
+  convert `rustworkx.PyDiGraph` to native `TransitionDAG` (delegates to classmethod).
+- `mifrost.TransitionDAG.from_rustworkx(graph, *, fallback_missing_candidate_id_to_node_index=False)`:
+  native classmethod implementing the rustworkx-to-`TransitionDAG` conversion path.
 
 `TransitionDAG.register_transition(...)` accepts:
 - `register_transition(parent, child, action=None, candidate_id=None)`

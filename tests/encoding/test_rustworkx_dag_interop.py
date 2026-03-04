@@ -49,6 +49,21 @@ def test_transition_dag_from_rustworkx_is_reexported():
     assert mifrost.transition_dag_from_rustworkx is transition_dag_from_rustworkx
 
 
+def test_transition_dag_from_rustworkx_classmethod_matches_helper(small_blocks):
+    space, _domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action, successor), _ = _first_distinct_changed_transitions(space, root, count=2)
+
+    graph = rx.PyDiGraph()
+    root_idx = graph.add_node(root)
+    succ_idx = graph.add_node(successor)
+    graph.add_edge(root_idx, succ_idx, action)
+
+    from_cls = mifrost.TransitionDAG.from_rustworkx(graph)
+    from_helper = transition_dag_from_rustworkx(graph)
+    _assert_same_dag(from_cls, from_helper)
+
+
 def test_rustworkx_dag_helper_uses_lazy_runtime_import():
     import mifrost.encoders._rustworkx_dag as helper
 
@@ -183,7 +198,7 @@ def test_transition_dag_from_rustworkx_rejects_edges_not_reachable_from_root(
         transition_dag_from_rustworkx(graph)
 
 
-def test_transition_dag_from_rustworkx_rejects_invalid_node_payload(small_blocks):
+def test_transition_dag_from_rustworkx_rejects_invalid_node_data(small_blocks):
     space, _domain, problem = small_blocks
     root = problem.get_initial_state()
     (_action, succ0), _ = _first_distinct_changed_transitions(space, root, count=2)
@@ -193,11 +208,11 @@ def test_transition_dag_from_rustworkx_rejects_invalid_node_payload(small_blocks
     bad_idx = graph.add_node(object())
     graph.add_edge(root_idx, bad_idx, None)
 
-    with pytest.raises(TypeError, match="node payload at index"):
+    with pytest.raises(TypeError, match="node data at index"):
         transition_dag_from_rustworkx(graph)
 
 
-def test_transition_dag_from_rustworkx_rejects_invalid_edge_payload(small_blocks):
+def test_transition_dag_from_rustworkx_rejects_invalid_edge_data(small_blocks):
     space, _domain, problem = small_blocks
     root = problem.get_initial_state()
     (_action, succ0), _ = _first_distinct_changed_transitions(space, root, count=2)
@@ -207,7 +222,7 @@ def test_transition_dag_from_rustworkx_rejects_invalid_edge_payload(small_blocks
     succ_idx = graph.add_node(succ0)
     graph.add_edge(root_idx, succ_idx, object())
 
-    with pytest.raises(TypeError, match="edge payload at"):
+    with pytest.raises(TypeError, match="edge data at"):
         transition_dag_from_rustworkx(graph)
 
 
@@ -230,7 +245,7 @@ def test_transition_dag_from_rustworkx_preserves_parallel_edges_in_transition_li
     assert dag.action(1) == adv_action(action0)
 
 
-def test_transition_dag_from_rustworkx_reads_candidate_id_from_mapping_payload(
+def test_transition_dag_from_rustworkx_reads_candidate_id_from_mapping_node_data(
     small_blocks,
 ):
     space, _domain, problem = small_blocks

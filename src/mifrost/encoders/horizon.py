@@ -42,7 +42,7 @@ from .common import (
 )
 from ._rustworkx_dag import (
     RXStateDAG,
-    _normalize_dag_batch_payload,
+    _normalize_dag_batch_data,
     _normalize_dag_leaf,
 )
 from ._action_contract import parse_flat_actions
@@ -337,7 +337,7 @@ class HorizonEncoder(HGraphEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
-        dags_for_core = _normalize_dag_batch_payload(dags)
+        dags_for_core = _normalize_dag_batch_data(dags)
         return self._engine.encode_batch(
             roots_for_core,
             dags=dags_for_core,
