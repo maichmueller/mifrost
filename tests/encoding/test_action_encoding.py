@@ -37,7 +37,11 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
 
         pytest.skip("Fixture does not provide applicable actions.")
 
-    encoder = HGraphEncoder(domain, ignore_actions=False)
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
     data = encoder.encode_pyg(state, actions=actions)
 
     symbol_type = mifrost.DEFAULT_SYMBOL_TYPE_ID
@@ -83,12 +87,37 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
             ), f"Missing edge {obj_name} -> {action_node} at position {pos}."
 
 
-def test_hgraph_action_target_metadata_mode_is_opt_in(small_blocks):
+def test_hgraph_action_target_metadata_enabled_for_action_source(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()
     action0, _action1 = _first_actions(space, state, count=2)
 
-    encoder = HGraphEncoder(domain, ignore_actions=False)
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
+    encoding = encoder.encode_batch([state], actions=[[action0]])
+    data = encoding.as_pyg(as_batch=True)
+
+    assert encoding.has_field("target_positions")
+    assert encoding.has_field("target_indices")
+    assert encoding.has_field("target_candidate_ids")
+    assert encoding.has_field("target_group_ids")
+    assert hasattr(data, "target_positions")
+    assert hasattr(data, "target_indices")
+    assert hasattr(data, "target_names")
+    assert hasattr(data, "target_groups")
+    assert list(data.target_groups) == ["action"]
+    assert data.target_group_ids.tolist() == [0]
+
+
+def test_hgraph_action_target_metadata_can_be_disabled(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False, target_sources=[])
     encoding = encoder.encode_batch([state], actions=[[action0]])
     data = encoding.as_pyg(as_batch=True)
 
@@ -104,7 +133,11 @@ def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks)
     state = problem.get_initial_state()
     action0, action1 = _first_actions(space, state, count=2)
 
-    encoder = HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
     encoding = encoder.encode_batch([state], actions=[[action0, action1]])
     data = encoding.as_pyg(as_batch=True)
 
@@ -124,6 +157,9 @@ def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks)
     assert data.target_positions_ptr.tolist() == [0, 2]
     assert hasattr(data, "target_names")
     assert hasattr(data, "target_symbol_prefix")
+    assert hasattr(data, "target_groups")
+    assert list(data.target_groups) == ["action"]
+    assert data.target_group_ids.tolist() == [0, 0]
     assert len(list(data.target_names)) == 2
     assert data.target_symbol_prefix == "target:"
 
@@ -135,7 +171,11 @@ def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
     state = problem.get_initial_state()
     action0, _action1 = _first_actions(space, state, count=2)
 
-    encoder = HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
     encoding = encoder.encode_batch([state, state], actions=[[action0, action0], []])
     data = encoding.as_pyg(as_batch=True)
 

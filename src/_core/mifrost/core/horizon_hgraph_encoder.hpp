@@ -27,8 +27,8 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
 
    /// Runtime config for horizon lookahead encoding.
    struct Config: HGraphEncoderEngine::Config {
+      Config() { target_sources = {TargetSource::States}; }
       Mode transition_mode = Mode::Full;
-      std::string target_symbol_prefix = "target:";
       std::string parent_relation = defaults::parent_relation;
       std::string sibling_relation = defaults::sibling_relation;
       std::string cousin_relation = defaults::cousin_relation;
@@ -87,7 +87,6 @@ BOOST_DESCRIBE_STRUCT(
    HorizonHGraphEncoderEngine::Config,
    (HGraphEncoderEngine::Config),
    (transition_mode,
-    target_symbol_prefix,
     parent_relation,
     sibling_relation,
     cousin_relation,

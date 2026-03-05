@@ -56,7 +56,8 @@ RelationDict build_horizon_relation_dict(
 }  // namespace
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
-    : HGraphEncoderEngine(domain), horizon_config_()
+    : HGraphEncoderEngine(domain, normalize_horizon_config(Config{})),
+      horizon_config_(normalize_horizon_config(Config{}))
 {
    relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
@@ -74,7 +75,8 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(mimir::formalism::Domain domain)
-    : HGraphEncoderEngine(domain), horizon_config_()
+    : HGraphEncoderEngine(std::move(domain), normalize_horizon_config(Config{})),
+      horizon_config_(normalize_horizon_config(Config{}))
 {
    relation_dict_ = build_horizon_relation_dict(domain_, config_);
    configure_relations();
@@ -1051,6 +1053,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    maybe_add_lgan_edges(builder, workspace);
 
    TargetColumns target_columns;
+   const bool export_state_targets = has_target_source(TargetSource::States);
    if(not nodes.empty()) {
       const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
                                         ? (nodes.size() - 1)
@@ -1108,7 +1111,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
          );
       }
 
-      target_columns.reserve(candidate_rows.size(), /*include_depth=*/true);
+      if(export_state_targets) {
+         target_columns.reserve(
+            candidate_rows.size(), /*include_depth=*/true, /*include_group=*/true
+         );
+      }
       hash_set< int64_t > seen_candidate_ids;
       seen_candidate_ids.reserve(candidate_rows.size());
       for(const auto& row : candidate_rows) {
@@ -1117,26 +1124,34 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(not seen_candidate_ids.emplace(candidate_id).second) {
             throw std::invalid_argument("duplicate candidate_id " + std::to_string(candidate_id));
          }
-         target_columns.append(
-            TargetRecord{
-               .position = row.position,
-               .index = row.index,
-               .candidate_id = candidate_id,
-               .depth = row.depth,
-               .name = row.name,
-            },
-            /*include_depth=*/true
-         );
+         if(export_state_targets) {
+            target_columns.append(
+               TargetRecord{
+                  .position = row.position,
+                  .index = row.index,
+                  .candidate_id = candidate_id,
+                  .depth = row.depth,
+                  .group_id = get_or_assign_target_group_id(TargetSource::States),
+                  .name = row.name,
+               },
+               /*include_depth=*/true,
+               /*include_group=*/true
+            );
+         }
       }
    }
 
-   const TargetMetadataEmitConfig target_emit_config{
-      .symbol_type_id = config_.symbol_type_id,
-      .symbol_prefix = horizon_config_.target_symbol_prefix,
-      .include_depth = true,
-      .parent_relation = horizon_config_.parent_relation,
-   };
-   emit_target_metadata(builder, target_columns, target_emit_config);
+   if(export_state_targets) {
+      const TargetMetadataEmitConfig target_emit_config{
+         .symbol_type_id = config_.symbol_type_id,
+         .symbol_prefix = config_.target_symbol_prefix,
+         .include_depth = true,
+         .include_group = true,
+         .groups = workspace.target_groups,
+         .parent_relation = horizon_config_.parent_relation,
+      };
+      emit_target_metadata(builder, target_columns, target_emit_config);
+   }
 
    std::vector< std::string > object_names_override;
    const std::vector< std::string >* object_names_override_ptr = nullptr;
@@ -1227,7 +1242,7 @@ void HorizonHGraphEncoderEngine::register_relation_type(const std::string& relat
 
 std::string HorizonHGraphEncoderEngine::target_node_key(int idx) const
 {
-   return fmt::format("{}{}", horizon_config_.target_symbol_prefix, idx);
+   return fmt::format("{}{}", config_.target_symbol_prefix, idx);
 }
 
 }  // namespace mifrost

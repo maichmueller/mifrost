@@ -13,6 +13,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/relation_formatter.hpp"
 
 namespace mifrost {
@@ -85,6 +86,56 @@ inline GoalSatisfaction cast_goal_satisfaction(std::string_view key, const nb::h
    }
 }
 
+inline std::optional< TargetSource > parse_target_source_alias(std::string_view value)
+{
+   const auto normalized = ascii_lower(value);
+   if(normalized == "action" or normalized == "actions") {
+      return TargetSource::Actions;
+   }
+   if(normalized == "goal" or normalized == "goals") {
+      return TargetSource::Goals;
+   }
+   if(normalized == "subgoal" or normalized == "subgoals") {
+      return TargetSource::Subgoals;
+   }
+   if(normalized == "state" or normalized == "states") {
+      return TargetSource::States;
+   }
+   if(normalized == "history") {
+      return TargetSource::History;
+   }
+   return std::nullopt;
+}
+
+inline TargetSource cast_target_source(std::string_view key, const nb::handle value)
+{
+   if(nb::isinstance< nb::str >(value)) {
+      const std::string token = nb::str(value).c_str();
+      if(const auto parsed = parse_target_source_alias(token); parsed.has_value()) {
+         return *parsed;
+      }
+      throw std::invalid_argument(
+         fmt::format(
+            "Invalid value '{}' for kwarg '{}'; expected TargetSource alias "
+            "('action', 'goal', 'subgoal', 'state', 'history') or TargetSource enum.",
+            token,
+            key
+         )
+      );
+   }
+   try {
+      return nb::cast< TargetSource >(value);
+   } catch(const std::exception&) {
+      throw std::invalid_argument(
+         fmt::format(
+            "Invalid value for kwarg '{}'; expected TargetSource alias "
+            "('action', 'goal', 'subgoal', 'state', 'history') or TargetSource enum.",
+            key
+         )
+      );
+   }
+}
+
 template < typename T >
 T cast_config_value(std::string_view key, const nb::handle value)
 {
@@ -98,6 +149,18 @@ T cast_config_value(std::string_view key, const nb::handle value)
          return out;
       }
       return {cast_goal_satisfaction(key, value)};
+   } else if constexpr(std::is_same_v< T, std::set< TargetSource > >) {
+      if(nb::isinstance< nb::iterable >(value) and not nb::isinstance< nb::str >(value)
+         and not nb::isinstance< nb::bytes >(value)) {
+         std::set< TargetSource > out;
+         for(nb::handle entry : nb::borrow< nb::object >(value)) {
+            out.insert(cast_target_source(key, entry));
+         }
+         return out;
+      }
+      return {cast_target_source(key, value)};
+   } else if constexpr(std::is_same_v< T, TargetSource >) {
+      return cast_target_source(key, value);
    } else {
       return nb::cast< T >(value);
    }

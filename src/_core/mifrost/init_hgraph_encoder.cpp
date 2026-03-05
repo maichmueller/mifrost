@@ -34,6 +34,13 @@ void apply_hgraph_config_kwargs(HGraphEncoderEngine::Config& config, const nb::k
 
 void init_hgraph_encoder(nb::module_& m)
 {
+   nb::enum_< TargetSource >(m, "TargetSource")
+      .value("Actions", TargetSource::Actions)
+      .value("Goals", TargetSource::Goals)
+      .value("Subgoals", TargetSource::Subgoals)
+      .value("States", TargetSource::States)
+      .value("History", TargetSource::History);
+
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())
       .def(
@@ -44,6 +51,7 @@ void init_hgraph_encoder(nb::module_& m)
          }
       )
       .def_rw("symbol_type_id", &HGraphEncoderEngine::Config::symbol_type_id)
+      .def_rw("target_symbol_prefix", &HGraphEncoderEngine::Config::target_symbol_prefix)
       .def_rw("nullary_object_name", &HGraphEncoderEngine::Config::nullary_object_name)
       .def_rw("max_goal_level", &HGraphEncoderEngine::Config::max_goal_level)
       .def_rw("support_literals", &HGraphEncoderEngine::Config::support_literals)
@@ -57,7 +65,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def_rw("include_lgan_edges", &HGraphEncoderEngine::Config::include_lgan_edges)
       .def_rw("include_empty_edge_types", &HGraphEncoderEngine::Config::include_empty_edge_types)
       .def_rw("export_node_names", &HGraphEncoderEngine::Config::export_node_names)
-      .def_rw("export_action_targets", &HGraphEncoderEngine::Config::export_action_targets)
+      .def_rw("target_sources", &HGraphEncoderEngine::Config::target_sources)
       .def_rw("history_link_relation", &HGraphEncoderEngine::Config::history_link_relation)
       .def_rw("lgan_tn_edge_pos", &HGraphEncoderEngine::Config::lgan_tn_edge_pos)
       .def_rw("lgan_nn_edge_pos", &HGraphEncoderEngine::Config::lgan_nn_edge_pos)

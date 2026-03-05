@@ -12,14 +12,19 @@ def test_hgraph_config_accepts_kwargs() -> None:
     config = mifrost.HGraphEncoderConfig(
         include_static=False,
         symbol_type_id="_sym_",
-        export_action_targets=True,
+        target_symbol_prefix="tg:",
+        target_sources={mifrost.TargetSource.Actions, mifrost.TargetSource.Goals},
         lgan_tn_edge_pos="_tn_",
         lgan_nn_edge_pos="_nn_",
         lgan_rr_edge_pos="_rr_",
     )
     assert config.include_static is False
     assert config.symbol_type_id == "_sym_"
-    assert config.export_action_targets is True
+    assert config.target_symbol_prefix == "tg:"
+    assert set(config.target_sources) == {
+        mifrost.TargetSource.Actions,
+        mifrost.TargetSource.Goals,
+    }
     assert config.lgan_tn_edge_pos == "_tn_"
     assert config.lgan_nn_edge_pos == "_nn_"
     assert config.lgan_rr_edge_pos == "_rr_"

@@ -64,12 +64,60 @@ from .types import (
 _HGraphMutableStreamEncoder = getattr(
     _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
 )
+TargetSource = getattr(_core, "TargetSource", None)
 
 
 def _build_config(config_cls, **kwargs: object):
     """Build a nanobind config object from non-None keyword values."""
     clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
     return config_cls(**clean_kwargs)
+
+
+_TARGET_SOURCE_ALIASES = (
+    {
+        "action": TargetSource.Actions,
+        "actions": TargetSource.Actions,
+        "goal": TargetSource.Goals,
+        "goals": TargetSource.Goals,
+        "subgoal": TargetSource.Subgoals,
+        "subgoals": TargetSource.Subgoals,
+        "state": TargetSource.States,
+        "states": TargetSource.States,
+        "history": TargetSource.History,
+    }
+    if TargetSource is not None
+    else {}
+)
+
+
+def _normalize_target_sources(
+    target_sources: Iterable[TargetSource | str] | None,
+) -> set[TargetSource] | None:
+    if target_sources is None:
+        return None
+    if TargetSource is None:
+        raise RuntimeError("target_sources requires mifrost._core.TargetSource support")
+    if isinstance(target_sources, (TargetSource, str)):
+        target_sources = [target_sources]
+    out: set[TargetSource] = set()
+    for source in target_sources:
+        if isinstance(source, TargetSource):
+            out.add(source)
+            continue
+        if isinstance(source, str):
+            key = source.strip().lower()
+            if key not in _TARGET_SOURCE_ALIASES:
+                raise ValueError(
+                    f"Unknown target source '{source}'. "
+                    "Expected one of: action, goal, subgoal, state, history."
+                )
+            out.add(_TARGET_SOURCE_ALIASES[key])
+            continue
+        raise TypeError(
+            "target_sources entries must be mifrost.TargetSource or str, "
+            f"got {type(source)!r}"
+        )
+    return out
 
 
 def _draw_hgraph_graph(
@@ -568,13 +616,14 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         domain: DomainInput,
         *,
         symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
+        target_symbol_prefix: str = "target:",
         ignore_actions: bool = True,
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
         include_static: bool = True,
         include_empty_edge_types: bool = True,
         export_node_names: bool = True,
-        export_action_targets: bool = False,
+        target_sources: Iterable[TargetSource | str] | None = None,
         max_goal_level: int = 0,
         support_literals: bool = False,
         nullary_object_name: str = "![nullary_symbol]!",
@@ -590,13 +639,14 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         config = self._make_config(
             _config_cls,
             symbol_type_id=symbol_type_id,
+            target_symbol_prefix=target_symbol_prefix,
             ignore_actions=ignore_actions,
             add_nullary_predicates=add_nullary_predicates,
             include_lgan_edges=include_lgan_edges,
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
             export_node_names=export_node_names,
-            export_action_targets=export_action_targets,
+            target_sources=_normalize_target_sources(target_sources),
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,

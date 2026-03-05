@@ -1,7 +1,11 @@
 #pragma once
 
+#include <fmt/format.h>
+
+#include <array>
 #include <boost/describe.hpp>
 #include <cstdint>
+#include <map>
 #include <mimir/formalism/action.hpp>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/ground_action.hpp>
@@ -23,6 +27,7 @@
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "relation_formatter.hpp"
+#include "schema_key_separators.hpp"
 #include "stream_encoder_base.hpp"
 #include "target_metadata.hpp"
 
@@ -33,6 +38,14 @@ namespace parsed {
 struct HGraphBatchInputs;
 }
 }  // namespace batch_input
+
+enum class TargetSource {
+   Actions,
+   Goals,
+   Subgoals,
+   States,
+   History,
+};
 
 /**
  * @brief Heterogeneous graph encoder engine.
@@ -113,13 +126,18 @@ class HGraphEncoderEngine {
       /// Explicit LGAN target symbol ids (action targets / horizon target nodes).
       hash_set< int64_t > lgan_target_symbol_ids;
 
-      /// Optional action-target metadata (input-order aligned) for target_* graph fields.
-      TargetColumns action_targets;
+      /// Target metadata rows for configured `Config::target_sources`.
+      TargetColumns targets;
+      /// Stable target group labels, indexed by target_group_ids.
+      std::vector< std::string > target_groups;
+      std::map< TargetSource, int64_t > target_group_ids;
+      int64_t next_target_index = 0;
    };
 
    /// Runtime configuration controlling which relations/nodes/edges are emitted.
    struct Config {
       std::string symbol_type_id = defaults::symbol_type_id;
+      std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::string nullary_object_name = "![nullary_symbol]!";
       std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
       std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
@@ -133,7 +151,7 @@ class HGraphEncoderEngine {
       bool include_static = true;
       bool include_empty_edge_types = true;
       bool export_node_names = true;
-      bool export_action_targets = false;
+      std::set< TargetSource > target_sources = {};
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
 
@@ -496,6 +514,9 @@ class HGraphEncoderEngine {
    RelationRef relation_ref_for(const std::string& node_type, int64_t relation_idx);
 
    std::string symbol_node_key(const mimir::formalism::Object& obj) const;
+   [[nodiscard]] bool has_target_source(TargetSource source) const;
+   [[nodiscard]] static std::string_view target_group_name(TargetSource source);
+   int64_t get_or_assign_target_group_id(TargetSource source);
 
    int64_t get_or_assign_special_symbol_id(std::string_view symbol_name);
    int64_t get_or_add_symbol_object_node(
@@ -568,6 +589,7 @@ BOOST_DESCRIBE_STRUCT(
    HGraphEncoderEngine::Config,
    (),
    (symbol_type_id,
+    target_symbol_prefix,
     nullary_object_name,
     lgan_tn_edge_pos,
     lgan_nn_edge_pos,
@@ -581,7 +603,7 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     include_empty_edge_types,
     export_node_names,
-    export_action_targets,
+    target_sources,
     goal_satisfaction_derivations)
 )
 
@@ -841,24 +863,30 @@ void HGraphEncoderEngine::encode_literals(
       const std::optional< int > goal_level = goal_levels.contains(literal)
                                                  ? std::optional< size_t >(goal_levels.at(literal))
                                                  : std::nullopt;
+      const bool is_subgoal = goal_level.has_value() and (*goal_level > 0);
+      std::optional< TargetSource > target_source = std::nullopt;
+      if(is_subgoal and has_target_source(TargetSource::Subgoals)) {
+         target_source = TargetSource::Subgoals;
+      } else if((not is_subgoal) and has_target_source(TargetSource::Goals)) {
+         target_source = TargetSource::Goals;
+      }
 
       std::string node_type;
       std::string node_name;
+      std::string formatted_literal;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
             predicate, level, std::nullopt, literal->get_polarity()
          );
-         if(config_.export_node_names) {
-            node_name = RelationFormatter::format_literal< GoalTag >(literal, level);
-         }
+         formatted_literal = RelationFormatter::format_literal< GoalTag >(literal, level);
+         node_name = config_.export_node_names ? formatted_literal : "";
       } else {
          node_type = RelationFormatter::format_predicate(
             predicate, std::nullopt, std::nullopt, literal->get_polarity()
          );
-         if(config_.export_node_names) {
-            node_name = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
-         }
+         formatted_literal = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
+         node_name = config_.export_node_names ? formatted_literal : "";
       }
 
       std::vector< int64_t > object_symbol_ids;
@@ -889,15 +917,71 @@ void HGraphEncoderEngine::encode_literals(
          node_name
       );
 
-      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
-         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
-         const std::string pos_str = std::to_string(pos);
+      std::vector< int64_t > extra_symbol_ids;
+      extra_symbol_ids.reserve(
+         extra_objects.size() + static_cast< size_t >(target_source.has_value() ? 1 : 0)
+      );
+
+      size_t pos = 0;
+      if(target_source.has_value()) {
+         const std::string target_symbol_key = fmt::format(
+            "{}{}{}{}{}{}{}{}{}{}",
+            config_.target_symbol_prefix,
+            target_group_name(*target_source),
+            schema_key::kEdgeTypeSeparator,
+            node_type,
+            schema_key::kEdgeTypeSeparator,
+            literal->get_polarity() ? 1 : 0,
+            schema_key::kEdgeTypeSeparator,
+            atom->get_index(),
+            schema_key::kEdgeTypeSeparator,
+            goal_level.value_or(-1)
+         );
+         const std::string target_symbol_name = config_.export_node_names
+                                                   ? fmt::format(
+                                                        "{}{}{}",
+                                                        target_symbol_key,
+                                                        schema_key::kEdgeTypeSeparator,
+                                                        formatted_literal
+                                                     )
+                                                   : target_symbol_key;
+         const auto target_symbol_idx = get_or_add_symbol_special_node(
+            target_symbol_key, target_symbol_name, builder, node_names
+         );
+         const auto target_symbol_id = get_or_assign_special_symbol_id(target_symbol_key);
+         if(config_.include_lgan_edges) {
+            workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
+         }
+         workspace_.targets.append(
+            TargetRecord{
+               .position = target_symbol_idx,
+               .index = workspace_.next_target_index,
+               .candidate_id = workspace_.next_target_index,
+               .depth = std::nullopt,
+               .group_id = get_or_assign_target_group_id(*target_source),
+               .name = formatted_literal,
+            },
+            /*include_depth=*/false,
+            /*include_group=*/true
+         );
+         ++workspace_.next_target_index;
+         extra_symbol_ids.emplace_back(target_symbol_id);
+         const std::string pos_str = std::to_string(pos++);
+         append_edges(
+            builder, config_.symbol_type_id, pos_str, node_type, target_symbol_idx, relation_idx
+         );
+         append_edges(
+            builder, node_type, pos_str, config_.symbol_type_id, relation_idx, target_symbol_idx
+         );
+      }
+
+      for(const auto symbol_id : object_symbol_ids) {
+         const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
+         const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      std::vector< int64_t > extra_symbol_ids;
-      extra_symbol_ids.reserve(extra_objects.size());
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& symbol_name = extra_objects[i];
          const auto obj_idx = get_or_add_symbol_special_node(
@@ -905,7 +989,7 @@ void HGraphEncoderEngine::encode_literals(
          );
          const auto symbol_id = get_or_assign_special_symbol_id(symbol_name);
          extra_symbol_ids.emplace_back(symbol_id);
-         const std::string pos_str = std::to_string(object_symbol_ids.size() + i);
+         const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
@@ -954,28 +1038,28 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       std::optional< size_t > goal_level = goal_levels.contains(goal)
                                               ? std::optional< size_t >(goal_levels.at(goal))
                                               : std::nullopt;
+      std::optional< TargetSource > target_source = std::nullopt;
 
       std::string node_type;
       std::string node_name;
+      std::string formatted_literal;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
          node_type = RelationFormatter::format_predicate(
             predicate, level, sat, goal->get_polarity(), suffix
          );
-         if(config_.export_node_names) {
-            node_name = RelationFormatter::format_literal< GoalTag >(
-               goal, level, sat, std::nullopt, suffix
-            );
-         }
+         formatted_literal = RelationFormatter::format_literal< GoalTag >(
+            goal, level, sat, std::nullopt, suffix
+         );
+         node_name = config_.export_node_names ? formatted_literal : "";
       } else {
          node_type = RelationFormatter::format_predicate(
             predicate, std::nullopt, sat, goal->get_polarity(), suffix
          );
-         if(config_.export_node_names) {
-            node_name = RelationFormatter::format_literal< GoalTag >(
-               goal, std::nullopt, sat, std::nullopt, suffix
-            );
-         }
+         formatted_literal = RelationFormatter::format_literal< GoalTag >(
+            goal, std::nullopt, sat, std::nullopt, suffix
+         );
+         node_name = config_.export_node_names ? formatted_literal : "";
       }
 
       std::vector< int64_t > object_symbol_ids;
@@ -1006,15 +1090,71 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          node_name
       );
 
-      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
-         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
-         const std::string pos_str = std::to_string(pos);
+      std::vector< int64_t > extra_symbol_ids;
+      extra_symbol_ids.reserve(
+         extra_objects.size() + static_cast< size_t >(target_source.has_value() ? 1 : 0)
+      );
+
+      size_t pos = 0;
+      if(target_source.has_value()) {
+         const std::string target_symbol_key = fmt::format(
+            "{}{}{}{}{}{}{}{}{}{}",
+            config_.target_symbol_prefix,
+            target_group_name(*target_source),
+            schema_key::kEdgeTypeSeparator,
+            node_type,
+            schema_key::kEdgeTypeSeparator,
+            goal->get_polarity() ? 1 : 0,
+            schema_key::kEdgeTypeSeparator,
+            atom->get_index(),
+            schema_key::kEdgeTypeSeparator,
+            goal_level.has_value() ? static_cast< int >(*goal_level) : -1
+         );
+         const std::string target_symbol_name = config_.export_node_names
+                                                   ? fmt::format(
+                                                        "{}{}{}",
+                                                        target_symbol_key,
+                                                        schema_key::kEdgeTypeSeparator,
+                                                        formatted_literal
+                                                     )
+                                                   : target_symbol_key;
+         const auto target_symbol_idx = get_or_add_symbol_special_node(
+            target_symbol_key, target_symbol_name, builder, node_names
+         );
+         const auto target_symbol_id = get_or_assign_special_symbol_id(target_symbol_key);
+         if(config_.include_lgan_edges) {
+            workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
+         }
+         workspace_.targets.append(
+            TargetRecord{
+               .position = target_symbol_idx,
+               .index = workspace_.next_target_index,
+               .candidate_id = workspace_.next_target_index,
+               .depth = std::nullopt,
+               .group_id = get_or_assign_target_group_id(*target_source),
+               .name = formatted_literal,
+            },
+            /*include_depth=*/false,
+            /*include_group=*/true
+         );
+         ++workspace_.next_target_index;
+         extra_symbol_ids.emplace_back(target_symbol_id);
+         const std::string pos_str = std::to_string(pos++);
+         append_edges(
+            builder, config_.symbol_type_id, pos_str, node_type, target_symbol_idx, relation_idx
+         );
+         append_edges(
+            builder, node_type, pos_str, config_.symbol_type_id, relation_idx, target_symbol_idx
+         );
+      }
+
+      for(const auto symbol_id : object_symbol_ids) {
+         const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
+         const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }
 
-      std::vector< int64_t > extra_symbol_ids;
-      extra_symbol_ids.reserve(extra_objects.size());
       for(size_t i = 0; i < extra_objects.size(); ++i) {
          const auto& symbol_name = extra_objects[i];
          const auto obj_idx = get_or_add_symbol_special_node(
@@ -1022,7 +1162,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          );
          const auto symbol_id = get_or_assign_special_symbol_id(symbol_name);
          extra_symbol_ids.emplace_back(symbol_id);
-         const std::string pos_str = std::to_string(object_symbol_ids.size() + i);
+         const std::string pos_str = std::to_string(pos++);
          append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
          append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
       }

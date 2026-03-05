@@ -66,7 +66,14 @@ void HGraphEncoderEngine::initialize_from_domain()
    if(not config_.ignore_actions) {
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
-   relation_dict_ = RelationDict(domain_, actions, rel_config);
+   const int predicate_arity_offset = 0;
+   const int action_arity_offset = (has_target_source(TargetSource::Actions)
+                                    or config_.include_lgan_edges)
+                                      ? 1
+                                      : 0;
+   relation_dict_ = RelationDict(
+      domain_, actions, rel_config, predicate_arity_offset, action_arity_offset
+   );
    rebuild_all_edge_types();
 }
 
@@ -113,7 +120,10 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    workspace_.relation_type_ids.clear();
    workspace_.relation_type_names.clear();
    workspace_.lgan_target_symbol_ids.clear();
-   workspace_.action_targets.clear();
+   workspace_.targets.clear();
+   workspace_.target_groups.clear();
+   workspace_.target_group_ids.clear();
+   workspace_.next_target_index = 0;
 
    const size_t type_hint = relation_dict_.arity.size() + 4;
    workspace_.node_indices.reserve(type_hint);
@@ -333,14 +343,20 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
       }
    }
 
-   if(config_.export_action_targets) {
+   const bool emit_target_metadata_fields = has_target_source(TargetSource::Actions)
+                                            or has_target_source(TargetSource::Goals)
+                                            or has_target_source(TargetSource::Subgoals)
+                                            or has_target_source(TargetSource::History);
+   if(emit_target_metadata_fields) {
       const TargetMetadataEmitConfig emit_config{
          .symbol_type_id = config_.symbol_type_id,
-         .symbol_prefix = std::string(kDefaultTargetSymbolPrefix),
+         .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
+         .include_group = true,
+         .groups = workspace.target_groups,
          .parent_relation = std::nullopt,
       };
-      emit_target_metadata(builder, workspace.action_targets, emit_config);
+      emit_target_metadata(builder, workspace.targets, emit_config);
    }
 
    ensure_empty_edge_types(builder);
@@ -596,15 +612,17 @@ void HGraphEncoderEngine::encode_actions(
    std::span< const std::string > extra_objects
 )
 {
-   if(config_.export_action_targets) {
-      workspace_.action_targets.reserve(actions.size(), /*include_depth=*/false);
+   const bool target_actions = has_target_source(TargetSource::Actions);
+   const bool needs_action_target_symbol = target_actions or config_.include_lgan_edges;
+   if(target_actions) {
+      workspace_.targets.reserve(actions.size(), /*include_depth=*/false, /*include_group=*/true);
    }
 
    for(size_t action_pos = 0; action_pos < actions.size(); ++action_pos) {
       const auto& action = actions[action_pos];
       const std::string node_type = RelationFormatter::format_action_schema(*action->get_action());
       const int64_t relation_key = static_cast< int64_t >(action->get_index());
-      const std::string action_name = (config_.export_node_names or config_.export_action_targets)
+      const std::string action_name = (config_.export_node_names or needs_action_target_symbol)
                                          ? RelationFormatter::format_action(action)
                                          : "";
       const std::string node_name = config_.export_node_names ? action_name : "";
@@ -612,41 +630,52 @@ void HGraphEncoderEngine::encode_actions(
          node_type, relation_key, builder, node_indices, node_names, node_name
       );
 
-      const std::string action_symbol_key = fmt::format(
-         "{}{}", kDefaultTargetSymbolPrefix, action->get_index()
-      );
-      const std::string action_symbol_name = config_.export_node_names
-                                                ? fmt::format(
-                                                     "{}{}{}{}",
-                                                     kDefaultTargetSymbolPrefix,
-                                                     action->get_index(),
-                                                     schema_key::kEdgeTypeSeparator,
-                                                     action_name
-                                                  )
-                                                : action_symbol_key;
-      const auto action_symbol_idx = get_or_add_symbol_special_node(
-         action_symbol_key, action_symbol_name, builder, node_names
-      );
-      const auto action_symbol_id = get_or_assign_special_symbol_id(action_symbol_key);
-      if(config_.include_lgan_edges) {
-         workspace_.lgan_target_symbol_ids.insert(action_symbol_id);
-      }
-      if(config_.export_action_targets) {
-         workspace_.action_targets.append(
-            TargetRecord{
-               .position = action_symbol_idx,
-               .index = static_cast< int64_t >(action_pos),
-               .candidate_id = static_cast< int64_t >(action_pos),
-               .depth = std::nullopt,
-               .name = action_name,
-            },
-            /*include_depth=*/false
+      std::optional< int64_t > action_symbol_id = std::nullopt;
+      if(needs_action_target_symbol) {
+         const std::string action_symbol_key = fmt::format(
+            "{}{}", config_.target_symbol_prefix, action->get_index()
          );
+         const std::string action_symbol_name = config_.export_node_names
+                                                   ? fmt::format(
+                                                        "{}{}{}{}",
+                                                        config_.target_symbol_prefix,
+                                                        action->get_index(),
+                                                        schema_key::kEdgeTypeSeparator,
+                                                        action_name
+                                                     )
+                                                   : action_symbol_key;
+         const auto action_symbol_idx = get_or_add_symbol_special_node(
+            action_symbol_key, action_symbol_name, builder, node_names
+         );
+         const auto symbol_id = get_or_assign_special_symbol_id(action_symbol_key);
+         action_symbol_id = symbol_id;
+         if(config_.include_lgan_edges) {
+            workspace_.lgan_target_symbol_ids.insert(symbol_id);
+         }
+         if(target_actions) {
+            workspace_.targets.append(
+               TargetRecord{
+                  .position = action_symbol_idx,
+                  .index = workspace_.next_target_index,
+                  .candidate_id = workspace_.next_target_index,
+                  .depth = std::nullopt,
+                  .group_id = get_or_assign_target_group_id(TargetSource::Actions),
+                  .name = action_name,
+               },
+               /*include_depth=*/false,
+               /*include_group=*/true
+            );
+            ++workspace_.next_target_index;
+         }
       }
 
       std::vector< int64_t > object_symbol_ids;
-      object_symbol_ids.reserve(action->get_objects().size() + 1);
-      object_symbol_ids.emplace_back(action_symbol_id);
+      object_symbol_ids.reserve(
+         action->get_objects().size() + static_cast< size_t >(needs_action_target_symbol ? 1 : 0)
+      );
+      if(action_symbol_id.has_value()) {
+         object_symbol_ids.emplace_back(*action_symbol_id);
+      }
       for(const auto& obj : action->get_objects()) {
          const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
          (void) obj_idx;
@@ -1048,6 +1077,35 @@ uint32_t HGraphEncoderEngine::get_or_assign_relation_type_id(const std::string& 
 std::string HGraphEncoderEngine::symbol_node_key(const mimir::formalism::Object& obj) const
 {
    return RelationFormatter::format_object(*obj);
+}
+
+bool HGraphEncoderEngine::has_target_source(TargetSource source) const
+{
+   return config_.target_sources.contains(source);
+}
+
+std::string_view HGraphEncoderEngine::target_group_name(TargetSource source)
+{
+   switch(source) {
+      case TargetSource::Actions: return "action";
+      case TargetSource::Goals: return "goal";
+      case TargetSource::Subgoals: return "subgoal";
+      case TargetSource::States: return "state";
+      case TargetSource::History: return "history";
+   }
+   throw std::invalid_argument("unknown target source");
+}
+
+int64_t HGraphEncoderEngine::get_or_assign_target_group_id(TargetSource source)
+{
+   auto it = workspace_.target_group_ids.find(source);
+   if(it != workspace_.target_group_ids.end()) {
+      return it->second;
+   }
+   const auto next_id = static_cast< int64_t >(workspace_.target_groups.size());
+   workspace_.target_group_ids.emplace(source, next_id);
+   workspace_.target_groups.emplace_back(target_group_name(source));
+   return next_id;
 }
 
 HGraphEncoderEngine::RelationRef

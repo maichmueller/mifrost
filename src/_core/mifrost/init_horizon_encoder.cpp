@@ -66,7 +66,6 @@ void init_horizon_encoder(nb::module_& m)
          }
       )
       .def_rw("transition_mode", &HorizonHGraphEncoderEngine::Config::transition_mode)
-      .def_rw("target_symbol_prefix", &HorizonHGraphEncoderEngine::Config::target_symbol_prefix)
       .def_rw("parent_relation", &HorizonHGraphEncoderEngine::Config::parent_relation)
       .def_rw("sibling_relation", &HorizonHGraphEncoderEngine::Config::sibling_relation)
       .def_rw("cousin_relation", &HorizonHGraphEncoderEngine::Config::cousin_relation)

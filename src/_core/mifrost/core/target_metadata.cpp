@@ -10,10 +10,11 @@ void TargetColumns::clear()
    indices.clear();
    candidate_ids.clear();
    depths.clear();
+   group_ids.clear();
    names.clear();
 }
 
-void TargetColumns::reserve(size_t count, bool include_depth)
+void TargetColumns::reserve(size_t count, bool include_depth, bool include_group)
 {
    positions.reserve(positions.size() + count);
    indices.reserve(indices.size() + count);
@@ -22,9 +23,12 @@ void TargetColumns::reserve(size_t count, bool include_depth)
    if(include_depth) {
       depths.reserve(depths.size() + count);
    }
+   if(include_group) {
+      group_ids.reserve(group_ids.size() + count);
+   }
 }
 
-void TargetColumns::append(TargetRecord record, bool include_depth)
+void TargetColumns::append(TargetRecord record, bool include_depth, bool include_group)
 {
    positions.push_back(record.position);
    indices.push_back(record.index);
@@ -38,10 +42,16 @@ void TargetColumns::append(TargetRecord record, bool include_depth)
       }
       depths.push_back(*record.depth);
    }
+   if(include_group) {
+      if(not record.group_id.has_value()) {
+         throw std::invalid_argument("target record group_id is required for this target metadata");
+      }
+      group_ids.push_back(*record.group_id);
+   }
    names.push_back(std::move(record.name));
 }
 
-void TargetColumns::validate(bool include_depth) const
+void TargetColumns::validate(bool include_depth, bool include_group) const
 {
    const size_t rows = positions.size();
    if(indices.size() != rows) {
@@ -59,6 +69,13 @@ void TargetColumns::validate(bool include_depth) const
       }
    } else if(not depths.empty()) {
       throw std::invalid_argument("target metadata depths must be empty when depth is disabled");
+   }
+   if(include_group) {
+      if(group_ids.size() != rows) {
+         throw std::invalid_argument("target metadata has mismatched positions/group_ids lengths");
+      }
+   } else if(not group_ids.empty()) {
+      throw std::invalid_argument("target metadata group_ids must be empty when group is disabled");
    }
 }
 
@@ -99,6 +116,11 @@ GraphFieldSpec make_target_candidate_ids_spec()
    return make_target_indices_spec();
 }
 
+GraphFieldSpec make_target_group_ids_spec()
+{
+   return make_target_indices_spec();
+}
+
 }  // namespace
 
 void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config)
@@ -111,6 +133,9 @@ void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfi
    if(config.include_depth) {
       builder.register_field(std::string(kTargetDepthsField), make_target_depths_spec());
    }
+   if(config.include_group) {
+      builder.register_field(std::string(kTargetGroupIdsField), make_target_group_ids_spec());
+   }
 }
 
 void set_target_fields(
@@ -119,7 +144,7 @@ void set_target_fields(
    const TargetMetadataEmitConfig& config
 )
 {
-   columns.validate(config.include_depth);
+   columns.validate(config.include_depth, config.include_group);
    builder.set_field(
       std::string(kTargetPositionsField), std::span< const int64_t >(columns.positions)
    );
@@ -132,6 +157,11 @@ void set_target_fields(
          std::string(kTargetDepthsField), std::span< const int64_t >(columns.depths)
       );
    }
+   if(config.include_group) {
+      builder.set_field(
+         std::string(kTargetGroupIdsField), std::span< const int64_t >(columns.group_ids)
+      );
+   }
 }
 
 void set_target_graph_attrs(
@@ -140,9 +170,12 @@ void set_target_graph_attrs(
    const TargetMetadataEmitConfig& config
 )
 {
-   columns.validate(config.include_depth);
+   columns.validate(config.include_depth, config.include_group);
    builder.set_graph_attr(std::string(kTargetNamesAttr), columns.names);
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config.symbol_prefix);
+   if(config.include_group) {
+      builder.set_graph_attr(std::string(kTargetGroupsAttr), config.groups);
+   }
    if(config.parent_relation.has_value()) {
       builder.set_graph_attr(std::string(kParentRelationAttr), *config.parent_relation);
    }

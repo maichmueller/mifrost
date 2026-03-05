@@ -46,7 +46,7 @@ from ._rustworkx_dag import (
     _normalize_dag_leaf,
 )
 from ._action_contract import parse_flat_actions
-from .hgraph import HGraphEncoder
+from .hgraph import HGraphEncoder, TargetSource
 from .types import (
     HeteroEncoding,
     DomainInput,
@@ -152,6 +152,7 @@ class HorizonEncoder(HGraphEncoder):
         *,
         transition_mode: object | None = None,
         target_symbol_prefix: str | None = None,
+        target_sources: Iterable[TargetSource | str] | None = None,
         parent_relation: str | None = None,
         sibling_relation: str | None = None,
         cousin_relation: str | None = None,
@@ -195,6 +196,7 @@ class HorizonEncoder(HGraphEncoder):
             _engine_cls=HorizonHGraphEncoderEngine,
             transition_mode=transition_mode,
             target_symbol_prefix=target_symbol_prefix,
+            target_sources=target_sources,
             parent_relation=parent_relation,
             sibling_relation=sibling_relation,
             cousin_relation=cousin_relation,
