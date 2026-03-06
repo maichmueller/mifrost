@@ -81,6 +81,21 @@ BatchBuilder::BatchEncoding encode_single(
    return builder.build();
 }
 
+BatchBuilder::BatchEncoding encode_single(
+   mifrost::FlatRelationEncoderEngine& engine,
+   const mimir::search::State& state,
+   const mifrost::GoalInputs& goals,
+   std::span< const mimir::formalism::GroundAction > actions,
+   std::span< const mifrost::FlatRelationEncoderEngine::HistorySubgoal > history_subgoals,
+   std::optional< int > history_max_steps = std::nullopt
+)
+{
+   BatchBuilder builder;
+   engine.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
 std::optional< size_t >
 relation_index_for(const std::vector< std::string >& relation_names, std::string_view relation_name)
 {
@@ -104,6 +119,23 @@ std::vector< mifrost::LiteralVariant > goal_literals(const mimir::formalism::Pro
       out.emplace_back(goal);
    }
    return out;
+}
+
+std::vector< mifrost::FlatRelationEncoderEngine::HistorySubgoal > history_subgoals_for(
+   const mimir::formalism::Problem& problem
+)
+{
+   auto goals = goal_literals(problem);
+   if(goals.empty()) {
+      return {};
+   }
+   if(goals.size() == 1) {
+      return {{-1, {goals.front()}}};
+   }
+   if(goals.size() == 2) {
+      return {{-1, {goals[0]}}, {-2, {goals[1]}}};
+   }
+   return {{-1, {goals[0], goals[1]}}, {-2, {goals[2]}}};
 }
 
 }  // namespace
@@ -161,6 +193,9 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
    const auto node_sizes = i64_field(encoding, "node_sizes");
    const auto object_sizes = i64_field(encoding, "object_sizes");
    const auto object_indices = i64_field(encoding, "object_indices");
+   const auto history_entity_sizes = i64_field(encoding, "history_entity_sizes");
+   const auto history_entity_indices = i64_field(encoding, "history_entity_indices");
+   const auto history_entity_dt = i64_field(encoding, "history_entity_dt");
    const auto target_entity_sizes = i64_field(encoding, "target_entity_sizes");
    const auto target_entity_indices = i64_field(encoding, "target_entity_indices");
    const auto relation_counts = i64_field(encoding, "relation_counts");
@@ -168,11 +203,15 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
 
    ASSERT_EQ(node_sizes.size(), 1u);
    ASSERT_EQ(object_sizes.size(), 1u);
+   ASSERT_EQ(history_entity_sizes.size(), 1u);
    ASSERT_EQ(target_entity_sizes.size(), 1u);
    ASSERT_EQ(node_sizes.front(), static_cast< int64_t >(entity_names.size()));
    ASSERT_EQ(object_sizes.front(), static_cast< int64_t >(object_names.size()));
+   ASSERT_EQ(history_entity_sizes.front(), 0);
    ASSERT_EQ(target_entity_sizes.front(), 0);
    ASSERT_EQ(object_indices.size(), object_names.size());
+   ASSERT_TRUE(history_entity_indices.empty());
+   ASSERT_TRUE(history_entity_dt.empty());
    ASSERT_TRUE(target_entity_indices.empty());
    for(size_t idx = 0; idx < object_indices.size(); ++idx) {
       EXPECT_EQ(object_indices[idx], static_cast< int64_t >(idx));
@@ -217,6 +256,9 @@ TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)
    const auto batch_node_sizes = i64_field(batch, "node_sizes");
    const auto batch_object_sizes = i64_field(batch, "object_sizes");
    const auto batch_object_indices = i64_field(batch, "object_indices");
+   const auto batch_history_entity_sizes = i64_field(batch, "history_entity_sizes");
+   const auto batch_history_entity_indices = i64_field(batch, "history_entity_indices");
+   const auto batch_history_entity_dt = i64_field(batch, "history_entity_dt");
    const auto batch_target_entity_sizes = i64_field(batch, "target_entity_sizes");
    const auto batch_target_entity_indices = i64_field(batch, "target_entity_indices");
    const auto batch_relation_counts = i64_field(batch, "relation_counts");
@@ -224,7 +266,12 @@ TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)
 
    ASSERT_EQ(batch_node_sizes.size(), 2u);
    ASSERT_EQ(batch_object_sizes.size(), 2u);
+   ASSERT_EQ(batch_history_entity_sizes.size(), 2u);
    ASSERT_EQ(batch_target_entity_sizes.size(), 2u);
+   EXPECT_EQ(batch_history_entity_sizes[0], 0);
+   EXPECT_EQ(batch_history_entity_sizes[1], 0);
+   ASSERT_TRUE(batch_history_entity_indices.empty());
+   ASSERT_TRUE(batch_history_entity_dt.empty());
    ASSERT_TRUE(batch_target_entity_indices.empty());
    ASSERT_EQ(batch_relation_counts.size(), 2u * relation_count);
 
@@ -232,12 +279,16 @@ TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)
    const auto succ_node_sizes = i64_field(single_succ, "node_sizes");
    const auto root_object_sizes = i64_field(single_root, "object_sizes");
    const auto succ_object_sizes = i64_field(single_succ, "object_sizes");
+   const auto root_history_entity_sizes = i64_field(single_root, "history_entity_sizes");
+   const auto succ_history_entity_sizes = i64_field(single_succ, "history_entity_sizes");
    const auto root_target_entity_sizes = i64_field(single_root, "target_entity_sizes");
    const auto succ_target_entity_sizes = i64_field(single_succ, "target_entity_sizes");
    EXPECT_EQ(batch_node_sizes[0], root_node_sizes.front());
    EXPECT_EQ(batch_node_sizes[1], succ_node_sizes.front());
    EXPECT_EQ(batch_object_sizes[0], root_object_sizes.front());
    EXPECT_EQ(batch_object_sizes[1], succ_object_sizes.front());
+   EXPECT_EQ(batch_history_entity_sizes[0], root_history_entity_sizes.front());
+   EXPECT_EQ(batch_history_entity_sizes[1], succ_history_entity_sizes.front());
    EXPECT_EQ(batch_target_entity_sizes[0], root_target_entity_sizes.front());
    EXPECT_EQ(batch_target_entity_sizes[1], succ_target_entity_sizes.front());
 
@@ -650,6 +701,115 @@ TEST_P(FlatRelationEncoderTest, MixedTargetSourcesUseStableGroupOrder)
    EXPECT_EQ(first_arg_for(*subgoal_relation_idx), target_positions[1]);
 }
 
+TEST_P(FlatRelationEncoderTest, HistoryRelationsPopulateHistoryCarrierFields)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto history = history_subgoals_for(ctx.problem);
+   if(history.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals for history payloads.";
+   }
+
+   mifrost::GoalInputs goals;
+   for(const auto& literal : goal_literals(ctx.problem)) {
+      std::visit([&](const auto& value) { goals.append(value, 0); }, literal);
+   }
+
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain());
+   const auto encoded = encode_single(
+      engine,
+      ctx.root,
+      goals,
+      std::span< const mimir::formalism::GroundAction >{},
+      std::span{history}
+   );
+
+   const auto history_entity_sizes = i64_field(encoded, "history_entity_sizes");
+   const auto history_entity_indices = i64_field(encoded, "history_entity_indices");
+   const auto history_entity_dt = i64_field(encoded, "history_entity_dt");
+   const auto relation_sources = str_attr(encoded, "relation_sources");
+   const auto relation_counts = i64_field(encoded, "relation_counts");
+   std::vector< int64_t > expected_dt;
+   expected_dt.reserve(history.size());
+   for(const auto& [dt, _literals] : history) {
+      expected_dt.push_back(dt);
+   }
+   std::sort(expected_dt.begin(), expected_dt.end());
+
+   ASSERT_EQ(
+      history_entity_sizes, (std::vector< int64_t >{static_cast< int64_t >(history.size())})
+   );
+   ASSERT_EQ(history_entity_indices.size(), history.size());
+   EXPECT_EQ(history_entity_dt, expected_dt);
+
+   int64_t emitted_history_literals = 0;
+   for(size_t idx = 0; idx < relation_sources.size(); ++idx) {
+      if(relation_sources[idx] == "history") {
+         emitted_history_literals += relation_counts[idx];
+      }
+   }
+   int64_t expected_history_literals = 0;
+   for(const auto& [_dt, literals] : history) {
+      expected_history_literals += static_cast< int64_t >(literals.size());
+   }
+   EXPECT_EQ(emitted_history_literals, expected_history_literals);
+}
+
+TEST_P(FlatRelationEncoderTest, HistoryTargetsEmitSharedTargetMetadata)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto history = history_subgoals_for(ctx.problem);
+   if(history.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals for history payloads.";
+   }
+
+   mifrost::GoalInputs goals;
+   for(const auto& literal : goal_literals(ctx.problem)) {
+      std::visit([&](const auto& value) { goals.append(value, 0); }, literal);
+   }
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.target_sources = {mifrost::TargetSource::History};
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+   const auto encoded = encode_single(
+      engine,
+      ctx.root,
+      goals,
+      std::span< const mimir::formalism::GroundAction >{},
+      std::span{history}
+   );
+
+   const auto target_sizes = i64_field(encoded, "target_sizes");
+   const auto target_positions = i64_field(encoded, "target_positions");
+   const auto target_indices = i64_field(encoded, "target_indices");
+   const auto target_candidate_ids = i64_field(encoded, "target_candidate_ids");
+   const auto target_group_ids = i64_field(encoded, "target_group_ids");
+   const auto target_entity_group_ids = i64_field(encoded, "target_entity_group_ids");
+   const auto& target_groups = str_vec_attr(encoded, "target_groups");
+   const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
+   const auto& target_names = str_vec_attr(encoded, "target_names");
+
+   int64_t expected_target_count = 0;
+   for(const auto& [_dt, literals] : history) {
+      expected_target_count += static_cast< int64_t >(literals.size());
+   }
+   ASSERT_EQ(target_sizes, (std::vector< int64_t >{expected_target_count}));
+   ASSERT_EQ(target_positions.size(), static_cast< size_t >(expected_target_count));
+   EXPECT_EQ(target_indices.front(), 0);
+   EXPECT_EQ(target_candidate_ids.front(), 0);
+   EXPECT_EQ(target_indices.back(), expected_target_count - 1);
+   EXPECT_EQ(target_candidate_ids.back(), expected_target_count - 1);
+   EXPECT_EQ(target_group_ids, std::vector< int64_t >(target_group_ids.size(), 0));
+   EXPECT_EQ(target_entity_group_ids, std::vector< int64_t >(target_entity_group_ids.size(), 1));
+   EXPECT_EQ(target_groups, (std::vector< std::string >{"history"}));
+   EXPECT_EQ(target_entity_groups, (std::vector< std::string >{"action", "history"}));
+   ASSERT_EQ(target_names.size(), static_cast< size_t >(expected_target_count));
+   EXPECT_TRUE(std::all_of(target_names.begin(), target_names.end(), [](const auto& name) {
+      return name.rfind("history:", 0) == 0;
+   }));
+}
+
 TEST_P(FlatRelationEncoderTest, ReservedTargetSourcesAreRejected)
 {
    const auto param = GetParam();
@@ -657,15 +817,6 @@ TEST_P(FlatRelationEncoderTest, ReservedTargetSourcesAreRejected)
 
    mifrost::FlatRelationEncoderEngine::Config config;
    config.target_sources = {mifrost::TargetSource::States};
-   EXPECT_THROW(
-      {
-         auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);
-         (void) engine;
-      },
-      std::invalid_argument
-   );
-
-   config.target_sources = {mifrost::TargetSource::History};
    EXPECT_THROW(
       {
          auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);

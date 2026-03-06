@@ -15,6 +15,7 @@ from .base import (
     EncoderBase,
     GoalBatchInput,
     GoalBatchParam,
+    HistorySubgoalsBatchParam,
     StateBatchInput,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
@@ -24,12 +25,14 @@ from .common import (
     _advanced_state,
     _convert_batch_payload,
     _prepare_actions,
+    _prepare_history_subgoals,
     _split_goals,
 )
 from .flat_data import FlatRelationData
 from .types import (
     DomainInput,
     GoalLiteralInput,
+    HistorySubgoalInput,
     HomoEncoding,
     StateInput,
     default_goals_from_state,
@@ -61,13 +64,13 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         normalized_target_sources = normalize_target_sources(target_sources)
         if normalized_target_sources is not None:
             unsupported_sources = normalized_target_sources.intersection(
-                {TargetSource.States, TargetSource.History}
+                {TargetSource.States}
             )
             if unsupported_sources:
                 raise ValueError(
                     "FlatRelationEncoder currently supports target_sources="
-                    "{'action', 'goal', 'subgoal'} only; 'state' and 'history' "
-                    "are reserved for the upcoming flat successor/horizon encoders"
+                    "{'action', 'goal', 'subgoal', 'history'} only; 'state' "
+                    "is reserved for the upcoming flat successor/horizon encoders"
                 )
         config_kwargs: dict[str, object] = {
             "max_goal_level": max_goal_level,
@@ -99,6 +102,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
     def relation_dict(self):
         return self._engine.relation_dict
 
+    def _accepted_kwargs(self) -> set[str]:
+        return {"history_subgoals", "history_max_steps"}
+
     def _encode(
         self,
         state: StateInput,
@@ -106,16 +112,27 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
     ) -> HomoEncoding:
         adv_state = _advanced_state(state)
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
-        if goals is None and subgoal_layers is None:
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if goals is None and subgoal_layers is None and not history_list:
             if action_list:
                 return self._engine.encode(adv_state, action_list)
             return self._engine.encode(adv_state)
         goals_input = goals if goals is not None else default_goals_from_state(state)
         split_goals = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            return self._engine.encode(
+                adv_state,
+                split_goals,
+                action_list,
+                history_list,
+                history_max_steps,
+            )
         if action_list:
             return self._engine.encode(adv_state, split_goals, action_list)
         return self._engine.encode(adv_state, split_goals)
@@ -127,6 +144,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs: object,
     ) -> HomoEncoding:
@@ -135,6 +154,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             include_metadata=include_metadata,
             **kwargs,
         )
@@ -146,6 +167,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
     ) -> HomoEncoding:
         states_for_core = _convert_batch_payload(
             states,
@@ -167,11 +190,18 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
+        history_subgoals_for_core = _convert_batch_payload(
+            history_subgoals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        )
         return self._engine.encode_batch(
             states_for_core,
             goals=goals_for_core,
             actions=actions_for_core,
             subgoal_layers=subgoal_layers_for_core,
+            history_subgoals=history_subgoals_for_core,
+            history_max_steps=history_max_steps,
         )
 
     def encode_batch(
@@ -181,6 +211,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
@@ -191,6 +223,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
             batch_attrs=batch_attrs,
             collate_spec=collate_spec,
             include_metadata=include_metadata,
@@ -211,6 +245,14 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         start, end = data.graph_node_range(graph_index)
         node_names = data.graph_node_names(graph_index)
         name_by_global = {start + idx: node_names[idx] for idx in range(end - start)}
+        history_entity_dt_by_index = {
+            int(global_idx): int(dt)
+            for global_idx, dt in zip(
+                data.graph_history_entity_indices(graph_index).tolist(),
+                data.graph_history_entity_dt(graph_index).tolist(),
+                strict=True,
+            )
+        }
         target_entity_indices = data.graph_target_entity_indices(graph_index)
         target_entity_group_ids = data.graph_target_entity_group_ids(graph_index)
         target_entity_groups = list(getattr(data, "target_entity_groups", ()))
@@ -230,12 +272,19 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             target_group_id, target_group_name = target_entity_group_by_index.get(
                 global_idx, (None, None)
             )
-            entity_kind = "target_entity" if target_group_name is not None else "object"
+            history_dt = history_entity_dt_by_index.get(global_idx)
+            if target_group_name is not None:
+                entity_kind = "target_entity"
+            elif history_dt is not None:
+                entity_kind = "history_entity"
+            else:
+                entity_kind = "object"
             graph.add_node(
                 label,
                 type="entity",
                 kind="entity",
                 entity_kind=entity_kind,
+                history_dt=history_dt,
                 target_group_id=target_group_id,
                 target_group=target_group_name,
                 global_index=global_idx,
@@ -321,6 +370,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 "goal": "#f9d7dd",
                 "subgoal": "#dbecc8",
                 "action": "#d8ecff",
+                "history": "#e6d7ff",
+                "history_entity": "#e8def8",
                 "target_entity": "#d8ecff",
             }
             nx.draw_networkx_nodes(
@@ -341,6 +392,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 "goal": "#c06c84",
                 "goal_satisfaction": "#6c9a8b",
                 "action": "#f08a24",
+                "history": "#7b5ea7",
                 "relation": "#666666",
             }
             nx.draw_networkx_nodes(

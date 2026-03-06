@@ -185,6 +185,7 @@ class FlatRelationData(Data):
         if key in {
             "relation_args",
             "object_indices",
+            "history_entity_indices",
             "target_entity_indices",
             "target_positions",
         }:
@@ -310,6 +311,31 @@ class FlatRelationData(Data):
             size_field_name="object_sizes",
             graph_index=graph_index,
         )
+
+    def graph_history_entity_indices(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="history_entity_indices",
+            size_field_name="history_entity_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_history_entity_dt(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="history_entity_dt",
+            size_field_name="history_entity_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_history_entity_names(self, graph_index: int = 0) -> list[str]:
+        history_entity_indices = self.graph_history_entity_indices(graph_index)
+        if history_entity_indices.numel() == 0:
+            return []
+        start, _end = self.graph_node_range(graph_index)
+        local_names = self.graph_node_names(graph_index)
+        return [
+            str(local_names[int(global_idx.item()) - start])
+            for global_idx in history_entity_indices
+        ]
 
     def graph_target_entity_indices(
         self, graph_index: int = 0, group: str | int | None = None

@@ -1,6 +1,9 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 #include "mifrost/binding_kwargs.hpp"
@@ -94,6 +97,26 @@ void init_flat_encoder(nb::module_& m)
          [](FlatRelationEncoderEngine& encoder,
             const mimir::search::State& state,
             const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
+            std::optional< int > history_max_steps) {
+            BatchBuilder builder;
+            builder.set_graph_kind("homo");
+            encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
+            builder.next_graph();
+            return builder.build();
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
             const std::vector< mimir::formalism::GroundAction >& actions) {
             BatchBuilder builder;
             builder.set_graph_kind("homo");
@@ -143,6 +166,24 @@ void init_flat_encoder(nb::module_& m)
             const mimir::search::State& state,
             const GoalInputs& goals,
             const std::vector< mimir::formalism::GroundAction >& actions,
+            const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
+            std::optional< int > history_max_steps,
+            BatchBuilder& builder) {
+            encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         "builder"_a
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
             BatchBuilder& builder) { encoder.encode(state, goals, actions, builder); },
          "state"_a,
          "goals"_a,
@@ -165,16 +206,20 @@ void init_flat_encoder(nb::module_& m)
             nb::object states,
             nb::object goals,
             nb::object actions,
-            nb::object subgoal_layers) {
+            nb::object subgoal_layers,
+            nb::object history_subgoals,
+            std::optional< int > history_max_steps) {
             auto parsed = batch_input::parse_flat_batch_inputs(
-               states, goals, actions, subgoal_layers
+               states, goals, actions, subgoal_layers, history_subgoals
             );
-            return encoder.encode_batch(parsed);
+            return encoder.encode_batch(parsed, history_max_steps);
          },
          "states"_a,
          "goals"_a = nb::none(),
          "actions"_a = nb::none(),
-         "subgoal_layers"_a = nb::none()
+         "subgoal_layers"_a = nb::none(),
+         "history_subgoals"_a = nb::none(),
+         "history_max_steps"_a = std::nullopt
       );
 }
 

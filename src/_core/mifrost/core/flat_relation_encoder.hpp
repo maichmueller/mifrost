@@ -31,6 +31,8 @@ struct FlatBatchInputs;
 
 class FlatRelationEncoderEngine {
   public:
+   using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
+
    struct Config {
       size_t max_goal_level = 0;
       bool support_literals = false;
@@ -62,14 +64,24 @@ class FlatRelationEncoderEngine {
    };
 
    struct EncodingContext {
+      struct HistoryEntry {
+         int dt = 0;
+         size_t entry_idx = 0;
+         int64_t entity_index = -1;
+         std::vector< LiteralVariant > literals;
+      };
+
       hash_map< int64_t, int64_t > entity_index_by_object_id;
       hash_map< TargetEntityKey, int64_t, TargetEntityKeyHash, std::equal_to< TargetEntityKey > >
          target_entity_index_by_key;
       std::vector< std::string > entity_names;
       std::vector< std::string > object_names;
       std::vector< int64_t > object_indices;
+      std::vector< int64_t > history_entity_indices;
+      std::vector< int64_t > history_entity_dt;
       std::vector< int64_t > target_entity_indices;
       std::vector< int64_t > target_entity_group_ids;
+      std::vector< HistoryEntry > history_entries;
       std::vector< mimir::formalism::GroundAction > unique_actions;
       TargetColumns target_columns;
    };
@@ -97,7 +109,18 @@ class FlatRelationEncoderEngine {
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder
    );
-   BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::FlatBatchInputs& inputs);
+   void encode(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      std::span< const HistorySubgoal > history_subgoals,
+      std::optional< int > history_max_steps,
+      BatchBuilder& builder
+   );
+   BatchBuilder::BatchEncoding encode_batch(
+      const batch_input::parsed::FlatBatchInputs& inputs,
+      std::optional< int > history_max_steps = std::nullopt
+   );
 
    [[nodiscard]] const Config& get_config() const { return config_; }
    [[nodiscard]] const RelationDict& get_relation_dict() const { return relation_dict_; }
@@ -125,6 +148,7 @@ class FlatRelationEncoderEngine {
    class GoalFactsComponent;
    class GoalSatisfactionComponent;
    class GroundActionsComponent;
+   class HistoryFactsComponent;
 
    void validate_config() const;
    void initialize_from_domain();
@@ -133,19 +157,25 @@ class FlatRelationEncoderEngine {
    void encode_default_goals(
       const mimir::search::State& state,
       std::span< const mimir::formalism::GroundAction > actions,
+      std::span< const HistorySubgoal > history_subgoals,
+      std::optional< int > history_max_steps,
       BatchBuilder& builder
    );
    void encode_impl(
       const mimir::search::State& state,
       const GoalInputs& goals,
       std::span< const mimir::formalism::GroundAction > actions,
+      std::span< const HistorySubgoal > history_subgoals,
+      std::optional< int > history_max_steps,
       BatchBuilder& builder,
       std::vector< std::string >* batch_target_names = nullptr
    );
    EncodingContext make_context(
       const mimir::search::State& state,
       const GoalInputs& goals,
-      std::span< const mimir::formalism::GroundAction > actions
+      std::span< const mimir::formalism::GroundAction > actions,
+      std::span< const HistorySubgoal > history_subgoals,
+      std::optional< int > history_max_steps
    ) const;
    int relation_id_for(const std::string& name) const;
    [[nodiscard]] bool has_target_source(TargetSource source) const;

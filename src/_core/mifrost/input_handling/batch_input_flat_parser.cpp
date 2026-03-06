@@ -6,7 +6,8 @@ parsed::FlatBatchInputs parse_flat_batch_inputs(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,
-   nb::handle subgoal_layers
+   nb::handle subgoal_layers,
+   nb::handle history_subgoals
 )
 {
    parsed::FlatBatchInputs out;
@@ -15,6 +16,7 @@ parsed::FlatBatchInputs parse_flat_batch_inputs(
    out.goals = parse_goals_batch_param(goals, state_count);
    out.actions = parse_actions_batch_param(actions, state_count);
    out.subgoal_layers = parse_subgoal_layers_batch_param(subgoal_layers, state_count);
+   out.history_subgoals = parse_history_subgoals_batch_param(history_subgoals, state_count);
    return out;
 }
 

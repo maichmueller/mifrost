@@ -113,6 +113,7 @@ struct MIFROST_LOCAL FlatBatchInputs {
    GoalBatch goals;
    ActionBatch actions;
    SubgoalLayersBatch subgoal_layers;
+   HistoryBatch history_subgoals;
 };
 
 struct MIFROST_LOCAL SuccessorBatchInputs {
@@ -175,7 +176,8 @@ MIFROST_LOCAL parsed::FlatBatchInputs parse_flat_batch_inputs(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,
-   nb::handle subgoal_layers
+   nb::handle subgoal_layers,
+   nb::handle history_subgoals
 );
 
 MIFROST_LOCAL parsed::SuccessorBatchInputs parse_successor_batch_inputs(

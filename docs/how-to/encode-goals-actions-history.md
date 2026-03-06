@@ -44,16 +44,18 @@ If your planner emits lookahead or macro-transition structures (for example from
 
 ## History Subgoals
 
-`HGraphEncoder` also supports history-aware subgoals:
+`HGraphEncoder` and `FlatRelationEncoder` support history-aware subgoals:
 
 ```python
 enc = encoder.encode(
     state,
     goals=goals,
-    history_subgoals=[(1, literals_t_minus_1), (2, literals_t_minus_2)],
+    history_subgoals=[(-1, literals_t_minus_1), (-2, literals_t_minus_2)],
     history_max_steps=4,
 )
 ```
+
+History `dt` values must be negative. `-1` means one step in the past.
 
 ## Notes
 

@@ -25,6 +25,30 @@ def _assert_flat_batch_equal(
     assert torch.equal(actual.node_sizes, expected.node_sizes)
     assert torch.equal(actual.object_sizes, expected.object_sizes)
     assert torch.equal(actual.object_indices, expected.object_indices)
+    actual_history_entity_sizes = getattr(actual, "history_entity_sizes", None)
+    expected_history_entity_sizes = getattr(expected, "history_entity_sizes", None)
+    if actual_history_entity_sizes is None or expected_history_entity_sizes is None:
+        assert actual_history_entity_sizes is expected_history_entity_sizes
+    else:
+        assert torch.equal(
+            actual_history_entity_sizes,
+            expected_history_entity_sizes,
+        )
+    actual_history_entity_indices = getattr(actual, "history_entity_indices", None)
+    expected_history_entity_indices = getattr(expected, "history_entity_indices", None)
+    if actual_history_entity_indices is None or expected_history_entity_indices is None:
+        assert actual_history_entity_indices is expected_history_entity_indices
+    else:
+        assert torch.equal(
+            actual_history_entity_indices,
+            expected_history_entity_indices,
+        )
+    actual_history_entity_dt = getattr(actual, "history_entity_dt", None)
+    expected_history_entity_dt = getattr(expected, "history_entity_dt", None)
+    if actual_history_entity_dt is None or expected_history_entity_dt is None:
+        assert actual_history_entity_dt is expected_history_entity_dt
+    else:
+        assert torch.equal(actual_history_entity_dt, expected_history_entity_dt)
     actual_target_entity_sizes = getattr(actual, "target_entity_sizes", None)
     expected_target_entity_sizes = getattr(expected, "target_entity_sizes", None)
     if actual_target_entity_sizes is None or expected_target_entity_sizes is None:
@@ -128,6 +152,24 @@ def _two_problem_goals(problem):
 
 def _adv_goal_literal(goal):
     return getattr(goal, "_advanced_ground_literal", goal)
+
+
+def _history_inputs(problem):
+    goals = _problem_goals(problem)
+    if len(goals) == 1:
+        return goals, [(-1, goals)]
+    if len(goals) == 2:
+        return goals, [(-1, goals[:1]), (-2, goals[1:2])]
+    return goals, [(-1, goals[:2]), (-2, goals[2:3])]
+
+
+def _filtered_history_inputs(history_subgoals, history_max_steps: int | None = None):
+    out = []
+    for dt, literals in history_subgoals:
+        if history_max_steps is not None and abs(int(dt)) > history_max_steps:
+            continue
+        out.append((int(dt), list(literals)))
+    return sorted(out, key=lambda item: item[0])
 
 
 def test_flat_relation_encoder_returns_flat_relation_data(small_blocks):
@@ -283,6 +325,37 @@ def test_flat_relation_batch_accepts_per_state_none_action_entries(small_blocks)
     )
     expected = encoder.encode_batch([state, state], actions=[[], [action]]).as_pyg(
         as_batch=True
+    )
+
+    _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_relation_batch_matches_from_data_list_with_history(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(domain)
+    state = problem.get_initial_state()
+    goals, history_subgoals = _history_inputs(problem)
+
+    actual = encoder.encode_batch(
+        [state, state],
+        goals=goals,
+        history_subgoals=[history_subgoals, [(-1, [goals[0]])]],
+    ).as_pyg(as_batch=True)
+    expected = flat_relation_data_from_pyg(
+        Batch.from_data_list(
+            [
+                encoder.encode_pyg(
+                    state,
+                    goals=goals,
+                    history_subgoals=history_subgoals,
+                ),
+                encoder.encode_pyg(
+                    state,
+                    goals=goals,
+                    history_subgoals=[(-1, [goals[0]])],
+                ),
+            ]
+        )
     )
 
     _assert_flat_batch_equal(actual, expected)
@@ -577,13 +650,140 @@ def test_flat_relation_goal_targets_preserve_duplicate_candidates_and_empty_grap
     _assert_flat_batch_equal(actual, expected)
 
 
-@pytest.mark.parametrize(
-    "target_source",
-    [mifrost.TargetSource.States, mifrost.TargetSource.History],
-)
-def test_flat_relation_encoder_rejects_reserved_target_sources(
+def test_flat_relation_history_entities_and_relations(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(domain)
+    goals, history_subgoals = _history_inputs(problem)
+
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=history_subgoals,
+    )
+
+    filtered_history = _filtered_history_inputs(history_subgoals)
+    expected_history_literals = sum(len(literals) for _dt, literals in filtered_history)
+    assert data.history_entity_sizes.tolist() == [len(filtered_history)]
+    assert data.graph_history_entity_dt(0).tolist() == [
+        dt for dt, _literals in filtered_history
+    ]
+    assert all(
+        name.startswith("history:") for name in data.graph_history_entity_names(0)
+    )
+    emitted_history_literals = sum(
+        int(data.flattened_relations[relation_name].shape[0])
+        for relation_idx, relation_name in enumerate(data.schema.names)
+        if data.schema.sources[relation_idx] == "history"
+    )
+    assert emitted_history_literals == expected_history_literals
+
+
+def test_flat_relation_history_max_steps_filters(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(domain)
+    goals, history_subgoals = _history_inputs(problem)
+
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=history_subgoals,
+        history_max_steps=1,
+    )
+
+    assert data.history_entity_sizes.tolist() == [1]
+    assert data.graph_history_entity_dt(0).tolist() == [-1]
+
+
+def test_flat_relation_history_target_metadata(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.History],
+    )
+    goals, history_subgoals = _history_inputs(problem)
+    filtered_history = _filtered_history_inputs(history_subgoals)
+
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=history_subgoals,
+    )
+
+    expected_target_count = sum(len(literals) for _dt, literals in filtered_history)
+    assert data.target_sizes.tolist() == [expected_target_count]
+    assert list(data.target_groups) == ["history"]
+    assert list(data.target_entity_groups) == ["action", "history"]
+    assert data.target_indices.tolist() == list(range(expected_target_count))
+    assert data.target_candidate_ids.tolist() == list(range(expected_target_count))
+    assert data.target_group_ids.tolist() == [0] * expected_target_count
+    assert data.graph_target_entity_names(
+        0, group="history"
+    ) == data.graph_target_names(0)
+    assert data.graph_target_positions(0).tolist() == (
+        data.graph_target_entity_indices(0, group="history").tolist()
+    )
+    assert data.graph_target_entity_group_ids(0).tolist() == [1] * expected_target_count
+    assert all(name.startswith("history:") for name in data.graph_target_names(0))
+
+
+def test_flat_relation_history_target_metadata_disambiguates_same_literal_across_timesteps(
     small_blocks,
-    target_source,
+):
+    _space, domain, problem = small_blocks
+    goals = _problem_goals(problem)
+    goal = goals[0]
+    encoder = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.History],
+    )
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=[(-1, [goal]), (-2, [goal])],
+    )
+
+    assert list(data.target_groups) == ["history"]
+    assert data.target_indices.tolist() == [0, 1]
+    assert data.target_candidate_ids.tolist() == [0, 1]
+    assert data.target_group_ids.tolist() == [0, 0]
+    assert data.target_positions.tolist()[0] != data.target_positions.tolist()[1]
+    assert data.graph_target_names(0)[0] != data.graph_target_names(0)[1]
+
+
+def test_flat_relation_history_visualization_marks_history_entities(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.History],
+    )
+    goals, history_subgoals = _history_inputs(problem)
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=history_subgoals,
+    )
+
+    graph = encoder.to_networkx(data)
+    history_entities = [
+        node
+        for node, attrs in graph.nodes(data=True)
+        if attrs.get("entity_kind") == "history_entity"
+    ]
+    history_targets = [
+        node
+        for node, attrs in graph.nodes(data=True)
+        if attrs.get("target_group") == "history"
+    ]
+
+    assert history_entities
+    assert history_targets
+    assert all(
+        graph.nodes[node].get("history_dt") is not None for node in history_entities
+    )
+
+
+def test_flat_relation_encoder_rejects_reserved_state_target_source(
+    small_blocks,
 ):
     _space, domain, _problem = small_blocks
 
@@ -591,7 +791,7 @@ def test_flat_relation_encoder_rejects_reserved_target_sources(
         ValueError,
         match="reserved for the upcoming flat successor/horizon encoders",
     ):
-        FlatRelationEncoder(domain, target_sources=[target_source])
+        FlatRelationEncoder(domain, target_sources=[mifrost.TargetSource.States])
 
 
 def test_flat_relation_visualization_is_reconstructable(small_blocks):
