@@ -28,6 +28,15 @@ def _history_inputs(problem):
     return goals, [(-1, goals[:2]), (-2, goals[2:3])]
 
 
+def _filtered_history_inputs(history_subgoals, history_max_steps: int | None = None):
+    out = []
+    for dt, literals in history_subgoals:
+        if history_max_steps is not None and abs(int(dt)) > history_max_steps:
+            continue
+        out.append((int(dt), list(literals)))
+    return sorted(out, key=lambda item: item[0])
+
+
 @pytest.mark.parametrize(
     "domain_name,problem_name",
     DOMAIN_CASES,
@@ -160,6 +169,74 @@ def test_history_batch_and_stream_parity(domain_name, problem_name):
     stream_parts = stream.flush()
 
     keywise_equal(batch_parts, stream_parts)
+
+
+@pytest.mark.parametrize(
+    "domain_name,problem_name",
+    DOMAIN_CASES,
+    ids=[f"{d}:{p}" for d, p in DOMAIN_CASES],
+)
+def test_history_target_metadata(domain_name, problem_name):
+    _, domain, problem = problem_setup(domain_name, problem_name)
+    encoder = HGraphEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.History],
+    )
+    state = problem.get_initial_state()
+    goals, history_subgoals = _history_inputs(problem)
+    filtered_history = _filtered_history_inputs(history_subgoals)
+
+    encoding = encoder.encode(state, goals=goals, history_subgoals=history_subgoals)
+    data = encoding.as_pyg(as_batch=True)
+
+    expected_target_count = sum(len(literals) for _dt, literals in filtered_history)
+    assert expected_target_count > 0
+    assert encoding.has_field("target_positions")
+    assert encoding.has_field("target_indices")
+    assert encoding.has_field("target_candidate_ids")
+    assert encoding.has_field("target_group_ids")
+    assert list(data.target_groups) == ["history"]
+    assert len(data.target_positions.tolist()) == expected_target_count
+    assert data.target_indices.tolist() == list(range(expected_target_count))
+    assert data.target_candidate_ids.tolist() == list(range(expected_target_count))
+    assert data.target_group_ids.tolist() == [0] * expected_target_count
+    assert len(list(data.target_names)) == expected_target_count
+    assert all(str(name).startswith("history:") for name in data.target_names)
+
+    expected_literals = []
+    formatter = mifrost.RelationFormatter
+    for dt, literals in filtered_history:
+        for literal in literals:
+            formatted = formatter.format_literal(to_advanced_literal(literal), None)
+            expected_literals.append((dt, formatted))
+    for target_name, (dt, literal_name) in zip(
+        list(data.target_names), expected_literals, strict=True
+    ):
+        assert f"history:{dt}" in str(target_name)
+        assert literal_name in str(target_name)
+
+
+def test_history_target_metadata_disambiguates_same_literal_across_timesteps():
+    _, domain, problem = problem_setup("blocks", "smedium")
+    goals = list(problem.get_goal_condition().get_literals())
+    if not goals:
+        pytest.skip("Problem has no goal literals for history encoding.")
+
+    goal = goals[0]
+    encoder = HGraphEncoder(domain, target_sources=[mifrost.TargetSource.History])
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        goals=goals,
+        history_subgoals=[(-1, [goal]), (-2, [goal])],
+    )
+
+    assert list(data.target_groups) == ["history"]
+    assert data.target_indices.tolist() == [0, 1]
+    assert data.target_candidate_ids.tolist() == [0, 1]
+    assert data.target_group_ids.tolist() == [0, 0]
+    assert len(list(data.target_names)) == 2
+    assert data.target_positions.tolist()[0] != data.target_positions.tolist()[1]
+    assert list(data.target_names)[0] != list(data.target_names)[1]
 
 
 def test_history_custom_relation_override():

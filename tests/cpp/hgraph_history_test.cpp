@@ -140,6 +140,67 @@ TEST_P(HGraphHistoryTest, HistoryNodesAndEdgesPresent)
    }
 }
 
+TEST_P(HGraphHistoryTest, HistoryTargetsEmitSharedTargetMetadata)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto goals = collect_goals(ctx.problem);
+   if(goals.empty()) {
+      GTEST_SKIP() << "No goal literals available for history target encoding.";
+   }
+
+   std::vector< mifrost::HGraphEncoderEngine::HistorySubgoal > history;
+   history.push_back({-2, {goals.front()}});
+   history.push_back({-1, {goals.front()}});
+
+   mifrost::GoalInputs inputs = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::HGraphEncoderEngine::Config config;
+   config.target_sources = {mifrost::TargetSource::History};
+   mifrost::HGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   engine.encode(ctx.root, inputs, {}, history, std::nullopt, builder);
+   builder.next_graph();
+
+   ASSERT_NE(builder.graph_fields, nullptr);
+   EXPECT_TRUE(builder.graph_fields->contains("target_positions"));
+   EXPECT_TRUE(builder.graph_fields->contains("target_indices"));
+   EXPECT_TRUE(builder.graph_fields->contains("target_candidate_ids"));
+   EXPECT_TRUE(builder.graph_fields->contains("target_group_ids"));
+   ASSERT_TRUE(builder.graph_attrs.contains("target_names"));
+   ASSERT_TRUE(builder.graph_attrs.contains("target_groups"));
+
+   const auto& positions = std::get< std::vector< int64_t > >(
+      builder.graph_fields->at("target_positions").values
+   );
+   const auto& indices = std::get< std::vector< int64_t > >(
+      builder.graph_fields->at("target_indices").values
+   );
+   const auto& candidate_ids = std::get< std::vector< int64_t > >(
+      builder.graph_fields->at("target_candidate_ids").values
+   );
+   const auto& group_ids = std::get< std::vector< int64_t > >(
+      builder.graph_fields->at("target_group_ids").values
+   );
+   const auto& target_names = std::get< std::vector< std::string > >(
+      builder.graph_attrs.at("target_names")
+   );
+   const auto& target_groups = std::get< std::vector< std::string > >(
+      builder.graph_attrs.at("target_groups")
+   );
+
+   ASSERT_EQ(positions.size(), 2u);
+   EXPECT_EQ(indices, (std::vector< int64_t >{0, 1}));
+   EXPECT_EQ(candidate_ids, (std::vector< int64_t >{0, 1}));
+   EXPECT_EQ(group_ids, (std::vector< int64_t >{0, 0}));
+   EXPECT_EQ(target_groups, (std::vector< std::string >{"history"}));
+   ASSERT_EQ(target_names.size(), 2u);
+   EXPECT_NE(positions[0], positions[1]);
+   EXPECT_NE(target_names[0], target_names[1]);
+   EXPECT_NE(target_names[0].find("history:-2"), std::string::npos);
+   EXPECT_NE(target_names[1].find("history:-1"), std::string::npos);
+}
+
 INSTANTIATE_TEST_SUITE_P(
    SmallDomains,
    HGraphHistoryTest,

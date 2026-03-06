@@ -253,6 +253,33 @@ def test_hgraph_target_groups_include_enabled_sources_even_when_empty(small_bloc
     assert data.target_indices.tolist() == [0]
 
 
+def test_hgraph_target_groups_order_goal_action_history(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _first_goal(problem)
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[
+            mifrost.TargetSource.Actions,
+            mifrost.TargetSource.Goals,
+            mifrost.TargetSource.History,
+        ],
+    )
+    data = encoder.encode(
+        state,
+        goals=[goal],
+        actions=[action0],
+        history_subgoals=[(-1, [goal])],
+    ).as_pyg(as_batch=True)
+
+    assert list(data.target_groups) == ["goal", "action", "history"]
+    assert data.target_group_ids.tolist() == [0, 1, 2]
+    assert data.target_indices.tolist() == [0, 1, 2]
+
+
 def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

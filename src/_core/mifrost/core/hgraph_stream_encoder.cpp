@@ -425,10 +425,9 @@ void HGraphEncoderEngine::encode_impl_core(
       workspace.symbol_to_relations
    );
    encode_goal_inputs(goals, builder, workspace);
-   if(not history_subgoals.empty()) {
-      encode_history(
-         history_subgoals,
-         history_max_steps,
+   if(not config_.ignore_actions) {
+      encode_actions(
+         actions,
          builder,
          workspace.node_indices,
          workspace.node_names,
@@ -436,9 +435,10 @@ void HGraphEncoderEngine::encode_impl_core(
          workspace.symbol_to_relations
       );
    }
-   if(not config_.ignore_actions) {
-      encode_actions(
-         actions,
+   if(not history_subgoals.empty()) {
+      encode_history(
+         history_subgoals,
+         history_max_steps,
          builder,
          workspace.node_indices,
          workspace.node_names,
@@ -724,6 +724,7 @@ void HGraphEncoderEngine::encode_history(
 )
 {
    builder.set_node_feature_dim("history", 1);
+   const bool target_history = has_target_source(TargetSource::History);
 
    struct HistoryEntry {
       int dt = 0;
@@ -751,6 +752,13 @@ void HGraphEncoderEngine::encode_history(
 
    std::vector< float > history_dt;
    history_dt.reserve(entries.size());
+   if(target_history) {
+      size_t target_count = 0;
+      for(const auto& entry : entries) {
+         target_count += entry.literals.size();
+      }
+      workspace_.targets.reserve(target_count, /*include_depth=*/false, /*include_group=*/true);
+   }
    bool wrote_history = false;
 
    for(size_t entry_idx = 0; entry_idx < entries.size(); ++entry_idx) {
@@ -806,6 +814,65 @@ void HGraphEncoderEngine::encode_history(
                   }
                }
 
+               std::vector< int64_t > extra_symbol_ids;
+               if(target_history) {
+                  const std::string formatted_literal = RelationFormatter::format_literal< Tag >(
+                     literal, std::nullopt
+                  );
+                  const std::string target_name = fmt::format(
+                     "history:{}#{}:{}", entry.dt, entry_idx, formatted_literal
+                  );
+                  const std::string target_symbol_key = fmt::format(
+                     "{}{}{}{}{}{}{}{}{}{}{}{}",
+                     config_.target_symbol_prefix,
+                     target_group_name(TargetSource::History),
+                     schema_key::kEdgeTypeSeparator,
+                     entry.dt,
+                     schema_key::kEdgeTypeSeparator,
+                     entry_idx,
+                     schema_key::kEdgeTypeSeparator,
+                     node_type,
+                     schema_key::kEdgeTypeSeparator,
+                     literal->get_polarity() ? 1 : 0,
+                     schema_key::kEdgeTypeSeparator,
+                     atom->get_index()
+                  );
+                  const std::string target_symbol_name = config_.export_node_names
+                                                            ? fmt::format(
+                                                                 "{}{}{}",
+                                                                 target_symbol_key,
+                                                                 schema_key::kEdgeTypeSeparator,
+                                                                 target_name
+                                                              )
+                                                            : target_symbol_key;
+                  const auto target_symbol_idx = get_or_add_symbol_special_node(
+                     target_symbol_key, target_symbol_name, builder, node_names
+                  );
+                  const auto target_symbol_id = get_or_assign_special_symbol_id(target_symbol_key);
+                  if(config_.include_lgan_edges) {
+                     workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
+                  }
+                  append_target_candidate(target_symbol_idx, TargetSource::History, target_name);
+                  extra_symbol_ids.emplace_back(target_symbol_id);
+                  const std::string pos_str = std::to_string(object_symbol_ids.size());
+                  append_edges(
+                     builder,
+                     config_.symbol_type_id,
+                     pos_str,
+                     node_type,
+                     target_symbol_idx,
+                     relation_idx
+                  );
+                  append_edges(
+                     builder,
+                     node_type,
+                     pos_str,
+                     config_.symbol_type_id,
+                     relation_idx,
+                     target_symbol_idx
+                  );
+               }
+
                if(is_new) {
                   for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
                      const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
@@ -823,7 +890,7 @@ void HGraphEncoderEngine::encode_history(
                track_relation_symbols_if_enabled(
                   rel_ref,
                   std::span{object_symbol_ids},
-                  std::span< const int64_t >{},
+                  std::span{extra_symbol_ids},
                   relation_to_symbols,
                   symbol_to_relations
                );
