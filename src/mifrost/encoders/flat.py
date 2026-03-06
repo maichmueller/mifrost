@@ -59,6 +59,16 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goal_satisfaction_derivations: Iterable[object] | None = None,
     ) -> None:
         normalized_target_sources = normalize_target_sources(target_sources)
+        if normalized_target_sources is not None:
+            unsupported_sources = normalized_target_sources.intersection(
+                {TargetSource.States, TargetSource.History}
+            )
+            if unsupported_sources:
+                raise ValueError(
+                    "FlatRelationEncoder currently supports target_sources="
+                    "{'action', 'goal', 'subgoal'} only; 'state' and 'history' "
+                    "are reserved for the upcoming flat successor/horizon encoders"
+                )
         config_kwargs: dict[str, object] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
@@ -201,20 +211,33 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         start, end = data.graph_node_range(graph_index)
         node_names = data.graph_node_names(graph_index)
         name_by_global = {start + idx: node_names[idx] for idx in range(end - start)}
-        target_entity_indices = {
-            int(idx.item()) for idx in data.graph_target_entity_indices(graph_index)
-        }
+        target_entity_indices = data.graph_target_entity_indices(graph_index)
+        target_entity_group_ids = data.graph_target_entity_group_ids(graph_index)
+        target_entity_groups = list(getattr(data, "target_entity_groups", ()))
+        target_entity_group_by_index: dict[int, tuple[int | None, str | None]] = {}
+        for global_idx, group_id in zip(
+            target_entity_indices.tolist(),
+            target_entity_group_ids.tolist(),
+            strict=True,
+        ):
+            group_name = None
+            if 0 <= group_id < len(target_entity_groups):
+                group_name = str(target_entity_groups[group_id])
+            target_entity_group_by_index[int(global_idx)] = (int(group_id), group_name)
 
         for global_idx in range(start, end):
             label = name_by_global.get(global_idx, f"entity:{global_idx}")
-            entity_kind = (
-                "target_entity" if global_idx in target_entity_indices else "object"
+            target_group_id, target_group_name = target_entity_group_by_index.get(
+                global_idx, (None, None)
             )
+            entity_kind = "target_entity" if target_group_name is not None else "object"
             graph.add_node(
                 label,
                 type="entity",
                 kind="entity",
                 entity_kind=entity_kind,
+                target_group_id=target_group_id,
+                target_group=target_group_name,
                 global_index=global_idx,
                 graph_index=graph_index,
             )
@@ -288,16 +311,24 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         ]
 
         if entity_nodes:
-            entity_kinds = [
-                graph.nodes[node].get("entity_kind", "object") for node in entity_nodes
+            entity_groups = [
+                graph.nodes[node].get("target_group")
+                or graph.nodes[node].get("entity_kind", "object")
+                for node in entity_nodes
             ]
+            entity_palette = {
+                "object": "#f3efe0",
+                "goal": "#f9d7dd",
+                "subgoal": "#dbecc8",
+                "action": "#d8ecff",
+                "target_entity": "#d8ecff",
+            }
             nx.draw_networkx_nodes(
                 graph,
                 pos,
                 nodelist=entity_nodes,
                 node_color=[
-                    "#f3efe0" if entity_kind == "object" else "#d8ecff"
-                    for entity_kind in entity_kinds
+                    entity_palette.get(group, "#d8ecff") for group in entity_groups
                 ],
                 edgecolors="#222222",
                 linewidths=1.3,

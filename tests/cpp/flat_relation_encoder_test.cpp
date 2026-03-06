@@ -4,10 +4,12 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -77,6 +79,31 @@ BatchBuilder::BatchEncoding encode_single(
    engine.encode(state, actions, builder);
    builder.next_graph();
    return builder.build();
+}
+
+std::optional< size_t >
+relation_index_for(const std::vector< std::string >& relation_names, std::string_view relation_name)
+{
+   const auto it = std::find(relation_names.begin(), relation_names.end(), relation_name);
+   if(it == relation_names.end()) {
+      return std::nullopt;
+   }
+   return static_cast< size_t >(std::distance(relation_names.begin(), it));
+}
+
+std::vector< mifrost::LiteralVariant > goal_literals(const mimir::formalism::Problem& problem)
+{
+   std::vector< mifrost::LiteralVariant > out;
+   for(const auto& goal : problem->get_goal_literals< mimir::formalism::StaticTag >()) {
+      out.emplace_back(goal);
+   }
+   for(const auto& goal : problem->get_goal_literals< mimir::formalism::FluentTag >()) {
+      out.emplace_back(goal);
+   }
+   for(const auto& goal : problem->get_goal_literals< mimir::formalism::DerivedTag >()) {
+      out.emplace_back(goal);
+   }
+   return out;
 }
 
 }  // namespace
@@ -428,6 +455,224 @@ TEST_P(FlatRelationEncoderTest, ActionTargetsEmitSharedTargetMetadata)
    EXPECT_EQ(batch_target_indices, target_indices);
    EXPECT_EQ(batch_target_candidate_ids, target_candidate_ids);
    EXPECT_EQ(batch_target_group_ids, target_group_ids);
+}
+
+TEST_P(FlatRelationEncoderTest, GoalTargetsAdjustRootGoalArityAndEmitMetadata)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto goals = goal_literals(ctx.problem);
+   if(goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   mifrost::GoalInputs inputs;
+   const auto& goal = goals.front();
+   std::string goal_name;
+   std::string relation_name;
+   std::visit(
+      [&](const auto& literal) {
+         inputs.append(literal, 0);
+         goal_name = mifrost::RelationFormatter::format_literal(literal, mifrost::GoalLevel(0));
+         relation_name = mifrost::RelationFormatter::format_predicate(
+            literal->get_atom()->get_predicate(),
+            mifrost::GoalLevel(0),
+            std::nullopt,
+            literal->get_polarity()
+         );
+      },
+      goal
+   );
+
+   mifrost::FlatRelationEncoderEngine base_engine(ctx.problem->get_domain());
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.max_goal_level = 1;
+   config.target_sources = {mifrost::TargetSource::Goals};
+   mifrost::FlatRelationEncoderEngine goal_engine(ctx.problem->get_domain(), config);
+
+   const auto base = encode_single(
+      base_engine, ctx.root, std::span< const mimir::formalism::GroundAction >{}
+   );
+
+   BatchBuilder builder;
+   goal_engine.encode(ctx.root, inputs, builder);
+   builder.next_graph();
+   const auto encoded = builder.build();
+
+   const auto relation_names = str_attr(encoded, "relation_names");
+   const auto relation_arities = i64_attr(encoded, "relation_arities");
+   const auto relation_sources = str_attr(encoded, "relation_sources");
+   const auto relation_counts = i64_field(encoded, "relation_counts");
+   const auto relation_args = i64_field(encoded, "relation_args");
+   const auto target_entity_sizes = i64_field(encoded, "target_entity_sizes");
+   const auto target_entity_indices = i64_field(encoded, "target_entity_indices");
+   const auto target_entity_group_ids = i64_field(encoded, "target_entity_group_ids");
+   const auto target_sizes = i64_field(encoded, "target_sizes");
+   const auto target_positions = i64_field(encoded, "target_positions");
+   const auto target_group_ids = i64_field(encoded, "target_group_ids");
+   const auto& target_names = str_vec_attr(encoded, "target_names");
+   const auto& target_groups = str_vec_attr(encoded, "target_groups");
+   const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
+
+   const auto relation_idx = relation_index_for(relation_names, relation_name);
+   ASSERT_TRUE(relation_idx.has_value());
+   ASSERT_LT(*relation_idx, relation_sources.size());
+   EXPECT_EQ(relation_sources[*relation_idx], "goal");
+
+   const auto base_relation_idx = relation_index_for(
+      str_attr(base, "relation_names"), relation_name
+   );
+   ASSERT_TRUE(base_relation_idx.has_value());
+   const auto base_relation_arities = i64_attr(base, "relation_arities");
+
+   EXPECT_EQ(relation_arities[*relation_idx], base_relation_arities[*base_relation_idx] + 1);
+   ASSERT_EQ(target_entity_sizes, (std::vector< int64_t >{1}));
+   ASSERT_EQ(target_sizes, (std::vector< int64_t >{1}));
+   ASSERT_EQ(target_entity_indices.size(), 1u);
+   ASSERT_EQ(target_entity_group_ids, (std::vector< int64_t >{0}));
+   ASSERT_EQ(target_positions, target_entity_indices);
+   ASSERT_EQ(target_group_ids, (std::vector< int64_t >{0}));
+   ASSERT_EQ(target_names, (std::vector< std::string >{goal_name}));
+   EXPECT_EQ(target_groups, (std::vector< std::string >{"goal"}));
+   EXPECT_EQ(target_entity_groups, (std::vector< std::string >{"goal", "action"}));
+
+   size_t slot_start = 0;
+   for(size_t idx = 0; idx < *relation_idx; ++idx) {
+      slot_start += static_cast< size_t >(relation_counts[idx] * relation_arities[idx]);
+   }
+   ASSERT_LT(slot_start, relation_args.size());
+   EXPECT_EQ(relation_args[slot_start], target_entity_indices.front());
+}
+
+TEST_P(FlatRelationEncoderTest, MixedTargetSourcesUseStableGroupOrder)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto goals = goal_literals(ctx.problem);
+   if(goals.size() < 2) {
+      GTEST_SKIP() << "Fixture does not provide enough goal literals.";
+   }
+   const auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+   (void) succ_state;
+
+   mifrost::GoalInputs inputs;
+   std::string root_relation_name;
+   std::string subgoal_relation_name;
+   std::string root_goal_name;
+   std::string subgoal_goal_name;
+   std::visit(
+      [&](const auto& literal) {
+         inputs.append(literal, 0);
+         root_goal_name = mifrost::RelationFormatter::format_literal(
+            literal, mifrost::GoalLevel(0)
+         );
+         root_relation_name = mifrost::RelationFormatter::format_predicate(
+            literal->get_atom()->get_predicate(),
+            mifrost::GoalLevel(0),
+            std::nullopt,
+            literal->get_polarity()
+         );
+      },
+      goals[0]
+   );
+   std::visit(
+      [&](const auto& literal) {
+         inputs.append(literal, 1);
+         subgoal_goal_name = mifrost::RelationFormatter::format_literal(
+            literal, mifrost::GoalLevel(1)
+         );
+         subgoal_relation_name = mifrost::RelationFormatter::format_predicate(
+            literal->get_atom()->get_predicate(),
+            mifrost::GoalLevel(1),
+            std::nullopt,
+            literal->get_polarity()
+         );
+      },
+      goals[1]
+   );
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.max_goal_level = 1;
+   config.target_sources = {
+      mifrost::TargetSource::Goals,
+      mifrost::TargetSource::Subgoals,
+      mifrost::TargetSource::Actions,
+   };
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+   const std::array< mimir::formalism::GroundAction, 1 > actions = {succ_action};
+
+   BatchBuilder builder;
+   engine.encode(ctx.root, inputs, std::span{actions}, builder);
+   builder.next_graph();
+   const auto encoded = builder.build();
+
+   const auto relation_names = str_attr(encoded, "relation_names");
+   const auto relation_arities = i64_attr(encoded, "relation_arities");
+   const auto relation_counts = i64_field(encoded, "relation_counts");
+   const auto relation_args = i64_field(encoded, "relation_args");
+   const auto target_entity_sizes = i64_field(encoded, "target_entity_sizes");
+   const auto target_entity_group_ids = i64_field(encoded, "target_entity_group_ids");
+   const auto target_sizes = i64_field(encoded, "target_sizes");
+   const auto target_positions = i64_field(encoded, "target_positions");
+   const auto target_group_ids = i64_field(encoded, "target_group_ids");
+   const auto target_candidate_ids = i64_field(encoded, "target_candidate_ids");
+   const auto& target_names = str_vec_attr(encoded, "target_names");
+   const auto& target_groups = str_vec_attr(encoded, "target_groups");
+   const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
+
+   ASSERT_EQ(target_entity_sizes, (std::vector< int64_t >{3}));
+   ASSERT_EQ(target_sizes, (std::vector< int64_t >{3}));
+   EXPECT_EQ(target_entity_group_ids, (std::vector< int64_t >{0, 1, 2}));
+   EXPECT_EQ(target_group_ids, (std::vector< int64_t >{0, 1, 2}));
+   EXPECT_EQ(target_candidate_ids, (std::vector< int64_t >{0, 1, 2}));
+   EXPECT_EQ(target_groups, (std::vector< std::string >{"goal", "subgoal", "action"}));
+   EXPECT_EQ(target_entity_groups, (std::vector< std::string >{"goal", "subgoal", "action"}));
+   ASSERT_EQ(target_names.size(), 3u);
+   EXPECT_EQ(target_names[0], root_goal_name);
+   EXPECT_EQ(target_names[1], subgoal_goal_name);
+   EXPECT_EQ(target_names[2], mifrost::RelationFormatter::format_action(succ_action));
+
+   const auto root_relation_idx = relation_index_for(relation_names, root_relation_name);
+   const auto subgoal_relation_idx = relation_index_for(relation_names, subgoal_relation_name);
+   ASSERT_TRUE(root_relation_idx.has_value());
+   ASSERT_TRUE(subgoal_relation_idx.has_value());
+
+   auto first_arg_for = [&](size_t relation_idx) {
+      size_t slot_start = 0;
+      for(size_t idx = 0; idx < relation_idx; ++idx) {
+         slot_start += static_cast< size_t >(relation_counts[idx] * relation_arities[idx]);
+      }
+      EXPECT_LT(slot_start, relation_args.size());
+      return relation_args[slot_start];
+   };
+
+   EXPECT_EQ(first_arg_for(*root_relation_idx), target_positions[0]);
+   EXPECT_EQ(first_arg_for(*subgoal_relation_idx), target_positions[1]);
+}
+
+TEST_P(FlatRelationEncoderTest, ReservedTargetSourcesAreRejected)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.target_sources = {mifrost::TargetSource::States};
+   EXPECT_THROW(
+      {
+         auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);
+         (void) engine;
+      },
+      std::invalid_argument
+   );
+
+   config.target_sources = {mifrost::TargetSource::History};
+   EXPECT_THROW(
+      {
+         auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);
+         (void) engine;
+      },
+      std::invalid_argument
+   );
 }
 
 INSTANTIATE_TEST_SUITE_P(

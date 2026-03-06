@@ -1,10 +1,14 @@
 #pragma once
 
+#include <ankerl/unordered_dense.h>
+
 #include <boost/describe.hpp>
+#include <map>
 #include <memory>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/ground_action.hpp>
 #include <mimir/search/state.hpp>
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
@@ -40,14 +44,34 @@ class FlatRelationEncoderEngine {
       };
    };
 
+   struct TargetEntityKey {
+      TargetSource source = TargetSource::Actions;
+      int64_t discriminator = 0;
+      int64_t primary = 0;
+      int64_t secondary = 0;
+      int64_t tertiary = 0;
+      int64_t quaternary = 0;
+
+      auto operator==(const TargetEntityKey& other) const -> bool = default;
+   };
+
+   struct TargetEntityKeyHash {
+      using is_avalanching = void;
+
+      [[nodiscard]] auto operator()(const TargetEntityKey& key) const noexcept -> uint64_t;
+   };
+
    struct EncodingContext {
       hash_map< int64_t, int64_t > entity_index_by_object_id;
-      hash_map< int64_t, int64_t > target_entity_index_by_action_id;
+      hash_map< TargetEntityKey, int64_t, TargetEntityKeyHash, std::equal_to< TargetEntityKey > >
+         target_entity_index_by_key;
       std::vector< std::string > entity_names;
       std::vector< std::string > object_names;
       std::vector< int64_t > object_indices;
       std::vector< int64_t > target_entity_indices;
-      std::vector< mimir::formalism::GroundAction > target_entity_actions;
+      std::vector< int64_t > target_entity_group_ids;
+      std::vector< mimir::formalism::GroundAction > unique_actions;
+      TargetColumns target_columns;
    };
 
    explicit FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain);
@@ -115,14 +139,19 @@ class FlatRelationEncoderEngine {
       const mimir::search::State& state,
       const GoalInputs& goals,
       std::span< const mimir::formalism::GroundAction > actions,
-      BatchBuilder& builder
+      BatchBuilder& builder,
+      std::vector< std::string >* batch_target_names = nullptr
    );
    EncodingContext make_context(
       const mimir::search::State& state,
+      const GoalInputs& goals,
       std::span< const mimir::formalism::GroundAction > actions
    ) const;
    int relation_id_for(const std::string& name) const;
    [[nodiscard]] bool has_target_source(TargetSource source) const;
+   [[nodiscard]] bool supports_target_metadata() const;
+   [[nodiscard]] int64_t target_entity_group_id(TargetSource source) const;
+   [[nodiscard]] int64_t target_metadata_group_id(TargetSource source) const;
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
@@ -136,6 +165,10 @@ class FlatRelationEncoderEngine {
    std::vector< int64_t > relation_arities_;
    std::vector< std::string > relation_sources_;
    hash_map< std::string, int > relation_name_to_id_;
+   std::vector< std::string > target_entity_group_names_;
+   std::map< TargetSource, int64_t > target_entity_group_ids_;
+   std::vector< std::string > target_metadata_group_names_;
+   std::map< TargetSource, int64_t > target_metadata_group_ids_;
 };
 
 BOOST_DESCRIBE_STRUCT(

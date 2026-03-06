@@ -52,13 +52,18 @@ struct hash_map_equal< std::string > {
    using type = transparent_string_equal;
 };
 
-template < typename Key, typename T >
-using hash_map = ankerl::unordered_dense::
-   map< Key, T, typename hash_map_hash< Key >::type, typename hash_map_equal< Key >::type >;
+template <
+   typename Key,
+   typename T,
+   typename Hash = hash_map_hash< Key >::type,
+   typename Equal = hash_map_equal< Key >::type >
+using hash_map = ankerl::unordered_dense::map< Key, T, Hash, Equal >;
 
 /// Project-wide hash set alias.
-template < typename Key >
-using hash_set = ankerl::unordered_dense::
-   set< Key, typename hash_map_hash< Key >::type, typename hash_map_equal< Key >::type >;
+template <
+   typename Key,
+   typename Hash = hash_map_hash< Key >::type,
+   typename Equal = hash_map_equal< Key >::type >
+using hash_set = ankerl::unordered_dense::set< Key, Hash, Equal >;
 
 }  // namespace mifrost

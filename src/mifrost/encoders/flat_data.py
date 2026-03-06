@@ -148,6 +148,9 @@ def normalize_flat_relation_batch_metadata(
     data.target_groups = _normalize_shared_str_list(
         getattr(data, "target_groups", None)
     )
+    data.target_entity_groups = _normalize_shared_str_list(
+        getattr(data, "target_entity_groups", None)
+    )
     data.target_symbol_prefix = _normalize_shared_scalar(
         getattr(data, "target_symbol_prefix", None)
     )
@@ -308,15 +311,35 @@ class FlatRelationData(Data):
             graph_index=graph_index,
         )
 
-    def graph_target_entity_indices(self, graph_index: int = 0) -> torch.Tensor:
-        return self._graph_cat_field_slice(
+    def graph_target_entity_indices(
+        self, graph_index: int = 0, group: str | int | None = None
+    ) -> torch.Tensor:
+        indices = self._graph_cat_field_slice(
             field_name="target_entity_indices",
             size_field_name="target_entity_sizes",
             graph_index=graph_index,
         )
+        if group is None or indices.numel() == 0:
+            return indices
+        group_ids = self.graph_target_entity_group_ids(graph_index)
+        mask = self._group_mask(
+            group_ids, group=group, attr_name="target_entity_groups"
+        )
+        return indices[mask]
 
-    def graph_target_entity_names(self, graph_index: int = 0) -> list[str]:
-        target_entity_indices = self.graph_target_entity_indices(graph_index)
+    def graph_target_entity_group_ids(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_entity_group_ids",
+            size_field_name="target_entity_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_entity_names(
+        self, graph_index: int = 0, group: str | int | None = None
+    ) -> list[str]:
+        target_entity_indices = self.graph_target_entity_indices(
+            graph_index, group=group
+        )
         if target_entity_indices.numel() == 0:
             return []
         start, _end = self.graph_node_range(graph_index)
@@ -443,6 +466,29 @@ class FlatRelationData(Data):
         arities = self._relation_arities_tensor(counts.device)
         prior_counts = counts[:graph_index].sum(dim=0)
         return int((prior_counts * arities).sum().item())
+
+    def _group_mask(
+        self,
+        group_ids: torch.Tensor,
+        *,
+        group: str | int,
+        attr_name: str,
+    ) -> torch.Tensor:
+        target_group_id = self._group_id(group=group, attr_name=attr_name)
+        return group_ids.long().view(-1) == target_group_id
+
+    def _group_id(self, *, group: str | int, attr_name: str) -> int:
+        if isinstance(group, int):
+            return group
+        group_names = getattr(self, attr_name, None)
+        if group_names is None:
+            raise ValueError(f"{attr_name} metadata is not available")
+        names = [str(value) for value in group_names]
+        if group not in names:
+            raise ValueError(
+                f"Unknown {attr_name} group {group!r}; expected one of {names!r}"
+            )
+        return names.index(group)
 
 
 def flat_relation_data_from_pyg(

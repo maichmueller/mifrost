@@ -40,6 +40,20 @@ def _assert_flat_batch_equal(
             actual_target_entity_indices,
             expected_target_entity_indices,
         )
+    actual_target_entity_group_ids = getattr(actual, "target_entity_group_ids", None)
+    expected_target_entity_group_ids = getattr(
+        expected, "target_entity_group_ids", None
+    )
+    if (
+        actual_target_entity_group_ids is None
+        or expected_target_entity_group_ids is None
+    ):
+        assert actual_target_entity_group_ids is expected_target_entity_group_ids
+    else:
+        assert torch.equal(
+            actual_target_entity_group_ids,
+            expected_target_entity_group_ids,
+        )
     actual_target_sizes = getattr(actual, "target_sizes", None)
     expected_target_sizes = getattr(expected, "target_sizes", None)
     if actual_target_sizes is None or expected_target_sizes is None:
@@ -82,6 +96,9 @@ def _assert_flat_batch_equal(
     assert getattr(actual, "target_groups", None) == getattr(
         expected, "target_groups", None
     )
+    assert getattr(actual, "target_entity_groups", None) == getattr(
+        expected, "target_entity_groups", None
+    )
     assert getattr(actual, "target_symbol_prefix", None) == getattr(
         expected, "target_symbol_prefix", None
     )
@@ -93,6 +110,24 @@ def _first_action(space, state):
     if not actions:
         pytest.skip("Fixture does not provide applicable actions.")
     return actions[0]
+
+
+def _problem_goals(problem):
+    goals = list(problem.get_goal_condition().get_literals())
+    if not goals:
+        pytest.skip("Fixture does not provide goal literals.")
+    return goals
+
+
+def _two_problem_goals(problem):
+    goals = _problem_goals(problem)
+    if len(goals) < 2:
+        pytest.skip("Fixture does not provide enough distinct goal literals.")
+    return goals[:2]
+
+
+def _adv_goal_literal(goal):
+    return getattr(goal, "_advanced_ground_literal", goal)
 
 
 def test_flat_relation_encoder_returns_flat_relation_data(small_blocks):
@@ -279,11 +314,13 @@ def test_flat_relation_action_target_metadata_enabled_for_action_source(
     assert data.target_indices.tolist() == [0]
     assert data.target_candidate_ids.tolist() == [0]
     assert data.target_group_ids.tolist() == [0]
+    assert data.target_entity_group_ids.tolist() == [0]
     assert (
         data.graph_target_positions(0).tolist() == data.target_entity_indices.tolist()
     )
     assert data.graph_target_names(0) == [formatter.format_action(adv)]
     assert list(data.target_groups) == ["action"]
+    assert list(data.target_entity_groups) == ["action"]
     assert data.target_symbol_prefix == "target:"
 
 
@@ -335,6 +372,226 @@ def test_flat_relation_action_target_metadata_preserves_duplicates_and_empty_gra
     assert actual.target_positions.tolist()[0] == actual.target_positions.tolist()[1]
     assert actual.graph_target_names(0) == [action_name, action_name]
     _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_relation_goal_target_source_adjusts_root_goal_arities_and_metadata(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _problem_goals(problem)[0]
+    formatter = mifrost.RelationFormatter
+
+    base_encoder = FlatRelationEncoder(domain, max_goal_level=1)
+    goal_encoder = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[mifrost.TargetSource.Goals],
+    )
+
+    assert goal_encoder.engine.relation_names == base_encoder.engine.relation_names
+
+    base_data = base_encoder.encode_pyg(state, goals=[goal])
+    goal_data = goal_encoder.encode_pyg(state, goals=[goal])
+    root_goal_name = formatter.format_literal(_adv_goal_literal(goal), 0)
+
+    nonempty_goal_relations = [
+        relation_name
+        for relation_idx, relation_name in enumerate(goal_data.schema.names)
+        if goal_data.schema.sources[relation_idx] == "goal"
+        and base_data.flattened_relations[relation_name].shape[0] > 0
+    ]
+    assert nonempty_goal_relations
+    for relation_name in nonempty_goal_relations:
+        assert (
+            goal_data.flattened_relations[relation_name].shape[1]
+            == base_data.flattened_relations[relation_name].shape[1] + 1
+        )
+        assert torch.equal(
+            goal_data.flattened_relations[relation_name][:, 0],
+            goal_data.target_positions,
+        )
+
+    assert goal_data.target_entity_sizes.tolist() == [1]
+    assert goal_data.target_sizes.tolist() == [1]
+    assert goal_data.graph_target_names(0) == [root_goal_name]
+    assert goal_data.graph_target_entity_names(0, group="goal") == [root_goal_name]
+    assert (
+        goal_data.graph_target_positions(0).tolist()
+        == goal_data.target_positions.tolist()
+    )
+    assert goal_data.graph_target_entity_indices(0, group="goal").tolist() == (
+        goal_data.target_entity_indices.tolist()
+    )
+    assert goal_data.target_group_ids.tolist() == [0]
+    assert goal_data.target_entity_group_ids.tolist() == [0]
+    assert list(goal_data.target_groups) == ["goal"]
+    assert list(goal_data.target_entity_groups) == ["goal", "action"]
+
+
+def test_flat_relation_subgoal_target_source_adjusts_only_layered_goal_arities(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _problem_goals(problem)[0]
+    formatter = mifrost.RelationFormatter
+
+    base_encoder = FlatRelationEncoder(domain, max_goal_level=1)
+    subgoal_encoder = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[mifrost.TargetSource.Subgoals],
+    )
+
+    assert subgoal_encoder.engine.relation_names == base_encoder.engine.relation_names
+
+    base_root = base_encoder.encode_pyg(state, goals=[goal])
+    subgoal_root = subgoal_encoder.encode_pyg(state, goals=[goal])
+    base_subgoal = base_encoder.encode_pyg(state, goals=[], subgoal_layers=[[goal]])
+    subgoal_data = subgoal_encoder.encode_pyg(state, goals=[], subgoal_layers=[[goal]])
+    subgoal_name = formatter.format_literal(_adv_goal_literal(goal), 1)
+
+    root_goal_relations = [
+        relation_name
+        for relation_idx, relation_name in enumerate(subgoal_root.schema.names)
+        if subgoal_root.schema.sources[relation_idx] == "goal"
+        and base_root.flattened_relations[relation_name].shape[0] > 0
+    ]
+    assert root_goal_relations
+    for relation_name in root_goal_relations:
+        assert (
+            subgoal_root.flattened_relations[relation_name].shape[1]
+            == base_root.flattened_relations[relation_name].shape[1]
+        )
+
+    subgoal_relations = [
+        relation_name
+        for relation_idx, relation_name in enumerate(subgoal_data.schema.names)
+        if subgoal_data.schema.sources[relation_idx] == "goal"
+        and base_subgoal.flattened_relations[relation_name].shape[0] > 0
+    ]
+    assert subgoal_relations
+    for relation_name in subgoal_relations:
+        assert (
+            subgoal_data.flattened_relations[relation_name].shape[1]
+            == base_subgoal.flattened_relations[relation_name].shape[1] + 1
+        )
+        assert torch.equal(
+            subgoal_data.flattened_relations[relation_name][:, 0],
+            subgoal_data.target_positions,
+        )
+
+    assert subgoal_data.target_entity_sizes.tolist() == [1]
+    assert subgoal_data.target_sizes.tolist() == [1]
+    assert subgoal_data.graph_target_names(0) == [subgoal_name]
+    assert subgoal_data.graph_target_entity_names(0, group="subgoal") == [subgoal_name]
+    assert subgoal_data.target_group_ids.tolist() == [0]
+    assert subgoal_data.target_entity_group_ids.tolist() == [0]
+    assert list(subgoal_data.target_groups) == ["subgoal"]
+    assert list(subgoal_data.target_entity_groups) == ["subgoal", "action"]
+
+
+def test_flat_relation_mixed_target_sources_preserve_order_and_grouping(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal0, goal1 = _two_problem_goals(problem)
+    action = _first_action(space, state)
+    formatter = mifrost.RelationFormatter
+
+    base_encoder = FlatRelationEncoder(domain, max_goal_level=1)
+    encoder = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[
+            mifrost.TargetSource.Goals,
+            mifrost.TargetSource.Subgoals,
+            mifrost.TargetSource.Actions,
+        ],
+    )
+    data = encoder.encode_pyg(
+        state,
+        goals=[goal0],
+        subgoal_layers=[[goal1]],
+        actions=[action],
+    )
+
+    assert encoder.engine.relation_names == base_encoder.engine.relation_names
+    assert list(data.target_groups) == ["goal", "subgoal", "action"]
+    assert list(data.target_entity_groups) == ["goal", "subgoal", "action"]
+    assert data.target_indices.tolist() == [0, 1, 2]
+    assert data.target_candidate_ids.tolist() == [0, 1, 2]
+    assert data.target_group_ids.tolist() == [0, 1, 2]
+    assert data.target_entity_group_ids.tolist() == [0, 1, 2]
+    assert data.graph_target_names(0) == [
+        formatter.format_literal(_adv_goal_literal(goal0), 0),
+        formatter.format_literal(_adv_goal_literal(goal1), 1),
+        formatter.format_action(adv_action(action)),
+    ]
+    assert data.graph_target_entity_names(0, group="goal") == [
+        formatter.format_literal(_adv_goal_literal(goal0), 0)
+    ]
+    assert data.graph_target_entity_names(0, group="subgoal") == [
+        formatter.format_literal(_adv_goal_literal(goal1), 1)
+    ]
+    assert data.graph_target_entity_names(0, group="action") == [
+        formatter.format_action(adv_action(action))
+    ]
+    assert data.graph_target_entity_group_ids(0).tolist() == [0, 1, 2]
+    assert data.graph_target_positions(0).tolist() == data.target_positions.tolist()
+
+
+def test_flat_relation_goal_targets_preserve_duplicate_candidates_and_empty_graphs(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _problem_goals(problem)[0]
+    goal_name = mifrost.RelationFormatter.format_literal(_adv_goal_literal(goal), 0)
+
+    encoder = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.Goals],
+    )
+    actual = encoder.encode_batch(
+        [state, state],
+        goals=[[goal, goal], []],
+    ).as_pyg(as_batch=True)
+    expected = flat_relation_data_from_pyg(
+        Batch.from_data_list(
+            [
+                encoder.encode_pyg(state, goals=[goal, goal]),
+                encoder.encode_pyg(state, goals=[]),
+            ]
+        )
+    )
+
+    assert actual.target_entity_sizes.tolist() == [1, 0]
+    assert actual.target_sizes.tolist() == [2, 0]
+    assert actual.target_indices.tolist() == [0, 1]
+    assert actual.target_candidate_ids.tolist() == [0, 1]
+    assert actual.target_group_ids.tolist() == [0, 0]
+    assert actual.target_positions.tolist()[0] == actual.target_positions.tolist()[1]
+    assert actual.graph_target_names(0) == [goal_name, goal_name]
+    assert actual.graph_target_entity_names(0, group="goal") == [goal_name]
+    _assert_flat_batch_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "target_source",
+    [mifrost.TargetSource.States, mifrost.TargetSource.History],
+)
+def test_flat_relation_encoder_rejects_reserved_target_sources(
+    small_blocks,
+    target_source,
+):
+    _space, domain, _problem = small_blocks
+
+    with pytest.raises(
+        ValueError,
+        match="reserved for the upcoming flat successor/horizon encoders",
+    ):
+        FlatRelationEncoder(domain, target_sources=[target_source])
 
 
 def test_flat_relation_visualization_is_reconstructable(small_blocks):
