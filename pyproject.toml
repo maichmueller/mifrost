@@ -12,8 +12,8 @@ backend-path = ["."]
 
 [project]
 name = "mifrost"
-version = "0.0.1"
-description = "C++ extension module built with nanobind"
+version = "0.1.0"
+description = "STRIPS states to graph encoding C++ extension module."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
