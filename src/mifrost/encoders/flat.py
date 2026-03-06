@@ -266,6 +266,50 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             if 0 <= group_id < len(target_entity_groups):
                 group_name = str(target_entity_groups[group_id])
             target_entity_group_by_index[int(global_idx)] = (int(group_id), group_name)
+        target_groups = list(getattr(data, "target_groups", ()))
+        target_positions = data.graph_target_positions(graph_index).tolist()
+        target_indices = data.graph_target_indices(graph_index).tolist()
+        target_candidate_ids = data.graph_target_candidate_ids(graph_index).tolist()
+        target_group_ids = data.graph_target_group_ids(graph_index).tolist()
+        target_names = data.graph_target_names(graph_index)
+        target_depths_tensor = getattr(data, "target_depths", None)
+        target_depths = (
+            data.graph_target_depths(graph_index).tolist()
+            if target_depths_tensor is not None
+            else [None] * len(target_positions)
+        )
+        target_rows_by_position: dict[int, list[dict[str, object]]] = {}
+        for (
+            position,
+            target_index,
+            candidate_id,
+            group_id,
+            target_name,
+            target_depth,
+        ) in zip(
+            target_positions,
+            target_indices,
+            target_candidate_ids,
+            target_group_ids,
+            target_names,
+            target_depths,
+            strict=True,
+        ):
+            group_name = None
+            if 0 <= group_id < len(target_groups):
+                group_name = str(target_groups[group_id])
+            target_rows_by_position.setdefault(int(position), []).append(
+                {
+                    "target_index": int(target_index),
+                    "target_candidate_id": int(candidate_id),
+                    "target_group_id": int(group_id),
+                    "target_group": group_name,
+                    "target_name": str(target_name),
+                    "target_depth": (
+                        None if target_depth is None else int(target_depth)
+                    ),
+                }
+            )
 
         for global_idx in range(start, end):
             label = name_by_global.get(global_idx, f"entity:{global_idx}")
@@ -273,6 +317,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 global_idx, (None, None)
             )
             history_dt = history_entity_dt_by_index.get(global_idx)
+            target_rows = target_rows_by_position.get(global_idx, [])
             if target_group_name is not None:
                 entity_kind = "target_entity"
             elif history_dt is not None:
@@ -287,9 +332,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 history_dt=history_dt,
                 target_group_id=target_group_id,
                 target_group=target_group_name,
+                target_rows=target_rows,
                 global_index=global_idx,
                 graph_index=graph_index,
             )
+            if len(target_rows) == 1:
+                graph.nodes[label].update(target_rows[0])
 
         flattened = data.flattened_relations_view(graph_index=graph_index)
         schema = data.schema
@@ -367,6 +415,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             ]
             entity_palette = {
                 "object": "#f3efe0",
+                "state": "#d6f0c0",
                 "goal": "#f9d7dd",
                 "subgoal": "#dbecc8",
                 "action": "#d8ecff",
@@ -393,6 +442,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 "goal_satisfaction": "#6c9a8b",
                 "action": "#f08a24",
                 "history": "#7b5ea7",
+                "parent": "#4c6a92",
+                "sibling": "#6f8f72",
+                "cousin": "#8a6f9e",
                 "relation": "#666666",
             }
             nx.draw_networkx_nodes(

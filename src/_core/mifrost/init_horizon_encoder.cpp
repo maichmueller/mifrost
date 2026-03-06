@@ -22,6 +22,7 @@
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/default_relations.hpp"
+#include "mifrost/core/flat_horizon_encoder.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/horizon_hgraph_encoder.hpp"
@@ -53,6 +54,10 @@ void init_horizon_encoder(nb::module_& m)
       .value("Full", HorizonHGraphEncoderEngine::Mode::Full)
       .value("Delta", HorizonHGraphEncoderEngine::Mode::Delta)
       .value("Action", HorizonHGraphEncoderEngine::Mode::Action);
+   nb::enum_< FlatHorizonEncoderEngine::Mode >(m, "FlatHorizonEncoderMode")
+      .value("Full", FlatHorizonEncoderEngine::Mode::Full)
+      .value("Delta", FlatHorizonEncoderEngine::Mode::Delta)
+      .value("Action", FlatHorizonEncoderEngine::Mode::Action);
 
    nb::class_< HorizonHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
       m, "HorizonEncoderConfig"
@@ -184,6 +189,102 @@ void init_horizon_encoder(nb::module_& m)
       .def("flush", &HorizonStreamEncoder::flush)
       .def("flush_pyg", &HorizonStreamEncoder::flush_pyg)
       .def("reset", &HorizonStreamEncoder::reset);
+
+   nb::class_< FlatHorizonEncoderEngine::Config >(m, "FlatHorizonEncoderConfig")
+      .def(nb::init<>())
+      .def(
+         "__init__",
+         [](FlatHorizonEncoderEngine::Config* self, const nb::kwargs& kwargs) {
+            new(self) FlatHorizonEncoderEngine::Config();
+            apply_config_kwargs(*self, kwargs, "FlatHorizonEncoderConfig");
+         }
+      )
+      .def_rw("max_goal_level", &FlatHorizonEncoderEngine::Config::max_goal_level)
+      .def_rw("support_literals", &FlatHorizonEncoderEngine::Config::support_literals)
+      .def_rw("include_static", &FlatHorizonEncoderEngine::Config::include_static)
+      .def_rw("export_node_names", &FlatHorizonEncoderEngine::Config::export_node_names)
+      .def_rw(
+         "ignore_zero_arity_relations",
+         &FlatHorizonEncoderEngine::Config::ignore_zero_arity_relations
+      )
+      .def_rw("ignore_actions", &FlatHorizonEncoderEngine::Config::ignore_actions)
+      .def_rw("transition_mode", &FlatHorizonEncoderEngine::Config::transition_mode)
+      .def_rw("target_symbol_prefix", &FlatHorizonEncoderEngine::Config::target_symbol_prefix)
+      .def_rw("parent_relation", &FlatHorizonEncoderEngine::Config::parent_relation)
+      .def_rw("sibling_relation", &FlatHorizonEncoderEngine::Config::sibling_relation)
+      .def_rw("cousin_relation", &FlatHorizonEncoderEngine::Config::cousin_relation)
+      .def_rw("enable_parent_relation", &FlatHorizonEncoderEngine::Config::enable_parent_relation)
+      .def_rw("enable_sibling_relation", &FlatHorizonEncoderEngine::Config::enable_sibling_relation)
+      .def_rw("enable_cousin_relation", &FlatHorizonEncoderEngine::Config::enable_cousin_relation)
+      .def_rw("exclude_root_candidate", &FlatHorizonEncoderEngine::Config::exclude_root_candidate)
+      .def_rw(
+         "goal_satisfaction_derivations",
+         &FlatHorizonEncoderEngine::Config::goal_satisfaction_derivations
+      );
+
+   nb::class_< FlatHorizonEncoderEngine >(m, "FlatHorizonEncoderEngine")
+      .def(nb::init< const mimir::formalism::DomainImpl& >())
+      .def(nb::init< const mimir::formalism::DomainImpl&, FlatHorizonEncoderEngine::Config >())
+      .def(nb::init< mimir::formalism::Domain >())
+      .def(nb::init< mimir::formalism::Domain, FlatHorizonEncoderEngine::Config >())
+      .def_prop_ro(
+         "config", &FlatHorizonEncoderEngine::get_config, nb::rv_policy::reference_internal
+      )
+      .def(
+         "relation_dict",
+         &FlatHorizonEncoderEngine::get_relation_dict,
+         nb::rv_policy::reference_internal
+      )
+      .def_prop_ro("relation_names", &FlatHorizonEncoderEngine::get_relation_names)
+      .def_prop_ro("relation_arities", &FlatHorizonEncoderEngine::get_relation_arities)
+      .def_prop_ro("relation_sources", &FlatHorizonEncoderEngine::get_relation_sources)
+      .def(
+         "encode",
+         [](FlatHorizonEncoderEngine& encoder,
+            const mimir::search::State& root,
+            const TransitionDAG& dag,
+            const GoalInputs& goals) {
+            BatchBuilder builder;
+            builder.set_graph_kind("homo");
+            encoder.encode(root, dag, goals, builder);
+            return builder.build();
+         },
+         "root"_a,
+         "dag"_a,
+         "goals"_a
+      )
+      .def(
+         "encode",
+         &FlatHorizonEncoderEngine::encode,
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         "builder"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "encode_batch",
+         [](FlatHorizonEncoderEngine& encoder,
+            nb::object roots,
+            nb::object dags,
+            nb::object goals,
+            nb::object actions,
+            nb::object subgoal_layers,
+            nb::object history_subgoals,
+            std::optional< int > history_max_steps) {
+            auto parsed = batch_input::parse_horizon_batch_inputs(
+               roots, dags, goals, actions, subgoal_layers, history_subgoals, history_max_steps
+            );
+            return encoder.encode_batch(parsed);
+         },
+         "roots"_a,
+         "dags"_a = nb::none(),
+         "goals"_a = nb::none(),
+         "actions"_a = nb::none(),
+         "subgoal_layers"_a = nb::none(),
+         "history_subgoals"_a = nb::none(),
+         "history_max_steps"_a = std::nullopt
+      );
 }
 
 }  // namespace mifrost

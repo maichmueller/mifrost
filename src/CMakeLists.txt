@@ -221,6 +221,7 @@ add_library(
         "_core/mifrost/core/batch_builder.cpp"
         "_core/mifrost/core/schema.cpp"
         "_core/mifrost/core/color_encoder.cpp"
+        "_core/mifrost/core/flat_horizon_encoder.cpp"
         "_core/mifrost/core/flat_relation_encoder.cpp"
         "_core/mifrost/core/hgraph_stream_encoder.cpp"
         "_core/mifrost/core/target_metadata.cpp"
@@ -480,6 +481,7 @@ if (BUILD_TESTING)
             mifrost_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/color_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_horizon_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_relation_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_history_test.cpp"
