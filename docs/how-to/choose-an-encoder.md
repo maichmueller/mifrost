@@ -5,9 +5,13 @@
 | Scenario | Recommended Encoder | Why |
 | --- | --- | --- |
 | Encode current planning state with goals/actions/history | `HGraphEncoder` | Flexible heterogeneous state graph with optional goal/action/history features |
+| Encode current planning state as packed flat relations | `FlatRelationEncoder` | Compact packed relation tensors with target-entity metadata and flat inspectability |
 | Encode root state plus lookahead DAG structure | `HorizonEncoder` | Adds candidate-target DAG semantics and horizon-specific attributes |
+| Encode root state plus lookahead DAG structure as flat packed relations | `FlatHorizonEncoder` | Compact state-target carrier rows over a `TransitionDAG` without relation nodes |
 | Learn full transition structure (state -> successor) | `TransitionHGraphEncoder` | Represents both source and successor graph structure |
+| Learn full transition structure (state -> successor) in the flat lane | `FlatTransitionEncoder` | Reuses the flat horizon/state-target substrate for compact successor encoding |
 | Learn transition effects/deltas only | `TransitionEffectsHGraphEncoder` | Focuses on change signals instead of full duplicated structure |
+| Learn transition effects/deltas only in the flat lane | `FlatTransitionEffectsEncoder` | Emits only changed successor structure on the compact flat carrier |
 | Build compact homogeneous baselines | `ColorEncoder` | Lower-dimensional homogeneous encoding for simple baselines |
 | Use ILG topology/features from Python | `ILGEncoder` | Pure-Python implementation with ILG atom/action/object construction |
 
@@ -27,13 +31,18 @@
 
 - `HGraphEncoder`, `HorizonEncoder`, transition encoders, and `ColorEncoder` provide stream wrappers.
 - `HGraphEncoder` also exposes a mutable stream with `update/remove`.
+- Flat encoders do not provide stream wrappers yet.
 
 ## Action Contract
 
 - `HGraphEncoder` expects flat action inputs (single action list or per-state flat lists).
+- `FlatRelationEncoder` also accepts flat action inputs and materializes grounded-action target entities on the packed carrier.
 - Nested/tuple action payloads are rejected by design.
 - For IW lookahead/macro-transition outputs, use `HorizonEncoder` with `TransitionDAG`
   or a `rustworkx.PyDiGraph`.
+- `FlatHorizonEncoder` and `FlatTransition*Encoder` derive candidate/state structure from
+  `dag` or `successor(s)` and currently reject explicit non-empty `actions` or
+  `history_subgoals` payloads.
 
 ## Batch Contract
 
@@ -62,7 +71,10 @@
   structure as an input error.
 - Encoder support:
   - `HGraphEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
+  - `FlatRelationEncoder`: per-state `goals`, `actions`, `subgoal_layers`, `history_subgoals`
   - `ColorEncoder`: per-state `goals`, `subgoal_layers` (`actions` are accepted as inputs but non-empty payloads are rejected)
   - `ILGEncoder`: per-state `goals`, `actions`, `subgoal_layers`
   - `Transition*Encoder`: shared or per-entry `successors`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)
   - `HorizonEncoder`: shared or per-entry `dags`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)
+  - `FlatHorizonEncoder`: shared or per-entry `dags`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)
+  - `FlatTransition*Encoder`: shared or per-entry `successors`, per-state `goals`, `subgoal_layers` (`actions`/history are explicit inputs but currently rejected when non-empty)

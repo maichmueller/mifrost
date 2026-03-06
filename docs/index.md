@@ -12,9 +12,13 @@ It provides native `BatchEncoding` outputs and optional conversion to PyTorch Ge
 ## Choose an Encoder Quickly
 
 - Use `HGraphEncoder` for state-centric heterogeneous encodings (goals/actions/history optional).
+- Use `FlatRelationEncoder` for compact packed state/goal/action/history encodings.
 - Use `HorizonEncoder` for root state + lookahead DAG candidate structure.
+- Use `FlatHorizonEncoder` for compact packed lookahead/state-target encodings.
 - Use `TransitionHGraphEncoder` for full current-to-successor transition structure.
+- Use `FlatTransitionEncoder` for compact full current-to-successor transition structure.
 - Use `TransitionEffectsHGraphEncoder` for delta/effects-focused transition features.
+- Use `FlatTransitionEffectsEncoder` for compact delta/effects-focused transition features.
 - Use `ColorEncoder` for compact homogeneous graph baselines.
 - Use `ILGEncoder` for Python-native ILG topology/features.
 

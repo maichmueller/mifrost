@@ -12,6 +12,7 @@ This section documents the main Python-facing API surfaces.
 ## Core Encoders
 
 - [HGraphEncoder](hgraph.md)
+- [Flat Encoders](flat.md)
 - [HorizonEncoder](horizon.md)
 - [Transition Encoders](transition.md)
 - [ColorEncoder](color.md)
@@ -25,6 +26,18 @@ This section documents the main Python-facing API surfaces.
     "reference/api/hgraph.md": """# HGraphEncoder
 
 ::: mifrost.encoders.hgraph.HGraphEncoder
+""",
+    "reference/api/flat.md": """# Flat Encoders
+
+::: mifrost.encoders.flat.FlatRelationEncoder
+
+::: mifrost.encoders.flat_horizon.FlatHorizonEncoder
+
+::: mifrost.encoders.flat_transition.FlatTransitionEncoder
+
+::: mifrost.encoders.flat_transition.FlatTransitionEffectsEncoder
+
+::: mifrost.encoders.flat_data.FlatRelationData
 """,
     "reference/api/horizon.md": """# HorizonEncoder
 
