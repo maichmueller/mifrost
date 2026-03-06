@@ -1217,6 +1217,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
    out["node_feature_dims"] = std::move(dims_dict);
    out["object_names"] = nb::cast(encoding.object_names);
    out["num_graphs"] = encoding.num_graphs;
+   out["schema_fingerprint"] = schema_fingerprint(encoding);
 
    if(not encoding.graph_attrs.empty()) {
       nb::dict graph_attrs_dict;
@@ -1257,13 +1258,27 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
 
    if(not want_batch) {
       if(encoding.graph_kind == "homo") {
-         return batch_to_single_homo_data(pyg_batch);
+         nb::object out = batch_to_single_homo_data(pyg_batch);
+         if(const auto it = encoding.schema.flags.find("flat_relations");
+            it != encoding.schema.flags.end() and it->second) {
+            return py::mifrost_flat_relation_data_from_pyg_fn()(
+               out, nb::arg("schema_fingerprint") = schema_fingerprint(encoding)
+            );
+         }
+         return out;
       }
       return batch_to_single_hetero_data(pyg_batch);
    }
 
    if(encoding.graph_kind == "homo") {
-      return batch_to_batch_homo_data(pyg_batch);
+      nb::object out = batch_to_batch_homo_data(pyg_batch);
+      if(const auto it = encoding.schema.flags.find("flat_relations");
+         it != encoding.schema.flags.end() and it->second) {
+         return py::mifrost_flat_relation_data_from_pyg_fn()(
+            out, nb::arg("schema_fingerprint") = schema_fingerprint(encoding)
+         );
+      }
+      return out;
    }
    return pyg_batch;
 }

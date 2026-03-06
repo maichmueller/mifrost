@@ -11,6 +11,7 @@ void init_schema(nanobind::module_& m);
 void init_color_encoder(nanobind::module_& m);
 void init_batch_encoding(nanobind::module_& m);
 void init_hgraph_encoder(nanobind::module_& m);
+void init_flat_encoder(nanobind::module_& m);
 void init_successor_encoders(nanobind::module_& m);
 void init_transition_dag(nanobind::module_& m);
 void init_horizon_encoder(nanobind::module_& m);

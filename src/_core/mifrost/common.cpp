@@ -77,6 +77,14 @@ nb::handle mifrost_core_module()
    return *module;
 }
 
+nb::handle mifrost_flat_data_module()
+{
+   static nb::object* module = [] {
+      return new nb::object(nb::module_::import_("mifrost.encoders.flat_data"));
+   }();
+   return *module;
+}
+
 nb::handle operator_module()
 {
    static nb::object* module = [] { return new nb::object(nb::module_::import_("operator")); }();
@@ -287,6 +295,14 @@ nb::handle mifrost_batch_encoding_loader()
       return new nb::object(mifrost_module().attr("_batch_encoding_from_payload"));
    }();
    return *loader;
+}
+
+nb::handle mifrost_flat_relation_data_from_pyg_fn()
+{
+   static nb::object* fn = [] {
+      return new nb::object(mifrost_flat_data_module().attr("flat_relation_data_from_pyg"));
+   }();
+   return *fn;
 }
 
 nb::handle operator_eq_fn()

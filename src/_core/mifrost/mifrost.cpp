@@ -18,6 +18,7 @@ NB_MODULE(_core, m)
    init_color_encoder(m);
    init_batch_encoding(m);
    init_hgraph_encoder(m);
+   init_flat_encoder(m);
    init_successor_encoders(m);
    init_transition_dag(m);
    init_horizon_encoder(m);

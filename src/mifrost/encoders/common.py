@@ -541,6 +541,76 @@ def _encoding_dict_to_pyg_homo(
     return data
 
 
+def _encoding_dict_to_pyg_flat(
+    encoding: NativeEncodingInput | Any,
+    *,
+    as_batch: bool | None = None,
+    include_metadata: bool = True,
+) -> Data:
+    from .flat_data import flat_relation_data_from_pyg
+
+    encoding_dict = _coerce_encoding_dict(encoding)
+    schema = _coerce_schema_dict(encoding_dict)
+    homo = _encoding_dict_to_pyg_homo(
+        encoding_dict,
+        as_batch=as_batch,
+        include_metadata=include_metadata,
+        undirected=False,
+    )
+    out = flat_relation_data_from_pyg(
+        homo, schema_fingerprint=encoding_dict.get("schema_fingerprint")
+    )
+    raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
+    object_names_raw = encoding_dict.get("object_names", [])
+    for entry in schema.get("graph_tensors", []):
+        key = str(entry["key"])
+        if key not in raw_tensors:
+            raise KeyError(f"Schema references missing graph tensor key: {key}")
+        attr = str(entry["attr"])
+        setattr(out, attr, _to_tensor(raw_tensors[key]))
+        ptr_key = str(entry.get("ptr_key", ""))
+        if ptr_key:
+            if ptr_key not in raw_tensors:
+                raise KeyError(
+                    f"Schema references missing graph tensor ptr key: {ptr_key}"
+                )
+            setattr(out, f"{attr}_ptr", _to_tensor(raw_tensors[ptr_key]))
+    graph_attrs = encoding_dict.get("graph_attrs", {})
+    if isinstance(graph_attrs, Mapping):
+        for key, value in graph_attrs.items():
+            setattr(out, str(key), value)
+    if include_metadata and object_names_raw:
+        out.object_names = (
+            object_names_raw
+            if isinstance(object_names_raw, list)
+            else list(object_names_raw)
+        )
+    if include_metadata and bool(as_batch):
+        node_names = getattr(out, "node_names", None)
+        node_sizes = getattr(out, "node_sizes", None)
+        if isinstance(node_names, list) and torch.is_tensor(node_sizes):
+            offsets = node_sizes.long().view(-1).tolist()
+            split: list[list[str]] = []
+            start = 0
+            for size in offsets:
+                stop = start + int(size)
+                split.append([str(name) for name in node_names[start:stop]])
+                start = stop
+            out.node_names = split
+        object_names = getattr(out, "object_names", None)
+        object_sizes = getattr(out, "object_sizes", None)
+        if isinstance(object_names, list) and torch.is_tensor(object_sizes):
+            offsets = object_sizes.long().view(-1).tolist()
+            split = []
+            start = 0
+            for size in offsets:
+                stop = start + int(size)
+                split.append([str(name) for name in object_names[start:stop]])
+                start = stop
+            out.object_names = split
+    return out
+
+
 def _encoding_dict_to_pyg(
     encoding: NativeEncodingInput | Any,
     *,
@@ -554,6 +624,11 @@ def _encoding_dict_to_pyg(
     """
     encoding_dict = _coerce_encoding_dict(encoding)
     schema = _coerce_schema_dict(encoding_dict)
+    flags = schema.get("flags", {})
+    if isinstance(flags, Mapping) and bool(flags.get("flat_relations", False)):
+        return _encoding_dict_to_pyg_flat(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
     graph_kind = schema.get("graph_kind")
     if graph_kind == "homo":
         return _encoding_dict_to_pyg_homo(

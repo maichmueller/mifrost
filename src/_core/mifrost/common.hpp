@@ -30,6 +30,7 @@ nanobind::handle torch_module();
 nanobind::handle torch_geometric_data_module();
 nanobind::handle mifrost_module();
 nanobind::handle mifrost_core_module();
+nanobind::handle mifrost_flat_data_module();
 nanobind::handle operator_module();
 nanobind::handle numpy_module();
 
@@ -66,6 +67,7 @@ nanobind::handle torch_geometric_data_ctor();
 
 nanobind::handle mifrost_core_batch_encoding_cls();
 nanobind::handle mifrost_batch_encoding_loader();
+nanobind::handle mifrost_flat_relation_data_from_pyg_fn();
 nanobind::handle operator_eq_fn();
 nanobind::handle numpy_array_type();
 nanobind::handle numpy_array_equal_fn();

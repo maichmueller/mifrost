@@ -9,6 +9,8 @@ from .common import _encoding_dict_to_pyg, _split_goals, encoding_to_tensors
 from .hgraph import HGraphEncoder, HGraphEncoderStream, HGraphMutableEncoderStream
 from .horizon import HorizonEncoder, HorizonEncoderStream
 from .color import ColorEncoder, ColorEncoderStream
+from .flat import FlatRelationEncoder
+from .flat_data import FlatRelationData, FlatRelationSchema
 from .transition import (
     TransitionEffectsHGraphEncoder,
     TransitionEffectsHGraphEncoderStream,
@@ -50,6 +52,9 @@ __all__ = [
     "HorizonEncoderStream",
     "ColorEncoder",
     "ColorEncoderStream",
+    "FlatRelationEncoder",
+    "FlatRelationData",
+    "FlatRelationSchema",
     "TransitionHGraphEncoder",
     "TransitionEffectsHGraphEncoder",
     "TransitionHGraphEncoderStream",
