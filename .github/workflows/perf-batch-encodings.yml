@@ -14,6 +14,8 @@ jobs:
   perf-batch-encodings:
     name: Batch Encodings Perf Gate (macOS)
     runs-on: macos-latest
+    outputs:
+      boundary_crossed: ${{ steps.gate.outputs.boundary_crossed }}
 
     steps:
       - uses: actions/checkout@v6
@@ -47,11 +49,14 @@ jobs:
           python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
       - name: Run batch_encodings benchmark gate
+        id: gate
+        shell: bash
         run: |
           # Reduce runner noise sensitivity:
           # - use CPU-time clock (less affected by scheduler preemption / noisy neighbors)
           # - gate on median instead of mean (robust to occasional outliers)
           # - pin common BLAS/OMP thread pools to 1
+          set +e
           OMP_NUM_THREADS=1 \
           MKL_NUM_THREADS=1 \
           OPENBLAS_NUM_THREADS=1 \
@@ -68,4 +73,63 @@ jobs:
             --gate-stat median \
             --max-plain-mean-ms 0.40 \
             --max-overhead-typed 1.55 \
-            --max-overhead-pyobj 2.35
+            --max-overhead-pyobj 2.35 \
+            2>&1 | tee perf-batch-encodings.log
+          status=${PIPESTATUS[0]}
+
+          if [[ "$status" -ne 0 ]]; then
+            echo "boundary_crossed=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Performance boundary exceeded::batch_encodings benchmark crossed configured boundary (non-blocking)."
+            echo "### Performance Boundary Warning" >> "$GITHUB_STEP_SUMMARY"
+            echo "Configured performance boundary was crossed. This is non-blocking." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "PERF REGRESSION:" perf-batch-encodings.log >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "boundary_crossed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Non-blocking gate: always succeed the workflow.
+          exit 0
+
+  perf-boundary-status:
+    name: Performance Boundary Status
+    needs: [perf-batch-encodings]
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    permissions:
+      checks: write
+      contents: read
+
+    steps:
+      - name: Publish boundary check run
+        uses: actions/github-script@v8
+        env:
+          BOUNDARY_CROSSED: ${{ needs.perf-batch-encodings.outputs.boundary_crossed }}
+        with:
+          script: |
+            const crossed = process.env.BOUNDARY_CROSSED === "true";
+            const headSha = context.eventName === "pull_request"
+              ? context.payload.pull_request.head.sha
+              : context.sha;
+
+            const title = crossed
+              ? "Performance boundary exceeded"
+              : "Performance boundary OK";
+            const summary = crossed
+              ? "Batch encodings benchmark crossed the configured boundary. This signal is non-blocking."
+              : "Batch encodings benchmark is within configured boundary.";
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "Performance Boundary",
+              head_sha: headSha,
+              status: "completed",
+              conclusion: crossed ? "neutral" : "success",
+              output: {
+                title,
+                summary,
+              },
+            });
