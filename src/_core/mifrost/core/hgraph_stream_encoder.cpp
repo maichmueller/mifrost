@@ -349,7 +349,7 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
                                             or has_target_source(TargetSource::History);
    if(emit_target_metadata_fields) {
       const TargetMetadataEmitConfig emit_config{
-         .symbol_type_id = config_.symbol_type_id,
+         .position_node_type_id = config_.symbol_type_id,
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
@@ -1086,14 +1086,7 @@ bool HGraphEncoderEngine::has_target_source(TargetSource source) const
 
 std::string_view HGraphEncoderEngine::target_group_name(TargetSource source)
 {
-   switch(source) {
-      case TargetSource::Actions: return "action";
-      case TargetSource::Goals: return "goal";
-      case TargetSource::Subgoals: return "subgoal";
-      case TargetSource::States: return "state";
-      case TargetSource::History: return "history";
-   }
-   throw std::invalid_argument("unknown target source");
+   return target_source_group_name(source);
 }
 
 int64_t HGraphEncoderEngine::get_or_assign_target_group_id(TargetSource source)

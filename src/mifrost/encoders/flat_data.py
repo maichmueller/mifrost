@@ -66,6 +66,103 @@ def _normalize_optional_int(value: object | None) -> int | None:
     return int(value)
 
 
+def _split_names_by_sizes(
+    values: object | None,
+    sizes: object | None,
+) -> object | None:
+    if not isinstance(values, list) or not torch.is_tensor(sizes):
+        return values
+    offsets = sizes.long().view(-1).tolist()
+    if values and isinstance(values[0], (list, tuple)):
+        if len(values) == len(offsets):
+            return [[str(name) for name in entry] for entry in values]
+        if len(values) == 1:
+            values = list(values[0])
+        else:
+            return values
+    split: list[list[str]] = []
+    start = 0
+    for size in offsets:
+        stop = start + int(size)
+        split.append([str(name) for name in values[start:stop]])
+        start = stop
+    return split
+
+
+def _sizes_from_ptr(ptr: object | None) -> torch.Tensor | None:
+    if not torch.is_tensor(ptr):
+        return None
+    ptr = ptr.long().view(-1)
+    if ptr.numel() <= 1:
+        return torch.zeros((0,), dtype=torch.long, device=ptr.device)
+    return ptr[1:] - ptr[:-1]
+
+
+def _normalize_shared_str_list(values: object | None) -> object | None:
+    if values is None:
+        return None
+    if isinstance(values, list) and values and isinstance(values[0], (list, tuple)):
+        first = [str(value) for value in values[0]]
+        if all([str(value) for value in entry] == first for entry in values[1:]):
+            return first
+        return [[str(value) for value in entry] for entry in values]
+    if isinstance(values, (list, tuple)):
+        return [str(value) for value in values]
+    return values
+
+
+def _normalize_shared_scalar(value: object | None) -> object | None:
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        if not value:
+            return None
+        first = value[0]
+        if all(entry == first for entry in value[1:]):
+            return first
+    return value
+
+
+def normalize_flat_relation_batch_metadata(
+    data: FlatRelationData | Batch,
+) -> FlatRelationData | Batch:
+    num_graphs = int(getattr(data, "num_graphs", getattr(data, "_num_graphs", 1)))
+    target_sizes = getattr(data, "target_sizes", None)
+    if target_sizes is None:
+        target_sizes = _sizes_from_ptr(getattr(data, "target_positions_ptr", None))
+        if target_sizes is not None:
+            data.target_sizes = target_sizes
+    if num_graphs > 1:
+        data.node_names = _split_names_by_sizes(
+            getattr(data, "node_names", None),
+            getattr(data, "node_sizes", None),
+        )
+        data.object_names = _split_names_by_sizes(
+            getattr(data, "object_names", None),
+            getattr(data, "object_sizes", None),
+        )
+        data.target_names = _split_names_by_sizes(
+            getattr(data, "target_names", None),
+            target_sizes,
+        )
+    data.target_groups = _normalize_shared_str_list(
+        getattr(data, "target_groups", None)
+    )
+    data.target_symbol_prefix = _normalize_shared_scalar(
+        getattr(data, "target_symbol_prefix", None)
+    )
+    for attr in (
+        "target_positions_ptr",
+        "target_indices_ptr",
+        "target_candidate_ids_ptr",
+        "target_depths_ptr",
+        "target_group_ids_ptr",
+    ):
+        if hasattr(data, attr):
+            delattr(data, attr)
+    return data
+
+
 @dataclass(frozen=True)
 class FlatRelationSchema:
     names: tuple[str, ...]
@@ -82,7 +179,12 @@ class FlatRelationData(Data):
     """Packed flat relation carrier with PyG-compatible batching behavior."""
 
     def __inc__(self, key: str, value: Any, *args, **kwargs) -> Any:
-        if key in {"relation_args", "object_indices", "action_indices"}:
+        if key in {
+            "relation_args",
+            "object_indices",
+            "target_entity_indices",
+            "target_positions",
+        }:
             return int(getattr(self, "num_nodes", 0))
         return super().__inc__(key, value, *args, **kwargs)
 
@@ -132,6 +234,40 @@ class FlatRelationData(Data):
             }
 
         relation_args = relation_args.long().view(-1)
+        if graph_index is None and self.num_graphs > 1:
+            counts = getattr(self, "relation_counts", None)
+            if counts is None:
+                return {
+                    name: relation_args.new_empty((0, arity))
+                    for name, arity in zip(self.schema.names, self.schema.arities)
+                }
+            counts = counts.long()
+            arities = self.schema.arities
+            chunks: dict[str, list[torch.Tensor]] = {
+                name: [] for name in self.schema.names
+            }
+            start = 0
+            for row in counts:
+                for relation_idx, name in enumerate(self.schema.names):
+                    arity = arities[relation_idx]
+                    instances = int(row[relation_idx].item()) if row.numel() > 0 else 0
+                    slots = instances * arity
+                    chunk = relation_args[start : start + slots]
+                    if arity > 0:
+                        chunks[name].append(chunk.view(instances, arity))
+                    else:
+                        chunks[name].append(chunk.new_empty((instances, 0)))
+                    start += slots
+            out: dict[str, torch.Tensor] = {}
+            for relation_name, arity in zip(self.schema.names, self.schema.arities):
+                parts = chunks[relation_name]
+                out[relation_name] = (
+                    torch.cat(parts, dim=0)
+                    if parts
+                    else relation_args.new_empty((0, arity))
+                )
+            return out
+
         counts = self._relation_counts_for(graph_index)
         arities = self.schema.arities
         start = self._relation_arg_start(graph_index)
@@ -153,11 +289,7 @@ class FlatRelationData(Data):
         if node_names is None:
             start, end = self.graph_node_range(graph_index)
             return [f"entity:{idx}" for idx in range(start, end)]
-        if (
-            self.num_graphs > 1
-            and node_names
-            and isinstance(node_names[0], (list, tuple))
-        ):
+        if node_names and isinstance(node_names[0], (list, tuple)):
             return [str(name) for name in node_names[graph_index]]
         return [str(name) for name in node_names]
 
@@ -165,13 +297,70 @@ class FlatRelationData(Data):
         object_names = getattr(self, "object_names", None)
         if object_names is None:
             return self.graph_node_names(graph_index)
-        if (
-            self.num_graphs > 1
-            and object_names
-            and isinstance(object_names[0], (list, tuple))
-        ):
+        if object_names and isinstance(object_names[0], (list, tuple)):
             return [str(name) for name in object_names[graph_index]]
         return [str(name) for name in object_names]
+
+    def graph_object_indices(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="object_indices",
+            size_field_name="object_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_entity_indices(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_entity_indices",
+            size_field_name="target_entity_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_entity_names(self, graph_index: int = 0) -> list[str]:
+        target_entity_indices = self.graph_target_entity_indices(graph_index)
+        if target_entity_indices.numel() == 0:
+            return []
+        start, _end = self.graph_node_range(graph_index)
+        local_names = self.graph_node_names(graph_index)
+        return [
+            str(local_names[int(global_idx.item()) - start])
+            for global_idx in target_entity_indices
+        ]
+
+    def graph_target_positions(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_positions",
+            size_field_name="target_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_indices(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_indices",
+            size_field_name="target_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_candidate_ids(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_candidate_ids",
+            size_field_name="target_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_group_ids(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_group_ids",
+            size_field_name="target_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_target_names(self, graph_index: int = 0) -> list[str]:
+        target_names = getattr(self, "target_names", None)
+        if target_names is None:
+            return []
+        if target_names and isinstance(target_names[0], (list, tuple)):
+            return [str(name) for name in target_names[graph_index]]
+        return [str(name) for name in target_names]
 
     def graph_node_range(self, graph_index: int = 0) -> tuple[int, int]:
         node_sizes = getattr(self, "node_sizes", None)
@@ -209,6 +398,29 @@ class FlatRelationData(Data):
                 f"graph_index {graph_index} out of range for {counts.size(0)} graphs"
             )
         return counts[graph_index]
+
+    def _graph_cat_field_slice(
+        self,
+        *,
+        field_name: str,
+        size_field_name: str,
+        graph_index: int,
+    ) -> torch.Tensor:
+        values = getattr(self, field_name, None)
+        if values is None:
+            return torch.empty((0,), dtype=torch.long)
+        values = values.long().view(-1)
+        sizes = getattr(self, size_field_name, None)
+        if sizes is None:
+            return values
+        sizes = sizes.long().view(-1)
+        if graph_index < 0 or graph_index >= len(sizes):
+            raise IndexError(
+                f"graph_index {graph_index} out of range for {len(sizes)} graphs"
+            )
+        start = int(sizes[:graph_index].sum().item()) if graph_index > 0 else 0
+        end = start + int(sizes[graph_index].item())
+        return values[start:end]
 
     def _relation_arities_tensor(
         self, device: torch.device | None = None
@@ -258,7 +470,12 @@ def flat_relation_data_from_pyg(
         out.relation_arities = _normalize_int_tuple(relation_arities)
     if schema_fingerprint is not None:
         out.schema_fingerprint = str(int(schema_fingerprint))
-    return out
+    return normalize_flat_relation_batch_metadata(out)
 
 
-__all__ = ["FlatRelationData", "FlatRelationSchema", "flat_relation_data_from_pyg"]
+__all__ = [
+    "FlatRelationData",
+    "FlatRelationSchema",
+    "flat_relation_data_from_pyg",
+    "normalize_flat_relation_batch_metadata",
+]

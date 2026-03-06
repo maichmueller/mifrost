@@ -24,6 +24,9 @@ constexpr std::string_view kRelationSourcesAttr = "relation_sources";
 constexpr std::string_view kNodeSizesField = "node_sizes";
 constexpr std::string_view kObjectSizesField = "object_sizes";
 constexpr std::string_view kObjectIndicesField = "object_indices";
+constexpr std::string_view kTargetEntitySizesField = "target_entity_sizes";
+constexpr std::string_view kTargetEntityIndicesField = "target_entity_indices";
+constexpr std::string_view kTargetSizesField = "target_sizes";
 constexpr std::string_view kRelationCountsField = "relation_counts";
 constexpr std::string_view kRelationArgsField = "relation_args";
 
@@ -60,6 +63,40 @@ GoalInputs default_goal_inputs_for_state(const mimir::search::State& state)
    return inputs;
 }
 
+TargetColumns build_action_target_columns(
+   std::span< const mimir::formalism::GroundAction > actions,
+   const FlatRelationEncoderEngine::EncodingContext& context
+)
+{
+   TargetColumns columns;
+   columns.reserve(actions.size(), /*include_depth=*/false, /*include_group=*/true);
+   for(size_t action_pos = 0; action_pos < actions.size(); ++action_pos) {
+      const auto& action = actions[action_pos];
+      const auto it = context.target_entity_index_by_action_id.find(
+         static_cast< int64_t >(action->get_index())
+      );
+      if(it == context.target_entity_index_by_action_id.end()) {
+         throw std::invalid_argument(
+            "Flat relation encoder encountered grounded action without a target entity row: "
+            + RelationFormatter::format_action(action)
+         );
+      }
+      columns.append(
+         TargetRecord{
+            .position = it->second,
+            .index = static_cast< int64_t >(action_pos),
+            .candidate_id = static_cast< int64_t >(action_pos),
+            .depth = std::nullopt,
+            .group_id = 0,
+            .name = RelationFormatter::format_action(action),
+         },
+         /*include_depth=*/false,
+         /*include_group=*/true
+      );
+   }
+   return columns;
+}
+
 class RelationSchemaRegistry {
   public:
    void add(std::string name, int arity, std::string source)
@@ -94,7 +131,10 @@ class RelationSchemaRegistry {
 
 class FlatRelationSink {
   public:
-   explicit FlatRelationSink(size_t relation_count) : relation_counts_(relation_count, 0) {}
+   explicit FlatRelationSink(size_t relation_count)
+       : relation_counts_(relation_count, 0), relation_args_by_relation_(relation_count)
+   {
+   }
 
    void emit(int relation_id, std::span< const int64_t > args)
    {
@@ -102,16 +142,35 @@ class FlatRelationSink {
          throw std::invalid_argument("FlatRelationSink relation id out of range");
       }
       relation_counts_[static_cast< size_t >(relation_id)] += 1;
-      relation_args_.insert(relation_args_.end(), args.begin(), args.end());
+      auto& bucket = relation_args_by_relation_[static_cast< size_t >(relation_id)];
+      bucket.insert(bucket.end(), args.begin(), args.end());
+      relation_args_dirty_ = true;
    }
 
    [[nodiscard]] const std::vector< int64_t >& relation_counts() const { return relation_counts_; }
 
-   [[nodiscard]] const std::vector< int64_t >& relation_args() const { return relation_args_; }
+   [[nodiscard]] const std::vector< int64_t >& relation_args() const
+   {
+      if(relation_args_dirty_) {
+         relation_args_.clear();
+         size_t total_slots = 0;
+         for(const auto& bucket : relation_args_by_relation_) {
+            total_slots += bucket.size();
+         }
+         relation_args_.reserve(total_slots);
+         for(const auto& bucket : relation_args_by_relation_) {
+            relation_args_.insert(relation_args_.end(), bucket.begin(), bucket.end());
+         }
+         relation_args_dirty_ = false;
+      }
+      return relation_args_;
+   }
 
   private:
    std::vector< int64_t > relation_counts_;
-   std::vector< int64_t > relation_args_;
+   mutable std::vector< std::vector< int64_t > > relation_args_by_relation_;
+   mutable std::vector< int64_t > relation_args_;
+   mutable bool relation_args_dirty_ = false;
 };
 
 template < typename GoalLevelsMap, typename LiteralTag >
@@ -146,6 +205,41 @@ std::vector< int64_t > local_arg_rows_for_atom(
       }
       args.push_back(it->second);
    }
+   return args;
+}
+
+std::vector< int64_t > local_arg_rows_for_action(
+   const FlatRelationEncoderEngine::EncodingContext& context,
+   const mimir::formalism::GroundAction& action
+)
+{
+   std::vector< int64_t > args;
+   args.reserve(action->get_objects().size() + 1);
+
+   const auto action_it = context.target_entity_index_by_action_id.find(
+      static_cast< int64_t >(action->get_index())
+   );
+   if(action_it == context.target_entity_index_by_action_id.end()) {
+      throw std::invalid_argument(
+         "Flat relation encoder encountered grounded action without a target entity row: "
+         + RelationFormatter::format_action(action)
+      );
+   }
+   args.push_back(action_it->second);
+
+   for(const auto& obj : action->get_objects()) {
+      const auto object_it = context.entity_index_by_object_id.find(
+         static_cast< int64_t >(obj->get_index())
+      );
+      if(object_it == context.entity_index_by_object_id.end()) {
+         throw std::invalid_argument(
+            "Flat relation encoder encountered action object not present in entity table: "
+            + RelationFormatter::format_object(*obj)
+         );
+      }
+      args.push_back(object_it->second);
+   }
+
    return args;
 }
 
@@ -431,6 +525,38 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
    }
 };
 
+class FlatRelationEncoderEngine::GroundActionsComponent final:
+    public FlatRelationEncoderEngine::RelationComponent {
+  public:
+   void declare_schema(
+      const FlatRelationEncoderEngine& engine,
+      RelationSchemaRegistry& registry
+   ) const override
+   {
+      for(const auto& spec : engine.action_specs_) {
+         registry.add(spec.name, spec.arity, "action");
+      }
+   }
+
+   void emit(
+      const FlatRelationEncoderEngine& engine,
+      const mimir::search::State&,
+      const GoalInputs&,
+      const hash_set< uint64_t >&,
+      const EncodingContext& context,
+      FlatRelationSink& sink
+   ) const override
+   {
+      for(const auto& action : context.target_entity_actions) {
+         const auto relation_id = engine.relation_id_for(
+            RelationFormatter::format_action_schema(*action->get_action())
+         );
+         const auto args = local_arg_rows_for_action(context, action);
+         sink.emit(relation_id, args);
+      }
+   }
+};
+
 FlatRelationEncoderEngine::FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain)
     : FlatRelationEncoderEngine(domain, Config{})
 {
@@ -442,6 +568,7 @@ FlatRelationEncoderEngine::FlatRelationEncoderEngine(
 )
     : domain_(domain), config_(std::move(config))
 {
+   validate_config();
    initialize_from_domain();
 }
 
@@ -453,21 +580,37 @@ FlatRelationEncoderEngine::FlatRelationEncoderEngine(mimir::formalism::Domain do
 FlatRelationEncoderEngine::FlatRelationEncoderEngine(mimir::formalism::Domain domain, Config config)
     : domain_holder_(std::move(domain)), domain_(*domain_holder_), config_(std::move(config))
 {
+   validate_config();
    initialize_from_domain();
 }
 
 FlatRelationEncoderEngine::~FlatRelationEncoderEngine() = default;
 
+void FlatRelationEncoderEngine::validate_config() const
+{
+   for(const auto source : config_.target_sources) {
+      if(source != TargetSource::Actions) {
+         throw std::invalid_argument(
+            "FlatRelationEncoder currently supports target_sources={'action'} only"
+         );
+      }
+   }
+}
+
 void FlatRelationEncoderEngine::initialize_from_domain()
 {
    predicate_specs_.clear();
    regular_predicate_specs_.clear();
+   action_specs_.clear();
 
    RelationDictConfig rel_config;
    rel_config.max_goal_level = static_cast< int >(config_.max_goal_level);
    rel_config.support_literals = config_.support_literals;
    rel_config.goal_satisfaction_derivations = config_.goal_satisfaction_derivations;
-   relation_dict_ = RelationDict(domain_, {}, rel_config, 0, 0);
+
+   std::vector< mimir::formalism::Action > actions;
+   actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
+   relation_dict_ = RelationDict(domain_, actions, rel_config, 0, 1);
 
    const auto top_type_predicates = rel_config.top_type_predicates;
    auto collect_predicates = [&]< typename Tag >(Tag) {
@@ -492,10 +635,21 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    std::ranges::sort(predicate_specs_, predicate_order);
    std::ranges::sort(regular_predicate_specs_, predicate_order);
 
+   for(const auto& action : actions) {
+      action_specs_.push_back(
+         PredicateSpec{
+            .name = RelationFormatter::format_action_schema(*action),
+            .arity = static_cast< int >(action->get_arity()) + 1,
+         }
+      );
+   }
+   std::ranges::sort(action_specs_, predicate_order);
+
    components_.clear();
    components_.push_back(std::make_unique< StateFactsComponent >());
    components_.push_back(std::make_unique< GoalFactsComponent >());
    components_.push_back(std::make_unique< GoalSatisfactionComponent >());
+   components_.push_back(std::make_unique< GroundActionsComponent >());
 
    rebuild_schema();
 }
@@ -577,6 +731,36 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
       }
    );
    builder.register_field(
+      std::string(kTargetEntitySizesField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::STACK,
+         .dim = 1,
+      }
+   );
+   builder.register_field(
+      std::string(kTargetEntityIndicesField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
+         .inc = GraphFieldInc{
+            .kind = GraphFieldInc::Kind::NODE_OFFSET,
+            .node_type = std::string(kEntityNodeType),
+         },
+      }
+   );
+   if(has_target_source(TargetSource::Actions)) {
+      builder.register_field(
+         std::string(kTargetSizesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+         }
+      );
+   }
+   builder.register_field(
       std::string(kRelationCountsField),
       GraphFieldSpec{
          .dtype = GraphFieldDType::I64,
@@ -599,7 +783,8 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
 }
 
 FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_context(
-   const mimir::search::State& state
+   const mimir::search::State& state,
+   std::span< const mimir::formalism::GroundAction > actions
 ) const
 {
    EncodingContext context;
@@ -609,9 +794,13 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       return lhs->get_index() < rhs->get_index();
    });
 
-   context.entity_names.reserve(ordered.size());
+   context.entity_names.reserve(ordered.size() + actions.size());
+   context.object_names.reserve(ordered.size());
    context.object_indices.reserve(ordered.size());
    context.entity_index_by_object_id.reserve(ordered.size());
+   context.target_entity_indices.reserve(actions.size());
+   context.target_entity_index_by_action_id.reserve(actions.size());
+   context.target_entity_actions.reserve(actions.size());
 
    for(size_t i = 0; i < ordered.size(); ++i) {
       const auto& obj = ordered[i];
@@ -619,9 +808,26 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       context.entity_index_by_object_id.emplace(
          static_cast< int64_t >(obj->get_index()), local_index
       );
-      context.entity_names.push_back(RelationFormatter::format_object(*obj));
+      const std::string object_name = RelationFormatter::format_object(*obj);
+      context.entity_names.push_back(object_name);
+      context.object_names.push_back(object_name);
       context.object_indices.push_back(local_index);
    }
+
+   hash_set< int64_t > seen_action_ids;
+   seen_action_ids.reserve(actions.size());
+   for(const auto& action : actions) {
+      const int64_t action_id = static_cast< int64_t >(action->get_index());
+      if(not seen_action_ids.emplace(action_id).second) {
+         continue;
+      }
+      const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
+      context.target_entity_index_by_action_id.emplace(action_id, local_index);
+      context.entity_names.push_back(RelationFormatter::format_action(action));
+      context.target_entity_indices.push_back(local_index);
+      context.target_entity_actions.push_back(action);
+   }
+
    return context;
 }
 
@@ -634,17 +840,32 @@ int FlatRelationEncoderEngine::relation_id_for(const std::string& name) const
    return it->second;
 }
 
+bool FlatRelationEncoderEngine::has_target_source(TargetSource source) const
+{
+   return config_.target_sources.contains(source);
+}
+
 void FlatRelationEncoderEngine::encode_default_goals(
    const mimir::search::State& state,
+   std::span< const mimir::formalism::GroundAction > actions,
    BatchBuilder& builder
 )
 {
-   encode_impl(state, default_goal_inputs_for_state(state), builder);
+   encode_impl(state, default_goal_inputs_for_state(state), actions, builder);
 }
 
 void FlatRelationEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
 {
-   encode_default_goals(state, builder);
+   encode_default_goals(state, {}, builder);
+}
+
+void FlatRelationEncoderEngine::encode(
+   const mimir::search::State& state,
+   std::span< const mimir::formalism::GroundAction > actions,
+   BatchBuilder& builder
+)
+{
+   encode_default_goals(state, actions, builder);
 }
 
 void FlatRelationEncoderEngine::encode(
@@ -653,17 +874,28 @@ void FlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_impl(state, goals, builder);
+   encode_impl(state, goals, {}, builder);
+}
+
+void FlatRelationEncoderEngine::encode(
+   const mimir::search::State& state,
+   const GoalInputs& goals,
+   std::span< const mimir::formalism::GroundAction > actions,
+   BatchBuilder& builder
+)
+{
+   encode_impl(state, goals, actions, builder);
 }
 
 void FlatRelationEncoderEngine::encode_impl(
    const mimir::search::State& state,
    const GoalInputs& goals,
+   std::span< const mimir::formalism::GroundAction > actions,
    BatchBuilder& builder
 )
 {
    prepare_builder(builder);
-   const auto context = make_context(state);
+   const auto context = make_context(state, actions);
    FlatRelationSink sink(relation_names_.size());
 
    hash_set< uint64_t > fact_keys;
@@ -710,17 +942,43 @@ void FlatRelationEncoderEngine::encode_impl(
 
    if(config_.export_node_names) {
       builder.set_node_names(std::string(kEntityNodeType), context.entity_names);
-      builder.set_object_names(context.entity_names);
+      builder.set_object_names(context.object_names);
    }
 
    const int64_t node_size = static_cast< int64_t >(context.entity_names.size());
    const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
+   const int64_t target_entity_size = static_cast< int64_t >(context.target_entity_indices.size());
    builder.set_field(std::string(kNodeSizesField), std::span< const int64_t >(&node_size, 1));
    builder.set_field(std::string(kObjectSizesField), std::span< const int64_t >(&object_size, 1));
    builder.set_field(
       std::string(kObjectIndicesField),
       std::span< const int64_t >(context.object_indices.data(), context.object_indices.size())
    );
+   builder.set_field(
+      std::string(kTargetEntitySizesField), std::span< const int64_t >(&target_entity_size, 1)
+   );
+   builder.set_field(
+      std::string(kTargetEntityIndicesField),
+      std::span< const int64_t >(
+         context.target_entity_indices.data(), context.target_entity_indices.size()
+      )
+   );
+   if(has_target_source(TargetSource::Actions)) {
+      const auto target_columns = build_action_target_columns(actions, context);
+      const int64_t target_size = static_cast< int64_t >(target_columns.size());
+      builder.set_field(
+         std::string(kTargetSizesField), std::span< const int64_t >(&target_size, 1)
+      );
+      const TargetMetadataEmitConfig target_emit_config{
+         .position_node_type_id = std::string(kEntityNodeType),
+         .symbol_prefix = config_.target_symbol_prefix,
+         .include_depth = false,
+         .include_group = true,
+         .groups = {std::string(target_source_group_name(TargetSource::Actions))},
+         .parent_relation = std::nullopt,
+      };
+      emit_target_metadata(builder, target_columns, target_emit_config);
+   }
    builder.set_field(
       std::string(kRelationCountsField),
       std::span< const int64_t >(sink.relation_counts().data(), sink.relation_counts().size())
@@ -732,7 +990,7 @@ void FlatRelationEncoderEngine::encode_impl(
 }
 
 BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
-   const batch_input::parsed::ColorBatchInputs& inputs
+   const batch_input::parsed::FlatBatchInputs& inputs
 )
 {
    BatchBuilder builder;
@@ -740,9 +998,11 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
    prepare_builder(builder);
 
    const size_t state_count = inputs.states.states.size();
+   std::vector< std::string > batch_target_names;
    for(size_t idx = 0; idx < state_count; ++idx) {
       const auto& state_entry = inputs.states.states[idx];
       const auto& goals_entry = inputs.goals.at(idx);
+      const auto& actions_entry = inputs.actions.at(idx);
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
 
       GoalInputs goal_inputs;
@@ -761,8 +1021,28 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
          }
       }
 
-      encode_impl(state_entry.state, goal_inputs, builder);
+      const auto actions_span = actions_entry.has_value()
+                                   ? std::span< const mimir::formalism::GroundAction >(
+                                        *actions_entry
+                                     )
+                                   : std::span< const mimir::formalism::GroundAction >{};
+      if(has_target_source(TargetSource::Actions)) {
+         batch_target_names.reserve(batch_target_names.size() + actions_span.size());
+         for(const auto& action : actions_span) {
+            batch_target_names.push_back(RelationFormatter::format_action(action));
+         }
+      }
+      encode_impl(state_entry.state, goal_inputs, actions_span, builder);
       builder.next_graph();
+   }
+
+   if(has_target_source(TargetSource::Actions)) {
+      builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+      builder.set_graph_attr(
+         std::string(kTargetGroupsAttr),
+         std::vector< std::string >{std::string(target_source_group_name(TargetSource::Actions))}
+      );
+      builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    }
 
    return builder.build();

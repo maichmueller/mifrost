@@ -7,6 +7,7 @@ import torch
 
 from .._core import FlatRelationEncoderConfig, FlatRelationEncoderEngine
 from ._action_contract import parse_flat_actions
+from ._target_sources import TargetSource, normalize_target_sources
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
@@ -53,15 +54,21 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         include_static: bool = True,
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
+        target_sources: Iterable[TargetSource | str] | None = None,
+        target_symbol_prefix: str = "target:",
         goal_satisfaction_derivations: Iterable[object] | None = None,
     ) -> None:
+        normalized_target_sources = normalize_target_sources(target_sources)
         config_kwargs: dict[str, object] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
             "include_static": include_static,
             "export_node_names": export_node_names,
             "ignore_zero_arity_relations": ignore_zero_arity_relations,
+            "target_symbol_prefix": target_symbol_prefix,
         }
+        if normalized_target_sources is not None:
+            config_kwargs["target_sources"] = normalized_target_sources
         if goal_satisfaction_derivations is not None:
             config_kwargs["goal_satisfaction_derivations"] = (
                 goal_satisfaction_derivations
@@ -93,14 +100,15 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         adv_state = _advanced_state(state)
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
-        if action_list:
-            raise ValueError(
-                "FlatRelationEncoder v1 does not support explicit action payloads"
-            )
         if goals is None and subgoal_layers is None:
+            if action_list:
+                return self._engine.encode(adv_state, action_list)
             return self._engine.encode(adv_state)
         goals_input = goals if goals is not None else default_goals_from_state(state)
-        return self._engine.encode(adv_state, _split_goals(goals_input, subgoal_layers))
+        split_goals = _split_goals(goals_input, subgoal_layers)
+        if action_list:
+            return self._engine.encode(adv_state, split_goals, action_list)
+        return self._engine.encode(adv_state, split_goals)
 
     def encode(
         self,
@@ -193,13 +201,20 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         start, end = data.graph_node_range(graph_index)
         node_names = data.graph_node_names(graph_index)
         name_by_global = {start + idx: node_names[idx] for idx in range(end - start)}
+        target_entity_indices = {
+            int(idx.item()) for idx in data.graph_target_entity_indices(graph_index)
+        }
 
         for global_idx in range(start, end):
             label = name_by_global.get(global_idx, f"entity:{global_idx}")
+            entity_kind = (
+                "target_entity" if global_idx in target_entity_indices else "object"
+            )
             graph.add_node(
                 label,
                 type="entity",
                 kind="entity",
+                entity_kind=entity_kind,
                 global_index=global_idx,
                 graph_index=graph_index,
             )
@@ -273,11 +288,17 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         ]
 
         if entity_nodes:
+            entity_kinds = [
+                graph.nodes[node].get("entity_kind", "object") for node in entity_nodes
+            ]
             nx.draw_networkx_nodes(
                 graph,
                 pos,
                 nodelist=entity_nodes,
-                node_color="#f3efe0",
+                node_color=[
+                    "#f3efe0" if entity_kind == "object" else "#d8ecff"
+                    for entity_kind in entity_kinds
+                ],
                 edgecolors="#222222",
                 linewidths=1.3,
                 node_size=420,
@@ -288,6 +309,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 "state": "#355c7d",
                 "goal": "#c06c84",
                 "goal_satisfaction": "#6c9a8b",
+                "action": "#f08a24",
                 "relation": "#666666",
             }
             nx.draw_networkx_nodes(
@@ -311,7 +333,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
 
         if edge_labels:
             labels = {
-                edge_key: attrs.get("position")
+                tuple(edge_key): attrs.get("position")
                 for *edge_key, attrs in graph.edges(keys=False, data=True)
                 if attrs.get("position") is not None
             }

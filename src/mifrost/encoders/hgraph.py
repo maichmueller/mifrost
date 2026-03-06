@@ -45,6 +45,7 @@ from .common import (
 from ._action_contract import (
     parse_flat_actions,
 )
+from ._target_sources import TargetSource, normalize_target_sources
 from .types import (
     DomainInput,
     GoalLiteralInput,
@@ -64,60 +65,12 @@ from .types import (
 _HGraphMutableStreamEncoder = getattr(
     _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
 )
-TargetSource = getattr(_core, "TargetSource", None)
 
 
 def _build_config(config_cls, **kwargs: object):
     """Build a nanobind config object from non-None keyword values."""
     clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
     return config_cls(**clean_kwargs)
-
-
-_TARGET_SOURCE_ALIASES = (
-    {
-        "action": TargetSource.Actions,
-        "actions": TargetSource.Actions,
-        "goal": TargetSource.Goals,
-        "goals": TargetSource.Goals,
-        "subgoal": TargetSource.Subgoals,
-        "subgoals": TargetSource.Subgoals,
-        "state": TargetSource.States,
-        "states": TargetSource.States,
-        "history": TargetSource.History,
-    }
-    if TargetSource is not None
-    else {}
-)
-
-
-def _normalize_target_sources(
-    target_sources: Iterable[TargetSource | str] | None,
-) -> set[TargetSource] | None:
-    if target_sources is None:
-        return None
-    if TargetSource is None:
-        raise RuntimeError("target_sources requires mifrost._core.TargetSource support")
-    if isinstance(target_sources, (TargetSource, str)):
-        target_sources = [target_sources]
-    out: set[TargetSource] = set()
-    for source in target_sources:
-        if isinstance(source, TargetSource):
-            out.add(source)
-            continue
-        if isinstance(source, str):
-            key = source.strip().lower()
-            if key not in _TARGET_SOURCE_ALIASES:
-                raise ValueError(
-                    f"Unknown target source '{source}'. "
-                    "Expected one of: action, goal, subgoal, state, history."
-                )
-            out.add(_TARGET_SOURCE_ALIASES[key])
-            continue
-        raise TypeError(
-            "target_sources entries must be mifrost.TargetSource or str, "
-            f"got {type(source)!r}"
-        )
-    return out
 
 
 def _draw_hgraph_graph(
@@ -646,7 +599,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
             export_node_names=export_node_names,
-            target_sources=_normalize_target_sources(target_sources),
+            target_sources=normalize_target_sources(target_sources),
             max_goal_level=max_goal_level,
             support_literals=support_literals,
             nullary_object_name=nullary_object_name,

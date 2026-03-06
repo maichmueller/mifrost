@@ -3,13 +3,16 @@
 Exports concrete encoders, stream variants, and shared base/helpers.
 """
 
+import sys as _sys
+
+_in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
+
 from .base import EncoderBase, StreamEncoderBase
 from ._rustworkx_dag import transition_dag_from_rustworkx
 from .common import _encoding_dict_to_pyg, _split_goals, encoding_to_tensors
 from .hgraph import HGraphEncoder, HGraphEncoderStream, HGraphMutableEncoderStream
 from .horizon import HorizonEncoder, HorizonEncoderStream
 from .color import ColorEncoder, ColorEncoderStream
-from .flat import FlatRelationEncoder
 from .flat_data import FlatRelationData, FlatRelationSchema
 from .transition import (
     TransitionEffectsHGraphEncoder,
@@ -43,6 +46,19 @@ from .types import (
     unregister_literal_adapter,
     unregister_state_adapter,
 )
+
+if not _in_stubgen:
+    from .flat import FlatRelationEncoder
+
+
+def __getattr__(name: str):
+    if name == "FlatRelationEncoder":
+        from .flat import FlatRelationEncoder as _FlatRelationEncoder
+
+        globals()[name] = _FlatRelationEncoder
+        return _FlatRelationEncoder
+    raise AttributeError(name)
+
 
 __all__ = [
     "HGraphEncoder",

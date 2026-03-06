@@ -3,8 +3,10 @@
 #include <boost/describe.hpp>
 #include <memory>
 #include <mimir/formalism/domain.hpp>
+#include <mimir/formalism/ground_action.hpp>
 #include <mimir/search/state.hpp>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -12,12 +14,14 @@
 #include "common_types.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
+#include "target_metadata.hpp"
+#include "target_source.hpp"
 
 namespace mifrost {
 
 namespace batch_input {
 namespace parsed {
-struct ColorBatchInputs;
+struct FlatBatchInputs;
 }
 }  // namespace batch_input
 
@@ -29,6 +33,8 @@ class FlatRelationEncoderEngine {
       bool include_static = true;
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
+      std::set< TargetSource > target_sources = {};
+      std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {
          GoalSatisfaction::satisfied,
       };
@@ -36,8 +42,12 @@ class FlatRelationEncoderEngine {
 
    struct EncodingContext {
       hash_map< int64_t, int64_t > entity_index_by_object_id;
+      hash_map< int64_t, int64_t > target_entity_index_by_action_id;
       std::vector< std::string > entity_names;
+      std::vector< std::string > object_names;
       std::vector< int64_t > object_indices;
+      std::vector< int64_t > target_entity_indices;
+      std::vector< mimir::formalism::GroundAction > target_entity_actions;
    };
 
    explicit FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain);
@@ -51,8 +61,19 @@ class FlatRelationEncoderEngine {
    ~FlatRelationEncoderEngine();
 
    void encode(const mimir::search::State& state, BatchBuilder& builder);
+   void encode(
+      const mimir::search::State& state,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
    void encode(const mimir::search::State& state, const GoalInputs& goals, BatchBuilder& builder);
-   BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::ColorBatchInputs& inputs);
+   void encode(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
+   BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::FlatBatchInputs& inputs);
 
    [[nodiscard]] const Config& get_config() const { return config_; }
    [[nodiscard]] const RelationDict& get_relation_dict() const { return relation_dict_; }
@@ -79,15 +100,29 @@ class FlatRelationEncoderEngine {
    class StateFactsComponent;
    class GoalFactsComponent;
    class GoalSatisfactionComponent;
+   class GroundActionsComponent;
 
+   void validate_config() const;
    void initialize_from_domain();
    void rebuild_schema();
    void prepare_builder(BatchBuilder& builder) const;
-   void encode_default_goals(const mimir::search::State& state, BatchBuilder& builder);
-   void
-   encode_impl(const mimir::search::State& state, const GoalInputs& goals, BatchBuilder& builder);
-   EncodingContext make_context(const mimir::search::State& state) const;
+   void encode_default_goals(
+      const mimir::search::State& state,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
+   void encode_impl(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      BatchBuilder& builder
+   );
+   EncodingContext make_context(
+      const mimir::search::State& state,
+      std::span< const mimir::formalism::GroundAction > actions
+   ) const;
    int relation_id_for(const std::string& name) const;
+   [[nodiscard]] bool has_target_source(TargetSource source) const;
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
@@ -95,6 +130,7 @@ class FlatRelationEncoderEngine {
    RelationDict relation_dict_;
    std::vector< PredicateSpec > predicate_specs_;
    std::vector< PredicateSpec > regular_predicate_specs_;
+   std::vector< PredicateSpec > action_specs_;
    std::vector< std::unique_ptr< RelationComponent > > components_;
    std::vector< std::string > relation_names_;
    std::vector< int64_t > relation_arities_;
@@ -110,6 +146,8 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     export_node_names,
     ignore_zero_arity_relations,
+    target_sources,
+    target_symbol_prefix,
     goal_satisfaction_derivations)
 )
 

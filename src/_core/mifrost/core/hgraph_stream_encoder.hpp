@@ -30,6 +30,7 @@
 #include "schema_key_separators.hpp"
 #include "stream_encoder_base.hpp"
 #include "target_metadata.hpp"
+#include "target_source.hpp"
 
 namespace mifrost {
 
@@ -38,14 +39,6 @@ namespace parsed {
 struct HGraphBatchInputs;
 }
 }  // namespace batch_input
-
-enum class TargetSource {
-   Actions,
-   Goals,
-   Subgoals,
-   States,
-   History,
-};
 
 /**
  * @brief Heterogeneous graph encoder engine.

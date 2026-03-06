@@ -41,6 +41,8 @@ void init_flat_encoder(nb::module_& m)
          "ignore_zero_arity_relations",
          &FlatRelationEncoderEngine::Config::ignore_zero_arity_relations
       )
+      .def_rw("target_sources", &FlatRelationEncoderEngine::Config::target_sources)
+      .def_rw("target_symbol_prefix", &FlatRelationEncoderEngine::Config::target_symbol_prefix)
       .def_rw(
          "goal_satisfaction_derivations",
          &FlatRelationEncoderEngine::Config::goal_satisfaction_derivations
@@ -77,6 +79,36 @@ void init_flat_encoder(nb::module_& m)
          "encode",
          [](FlatRelationEncoderEngine& encoder,
             const mimir::search::State& state,
+            const std::vector< mimir::formalism::GroundAction >& actions) {
+            BatchBuilder builder;
+            builder.set_graph_kind("homo");
+            encoder.encode(state, actions, builder);
+            builder.next_graph();
+            return builder.build();
+         },
+         "state"_a,
+         "actions"_a
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions) {
+            BatchBuilder builder;
+            builder.set_graph_kind("homo");
+            encoder.encode(state, goals, actions, builder);
+            builder.next_graph();
+            return builder.build();
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
             const GoalInputs& goals) {
             BatchBuilder builder;
             builder.set_graph_kind("homo");
@@ -99,6 +131,28 @@ void init_flat_encoder(nb::module_& m)
          "encode",
          [](FlatRelationEncoderEngine& encoder,
             const mimir::search::State& state,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            BatchBuilder& builder) { encoder.encode(state, actions, builder); },
+         "state"_a,
+         "actions"_a,
+         "builder"_a
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            BatchBuilder& builder) { encoder.encode(state, goals, actions, builder); },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "builder"_a
+      )
+      .def(
+         "encode",
+         [](FlatRelationEncoderEngine& encoder,
+            const mimir::search::State& state,
             const GoalInputs& goals,
             BatchBuilder& builder) { encoder.encode(state, goals, builder); },
          "state"_a,
@@ -112,7 +166,7 @@ void init_flat_encoder(nb::module_& m)
             nb::object goals,
             nb::object actions,
             nb::object subgoal_layers) {
-            auto parsed = batch_input::parse_color_batch_inputs(
+            auto parsed = batch_input::parse_flat_batch_inputs(
                states, goals, actions, subgoal_layers
             );
             return encoder.encode_batch(parsed);

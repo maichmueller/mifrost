@@ -81,7 +81,7 @@ void TargetColumns::validate(bool include_depth, bool include_group) const
 
 namespace {
 
-GraphFieldSpec make_target_positions_spec(const std::string& symbol_type_id)
+GraphFieldSpec make_target_positions_spec(const std::string& position_node_type_id)
 {
    return GraphFieldSpec{
       .dtype = GraphFieldDType::I64,
@@ -90,7 +90,7 @@ GraphFieldSpec make_target_positions_spec(const std::string& symbol_type_id)
       .cat_dim = 0,
       .inc = GraphFieldInc{
          .kind = GraphFieldInc::Kind::NODE_OFFSET,
-         .node_type = symbol_type_id,
+         .node_type = position_node_type_id,
       },
    };
 }
@@ -126,7 +126,7 @@ GraphFieldSpec make_target_group_ids_spec()
 void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config)
 {
    builder.register_field(
-      std::string(kTargetPositionsField), make_target_positions_spec(config.symbol_type_id)
+      std::string(kTargetPositionsField), make_target_positions_spec(config.position_node_type_id)
    );
    builder.register_field(std::string(kTargetIndicesField), make_target_indices_spec());
    builder.register_field(std::string(kTargetCandidateIdsField), make_target_candidate_ids_spec());

@@ -108,6 +108,13 @@ struct MIFROST_LOCAL ColorBatchInputs {
    SubgoalLayersBatch subgoal_layers;
 };
 
+struct MIFROST_LOCAL FlatBatchInputs {
+   StateBatch states;
+   GoalBatch goals;
+   ActionBatch actions;
+   SubgoalLayersBatch subgoal_layers;
+};
+
 struct MIFROST_LOCAL SuccessorBatchInputs {
    StateBatch states;
    SuccessorBatch successors;
@@ -158,6 +165,13 @@ MIFROST_LOCAL parsed::HGraphBatchInputs parse_hgraph_batch_inputs(
 );
 
 MIFROST_LOCAL parsed::ColorBatchInputs parse_color_batch_inputs(
+   nb::handle states,
+   nb::handle goals,
+   nb::handle actions,
+   nb::handle subgoal_layers
+);
+
+MIFROST_LOCAL parsed::FlatBatchInputs parse_flat_batch_inputs(
    nb::handle states,
    nb::handle goals,
    nb::handle actions,

@@ -48,7 +48,7 @@ struct TargetColumns {
 };
 
 struct TargetMetadataEmitConfig {
-   std::string symbol_type_id;
+   std::string position_node_type_id;
    std::string symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
    bool include_depth = false;
    bool include_group = false;

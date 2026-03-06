@@ -13,8 +13,8 @@
 #include <string_view>
 #include <type_traits>
 
-#include "mifrost/core/hgraph_stream_encoder.hpp"
 #include "mifrost/core/relation_formatter.hpp"
+#include "mifrost/core/target_source.hpp"
 
 namespace mifrost {
 

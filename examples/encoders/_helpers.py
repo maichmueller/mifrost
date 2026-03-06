@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import matplotlib
-from matplotlib import pyplot as plt
 import pymimir
+
+if TYPE_CHECKING:
+    import matplotlib
 
 
 def repo_root() -> Path:
@@ -56,6 +58,8 @@ def plot_output_dir() -> Path:
 
 
 def save_plot(name: str, dpi=300) -> Path:
+    from matplotlib import pyplot as plt
+
     out_path = plot_output_dir() / name
     # plt.tight_layout()
     plt.savefig(out_path, dpi=dpi)
@@ -64,4 +68,6 @@ def save_plot(name: str, dpi=300) -> Path:
 
 
 def begin_plot(*, figsize: tuple[float, float] = (14, 10)) -> matplotlib.figure.Figure:
+    from matplotlib import pyplot as plt
+
     return plt.figure(figsize=figsize)

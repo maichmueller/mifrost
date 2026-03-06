@@ -1143,7 +1143,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    if(export_state_targets) {
       const TargetMetadataEmitConfig target_emit_config{
-         .symbol_type_id = config_.symbol_type_id,
+         .position_node_type_id = config_.symbol_type_id,
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = true,
          .include_group = true,

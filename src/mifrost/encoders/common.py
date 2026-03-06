@@ -547,7 +547,10 @@ def _encoding_dict_to_pyg_flat(
     as_batch: bool | None = None,
     include_metadata: bool = True,
 ) -> Data:
-    from .flat_data import flat_relation_data_from_pyg
+    from .flat_data import (
+        flat_relation_data_from_pyg,
+        normalize_flat_relation_batch_metadata,
+    )
 
     encoding_dict = _coerce_encoding_dict(encoding)
     schema = _coerce_schema_dict(encoding_dict)
@@ -585,30 +588,7 @@ def _encoding_dict_to_pyg_flat(
             if isinstance(object_names_raw, list)
             else list(object_names_raw)
         )
-    if include_metadata and bool(as_batch):
-        node_names = getattr(out, "node_names", None)
-        node_sizes = getattr(out, "node_sizes", None)
-        if isinstance(node_names, list) and torch.is_tensor(node_sizes):
-            offsets = node_sizes.long().view(-1).tolist()
-            split: list[list[str]] = []
-            start = 0
-            for size in offsets:
-                stop = start + int(size)
-                split.append([str(name) for name in node_names[start:stop]])
-                start = stop
-            out.node_names = split
-        object_names = getattr(out, "object_names", None)
-        object_sizes = getattr(out, "object_sizes", None)
-        if isinstance(object_names, list) and torch.is_tensor(object_sizes):
-            offsets = object_sizes.long().view(-1).tolist()
-            split = []
-            start = 0
-            for size in offsets:
-                stop = start + int(size)
-                split.append([str(name) for name in object_names[start:stop]])
-                start = stop
-            out.object_names = split
-    return out
+    return normalize_flat_relation_batch_metadata(out)
 
 
 def _encoding_dict_to_pyg(

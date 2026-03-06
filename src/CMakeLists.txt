@@ -227,6 +227,7 @@ add_library(
         "_core/mifrost/input_handling/batch_input_parser.cpp"
         "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
         "_core/mifrost/input_handling/batch_input_color_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_flat_parser.cpp"
         "_core/mifrost/input_handling/batch_input_successor_parser.cpp"
         "_core/mifrost/input_handling/batch_input_horizon_parser.cpp"
         "_core/mifrost/core/transition_dag.cpp"
@@ -429,6 +430,46 @@ if (MIFROST_BUILD_BENCHMARKS)
     )
     target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
     target_compile_definitions(mifrost_bench_hgraph PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
+
+    add_executable(
+            mifrost_bench_flat_relation
+            "${CMAKE_SOURCE_DIR}/bench/bench_flat_relation_encoder.cpp"
+    )
+    target_link_libraries(
+            mifrost_bench_flat_relation
+            PRIVATE
+            mifrost_core
+            benchmark::benchmark
+            argparse::argparse
+            ${_python_embed_target}
+    )
+    target_compile_definitions(
+            mifrost_bench_flat_relation
+            PRIVATE
+            MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+    )
+    target_compile_definitions(mifrost_bench_flat_relation PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
+    target_compile_definitions(mifrost_bench_flat_relation PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
+
+    add_executable(
+            mifrost_bench_relation_encoders
+            "${CMAKE_SOURCE_DIR}/bench/bench_relation_encoder_compare.cpp"
+    )
+    target_link_libraries(
+            mifrost_bench_relation_encoders
+            PRIVATE
+            mifrost_core
+            benchmark::benchmark
+            argparse::argparse
+            ${_python_embed_target}
+    )
+    target_compile_definitions(
+            mifrost_bench_relation_encoders
+            PRIVATE
+            MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+    )
+    target_compile_definitions(mifrost_bench_relation_encoders PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
+    target_compile_definitions(mifrost_bench_relation_encoders PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
 endif ()
 
 # --- Tests ---
@@ -439,6 +480,7 @@ if (BUILD_TESTING)
             mifrost_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/color_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_relation_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_history_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_stream_cache_test.cpp"
