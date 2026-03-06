@@ -18,6 +18,20 @@ def _first_actions(space, state, count: int = 2):
     return actions[:count]
 
 
+def _first_goal(problem):
+    goals = list(problem.get_goal_condition().get_literals())
+    if not goals:
+        pytest.skip("Fixture does not provide goal literals.")
+    return goals[0]
+
+
+def _first_distinct_goals(problem, count: int = 2):
+    goals = list(problem.get_goal_condition().get_literals())
+    if len(goals) < count:
+        pytest.skip("Fixture does not provide enough distinct goal literals.")
+    return goals[:count]
+
+
 def _has_action_node(data, action) -> bool:
     formatter = mifrost.RelationFormatter
     adv = adv_action(action)
@@ -192,6 +206,51 @@ def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
     assert data.target_positions_ptr.tolist() == [0, 2, 2]
     assert isinstance(list(data.target_names), list)
     assert data.target_symbol_prefix == "target:"
+
+
+def test_hgraph_target_groups_follow_canonical_source_order(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal0, goal1 = _first_distinct_goals(problem, count=2)
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[
+            mifrost.TargetSource.Actions,
+            mifrost.TargetSource.Goals,
+            mifrost.TargetSource.Subgoals,
+        ],
+    )
+    data = encoder.encode(
+        state,
+        goals=[goal0],
+        subgoal_layers=[[goal1]],
+        actions=[action0],
+    ).as_pyg(as_batch=True)
+
+    assert list(data.target_groups) == ["goal", "subgoal", "action"]
+    assert data.target_group_ids.tolist() == [0, 1, 2]
+    assert data.target_indices.tolist() == [0, 1, 2]
+    assert len(list(data.target_names)) == 3
+
+
+def test_hgraph_target_groups_include_enabled_sources_even_when_empty(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _first_goal(problem)
+
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions, mifrost.TargetSource.Goals],
+    )
+    data = encoder.encode(state, goals=[goal], actions=[]).as_pyg(as_batch=True)
+
+    assert list(data.target_groups) == ["goal", "action"]
+    assert data.target_group_ids.tolist() == [0]
+    assert data.target_indices.tolist() == [0]
 
 
 def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_blocks):

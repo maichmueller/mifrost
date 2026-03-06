@@ -32,13 +32,6 @@ constexpr std::string_view kTargetEntityGroupsAttr = "target_entity_groups";
 constexpr std::string_view kTargetSizesField = "target_sizes";
 constexpr std::string_view kRelationCountsField = "relation_counts";
 constexpr std::string_view kRelationArgsField = "relation_args";
-constexpr std::array kTargetSourceOrder = {
-   TargetSource::Goals,
-   TargetSource::Subgoals,
-   TargetSource::Actions,
-   TargetSource::History,
-   TargetSource::States,
-};
 
 template < typename LiteralTag >
 uint32_t fact_tag_id()
@@ -765,7 +758,7 @@ void FlatRelationEncoderEngine::initialize_from_domain()
       group_names.emplace_back(target_source_group_name(source));
    };
 
-   for(const auto source : kTargetSourceOrder) {
+   for(const auto source : kCanonicalTargetSourceOrder) {
       if(source == TargetSource::Actions or has_target_source(source)) {
          if(source == TargetSource::History or source == TargetSource::States) {
             continue;

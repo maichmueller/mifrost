@@ -125,6 +125,16 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    workspace_.target_group_ids.clear();
    workspace_.next_target_index = 0;
 
+   workspace_.target_groups.reserve(config_.target_sources.size());
+   for(const auto source : kCanonicalTargetSourceOrder) {
+      if(not config_.target_sources.contains(source)) {
+         continue;
+      }
+      const auto next_id = static_cast< int64_t >(workspace_.target_groups.size());
+      workspace_.target_group_ids.emplace(source, next_id);
+      workspace_.target_groups.emplace_back(target_group_name(source));
+   }
+
    const size_t type_hint = relation_dict_.arity.size() + 4;
    workspace_.node_indices.reserve(type_hint);
    workspace_.node_indices_i64.reserve(type_hint);
