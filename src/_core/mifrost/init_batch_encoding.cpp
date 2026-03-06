@@ -1229,6 +1229,18 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
    return out;
 }
 
+std::optional< nb::object > batch_encoding_graph_attr_if_present(
+   const BatchBuilder::BatchEncoding& encoding,
+   std::string_view key
+)
+{
+   auto it = encoding.graph_attrs.find(std::string(key));
+   if(it == encoding.graph_attrs.end()) {
+      return std::nullopt;
+   }
+   return std::visit([](const auto& value) -> nb::object { return nb::cast(value); }, it->second);
+}
+
 nb::object
 batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
 {
@@ -1880,6 +1892,10 @@ void init_batch_encoding(nb::module_& m)
                );
                if(batch_encoding_has_graph_field(*encoding, key)) {
                   return batch_encoding_get_graph_field(*encoding, key, self);
+               }
+               if(auto value = batch_encoding_graph_attr_if_present(*encoding, key);
+                  value.has_value()) {
+                  return std::move(*value);
                }
                const std::string message = "'BatchEncoding' object has no attribute '" + key + "'";
                PyErr_SetString(PyExc_AttributeError, message.c_str());

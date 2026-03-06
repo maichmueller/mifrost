@@ -379,6 +379,19 @@ def _encoding_with_target_candidate_ids(*, graph_kind: str) -> mifrost.BatchEnco
     return builder.build()
 
 
+def _encoding_with_target_groups_attr(*, graph_kind: str) -> mifrost.BatchEncoding:
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind(graph_kind)
+    builder.add_node_features("atom", "x", torch.zeros(2, 1))
+    builder.next_graph()
+    encoding = builder.build()
+    state = encoding.__getstate__()
+    state["graph_attrs"]["target_groups"] = ["subgoal"]
+    out = mifrost.BatchEncoding()
+    out.__setstate__(state)
+    return out
+
+
 def test_hetero_facade_forwards_graph_fields_from_base():
     encoding = _encoding_with_target_candidate_ids(graph_kind="hetero")
     view = encoding.as_hetero()
@@ -405,3 +418,19 @@ def test_homo_facade_forwards_graph_fields_from_base():
         view.target_candidate_ids_ptr,
         encoding.get_field("target_candidate_ids_ptr"),
     )
+
+
+def test_hetero_facade_forwards_graph_attrs_from_base():
+    encoding = _encoding_with_target_groups_attr(graph_kind="hetero")
+    view = encoding.as_hetero()
+
+    assert list(view.target_groups) == ["subgoal"]
+    assert list(encoding.target_groups) == ["subgoal"]
+
+
+def test_homo_facade_forwards_graph_attrs_from_base():
+    encoding = _encoding_with_target_groups_attr(graph_kind="homo")
+    view = encoding.as_homo()
+
+    assert list(view.target_groups) == ["subgoal"]
+    assert list(encoding.target_groups) == ["subgoal"]
