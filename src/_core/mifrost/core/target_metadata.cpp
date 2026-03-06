@@ -1,8 +1,11 @@
 #include "target_metadata.hpp"
 
+#include <mimir/search/formatter.hpp>
+#include <sstream>
 #include <stdexcept>
 
 #include "common_types.hpp"
+#include "transition_dag.hpp"
 
 namespace mifrost {
 
@@ -147,6 +150,44 @@ void append_target_candidate_row(
       config.include_depth,
       config.include_group
    );
+}
+
+std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
+   const TransitionDAG& dag,
+   const hash_map< int64_t, int64_t >& positions_by_index,
+   bool exclude_root_candidate,
+   std::optional< int64_t > group_id
+)
+{
+   const auto& nodes = dag.nodes();
+   const size_t reserved = (exclude_root_candidate and not nodes.empty()) ? (nodes.size() - 1)
+                                                                          : nodes.size();
+   std::vector< TargetCandidateRow > rows;
+   rows.reserve(reserved);
+
+   for(const auto& node : nodes) {
+      if(exclude_root_candidate and node.index == dag.root_index()) {
+         continue;
+      }
+      const auto position_it = positions_by_index.find(node.index);
+      if(position_it == positions_by_index.end()) {
+         continue;
+      }
+      std::ostringstream stream;
+      stream << node.state;
+      rows.push_back(
+         TargetCandidateRow{
+            .position = position_it->second,
+            .index = node.index,
+            .candidate_id = node.candidate_id,
+            .depth = node.depth,
+            .group_id = group_id,
+            .name = stream.str(),
+         }
+      );
+   }
+
+   return rows;
 }
 
 namespace {

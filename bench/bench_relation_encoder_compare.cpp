@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#include <fmt/format.h>
 
 #include <argparse/argparse.hpp>
 #include <filesystem>
@@ -6,6 +7,7 @@
 #include <mimir/search/axiom_evaluators/grounded/grounded.hpp>
 #include <mimir/search/grounders/lifted.hpp>
 #include <mimir/search/state_repository.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +27,29 @@ struct BenchConfig {
 
 BenchConfig g_config;
 std::vector< std::string > g_unparsed_args;
+
+struct RelationSchemaView {
+   std::vector< std::string > names;
+   std::vector< int64_t > arities;
+};
+
+struct ParityCheckResult {
+   bool ok = true;
+   std::string detail = "ok";
+};
+
+struct ParityReport {
+   ParityCheckResult shared_schema_names;
+   ParityCheckResult shared_schema_arities;
+   std::string flat_only_schema = "none";
+   std::string hgraph_only_schema = "none";
+   ParityCheckResult single_counts;
+   ParityCheckResult single_slots;
+   ParityCheckResult batch_counts;
+   ParityCheckResult batch_slots;
+};
+
+mifrost::GoalInputs make_goal_inputs(const mimir::formalism::Problem& problem);
 
 std::string default_data_dir()
 {
@@ -94,6 +119,7 @@ struct BenchContext {
    mimir::search::State root;
    mifrost::HGraphEncoderEngine hgraph_engine;
    mifrost::FlatRelationEncoderEngine flat_engine;
+   mifrost::GoalInputs goals;
    std::vector< mimir::search::State > batch_states;
 
    static mimir::search::State make_root(const mimir::formalism::Problem& problem)
@@ -116,7 +142,8 @@ struct BenchContext {
          ),
          root(make_root(problem)),
          hgraph_engine(problem->get_domain()),
-         flat_engine(problem->get_domain())
+         flat_engine(problem->get_domain()),
+         goals(make_goal_inputs(problem))
    {
       batch_states.assign(static_cast< size_t >(std::max(cfg.batch_size, 1)), root);
    }
@@ -126,6 +153,18 @@ BenchContext& context()
 {
    static BenchContext ctx(g_config);
    return ctx;
+}
+
+RelationSchemaView relation_schema_from_dict(const mifrost::RelationDict& relation_dict)
+{
+   RelationSchemaView view;
+   view.names.reserve(relation_dict.arity.size());
+   view.arities.reserve(relation_dict.arity.size());
+   for(const auto& [name, arity] : relation_dict.arity) {
+      view.names.push_back(name);
+      view.arities.push_back(arity);
+   }
+   return view;
 }
 
 mifrost::GoalInputs make_goal_inputs(const mimir::formalism::Problem& problem)
@@ -146,13 +185,302 @@ mifrost::GoalInputs make_goal_inputs(const mimir::formalism::Problem& problem)
    return inputs;
 }
 
+std::vector< int64_t > flat_relation_counts_total(
+   const mifrost::BatchBuilder::BatchEncoding& encoding,
+   size_t relation_count
+)
+{
+   const auto field_it = encoding.graph_fields.find("relation_counts");
+   if(field_it == encoding.graph_fields.end()) {
+      return std::vector< int64_t >(relation_count, 0);
+   }
+   const auto& values = std::get< std::vector< int64_t > >(field_it->second.values);
+   std::vector< int64_t > totals(relation_count, 0);
+   if(relation_count == 0 || values.empty()) {
+      return totals;
+   }
+   for(size_t idx = 0; idx < values.size(); ++idx) {
+      totals[idx % relation_count] += values[idx];
+   }
+   return totals;
+}
+
+std::vector< int64_t > hgraph_relation_counts_total(
+   const mifrost::BatchBuilder::BatchEncoding& encoding,
+   const std::vector< std::string >& relation_names
+)
+{
+   std::vector< int64_t > totals;
+   totals.reserve(relation_names.size());
+   for(const auto& relation_name : relation_names) {
+      const auto it = encoding.node_counts.find(relation_name);
+      totals.push_back(it == encoding.node_counts.end() ? 0 : it->second);
+   }
+   return totals;
+}
+
+std::vector< std::string > filter_names_in_order(
+   const std::vector< std::string >& names,
+   const mifrost::hash_set< std::string >& keep
+)
+{
+   std::vector< std::string > out;
+   out.reserve(names.size());
+   for(const auto& name : names) {
+      if(keep.contains(name)) {
+         out.push_back(name);
+      }
+   }
+   return out;
+}
+
+std::vector< int64_t > arities_for_names(
+   const std::vector< std::string >& names,
+   const std::vector< std::string >& ordered_schema_names,
+   const std::vector< int64_t >& ordered_schema_arities
+)
+{
+   mifrost::hash_map< std::string, int64_t > arity_by_name;
+   arity_by_name.reserve(ordered_schema_names.size());
+   for(size_t idx = 0; idx < ordered_schema_names.size(); ++idx) {
+      arity_by_name.emplace(ordered_schema_names[idx], ordered_schema_arities[idx]);
+   }
+
+   std::vector< int64_t > out;
+   out.reserve(names.size());
+   for(const auto& name : names) {
+      out.push_back(arity_by_name.at(name));
+   }
+   return out;
+}
+
+std::string summarize_name_diff(const std::vector< std::string >& names)
+{
+   if(names.empty()) {
+      return "none";
+   }
+   constexpr size_t kMaxShown = 6;
+   std::vector< std::string > shown;
+   shown.reserve(std::min(kMaxShown, names.size()));
+   for(size_t idx = 0; idx < names.size() && idx < kMaxShown; ++idx) {
+      shown.push_back(names[idx]);
+   }
+   if(names.size() > kMaxShown) {
+      return fmt::format("{} (+{} more)", fmt::join(shown, ","), names.size() - kMaxShown);
+   }
+   return fmt::format("{}", fmt::join(shown, ","));
+}
+
+std::vector< int64_t >
+slot_counts(std::span< const int64_t > relation_counts, std::span< const int64_t > relation_arities)
+{
+   std::vector< int64_t > slots(relation_counts.size(), 0);
+   for(size_t idx = 0; idx < relation_counts.size(); ++idx) {
+      slots[idx] = relation_counts[idx] * relation_arities[idx];
+   }
+   return slots;
+}
+
+template < typename T >
+ParityCheckResult compare_vectors(
+   std::string_view label,
+   const std::vector< T >& lhs,
+   const std::vector< T >& rhs,
+   const std::vector< std::string >& names = {}
+)
+{
+   if(lhs.size() != rhs.size()) {
+      return {
+         .ok = false,
+         .detail = fmt::format("{} size mismatch: {} vs {}", label, lhs.size(), rhs.size()),
+      };
+   }
+   for(size_t idx = 0; idx < lhs.size(); ++idx) {
+      if(lhs[idx] == rhs[idx]) {
+         continue;
+      }
+      const std::string relation_name = idx < names.size() ? names[idx] : fmt::format("#{}", idx);
+      return {
+         .ok = false,
+         .detail = fmt::format(
+            "{} mismatch at {}: flat={} hetero={}", label, relation_name, lhs[idx], rhs[idx]
+         ),
+      };
+   }
+   return {.ok = true, .detail = "ok"};
+}
+
+mifrost::BatchBuilder::BatchEncoding encode_hgraph_single(BenchContext& ctx)
+{
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   ctx.hgraph_engine.encode(ctx.root, ctx.goals, {}, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+mifrost::BatchBuilder::BatchEncoding encode_flat_single(BenchContext& ctx)
+{
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("homo");
+   ctx.flat_engine.encode(
+      ctx.root, ctx.goals, std::span< const mimir::formalism::GroundAction >{}, builder
+   );
+   builder.next_graph();
+   return builder.build();
+}
+
+mifrost::BatchBuilder::BatchEncoding encode_hgraph_batch(BenchContext& ctx)
+{
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   for(const auto& st : ctx.batch_states) {
+      ctx.hgraph_engine.encode(st, ctx.goals, {}, builder);
+      builder.next_graph();
+   }
+   return builder.build();
+}
+
+mifrost::BatchBuilder::BatchEncoding encode_flat_batch(BenchContext& ctx)
+{
+   mifrost::BatchBuilder builder;
+   builder.set_graph_kind("homo");
+   for(const auto& st : ctx.batch_states) {
+      ctx.flat_engine.encode(
+         st, ctx.goals, std::span< const mimir::formalism::GroundAction >{}, builder
+      );
+      builder.next_graph();
+   }
+   return builder.build();
+}
+
+ParityReport build_parity_report(BenchContext& ctx)
+{
+   const auto hgraph_schema = relation_schema_from_dict(ctx.hgraph_engine.get_relation_dict());
+   RelationSchemaView flat_schema{
+      .names = ctx.flat_engine.get_relation_names(),
+      .arities = ctx.flat_engine.get_relation_arities(),
+   };
+   mifrost::hash_set< std::string > hgraph_name_set;
+   hgraph_name_set.reserve(hgraph_schema.names.size());
+   for(const auto& name : hgraph_schema.names) {
+      hgraph_name_set.insert(name);
+   }
+   mifrost::hash_set< std::string > flat_name_set;
+   flat_name_set.reserve(flat_schema.names.size());
+   for(const auto& name : flat_schema.names) {
+      flat_name_set.insert(name);
+   }
+
+   std::vector< std::string > shared_names;
+   shared_names.reserve(std::min(flat_schema.names.size(), hgraph_schema.names.size()));
+   for(const auto& name : flat_schema.names) {
+      if(hgraph_name_set.contains(name)) {
+         shared_names.push_back(name);
+      }
+   }
+   const auto hgraph_shared_names = filter_names_in_order(hgraph_schema.names, flat_name_set);
+   const auto flat_shared_arities = arities_for_names(
+      shared_names, flat_schema.names, flat_schema.arities
+   );
+   const auto hgraph_shared_arities = arities_for_names(
+      shared_names, hgraph_schema.names, hgraph_schema.arities
+   );
+
+   std::vector< std::string > flat_only_names;
+   for(const auto& name : flat_schema.names) {
+      if(not hgraph_name_set.contains(name)) {
+         flat_only_names.push_back(name);
+      }
+   }
+   std::vector< std::string > hgraph_only_names;
+   for(const auto& name : hgraph_schema.names) {
+      if(not flat_name_set.contains(name)) {
+         hgraph_only_names.push_back(name);
+      }
+   }
+
+   const auto hgraph_single = encode_hgraph_single(ctx);
+   const auto flat_single = encode_flat_single(ctx);
+   const auto hgraph_batch = encode_hgraph_batch(ctx);
+   const auto flat_batch = encode_flat_batch(ctx);
+
+   const auto flat_single_all_counts = flat_relation_counts_total(
+      flat_single, flat_schema.names.size()
+   );
+   const auto flat_batch_all_counts = flat_relation_counts_total(
+      flat_batch, flat_schema.names.size()
+   );
+   mifrost::hash_map< std::string, int64_t > flat_single_count_by_name;
+   mifrost::hash_map< std::string, int64_t > flat_batch_count_by_name;
+   flat_single_count_by_name.reserve(flat_schema.names.size());
+   flat_batch_count_by_name.reserve(flat_schema.names.size());
+   for(size_t idx = 0; idx < flat_schema.names.size(); ++idx) {
+      flat_single_count_by_name.emplace(flat_schema.names[idx], flat_single_all_counts[idx]);
+      flat_batch_count_by_name.emplace(flat_schema.names[idx], flat_batch_all_counts[idx]);
+   }
+   std::vector< int64_t > flat_single_counts;
+   std::vector< int64_t > flat_batch_counts;
+   flat_single_counts.reserve(shared_names.size());
+   flat_batch_counts.reserve(shared_names.size());
+   for(const auto& name : shared_names) {
+      flat_single_counts.push_back(flat_single_count_by_name.at(name));
+      flat_batch_counts.push_back(flat_batch_count_by_name.at(name));
+   }
+   const auto hgraph_single_counts = hgraph_relation_counts_total(hgraph_single, shared_names);
+   const auto hgraph_batch_counts = hgraph_relation_counts_total(hgraph_batch, shared_names);
+
+   return ParityReport{
+      .shared_schema_names = compare_vectors(
+         "shared schema names", shared_names, hgraph_shared_names
+      ),
+      .shared_schema_arities = compare_vectors(
+         "shared schema arities", flat_shared_arities, hgraph_shared_arities, shared_names
+      ),
+      .flat_only_schema = summarize_name_diff(flat_only_names),
+      .hgraph_only_schema = summarize_name_diff(hgraph_only_names),
+      .single_counts = compare_vectors(
+         "single counts", flat_single_counts, hgraph_single_counts, shared_names
+      ),
+      .single_slots = compare_vectors(
+         "single slots",
+         slot_counts(flat_single_counts, flat_shared_arities),
+         slot_counts(hgraph_single_counts, flat_shared_arities),
+         shared_names
+      ),
+      .batch_counts = compare_vectors(
+         "batch counts", flat_batch_counts, hgraph_batch_counts, shared_names
+      ),
+      .batch_slots = compare_vectors(
+         "batch slots",
+         slot_counts(flat_batch_counts, flat_shared_arities),
+         slot_counts(hgraph_batch_counts, flat_shared_arities),
+         shared_names
+      ),
+   };
+}
+
+void publish_parity_report(const ParityReport& report)
+{
+   const auto publish = [](std::string_view key, const ParityCheckResult& result) {
+      benchmark::AddCustomContext(std::string(key), result.detail);
+   };
+   publish("parity_shared_schema_names", report.shared_schema_names);
+   publish("parity_shared_schema_arities", report.shared_schema_arities);
+   benchmark::AddCustomContext("schema_flat_only", report.flat_only_schema);
+   benchmark::AddCustomContext("schema_hgraph_only", report.hgraph_only_schema);
+   publish("parity_single_counts", report.single_counts);
+   publish("parity_single_slots", report.single_slots);
+   publish("parity_batch_counts", report.batch_counts);
+   publish("parity_batch_slots", report.batch_slots);
+}
+
 void BM_HGraphEncodeSingle(benchmark::State& state)
 {
    auto& ctx = context();
-   const auto goals = make_goal_inputs(ctx.problem);
    for(auto _ : state) {
       mifrost::BatchBuilder builder;
-      ctx.hgraph_engine.encode(ctx.root, goals, {}, builder);
+      ctx.hgraph_engine.encode(ctx.root, ctx.goals, {}, builder);
       benchmark::DoNotOptimize(builder.current_node_counts.size());
    }
 }
@@ -162,7 +490,9 @@ void BM_FlatEncodeSingle(benchmark::State& state)
    auto& ctx = context();
    for(auto _ : state) {
       mifrost::BatchBuilder builder;
-      ctx.flat_engine.encode(ctx.root, builder);
+      ctx.flat_engine.encode(
+         ctx.root, ctx.goals, std::span< const mimir::formalism::GroundAction >{}, builder
+      );
       benchmark::DoNotOptimize(builder.current_node_counts.size());
    }
 }
@@ -170,11 +500,10 @@ void BM_FlatEncodeSingle(benchmark::State& state)
 void BM_HGraphEncodeBatch(benchmark::State& state)
 {
    auto& ctx = context();
-   const auto goals = make_goal_inputs(ctx.problem);
    for(auto _ : state) {
       mifrost::BatchBuilder builder;
       for(const auto& st : ctx.batch_states) {
-         ctx.hgraph_engine.encode(st, goals, {}, builder);
+         ctx.hgraph_engine.encode(st, ctx.goals, {}, builder);
          builder.next_graph();
       }
       benchmark::DoNotOptimize(builder.current_graph_idx);
@@ -187,7 +516,9 @@ void BM_FlatEncodeBatch(benchmark::State& state)
    for(auto _ : state) {
       mifrost::BatchBuilder builder;
       for(const auto& st : ctx.batch_states) {
-         ctx.flat_engine.encode(st, builder);
+         ctx.flat_engine.encode(
+            st, ctx.goals, std::span< const mimir::formalism::GroundAction >{}, builder
+         );
          builder.next_graph();
       }
       benchmark::DoNotOptimize(builder.current_graph_idx);
@@ -208,6 +539,7 @@ int main(int argc, char** argv)
    if(benchmark::ReportUnrecognizedArguments(argc, argv)) {
       return 1;
    }
+   publish_parity_report(build_parity_report(context()));
    benchmark::RunSpecifiedBenchmarks();
    return 0;
 }

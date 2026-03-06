@@ -1055,11 +1055,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
    TargetColumns target_columns;
    const bool export_state_targets = has_target_source(TargetSource::States);
    if(not nodes.empty()) {
-      const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
-                                        ? (nodes.size() - 1)
-                                        : nodes.size();
-      std::vector< TargetCandidateRow > candidate_rows;
-      candidate_rows.reserve(candidate_count);
       const std::optional< int64_t > state_target_group_id = export_state_targets
                                                                 ? std::optional< int64_t >(
                                                                      get_or_assign_target_group_id(
@@ -1067,6 +1062,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                                                      )
                                                                   )
                                                                 : std::nullopt;
+      hash_map< int64_t, int64_t > target_positions_by_index;
+      target_positions_by_index.reserve(nodes.size());
 
       for(const auto& node : nodes) {
          if(horizon_config_.exclude_root_candidate and node.index == root_index) {
@@ -1081,22 +1078,16 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(it == workspace.symbol_indices.end()) {
             continue;
          }
-
-         std::ostringstream stream;
-         stream << node.state;
-         candidate_rows.push_back(
-            TargetCandidateRow{
-               .position = it->second,
-               .index = node.index,
-               .depth = node.depth,
-               .candidate_id = node.candidate_id,
-               .group_id = state_target_group_id,
-               .name = stream.str(),
-            }
-         );
+         target_positions_by_index.emplace(node.index, it->second);
       }
 
       if(export_state_targets) {
+         const auto candidate_rows = collect_transition_dag_target_candidate_rows(
+            dag,
+            target_positions_by_index,
+            horizon_config_.exclude_root_candidate,
+            state_target_group_id
+         );
          append_target_candidate_rows(
             target_columns,
             candidate_rows,
