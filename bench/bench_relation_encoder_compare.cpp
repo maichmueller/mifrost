@@ -15,6 +15,7 @@
 #include "mifrost/core/flat_relation_encoder.hpp"
 #include "mifrost/core/goal_inputs.hpp"
 #include "mifrost/core/hgraph_stream_encoder.hpp"
+#include "mifrost/core/relation_formatter.hpp"
 
 namespace {
 
@@ -41,8 +42,16 @@ struct ParityCheckResult {
 struct ParityReport {
    ParityCheckResult shared_schema_names;
    ParityCheckResult shared_schema_arities;
+   ParityCheckResult flat_only_schema_diff;
+   ParityCheckResult hgraph_only_schema_diff;
    std::string flat_only_schema = "none";
+   std::string flat_only_expected_schema = "none";
+   std::string flat_only_unexpected_schema = "none";
+   std::string flat_only_missing_expected_schema = "none";
    std::string hgraph_only_schema = "none";
+   std::string hgraph_only_expected_schema = "none";
+   std::string hgraph_only_unexpected_schema = "none";
+   std::string hgraph_only_missing_expected_schema = "none";
    ParityCheckResult single_counts;
    ParityCheckResult single_slots;
    ParityCheckResult batch_counts;
@@ -271,6 +280,155 @@ std::string summarize_name_diff(const std::vector< std::string >& names)
    return fmt::format("{}", fmt::join(shown, ","));
 }
 
+template < typename Predicates >
+void append_history_relation_names(std::vector< std::string >& out, const Predicates& predicates)
+{
+   for(const auto& predicate : predicates) {
+      if(predicate->get_arity() == 0) {
+         continue;
+      }
+      out.push_back(
+         mifrost::RelationFormatter::format_predicate(
+            predicate, std::nullopt, std::nullopt, true, "[hist]"
+         )
+      );
+      out.push_back(
+         mifrost::RelationFormatter::format_predicate(
+            predicate, std::nullopt, std::nullopt, false, "[hist]"
+         )
+      );
+   }
+}
+
+std::vector< std::string > expected_flat_only_schema(const mimir::formalism::Domain& domain)
+{
+   std::vector< std::string > names;
+   names.reserve(domain->get_actions().size() + 32);
+   for(const auto& action : domain->get_actions()) {
+      names.push_back(mifrost::RelationFormatter::format_action_schema(*action));
+   }
+   append_history_relation_names(names, domain->get_predicates< mimir::formalism::StaticTag >());
+   append_history_relation_names(names, domain->get_predicates< mimir::formalism::FluentTag >());
+   append_history_relation_names(names, domain->get_predicates< mimir::formalism::DerivedTag >());
+   std::ranges::sort(names);
+   names.erase(std::ranges::unique(names).begin(), names.end());
+   return names;
+}
+
+template < typename Predicates >
+void append_zero_arity_relation_names(
+   std::vector< std::string >& out,
+   const Predicates& predicates,
+   const mifrost::RelationDict& relation_dict
+)
+{
+   for(const auto& predicate : predicates) {
+      if(predicate->get_arity() != 0) {
+         continue;
+      }
+      out.push_back(mifrost::RelationFormatter::format_predicate(predicate));
+      for(int level = 0; level <= relation_dict.max_goal_level; ++level) {
+         const mifrost::GoalLevel goal_level(level);
+         for(bool polarity : {true, false}) {
+            out.push_back(
+               mifrost::RelationFormatter::format_predicate(
+                  predicate, goal_level, std::nullopt, polarity
+               )
+            );
+            for(const auto satisfaction : relation_dict.goal_satisfaction_derivations) {
+               out.push_back(
+                  mifrost::RelationFormatter::format_predicate(
+                     predicate, goal_level, satisfaction, polarity
+                  )
+               );
+            }
+         }
+      }
+      if(not relation_dict.support_literals) {
+         continue;
+      }
+      for(bool polarity : {true, false}) {
+         out.push_back(
+            mifrost::RelationFormatter::format_predicate(
+               predicate, std::nullopt, std::nullopt, polarity
+            )
+         );
+         for(const auto satisfaction : relation_dict.goal_satisfaction_derivations) {
+            out.push_back(
+               mifrost::RelationFormatter::format_predicate(
+                  predicate, std::nullopt, satisfaction, polarity
+               )
+            );
+         }
+      }
+   }
+}
+
+std::vector< std::string > expected_hgraph_only_schema(
+   const mimir::formalism::Domain& domain,
+   const mifrost::RelationDict& relation_dict
+)
+{
+   std::vector< std::string > names;
+   append_zero_arity_relation_names(
+      names, domain->get_predicates< mimir::formalism::StaticTag >(), relation_dict
+   );
+   append_zero_arity_relation_names(
+      names, domain->get_predicates< mimir::formalism::FluentTag >(), relation_dict
+   );
+   append_zero_arity_relation_names(
+      names, domain->get_predicates< mimir::formalism::DerivedTag >(), relation_dict
+   );
+   std::ranges::sort(names);
+   names.erase(std::ranges::unique(names).begin(), names.end());
+   return names;
+}
+
+ParityCheckResult compare_name_diff(
+   std::string_view label,
+   const std::vector< std::string >& actual_names,
+   const std::vector< std::string >& expected_names
+)
+{
+   mifrost::hash_set< std::string > expected_set;
+   expected_set.reserve(expected_names.size());
+   for(const auto& name : expected_names) {
+      expected_set.insert(name);
+   }
+   mifrost::hash_set< std::string > actual_set;
+   actual_set.reserve(actual_names.size());
+   for(const auto& name : actual_names) {
+      actual_set.insert(name);
+   }
+
+   std::vector< std::string > unexpected;
+   for(const auto& name : actual_names) {
+      if(not expected_set.contains(name)) {
+         unexpected.push_back(name);
+      }
+   }
+
+   std::vector< std::string > missing;
+   for(const auto& name : expected_names) {
+      if(not actual_set.contains(name)) {
+         missing.push_back(name);
+      }
+   }
+
+   if(unexpected.empty() and missing.empty()) {
+      return {.ok = true, .detail = "ok"};
+   }
+   return {
+      .ok = false,
+      .detail = fmt::format(
+         "{} unexpected={} missing={}",
+         label,
+         summarize_name_diff(unexpected),
+         summarize_name_diff(missing)
+      ),
+   };
+}
+
 std::vector< int64_t >
 slot_counts(std::span< const int64_t > relation_counts, std::span< const int64_t > relation_arities)
 {
@@ -399,6 +557,10 @@ ParityReport build_parity_report(BenchContext& ctx)
          hgraph_only_names.push_back(name);
       }
    }
+   const auto expected_flat_only_names = expected_flat_only_schema(ctx.problem->get_domain());
+   const auto expected_hgraph_only_names = expected_hgraph_only_schema(
+      ctx.problem->get_domain(), ctx.hgraph_engine.get_relation_dict()
+   );
 
    const auto hgraph_single = encode_hgraph_single(ctx);
    const auto flat_single = encode_flat_single(ctx);
@@ -437,8 +599,52 @@ ParityReport build_parity_report(BenchContext& ctx)
       .shared_schema_arities = compare_vectors(
          "shared schema arities", flat_shared_arities, hgraph_shared_arities, shared_names
       ),
+      .flat_only_schema_diff = compare_name_diff(
+         "flat-only schema diff", flat_only_names, expected_flat_only_names
+      ),
+      .hgraph_only_schema_diff = compare_name_diff(
+         "hgraph-only schema diff", hgraph_only_names, expected_hgraph_only_names
+      ),
       .flat_only_schema = summarize_name_diff(flat_only_names),
+      .flat_only_expected_schema = summarize_name_diff(expected_flat_only_names),
+      .flat_only_unexpected_schema = summarize_name_diff([&] {
+         std::vector< std::string > names;
+         for(const auto& name : flat_only_names) {
+            if(not std::ranges::contains(expected_flat_only_names, name)) {
+               names.push_back(name);
+            }
+         }
+         return names;
+      }()),
+      .flat_only_missing_expected_schema = summarize_name_diff([&] {
+         std::vector< std::string > names;
+         for(const auto& name : expected_flat_only_names) {
+            if(not std::ranges::contains(flat_only_names, name)) {
+               names.push_back(name);
+            }
+         }
+         return names;
+      }()),
       .hgraph_only_schema = summarize_name_diff(hgraph_only_names),
+      .hgraph_only_expected_schema = summarize_name_diff(expected_hgraph_only_names),
+      .hgraph_only_unexpected_schema = summarize_name_diff([&] {
+         std::vector< std::string > names;
+         for(const auto& name : hgraph_only_names) {
+            if(not std::ranges::contains(expected_hgraph_only_names, name)) {
+               names.push_back(name);
+            }
+         }
+         return names;
+      }()),
+      .hgraph_only_missing_expected_schema = summarize_name_diff([&] {
+         std::vector< std::string > names;
+         for(const auto& name : expected_hgraph_only_names) {
+            if(not std::ranges::contains(hgraph_only_names, name)) {
+               names.push_back(name);
+            }
+         }
+         return names;
+      }()),
       .single_counts = compare_vectors(
          "single counts", flat_single_counts, hgraph_single_counts, shared_names
       ),
@@ -467,8 +673,22 @@ void publish_parity_report(const ParityReport& report)
    };
    publish("parity_shared_schema_names", report.shared_schema_names);
    publish("parity_shared_schema_arities", report.shared_schema_arities);
+   publish("parity_schema_flat_only", report.flat_only_schema_diff);
+   publish("parity_schema_hgraph_only", report.hgraph_only_schema_diff);
    benchmark::AddCustomContext("schema_flat_only", report.flat_only_schema);
+   benchmark::AddCustomContext("schema_flat_only_expected", report.flat_only_expected_schema);
+   benchmark::AddCustomContext("schema_flat_only_unexpected", report.flat_only_unexpected_schema);
+   benchmark::AddCustomContext(
+      "schema_flat_only_missing_expected", report.flat_only_missing_expected_schema
+   );
    benchmark::AddCustomContext("schema_hgraph_only", report.hgraph_only_schema);
+   benchmark::AddCustomContext("schema_hgraph_only_expected", report.hgraph_only_expected_schema);
+   benchmark::AddCustomContext(
+      "schema_hgraph_only_unexpected", report.hgraph_only_unexpected_schema
+   );
+   benchmark::AddCustomContext(
+      "schema_hgraph_only_missing_expected", report.hgraph_only_missing_expected_schema
+   );
    publish("parity_single_counts", report.single_counts);
    publish("parity_single_slots", report.single_slots);
    publish("parity_batch_counts", report.batch_counts);
