@@ -50,6 +50,7 @@ from .types import (
 if not _in_stubgen:
     from .flat import FlatRelationEncoder
     from .flat_horizon import FlatHorizonEncoder
+    from .flat_transition import FlatTransitionEncoder, FlatTransitionEffectsEncoder
 
 
 def __getattr__(name: str):
@@ -63,6 +64,18 @@ def __getattr__(name: str):
 
         globals()[name] = _FlatHorizonEncoder
         return _FlatHorizonEncoder
+    if name == "FlatTransitionEncoder":
+        from .flat_transition import FlatTransitionEncoder as _FlatTransitionEncoder
+
+        globals()[name] = _FlatTransitionEncoder
+        return _FlatTransitionEncoder
+    if name == "FlatTransitionEffectsEncoder":
+        from .flat_transition import (
+            FlatTransitionEffectsEncoder as _FlatTransitionEffectsEncoder,
+        )
+
+        globals()[name] = _FlatTransitionEffectsEncoder
+        return _FlatTransitionEffectsEncoder
     raise AttributeError(name)
 
 
@@ -76,6 +89,8 @@ __all__ = [
     "ColorEncoderStream",
     "FlatRelationEncoder",
     "FlatHorizonEncoder",
+    "FlatTransitionEncoder",
+    "FlatTransitionEffectsEncoder",
     "FlatRelationData",
     "FlatRelationSchema",
     "TransitionHGraphEncoder",
