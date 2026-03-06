@@ -653,19 +653,7 @@ void HGraphEncoderEngine::encode_actions(
             workspace_.lgan_target_symbol_ids.insert(symbol_id);
          }
          if(target_actions) {
-            workspace_.targets.append(
-               TargetRecord{
-                  .position = action_symbol_idx,
-                  .index = workspace_.next_target_index,
-                  .candidate_id = workspace_.next_target_index,
-                  .depth = std::nullopt,
-                  .group_id = get_or_assign_target_group_id(TargetSource::Actions),
-                  .name = action_name,
-               },
-               /*include_depth=*/false,
-               /*include_group=*/true
-            );
-            ++workspace_.next_target_index;
+            append_target_candidate(action_symbol_idx, TargetSource::Actions, action_name);
          }
       }
 
@@ -1099,6 +1087,32 @@ int64_t HGraphEncoderEngine::get_or_assign_target_group_id(TargetSource source)
    workspace_.target_group_ids.emplace(source, next_id);
    workspace_.target_groups.emplace_back(target_group_name(source));
    return next_id;
+}
+
+int64_t HGraphEncoderEngine::append_target_candidate(
+   int64_t position,
+   TargetSource source,
+   std::string name,
+   std::optional< int64_t > candidate_id
+)
+{
+   const int64_t target_index = workspace_.next_target_index++;
+   append_target_candidate_row(
+      workspace_.targets,
+      TargetCandidateRow{
+         .position = position,
+         .index = target_index,
+         .candidate_id = candidate_id.value_or(target_index),
+         .depth = std::nullopt,
+         .group_id = get_or_assign_target_group_id(source),
+         .name = std::move(name),
+      },
+      TargetCandidateAppendConfig{
+         .include_depth = false,
+         .include_group = true,
+      }
+   );
+   return target_index;
 }
 
 HGraphEncoderEngine::RelationRef

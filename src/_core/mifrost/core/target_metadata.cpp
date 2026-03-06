@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "common_types.hpp"
+
 namespace mifrost {
 
 void TargetColumns::clear()
@@ -77,6 +79,74 @@ void TargetColumns::validate(bool include_depth, bool include_group) const
    } else if(not group_ids.empty()) {
       throw std::invalid_argument("target metadata group_ids must be empty when group is disabled");
    }
+}
+
+void append_target_candidate_rows(
+   TargetColumns& columns,
+   const std::vector< TargetCandidateRow >& rows,
+   const TargetCandidateAppendConfig& config
+)
+{
+   bool has_explicit_candidate_ids = false;
+   std::optional< int64_t > first_missing_candidate_id_index = std::nullopt;
+   for(const auto& row : rows) {
+      if(row.candidate_id.has_value()) {
+         has_explicit_candidate_ids = true;
+      } else if(not first_missing_candidate_id_index.has_value()) {
+         first_missing_candidate_id_index = row.index;
+      }
+   }
+   if(has_explicit_candidate_ids and first_missing_candidate_id_index.has_value()) {
+      throw std::invalid_argument(
+         config.missing_candidate_id_prefix + std::to_string(*first_missing_candidate_id_index)
+      );
+   }
+
+   columns.reserve(rows.size(), config.include_depth, config.include_group);
+   hash_set< int64_t > seen_candidate_ids;
+   seen_candidate_ids.reserve(rows.size());
+   for(const auto& row : rows) {
+      const int64_t candidate_id = has_explicit_candidate_ids ? *row.candidate_id : row.index;
+      if(not seen_candidate_ids.emplace(candidate_id).second) {
+         throw std::invalid_argument(
+            config.duplicate_candidate_id_prefix + std::to_string(candidate_id)
+         );
+      }
+      columns.append(
+         TargetRecord{
+            .position = row.position,
+            .index = row.index,
+            .candidate_id = candidate_id,
+            .depth = row.depth,
+            .group_id = row.group_id,
+            .name = row.name,
+         },
+         config.include_depth,
+         config.include_group
+      );
+   }
+}
+
+void append_target_candidate_row(
+   TargetColumns& columns,
+   TargetCandidateRow row,
+   const TargetCandidateAppendConfig& config
+)
+{
+   const int64_t candidate_id = row.candidate_id.value_or(row.index);
+   columns.reserve(1, config.include_depth, config.include_group);
+   columns.append(
+      TargetRecord{
+         .position = row.position,
+         .index = row.index,
+         .candidate_id = candidate_id,
+         .depth = row.depth,
+         .group_id = row.group_id,
+         .name = std::move(row.name),
+      },
+      config.include_depth,
+      config.include_group
+   );
 }
 
 namespace {

@@ -7,7 +7,7 @@ import pytest
 import torch
 
 import mifrost
-from mifrost.encoders import ColorEncoder, HGraphEncoder
+from mifrost.encoders import ColorEncoder, FlatRelationData, HGraphEncoder
 
 
 def _assert_tensor_equal(actual: torch.Tensor, expected: torch.Tensor) -> None:
@@ -392,6 +392,70 @@ def _encoding_with_target_groups_attr(*, graph_kind: str) -> mifrost.BatchEncodi
     return out
 
 
+def _encoding_with_flat_target_depths() -> mifrost.BatchEncoding:
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("homo")
+    builder.set_schema_flag("flat_relations", True)
+    builder.add_node_features("entity", "x", torch.zeros(3, 1))
+    builder.register_field(
+        "target_sizes",
+        {
+            "dtype": "i64",
+            "mode": "stack",
+            "dim": 1,
+            "inc": {"kind": "none"},
+        },
+    )
+    builder.register_field(
+        "target_depths",
+        {
+            "dtype": "i64",
+            "mode": "ragged_cat",
+            "dim": 1,
+            "inc": {"kind": "none"},
+        },
+    )
+    builder.set_field("target_sizes", [2])
+    builder.set_field("target_depths", [3, 5])
+    builder.next_graph()
+    return builder.build()
+
+
+def _batched_encoding_with_flat_target_depths() -> mifrost.BatchEncoding:
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("homo")
+    builder.set_schema_flag("flat_relations", True)
+    builder.register_field(
+        "target_sizes",
+        {
+            "dtype": "i64",
+            "mode": "stack",
+            "dim": 1,
+            "inc": {"kind": "none"},
+        },
+    )
+    builder.register_field(
+        "target_depths",
+        {
+            "dtype": "i64",
+            "mode": "ragged_cat",
+            "dim": 1,
+            "inc": {"kind": "none"},
+        },
+    )
+
+    builder.add_node_features("entity", "x", torch.zeros(3, 1))
+    builder.set_field("target_sizes", [2])
+    builder.set_field("target_depths", [3, 5])
+    builder.next_graph()
+
+    builder.add_node_features("entity", "x", torch.zeros(2, 1))
+    builder.set_field("target_sizes", [1])
+    builder.set_field("target_depths", [8])
+    builder.next_graph()
+    return builder.build()
+
+
 def test_hetero_facade_forwards_graph_fields_from_base():
     encoding = _encoding_with_target_candidate_ids(graph_kind="hetero")
     view = encoding.as_hetero()
@@ -434,3 +498,22 @@ def test_homo_facade_forwards_graph_attrs_from_base():
 
     assert list(view.target_groups) == ["subgoal"]
     assert list(encoding.target_groups) == ["subgoal"]
+
+
+def test_flat_as_pyg_exposes_target_depths_from_base():
+    encoding = _encoding_with_flat_target_depths()
+    data = encoding.as_pyg(as_batch=False)
+
+    assert isinstance(data, FlatRelationData)
+    _assert_tensor_equal(data.target_depths, encoding.get_field("target_depths"))
+    assert data.graph_target_depths(0).tolist() == [3, 5]
+    assert not hasattr(data, "target_depths_ptr")
+
+
+def test_flat_as_pyg_slices_target_depths_by_target_sizes():
+    encoding = _batched_encoding_with_flat_target_depths()
+    data = encoding.as_pyg(as_batch=True)
+
+    assert data.target_sizes.tolist() == [2, 1]
+    assert data.graph_target_depths(0).tolist() == [3, 5]
+    assert data.graph_target_depths(1).tolist() == [8]

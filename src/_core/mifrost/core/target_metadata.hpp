@@ -31,6 +31,15 @@ struct TargetRecord {
    std::string name;
 };
 
+struct TargetCandidateRow {
+   int64_t position = 0;
+   int64_t index = 0;
+   std::optional< int64_t > candidate_id = std::nullopt;
+   std::optional< int64_t > depth = std::nullopt;
+   std::optional< int64_t > group_id = std::nullopt;
+   std::string name;
+};
+
 struct TargetColumns {
    std::vector< int64_t > positions;
    std::vector< int64_t > indices;
@@ -47,6 +56,13 @@ struct TargetColumns {
    void validate(bool include_depth, bool include_group) const;
 };
 
+struct TargetCandidateAppendConfig {
+   bool include_depth = false;
+   bool include_group = false;
+   std::string missing_candidate_id_prefix = "missing candidate_id for target index ";
+   std::string duplicate_candidate_id_prefix = "duplicate candidate_id ";
+};
+
 struct TargetMetadataEmitConfig {
    std::string position_node_type_id;
    std::string symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
@@ -56,6 +72,16 @@ struct TargetMetadataEmitConfig {
    std::optional< std::string > parent_relation = std::nullopt;
 };
 
+void append_target_candidate_rows(
+   TargetColumns& columns,
+   const std::vector< TargetCandidateRow >& rows,
+   const TargetCandidateAppendConfig& config
+);
+void append_target_candidate_row(
+   TargetColumns& columns,
+   TargetCandidateRow row,
+   const TargetCandidateAppendConfig& config
+);
 void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config);
 void set_target_fields(
    BatchBuilder& builder,

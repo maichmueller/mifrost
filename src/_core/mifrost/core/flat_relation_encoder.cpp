@@ -1004,8 +1004,9 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
 
    auto append_target_row = [&](TargetSource source, int64_t position, const std::string& name) {
       const int64_t target_index = static_cast< int64_t >(context.target_columns.size());
-      context.target_columns.append(
-         TargetRecord{
+      append_target_candidate_row(
+         context.target_columns,
+         TargetCandidateRow{
             .position = position,
             .index = target_index,
             .candidate_id = target_index,
@@ -1013,8 +1014,10 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
             .group_id = target_metadata_group_id(source),
             .name = name,
          },
-         /*include_depth=*/false,
-         /*include_group=*/true
+         TargetCandidateAppendConfig{
+            .include_depth = false,
+            .include_group = true,
+         }
       );
    };
 

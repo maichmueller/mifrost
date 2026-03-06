@@ -510,6 +510,12 @@ class HGraphEncoderEngine {
    [[nodiscard]] bool has_target_source(TargetSource source) const;
    [[nodiscard]] static std::string_view target_group_name(TargetSource source);
    int64_t get_or_assign_target_group_id(TargetSource source);
+   int64_t append_target_candidate(
+      int64_t position,
+      TargetSource source,
+      std::string name,
+      std::optional< int64_t > candidate_id = std::nullopt
+   );
 
    int64_t get_or_assign_special_symbol_id(std::string_view symbol_name);
    int64_t get_or_add_symbol_object_node(
@@ -945,19 +951,7 @@ void HGraphEncoderEngine::encode_literals(
          if(config_.include_lgan_edges) {
             workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
          }
-         workspace_.targets.append(
-            TargetRecord{
-               .position = target_symbol_idx,
-               .index = workspace_.next_target_index,
-               .candidate_id = workspace_.next_target_index,
-               .depth = std::nullopt,
-               .group_id = get_or_assign_target_group_id(*target_source),
-               .name = formatted_literal,
-            },
-            /*include_depth=*/false,
-            /*include_group=*/true
-         );
-         ++workspace_.next_target_index;
+         append_target_candidate(target_symbol_idx, *target_source, formatted_literal);
          extra_symbol_ids.emplace_back(target_symbol_id);
          const std::string pos_str = std::to_string(pos++);
          append_edges(
@@ -1118,19 +1112,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
          if(config_.include_lgan_edges) {
             workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
          }
-         workspace_.targets.append(
-            TargetRecord{
-               .position = target_symbol_idx,
-               .index = workspace_.next_target_index,
-               .candidate_id = workspace_.next_target_index,
-               .depth = std::nullopt,
-               .group_id = get_or_assign_target_group_id(*target_source),
-               .name = formatted_literal,
-            },
-            /*include_depth=*/false,
-            /*include_group=*/true
-         );
-         ++workspace_.next_target_index;
+         append_target_candidate(target_symbol_idx, *target_source, formatted_literal);
          extra_symbol_ids.emplace_back(target_symbol_id);
          const std::string pos_str = std::to_string(pos++);
          append_edges(

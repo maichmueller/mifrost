@@ -1058,15 +1058,15 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const size_t candidate_count = (horizon_config_.exclude_root_candidate and not nodes.empty())
                                         ? (nodes.size() - 1)
                                         : nodes.size();
-      struct CandidateRow {
-         int64_t position = 0;
-         int64_t index = 0;
-         int64_t depth = 0;
-         std::optional< int64_t > explicit_candidate_id = std::nullopt;
-         std::string name;
-      };
-      std::vector< CandidateRow > candidate_rows;
+      std::vector< TargetCandidateRow > candidate_rows;
       candidate_rows.reserve(candidate_count);
+      const std::optional< int64_t > state_target_group_id = export_state_targets
+                                                                ? std::optional< int64_t >(
+                                                                     get_or_assign_target_group_id(
+                                                                        TargetSource::States
+                                                                     )
+                                                                  )
+                                                                : std::nullopt;
 
       for(const auto& node : nodes) {
          if(horizon_config_.exclude_root_candidate and node.index == root_index) {
@@ -1085,59 +1085,28 @@ void HorizonHGraphEncoderEngine::encode_impl(
          std::ostringstream stream;
          stream << node.state;
          candidate_rows.push_back(
-            CandidateRow{
+            TargetCandidateRow{
                .position = it->second,
                .index = node.index,
                .depth = node.depth,
-               .explicit_candidate_id = node.candidate_id,
+               .candidate_id = node.candidate_id,
+               .group_id = state_target_group_id,
                .name = stream.str(),
             }
          );
       }
 
-      bool has_explicit_candidate_ids = false;
-      std::optional< int64_t > first_missing_candidate_id_node = std::nullopt;
-      for(const auto& row : candidate_rows) {
-         if(row.explicit_candidate_id.has_value()) {
-            has_explicit_candidate_ids = true;
-         } else if(not first_missing_candidate_id_node.has_value()) {
-            first_missing_candidate_id_node = row.index;
-         }
-      }
-      if(has_explicit_candidate_ids and first_missing_candidate_id_node.has_value()) {
-         throw std::invalid_argument(
-            "missing candidate_id for target node index "
-            + std::to_string(*first_missing_candidate_id_node)
-         );
-      }
-
       if(export_state_targets) {
-         target_columns.reserve(
-            candidate_rows.size(), /*include_depth=*/true, /*include_group=*/true
+         append_target_candidate_rows(
+            target_columns,
+            candidate_rows,
+            TargetCandidateAppendConfig{
+               .include_depth = true,
+               .include_group = true,
+               .missing_candidate_id_prefix = "missing candidate_id for target node index ",
+               .duplicate_candidate_id_prefix = "duplicate candidate_id ",
+            }
          );
-      }
-      hash_set< int64_t > seen_candidate_ids;
-      seen_candidate_ids.reserve(candidate_rows.size());
-      for(const auto& row : candidate_rows) {
-         const int64_t candidate_id = has_explicit_candidate_ids ? *row.explicit_candidate_id
-                                                                 : row.index;
-         if(not seen_candidate_ids.emplace(candidate_id).second) {
-            throw std::invalid_argument("duplicate candidate_id " + std::to_string(candidate_id));
-         }
-         if(export_state_targets) {
-            target_columns.append(
-               TargetRecord{
-                  .position = row.position,
-                  .index = row.index,
-                  .candidate_id = candidate_id,
-                  .depth = row.depth,
-                  .group_id = get_or_assign_target_group_id(TargetSource::States),
-                  .name = row.name,
-               },
-               /*include_depth=*/true,
-               /*include_group=*/true
-            );
-         }
       }
    }
 

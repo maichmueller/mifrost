@@ -370,6 +370,13 @@ class FlatRelationData(Data):
             graph_index=graph_index,
         )
 
+    def graph_target_depths(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_cat_field_slice(
+            field_name="target_depths",
+            size_field_name="target_sizes",
+            graph_index=graph_index,
+        )
+
     def graph_target_group_ids(self, graph_index: int = 0) -> torch.Tensor:
         return self._graph_cat_field_slice(
             field_name="target_group_ids",
