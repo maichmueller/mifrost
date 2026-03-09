@@ -10,22 +10,17 @@ from pathlib import Path
 import pymimir
 from torch_geometric.data import Batch
 
-
-def _strip_scikit_build_editable() -> None:
-    sys.meta_path = [
-        finder
-        for finder in sys.meta_path
-        if finder.__class__.__module__ != "_mifrost_editable"
-    ]
-
-
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-_strip_scikit_build_editable()
 
-import mifrost
+
+def _configure_import_mode(import_mode: str) -> None:
+    if import_mode == "source":
+        src = ROOT / "src"
+        if str(src) not in sys.path:
+            sys.path.insert(0, str(src))
+        return
+    if import_mode != "installed":
+        raise ValueError(f"Unsupported import mode: {import_mode!r}")
 
 
 def load_problem(domain: str, problem: str):
@@ -210,6 +205,11 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", default="blocks")
     parser.add_argument("--problem", default="probBLOCKS-8-1")
+    parser.add_argument(
+        "--import-mode",
+        choices=("installed", "source"),
+        default="installed",
+    )
     parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--stream-size", type=int, default=16)
@@ -238,6 +238,9 @@ def main(argv: list[str]) -> int:
         help="Disable node/object name metadata export in native encodings.",
     )
     args = parser.parse_args(argv)
+
+    _configure_import_mode(args.import_mode)
+    import mifrost
 
     domain_obj, problem_obj = load_problem(args.domain, args.problem)
     states_single = build_states(problem_obj, max(1, args.iterations))

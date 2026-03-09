@@ -17,6 +17,7 @@
 
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
+#include "state_fact_iteration.hpp"
 
 namespace mifrost {
 
@@ -506,8 +507,6 @@ hash_set< uint64_t > HGraphEncoderEngine::encode_facts(
 )
 {
    hash_set< uint64_t > fact_keys;
-   const auto& problem = state.get_problem();
-   const auto& repos = problem.get_repositories();
 
    auto handle_atom = [&]< typename Tag >(mimir::formalism::GroundAtom< Tag > atom) {
       const auto predicate = atom->get_predicate();
@@ -572,42 +571,10 @@ hash_set< uint64_t > HGraphEncoderEngine::encode_facts(
          symbol_to_relations
       );
 
-      uint32_t tag_id = 0;
-      if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
-         tag_id = 1;
-      } else if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
-         tag_id = 2;
-      } else {
-         tag_id = 3;
-      }
-      fact_keys.insert(
-         pack_u32_u32(static_cast< uint32_t >(atom->get_index()), static_cast< uint32_t >(tag_id))
-      );
+      fact_keys.insert(state_fact_key_for_atom(atom));
    };
 
-   if(config_.include_static) {
-      const auto& literals = problem.get_initial_literals< mimir::formalism::StaticTag >();
-      for(const auto& literal : literals) {
-         if(not literal->get_polarity()) {
-            continue;
-         }
-         handle_atom(literal->get_atom());
-      }
-   }
-
-   const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-      state.get_atoms< mimir::formalism::FluentTag >()
-   );
-   for(const auto& atom : fluent_atoms) {
-      handle_atom(atom);
-   }
-
-   const auto derived_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-      state.get_atoms< mimir::formalism::DerivedTag >()
-   );
-   for(const auto& atom : derived_atoms) {
-      handle_atom(atom);
-   }
+   for_each_state_fact_atom(state, config_.include_static, handle_atom);
 
    return fact_keys;
 }

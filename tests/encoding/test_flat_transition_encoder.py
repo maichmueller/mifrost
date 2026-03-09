@@ -101,6 +101,23 @@ def test_flat_transition_batch_rejects_unsupported_payloads(small_blocks):
             )
 
 
+def test_flat_transition_batch_accepts_empty_unsupported_payloads(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, state, count=1)
+    successor = transitions[0][1]
+    encoder = FlatTransitionEncoder(domain)
+
+    encoding = encoder.encode_batch(
+        [state],
+        successors=[successor],
+        actions=[],
+        history_subgoals=[],
+    )
+
+    assert encoding.num_graphs == 1
+
+
 def test_flat_transition_encoder_emits_state_target_metadata(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

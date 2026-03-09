@@ -15,10 +15,9 @@ from .._core import (
     BatchEncoding,
 )
 from .accessors import (
-    action_arity,
     action_objects,
+    atom_signature,
     atom_objects,
-    atoms_equal,
     literal_atom,
     literal_polarity,
     object_name,
@@ -196,32 +195,38 @@ class ILGEncoder(EncoderBase[HeteroData]):
         self._relation_arity: dict[str, int] = {
             predicate_name(pred): predicate_arity(pred) for pred in self._predicates
         }
+        actions = tuple(domain.get_actions()) if hasattr(domain, "get_actions") else ()
+        self._action_feature_dim = (
+            max((int(action.get_arity()) for action in actions), default=0) + 1
+        )
 
     def _compute_statuses(
         self,
         facts: Collection[Any],
         goals: Sequence[Any],
         goal_level_map: dict[Any, int],
-    ) -> tuple[list[Any], dict[Any, AtomStatus]]:
+    ) -> tuple[list[Any], dict[tuple[str, tuple[str, ...]], AtomStatus]]:
         """
         Compute per-atom status flags and collect unsatisfied goal atoms.
 
         Returns ``(missing_goal_facts, status_by_atom)``.
         """
+        fact_signatures = {atom_signature(fact) for fact in facts}
         goal_matches = {
-            literal_atom(goal)
+            atom_signature(literal_atom(goal))
             for goal in goals
-            if any(atoms_equal(literal_atom(goal), f) for f in facts)
+            if (atom_signature(literal_atom(goal)) in fact_signatures)
             == literal_polarity(goal)
         }
-        statuses: dict[Any, AtomStatus] = {}
+        statuses: dict[tuple[str, tuple[str, ...]], AtomStatus] = {}
         missing_goal_facts: list[Any] = []
         for goal in goals:
             atom = literal_atom(goal)
-            is_satisfied = atom in goal_matches
-            prev = statuses.get(atom, AtomStatus())
+            signature = atom_signature(atom)
+            is_satisfied = signature in goal_matches
+            prev = statuses.get(signature, AtomStatus())
             new_levels = tuple(sorted(set(prev.goal_levels) | {goal_level_map[goal]}))
-            statuses[atom] = AtomStatus(
+            statuses[signature] = AtomStatus(
                 is_regular=False,
                 is_negated=not literal_polarity(goal),
                 is_satisfied=is_satisfied,
@@ -258,6 +263,11 @@ class ILGEncoder(EncoderBase[HeteroData]):
             facts = list(advanced_state.get_fluent_atoms()) + list(
                 advanced_state.get_derived_atoms()
             )
+            if facts and all(isinstance(fact, int) for fact in facts):
+                raise TypeError(
+                    "ILGEncoder does not support advanced states that expose atom "
+                    "indices only; pass wrapper states or an explicit iterable of atoms"
+                )
             if goals is None:
                 goals = []
             objects = _gather_objects(facts)
@@ -309,7 +319,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
             rows: list[list[float]] = []
             names: list[str] = []
             for atom in atoms:
-                status = statuses.get(atom, AtomStatus())
+                status = statuses.get(atom_signature(atom), AtomStatus())
                 value = float(status.encode())
                 rows.append([value] * feature_dim)
                 names.append(str(atom))
@@ -318,10 +328,10 @@ class ILGEncoder(EncoderBase[HeteroData]):
             builder.set_node_names(pred_name, names)
 
         if actions_list:
-            max_action_arity = max(action_arity(action) for action in actions_list)
-            action_dim = max_action_arity + 1
             action_names = [str(action) for action in actions_list]
-            action_x = np.zeros((len(action_names), action_dim), dtype=np.float32)
+            action_x = np.zeros(
+                (len(action_names), self._action_feature_dim), dtype=np.float32
+            )
             builder.add_node_features(self.action_type_id, "x", action_x)
             builder.set_node_names(self.action_type_id, action_names)
 

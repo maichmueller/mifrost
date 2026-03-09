@@ -11,8 +11,7 @@ from .._core import (
     TransitionDAG,
     BatchEncoding,
 )
-from ._action_contract import parse_flat_actions
-from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data, _normalize_dag_leaf
+from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
@@ -29,49 +28,25 @@ from .common import (
     _advanced_domain,
     _advanced_state,
     _convert_batch_payload,
-    _prepare_history_subgoals,
-    _split_goals,
+)
+from ._lane_specs import (
+    FLAT_HORIZON_LANE_SPEC,
+    ensure_transition_dag,
+    prepare_goal_inputs,
+    validate_batch_optional_payloads,
+    validate_single_optional_payloads,
 )
 from .flat import FlatRelationEncoder
 from .types import (
     DomainInput,
-    GoalLiteralInput,
     HistorySubgoalInput,
     HomoEncoding,
     StateInput,
-    default_goals_from_state,
-    is_action_input,
     is_goal_literal_input,
     is_state_input,
-    to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
-
-
-def _ensure_dag(
-    root: StateInput, dag: TransitionDAG | RXStateDAG | None
-) -> TransitionDAG:
-    if dag is not None:
-        normalized = _normalize_dag_leaf(dag)
-        if isinstance(normalized, TransitionDAG):
-            return normalized
-        raise TypeError(
-            "dag must be a TransitionDAG, rustworkx.PyDiGraph, or None, "
-            f"got {type(dag)!r}"
-        )
-    adv_root = _advanced_state(root)
-    return TransitionDAG(adv_root)
-
-
-def _prepare_horizon_goals(
-    root: StateInput,
-    goals: GoalBatchInput,
-    subgoal_layers: SubgoalLayersInput,
-):
-    if goals is None:
-        goals = default_goals_from_state(root)
-    return _split_goals(goals, subgoal_layers)
 
 
 def _normalize_flat_horizon_mode(mode: object | None) -> FlatHorizonEncoderMode | None:
@@ -181,19 +156,15 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> HomoEncoding:
-        action_list = parse_flat_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if action_list:
-            raise ValueError(
-                "FlatHorizonEncoder does not support explicit action payloads"
-            )
-        if history_list or history_max_steps is not None:
-            raise ValueError(
-                "FlatHorizonEncoder does not support history_subgoals payloads"
-            )
+        validate_single_optional_payloads(
+            FLAT_HORIZON_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         adv_root = _advanced_state(root)
-        dag = _ensure_dag(root, dag)
-        inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
+        dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
         return self._engine.encode(adv_root, dag, inputs)
 
     def encode(
@@ -232,6 +203,12 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ) -> HomoEncoding:
+        validate_batch_optional_payloads(
+            FLAT_HORIZON_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         roots_for_core = _convert_batch_payload(
             roots,
             is_leaf=is_state_input,
@@ -242,29 +219,11 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
-        actions_for_core = _convert_batch_payload(
-            actions,
-            is_leaf=is_action_input,
-            convert_leaf=to_advanced_action,
-        )
         subgoal_layers_for_core = _convert_batch_payload(
             subgoal_layers,
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
-        history_subgoals_for_core = _convert_batch_payload(
-            history_subgoals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        if actions_for_core is not None:
-            raise ValueError(
-                "FlatHorizonEncoder batch encoding does not support explicit action payloads"
-            )
-        if history_subgoals_for_core is not None or history_max_steps is not None:
-            raise ValueError(
-                "FlatHorizonEncoder batch encoding does not support history_subgoals payloads"
-            )
         dags_for_core = _normalize_dag_batch_data(dags)
         return self._engine.encode_batch(
             roots_for_core,

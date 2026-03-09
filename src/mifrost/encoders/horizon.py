@@ -37,15 +37,18 @@ from .base import (
 from .common import (
     _advanced_state,
     _convert_batch_payload,
-    _prepare_history_subgoals,
-    _split_goals,
+)
+from ._lane_specs import (
+    HORIZON_LANE_SPEC,
+    ensure_transition_dag,
+    prepare_goal_inputs,
+    validate_batch_optional_payloads,
+    validate_single_optional_payloads,
 )
 from ._rustworkx_dag import (
     RXStateDAG,
     _normalize_dag_batch_data,
-    _normalize_dag_leaf,
 )
-from ._action_contract import parse_flat_actions
 from .hgraph import HGraphEncoder, TargetSource
 from .types import (
     HeteroEncoding,
@@ -53,42 +56,13 @@ from .types import (
     GoalLiteralInput,
     HistorySubgoalInput,
     StateInput,
-    default_goals_from_state,
-    is_action_input,
     is_goal_literal_input,
+    is_action_input,
     is_state_input,
     to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
-
-
-def _ensure_dag(
-    root: StateInput, dag: TransitionDAG | RXStateDAG | None
-) -> TransitionDAG:
-    """Return an explicit DAG or create a default single-root DAG."""
-    if dag is not None:
-        normalized = _normalize_dag_leaf(dag)
-        if isinstance(normalized, TransitionDAG):
-            return normalized
-        raise TypeError(
-            "dag must be a TransitionDAG, rustworkx.PyDiGraph, or None, "
-            f"got {type(dag)!r}"
-        )
-    adv_root = _advanced_state(root)
-    return TransitionDAG(adv_root)
-
-
-def _prepare_horizon_goals(
-    root: StateInput,
-    goals: GoalBatchInput,
-    subgoal_layers: SubgoalLayersInput,
-) -> GoalInputs:
-    """Resolve user-provided or problem-default goals into ``GoalInputs``."""
-    if goals is None:
-        goals = default_goals_from_state(root)
-    inputs = _split_goals(goals, subgoal_layers)
-    return inputs
 
 
 @dataclass
@@ -112,8 +86,8 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     ) -> int:
         """Append one root/DAG encoding to the stream."""
         adv_root = _advanced_state(root)
-        dag = _ensure_dag(root, dag)
-        inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
+        dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
         return self._coerce_stream_id(self._stream.append(adv_root, dag, inputs))
 
     def remove(self, stream_id: int) -> None:
@@ -129,8 +103,8 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
         adv_root = _advanced_state(root)
-        dag = _ensure_dag(root, dag)
-        inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
+        dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
         self._stream.update(stream_id, adv_root, dag, inputs)
 
     def _reset_builder(self) -> None:
@@ -229,17 +203,15 @@ class HorizonEncoder(HGraphEncoder):
         **_: object,
     ) -> BatchEncoding:
         """Encode one root/DAG pair."""
-        action_list = parse_flat_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if action_list:
-            raise ValueError("HorizonEncoder does not support explicit action payloads")
-        if history_list or history_max_steps is not None:
-            raise ValueError(
-                "HorizonEncoder does not support history_subgoals payloads"
-            )
+        validate_single_optional_payloads(
+            HORIZON_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         adv_root = _advanced_state(root)
-        dag = _ensure_dag(root, dag)
-        inputs = _prepare_horizon_goals(root, goals, subgoal_layers)
+        dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
         return self._engine.encode(adv_root, dag, inputs)
 
     def encode(
@@ -314,6 +286,12 @@ class HorizonEncoder(HGraphEncoder):
         history_max_steps: int | None = None,
     ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
+        validate_batch_optional_payloads(
+            HORIZON_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         roots_for_core = _convert_batch_payload(
             roots,
             is_leaf=is_state_input,

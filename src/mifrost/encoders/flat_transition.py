@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ._action_contract import parse_flat_actions
 from ._batch_contract import (
     parse_states_batch,
     parse_successors_batch_param,
@@ -20,109 +19,23 @@ from .base import (
     SuccessorBatchParam,
 )
 from .common import (
-    _advanced_state,
     _convert_batch_payload,
-    _prepare_history_subgoals,
 )
 from .flat_horizon import FlatHorizonEncoder
+from ._lane_specs import (
+    TRANSITION_LANE_SPEC,
+    require_batch_payload,
+    require_single_payload,
+    single_transition_dag,
+    validate_batch_optional_payloads,
+    validate_single_optional_payloads,
+)
 from .types import (
-    BatchParam,
     HistorySubgoalInput,
     StateInput,
-    is_action_input,
     is_state_input,
     to_advanced_state,
 )
-
-
-def _single_transition_dag(
-    current: StateInput,
-    successor: StateInput,
-):
-    from .._core import TransitionDAG
-
-    adv_current = _advanced_state(current)
-    dag = TransitionDAG(adv_current)
-    dag.register_transition(
-        adv_current,
-        _advanced_state(successor),
-        None,
-    )
-    return dag
-
-
-def _action_payload_has_non_empty_entries(value: object) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, BatchParam):
-        if value.kind == "none":
-            return False
-        if value.kind == "shared":
-            return _action_payload_has_non_empty_entries(value.value)
-        if value.kind == "separate":
-            if value.value is None:
-                return False
-            return any(
-                _action_payload_has_non_empty_entries(entry)
-                for entry in value.value
-                if entry is not None
-            )
-    if is_action_input(value):
-        return True
-    if isinstance(value, (str, bytes, bytearray)):
-        return bool(value)
-    if isinstance(value, tuple):
-        return any(_action_payload_has_non_empty_entries(item) for item in value)
-    if isinstance(value, list):
-        if not value:
-            return False
-        if any(is_action_input(item) for item in value if item is not None):
-            return True
-        return any(
-            _action_payload_has_non_empty_entries(item)
-            for item in value
-            if item is not None
-        )
-    return True
-
-
-def _is_history_entry(value: object) -> bool:
-    return isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], int)
-
-
-def _history_payload_has_non_empty_entries(value: object) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, BatchParam):
-        if value.kind == "none":
-            return False
-        if value.kind == "shared":
-            return _history_payload_has_non_empty_entries(value.value)
-        if value.kind == "separate":
-            if value.value is None:
-                return False
-            return any(
-                _history_payload_has_non_empty_entries(entry)
-                for entry in value.value
-                if entry is not None
-            )
-    if _is_history_entry(value):
-        return bool(value[1])
-    if isinstance(value, (str, bytes, bytearray)):
-        return bool(value)
-    if isinstance(value, tuple):
-        return any(_history_payload_has_non_empty_entries(item) for item in value)
-    if isinstance(value, list):
-        if not value:
-            return False
-        if all(_is_history_entry(item) for item in value if item is not None):
-            return any(bool(item[1]) for item in value if item is not None)
-        return any(
-            _history_payload_has_non_empty_entries(item)
-            for item in value
-            if item is not None
-        )
-    return True
 
 
 class _FlatTransitionEncoderBase(FlatHorizonEncoder):
@@ -142,19 +55,14 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ):
-        if successor is None:
-            raise ValueError("successor must be provided for transition encoding")
-        action_list = parse_flat_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if action_list:
-            raise ValueError(
-                "Transition encoders do not support explicit action payloads"
-            )
-        if history_list or history_max_steps is not None:
-            raise ValueError(
-                "Transition encoders do not support history_subgoals payloads"
-            )
-        dag = _single_transition_dag(current, successor)
+        require_single_payload(TRANSITION_LANE_SPEC, successor)
+        validate_single_optional_payloads(
+            TRANSITION_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        dag = single_transition_dag(current, successor)
         return FlatHorizonEncoder._encode(
             self,
             current,
@@ -202,10 +110,13 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ):
-        if successors is None:
-            raise ValueError(
-                "successors must be provided for transition batch encoding"
-            )
+        require_batch_payload(TRANSITION_LANE_SPEC, successors)
+        validate_batch_optional_payloads(
+            TRANSITION_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         states_for_batch = _convert_batch_payload(
             states,
             is_leaf=is_state_input,
@@ -217,23 +128,12 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
             convert_leaf=to_advanced_state,
         )
         states_list = parse_states_batch(states_for_batch)
-        if _action_payload_has_non_empty_entries(actions):
-            raise ValueError(
-                "Transition batch encoding does not support explicit action payloads"
-            )
-        if (
-            _history_payload_has_non_empty_entries(history_subgoals)
-            or history_max_steps is not None
-        ):
-            raise ValueError(
-                "Transition batch encoding does not support history_subgoals payloads"
-            )
         successors_list = parse_successors_batch_param(
             successors_for_batch,
             state_count=len(states_list),
         )
         dags = [
-            _single_transition_dag(current, successor)
+            single_transition_dag(current, successor)
             for current, successor in zip(states_list, successors_list, strict=True)
         ]
         return FlatHorizonEncoder._encode_batch(

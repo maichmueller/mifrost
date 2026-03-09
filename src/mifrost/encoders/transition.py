@@ -33,10 +33,15 @@ from .base import (
 from .common import (
     _advanced_state,
     _convert_batch_payload,
-    _prepare_history_subgoals,
     _split_goals,
 )
-from ._action_contract import parse_flat_actions
+from ._lane_specs import (
+    TRANSITION_LANE_SPEC,
+    require_batch_payload,
+    require_single_payload,
+    validate_batch_optional_payloads,
+    validate_single_optional_payloads,
+)
 from .hgraph import HGraphEncoder
 from .types import (
     DomainInput,
@@ -44,10 +49,8 @@ from .types import (
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
-    is_action_input,
     is_goal_literal_input,
     is_state_input,
-    to_advanced_action,
     to_advanced_literal,
     to_advanced_state,
 )
@@ -122,19 +125,14 @@ class _TransitionEncoderBase(HGraphEncoder):
         **kwargs: object,
     ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition."""
-        if successor is None:
-            raise ValueError("successor must be provided for transition encoding")
+        require_single_payload(TRANSITION_LANE_SPEC, successor)
         _ = kwargs
-        action_list = parse_flat_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if action_list:
-            raise ValueError(
-                "Transition encoders do not support explicit action payloads"
-            )
-        if history_list or history_max_steps is not None:
-            raise ValueError(
-                "Transition encoders do not support history_subgoals payloads"
-            )
+        validate_single_optional_payloads(
+            TRANSITION_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         adv_state = _advanced_state(state)
         adv_successor = _advanced_state(successor)
         if goals is None:
@@ -211,10 +209,13 @@ class _TransitionEncoderBase(HGraphEncoder):
         **kwargs: object,
     ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
-        if successors is None:
-            raise ValueError(
-                "successors must be provided for transition batch encoding"
-            )
+        require_batch_payload(TRANSITION_LANE_SPEC, successors)
+        validate_batch_optional_payloads(
+            TRANSITION_LANE_SPEC,
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
         _ = kwargs
         states_for_core = _convert_batch_payload(
             states,
@@ -231,18 +232,8 @@ class _TransitionEncoderBase(HGraphEncoder):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
-        actions_for_core = _convert_batch_payload(
-            actions,
-            is_leaf=is_action_input,
-            convert_leaf=to_advanced_action,
-        )
         subgoal_layers_for_core = _convert_batch_payload(
             subgoal_layers,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        history_subgoals_for_core = _convert_batch_payload(
-            history_subgoals,
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
@@ -251,9 +242,9 @@ class _TransitionEncoderBase(HGraphEncoder):
             states_for_core,
             successors_for_core,
             goals_for_core,
-            actions_for_core,
+            None,
             subgoal_layers_for_core,
-            history_subgoals_for_core,
+            None,
             history_max_steps,
         )
 

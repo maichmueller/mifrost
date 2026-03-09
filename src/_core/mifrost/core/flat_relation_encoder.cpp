@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "mifrost/input_handling/batch_input_parser.hpp"
+#include "state_fact_iteration.hpp"
 
 namespace mifrost {
 
@@ -37,23 +38,6 @@ constexpr std::string_view kTargetSizesField = "target_sizes";
 constexpr std::string_view kRelationCountsField = "relation_counts";
 constexpr std::string_view kRelationArgsField = "relation_args";
 constexpr std::string_view kHistoryRelationSuffix = "[hist]";
-
-template < typename LiteralTag >
-uint32_t fact_tag_id()
-{
-   if constexpr(std::is_same_v< LiteralTag, mimir::formalism::StaticTag >) {
-      return 1U;
-   }
-   if constexpr(std::is_same_v< LiteralTag, mimir::formalism::FluentTag >) {
-      return 2U;
-   }
-   return 3U;
-}
-
-uint64_t pack_u32_u32(uint32_t hi, uint32_t lo)
-{
-   return (static_cast< uint64_t >(hi) << 32) | static_cast< uint64_t >(lo);
-}
 
 GoalInputs default_goal_inputs_for_state(const mimir::search::State& state)
 {
@@ -133,7 +117,7 @@ FlatRelationEncoderEngine::TargetEntityKey goal_target_entity_key(
 {
    return FlatRelationEncoderEngine::TargetEntityKey{
       .source = source,
-      .discriminator = static_cast< int64_t >(fact_tag_id< GoalTag >()),
+      .discriminator = static_cast< int64_t >(state_fact_tag_id< GoalTag >()),
       .primary = static_cast< int64_t >(literal->get_atom()->get_index()),
       .secondary = literal->get_polarity() ? 1 : 0,
       .tertiary = goal_level.has_value() ? static_cast< int64_t >(*goal_level) : -1,
@@ -164,7 +148,7 @@ FlatRelationEncoderEngine::TargetEntityKey history_target_entity_key(
 {
    return FlatRelationEncoderEngine::TargetEntityKey{
       .source = TargetSource::History,
-      .discriminator = static_cast< int64_t >(fact_tag_id< HistoryTag >()),
+      .discriminator = static_cast< int64_t >(state_fact_tag_id< HistoryTag >()),
       .primary = static_cast< int64_t >(dt),
       .secondary = static_cast< int64_t >(entry_idx),
       .tertiary = static_cast< int64_t >(literal->get_atom()->get_index()),
@@ -508,10 +492,7 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
       FlatRelationSink& sink
    ) const override
    {
-      const auto& problem = state.get_problem();
-      const auto& repos = problem.get_repositories();
-
-      auto emit_atom = [&]< typename Tag >(mimir::formalism::GroundAtom< Tag > atom) {
+      auto emit_atom = [&](const auto& atom) {
          const int arity = static_cast< int >(atom->get_predicate()->get_arity());
          if(engine.config_.ignore_zero_arity_relations and arity == 0) {
             return;
@@ -522,30 +503,7 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
          const auto args = local_arg_rows_for_atom(context, atom);
          sink.emit(relation_id, args);
       };
-
-      if(engine.config_.include_static) {
-         for(const auto& literal : problem.get_initial_literals< mimir::formalism::StaticTag >()) {
-            if(not literal->get_polarity()) {
-               continue;
-            }
-            emit_atom(literal->get_atom());
-         }
-      }
-
-      const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-         state.get_atoms< mimir::formalism::FluentTag >()
-      );
-      for(const auto& atom : fluent_atoms) {
-         emit_atom(atom);
-      }
-
-      const auto derived_atoms = repos
-                                    .get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-                                       state.get_atoms< mimir::formalism::DerivedTag >()
-                                    );
-      for(const auto& atom : derived_atoms) {
-         emit_atom(atom);
-      }
+      for_each_state_fact_atom(state, engine.config_.include_static, emit_atom);
    }
 };
 
@@ -717,9 +675,7 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
             continue;
          }
 
-         const uint64_t fact_key = pack_u32_u32(
-            static_cast< uint32_t >(literal->get_atom()->get_index()), fact_tag_id< GoalTag >()
-         );
+         const uint64_t fact_key = state_fact_key_for_atom(literal->get_atom());
          const bool satisfied = fact_keys.contains(fact_key) == literal->get_polarity();
          const GoalSatisfaction satisfaction = satisfied ? GoalSatisfaction::satisfied
                                                          : GoalSatisfaction::unsatisfied;
@@ -1471,37 +1427,7 @@ void FlatRelationEncoderEngine::encode_impl(
    FlatRelationSink sink(relation_names_.size());
 
    hash_set< uint64_t > fact_keys;
-   const auto& problem = state.get_problem();
-   const auto& repos = problem.get_repositories();
-
-   auto collect_fact_key = [&]< typename Tag >(mimir::formalism::GroundAtom< Tag > atom) {
-      fact_keys.insert(
-         pack_u32_u32(static_cast< uint32_t >(atom->get_index()), fact_tag_id< Tag >())
-      );
-   };
-
-   if(config_.include_static) {
-      for(const auto& literal : problem.get_initial_literals< mimir::formalism::StaticTag >()) {
-         if(not literal->get_polarity()) {
-            continue;
-         }
-         collect_fact_key(literal->get_atom());
-      }
-   }
-
-   const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-      state.get_atoms< mimir::formalism::FluentTag >()
-   );
-   for(const auto& atom : fluent_atoms) {
-      collect_fact_key(atom);
-   }
-
-   const auto derived_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-      state.get_atoms< mimir::formalism::DerivedTag >()
-   );
-   for(const auto& atom : derived_atoms) {
-      collect_fact_key(atom);
-   }
+   collect_state_fact_keys(state, config_.include_static, fact_keys);
 
    for(const auto& component : components_) {
       component->emit(*this, state, goals, fact_keys, context, sink);

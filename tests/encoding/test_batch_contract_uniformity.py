@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pymimir
 import pytest
 
 from mifrost.encoders import (
@@ -28,6 +31,43 @@ def _first_transitions(space, state, count: int = 2):
 
 def _problem_goals(problem):
     return list(problem.get_goal_condition().get_literals())
+
+
+def _load_grounded_problem(domain: str, problem: str):
+    root = Path(__file__).resolve().parents[2]
+    domain_path = root / "data" / "pddl" / domain / "domain.pddl"
+    problem_path = root / "data" / "pddl" / domain / f"{problem}.pddl"
+    domain_obj = pymimir.Domain(domain_path)
+    problem_obj = pymimir.Problem(domain_obj, problem_path, mode="grounded")
+    return domain_obj, problem_obj
+
+
+def _action_arity(action) -> int:
+    return len(list(action.get_objects()))
+
+
+def _find_distinct_action_arities(space, root):
+    queue = [root]
+    seen = {str(adv_state(root))}
+    by_arity: dict[int, tuple[object, object]] = {}
+
+    while queue and len(seen) < 32 and len(by_arity) < 2:
+        state = queue.pop(0)
+        for action, successor in space.get_forward_transitions(state):
+            if action is None or successor is None:
+                continue
+            by_arity.setdefault(_action_arity(action), (state, action))
+            succ_key = str(adv_state(successor))
+            if succ_key not in seen:
+                seen.add(succ_key)
+                queue.append(successor)
+            if len(by_arity) >= 2:
+                break
+
+    if len(by_arity) < 2:
+        pytest.skip("Fixture does not provide actions with distinct arities.")
+
+    return [by_arity[arity] for arity in sorted(by_arity)[:2]]
 
 
 def _single_transition_dag(root, action, successor):
@@ -318,6 +358,65 @@ def test_ilg_batch_accepts_per_state_goals_actions_and_subgoal_layers(small_bloc
     assert encoding.num_graphs == 2
     assert "action" in data.node_types
     assert data["action"].num_nodes == 1
+
+
+def test_ilg_grounded_batch_accepts_goals_and_actions():
+    domain, problem = _load_grounded_problem("blocks", "smedium")
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    actions = list(state.generate_applicable_actions())
+    if not actions:
+        pytest.skip("Grounded fixture does not provide applicable actions.")
+
+    encoder = ILGEncoder(domain)
+    encoding = encoder.encode_batch(
+        [state, state],
+        goals=[goals, goals],
+        actions=[[actions[0]], []],
+    )
+    data = encoding.as_pyg(as_batch=True)
+
+    assert encoding.num_graphs == 2
+    assert "action" in data.node_types
+    assert data["action"].num_nodes == 1
+
+
+def test_ilg_batch_accepts_mixed_wrapper_and_advanced_payloads(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+    (action0, _succ0), _ = _first_transitions(space, state, count=2)
+
+    encoder = ILGEncoder(domain)
+    encoding = encoder.encode_batch(
+        [state, state],
+        goals=[
+            goals,
+            [getattr(goal, "_advanced_ground_literal", goal) for goal in goals],
+        ],
+        actions=[[action0], [adv_action(action0)]],
+        subgoal_layers=[None, None],
+    )
+
+    assert encoding.num_graphs == 2
+
+
+def test_ilg_batch_supports_heterogeneous_action_arities(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    action_states = _find_distinct_action_arities(space, root)
+    states = [entry[0] for entry in action_states]
+    actions = [[entry[1]] for entry in action_states]
+    max_arity = max(_action_arity(entry[1]) for entry in action_states)
+
+    encoder = ILGEncoder(domain)
+    data = encoder.encode_batch(states, actions=actions).as_pyg(as_batch=True)
+
+    assert "action" in data.node_types
+    assert data["action"].num_nodes == len(action_states)
+    assert data["action"].x.shape[1] == max_arity + 1
 
 
 def test_hgraph_advanced_batch_derives_default_goals_with_aux_payload(small_blocks):

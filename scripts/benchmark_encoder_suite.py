@@ -9,36 +9,65 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence, TypeVar
 
 import pymimir
 
-
-def _strip_scikit_build_editable() -> None:
-    sys.meta_path = [
-        finder
-        for finder in sys.meta_path
-        if finder.__class__.__module__ != "_mifrost_editable"
-    ]
-
-
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-_strip_scikit_build_editable()
 
-import mifrost
-from mifrost.encoders import (
-    HGraphEncoder,
-    HorizonEncoder,
-    TransitionEffectsHGraphEncoder,
-    TransitionHGraphEncoder,
-    _split_goals,
-)
+mifrost = None
+HGraphEncoder = None
+HorizonEncoder = None
+TransitionEffectsHGraphEncoder = None
+TransitionHGraphEncoder = None
+HGRAPH_BENCH_SPEC = None
+TRANSITION_LANE_SPEC = None
 
 StateT = Any
 ActionT = Any
+_T = TypeVar("_T")
+
+
+def _configure_import_mode(import_mode: str) -> None:
+    if import_mode == "source":
+        src = ROOT / "src"
+        if str(src) not in sys.path:
+            sys.path.insert(0, str(src))
+        return
+    if import_mode != "installed":
+        raise ValueError(f"Unsupported import mode: {import_mode!r}")
+
+
+def _import_runtime(import_mode: str) -> None:
+    global mifrost
+    global HGraphEncoder
+    global HorizonEncoder
+    global TransitionEffectsHGraphEncoder
+    global TransitionHGraphEncoder
+    global HGRAPH_BENCH_SPEC
+    global TRANSITION_LANE_SPEC
+
+    _configure_import_mode(import_mode)
+
+    import mifrost as mifrost_module
+    from mifrost.encoders import (
+        HGraphEncoder as HGraphEncoderCls,
+        HorizonEncoder as HorizonEncoderCls,
+        TransitionEffectsHGraphEncoder as TransitionEffectsHGraphEncoderCls,
+        TransitionHGraphEncoder as TransitionHGraphEncoderCls,
+    )
+    from mifrost.encoders._lane_specs import (
+        HGRAPH_BENCH_SPEC as HGraphBenchSpec,
+        TRANSITION_LANE_SPEC as TransitionLaneSpec,
+    )
+
+    mifrost = mifrost_module
+    HGraphEncoder = HGraphEncoderCls
+    HorizonEncoder = HorizonEncoderCls
+    TransitionEffectsHGraphEncoder = TransitionEffectsHGraphEncoderCls
+    TransitionHGraphEncoder = TransitionHGraphEncoderCls
+    HGRAPH_BENCH_SPEC = HGraphBenchSpec
+    TRANSITION_LANE_SPEC = TransitionLaneSpec
 
 
 @dataclass
@@ -136,14 +165,14 @@ def _collect_state_pool(
     return states, transitions
 
 
-def _pick_cycle[T](items: Sequence[T], n: int) -> list[T]:
+def _pick_cycle(items: Sequence[_T], n: int) -> list[_T]:
     if n <= 0:
         return []
     if not items:
         return []
     if n <= len(items):
         return list(items[:n])
-    out: list[T] = []
+    out: list[_T] = []
     i = 0
     while len(out) < n:
         out.append(items[i % len(items)])
@@ -231,6 +260,25 @@ def _benchmark(
     return durations
 
 
+def _benchmark_prepared(
+    prepare: Callable[[], Any],
+    action: Callable[[Any], None],
+    *,
+    warmup: int,
+    repeats: int,
+) -> list[float]:
+    for _ in range(max(0, warmup)):
+        prepared = prepare()
+        action(prepared)
+    durations: list[float] = []
+    for _ in range(max(1, repeats)):
+        prepared = prepare()
+        start = time.perf_counter()
+        action(prepared)
+        durations.append(time.perf_counter() - start)
+    return durations
+
+
 def _summarize(
     *,
     suite: str,
@@ -299,6 +347,10 @@ def _run_hgraph_suite(
                 include_actions,
                 include_subgoals,
             ) in scenarios:
+                if include_lgan and not HGRAPH_BENCH_SPEC.allows_lgan(
+                    include_actions=include_actions
+                ):
+                    continue
                 encoder = HGraphEncoder(
                     domain_obj,
                     ignore_actions=not include_actions,
@@ -338,6 +390,17 @@ def _run_hgraph_suite(
                         )
                     stream.flush()
 
+                def _prepare_stream() -> Any:
+                    stream = encoder.stream()
+                    for idx, state in enumerate(states):
+                        stream.append(
+                            state,
+                            goals=goals_arg,
+                            actions=actions_by_state[idx] if include_actions else None,
+                            subgoal_layers=subgoals_arg,
+                        )
+                    return stream
+
                 context = {
                     "batch_size": batch_size,
                     "include_lgan": include_lgan,
@@ -364,6 +427,49 @@ def _run_hgraph_suite(
                             context=context,
                         )
                     )
+
+                durations = _benchmark_prepared(
+                    _prepare_stream,
+                    lambda stream: stream.flush(),
+                    warmup=warmup,
+                    repeats=repeats,
+                )
+                results.append(
+                    _summarize(
+                        suite="hgraph",
+                        scenario=scenario_name,
+                        path="stream_flush_native",
+                        durations=durations,
+                        n_items=len(states),
+                        repeats=repeats,
+                        warmup=warmup,
+                        context=context,
+                    )
+                )
+
+                durations = _benchmark_prepared(
+                    lambda: encoder.encode_batch(
+                        states,
+                        goals=goals_arg,
+                        actions=actions_arg,
+                        subgoal_layers=subgoals_arg,
+                    ),
+                    lambda encoding: encoding.as_pyg(as_batch=True),
+                    warmup=warmup,
+                    repeats=repeats,
+                )
+                results.append(
+                    _summarize(
+                        suite="hgraph",
+                        scenario=scenario_name,
+                        path="batch_as_pyg",
+                        durations=durations,
+                        n_items=len(states),
+                        repeats=repeats,
+                        warmup=warmup,
+                        context=context,
+                    )
+                )
 
                 if benchmark_pyg:
 
@@ -418,6 +524,25 @@ def _run_hgraph_suite(
                             )
                         )
 
+                    durations = _benchmark_prepared(
+                        _prepare_stream,
+                        lambda stream: stream.flush_pyg(as_batch=True),
+                        warmup=warmup,
+                        repeats=repeats,
+                    )
+                    results.append(
+                        _summarize(
+                            suite="hgraph",
+                            scenario=scenario_name,
+                            path="stream_flush_pyg",
+                            durations=durations,
+                            n_items=len(states),
+                            repeats=repeats,
+                            warmup=warmup,
+                            context=context,
+                        )
+                    )
+
     return results
 
 
@@ -450,6 +575,10 @@ def _run_transition_suite(
 
     for include_lgan in include_lgan_values:
         for batch_size in batch_sizes:
+            if include_lgan and not TRANSITION_LANE_SPEC.allows_lgan(
+                include_actions=False
+            ):
+                continue
             pairs = _pick_cycle(transition_pairs, batch_size)
             current_states = [pair[0] for pair in pairs]
             successor_states = [pair[1] for pair in pairs]
@@ -475,6 +604,12 @@ def _run_transition_suite(
                         stream.append(current, successor, goals=goals_arg)
                     stream.flush()
 
+                def _prepare_stream() -> Any:
+                    stream = encoder.stream()
+                    for current, successor in zip(current_states, successor_states):
+                        stream.append(current, successor, goals=goals_arg)
+                    return stream
+
                 context = {
                     "batch_size": batch_size,
                     "include_lgan": include_lgan,
@@ -499,6 +634,48 @@ def _run_transition_suite(
                             context=context,
                         )
                     )
+
+                durations = _benchmark_prepared(
+                    _prepare_stream,
+                    lambda stream: stream.flush(),
+                    warmup=warmup,
+                    repeats=repeats,
+                )
+                results.append(
+                    _summarize(
+                        suite="transition",
+                        scenario=scenario_name,
+                        path="stream_flush_native",
+                        durations=durations,
+                        n_items=len(current_states),
+                        repeats=repeats,
+                        warmup=warmup,
+                        context=context,
+                    )
+                )
+
+                durations = _benchmark_prepared(
+                    lambda: encoder.encode_batch(
+                        current_states,
+                        successors=successor_states,
+                        goals=goals_arg,
+                    ),
+                    lambda encoding: encoding.as_pyg(as_batch=True),
+                    warmup=warmup,
+                    repeats=repeats,
+                )
+                results.append(
+                    _summarize(
+                        suite="transition",
+                        scenario=scenario_name,
+                        path="batch_as_pyg",
+                        durations=durations,
+                        n_items=len(current_states),
+                        repeats=repeats,
+                        warmup=warmup,
+                        context=context,
+                    )
+                )
 
                 if benchmark_pyg:
 
@@ -541,6 +718,25 @@ def _run_transition_suite(
                                 context=context,
                             )
                         )
+
+                    durations = _benchmark_prepared(
+                        _prepare_stream,
+                        lambda stream: stream.flush_pyg(as_batch=True),
+                        warmup=warmup,
+                        repeats=repeats,
+                    )
+                    results.append(
+                        _summarize(
+                            suite="transition",
+                            scenario=scenario_name,
+                            path="stream_flush_pyg",
+                            durations=durations,
+                            n_items=len(current_states),
+                            repeats=repeats,
+                            warmup=warmup,
+                            context=context,
+                        )
+                    )
 
     return results
 
@@ -609,26 +805,19 @@ def _run_horizon_suite(
                             encoder.encode(root, dag=dag, goals=goals_arg)
 
                     def _batch_native() -> None:
-                        builder = mifrost.BatchBuilder()
-                        builder.set_graph_kind("hetero")
-                        for root, dag in zip(roots, dags):
-                            goal_list = (
-                                goals_arg
-                                if goals_arg is not None
-                                else _goal_literals(root.get_problem())
-                            )
-                            inputs = _split_goals(goal_list, None)
-                            encoder.engine.encode(
-                                _advanced_state(root), dag, inputs, builder
-                            )
-                            builder.next_graph()
-                        builder.build()
+                        encoder.encode_batch(roots, dags=dags, goals=goals_arg)
 
                     def _stream_native() -> None:
                         stream = encoder.stream()
                         for root, dag in zip(roots, dags):
                             stream.append(root, dag=dag, goals=goals_arg)
                         stream.flush()
+
+                    def _prepare_stream() -> Any:
+                        stream = encoder.stream()
+                        for root, dag in zip(roots, dags):
+                            stream.append(root, dag=dag, goals=goals_arg)
+                        return stream
 
                     context = {
                         "n_roots": n_roots,
@@ -664,6 +853,44 @@ def _run_horizon_suite(
                             )
                         )
 
+                    durations = _benchmark_prepared(
+                        _prepare_stream,
+                        lambda stream: stream.flush(),
+                        warmup=warmup,
+                        repeats=repeats,
+                    )
+                    results.append(
+                        _summarize(
+                            suite="horizon",
+                            scenario=scenario_name,
+                            path="stream_flush_native",
+                            durations=durations,
+                            n_items=len(roots),
+                            repeats=repeats,
+                            warmup=warmup,
+                            context=context,
+                        )
+                    )
+
+                    durations = _benchmark_prepared(
+                        lambda: encoder.encode_batch(roots, dags=dags, goals=goals_arg),
+                        lambda encoding: encoding.as_pyg(as_batch=True),
+                        warmup=warmup,
+                        repeats=repeats,
+                    )
+                    results.append(
+                        _summarize(
+                            suite="horizon",
+                            scenario=scenario_name,
+                            path="batch_as_pyg",
+                            durations=durations,
+                            n_items=len(roots),
+                            repeats=repeats,
+                            warmup=warmup,
+                            context=context,
+                        )
+                    )
+
                     if benchmark_pyg:
 
                         def _single_pyg() -> None:
@@ -671,20 +898,7 @@ def _run_horizon_suite(
                                 encoder.encode_pyg(root, dag=dag, goals=goals_arg)
 
                         def _batch_pyg() -> None:
-                            builder = mifrost.BatchBuilder()
-                            builder.set_graph_kind("hetero")
-                            for root, dag in zip(roots, dags):
-                                goal_list = (
-                                    goals_arg
-                                    if goals_arg is not None
-                                    else _goal_literals(root.get_problem())
-                                )
-                                inputs = _split_goals(goal_list, None)
-                                encoder.engine.encode(
-                                    _advanced_state(root), dag, inputs, builder
-                                )
-                                builder.next_graph()
-                            builder.build_pyg()
+                            encoder.encode_batch_pyg(roots, dags=dags, goals=goals_arg)
 
                         def _stream_pyg() -> None:
                             stream = encoder.stream()
@@ -711,14 +925,34 @@ def _run_horizon_suite(
                                 )
                             )
 
+                        durations = _benchmark_prepared(
+                            _prepare_stream,
+                            lambda stream: stream.flush_pyg(as_batch=True),
+                            warmup=warmup,
+                            repeats=repeats,
+                        )
+                        results.append(
+                            _summarize(
+                                suite="horizon",
+                                scenario=scenario_name,
+                                path="stream_flush_pyg",
+                                durations=durations,
+                                n_items=len(roots),
+                                repeats=repeats,
+                                warmup=warmup,
+                                context=context,
+                            )
+                        )
+
     return results
 
 
 def _print_table(results: Sequence[BenchSummary]) -> None:
+    path_width = 22
     header = (
         "suite".ljust(11)
         + "scenario".ljust(27)
-        + "path".ljust(14)
+        + "path".ljust(path_width)
         + "lgan".ljust(7)
         + "dag".rjust(6)
         + "items".rjust(7)
@@ -746,7 +980,7 @@ def _print_table(results: Sequence[BenchSummary]) -> None:
         print(
             row.suite.ljust(11)
             + row.scenario.ljust(27)
-            + row.path.ljust(14)
+            + row.path.ljust(path_width)
             + include_lgan.ljust(7)
             + dag_cell.rjust(6)
             + str(row.n_items).rjust(7)
@@ -765,6 +999,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--domain", default="blocks")
     parser.add_argument("--problem", default="probBLOCKS-8-1")
     parser.add_argument("--mode", choices=("grounded", "lifted"), default="grounded")
+    parser.add_argument(
+        "--import-mode",
+        choices=("installed", "source"),
+        default="installed",
+    )
     parser.add_argument("--max-states", type=int, default=256)
     parser.add_argument("--max-branch", type=int, default=4)
     parser.add_argument("--max-actions-per-state", type=int, default=4)
@@ -790,6 +1029,7 @@ def main(argv: list[str]) -> int:
     horizon_dag_sizes = _parse_int_list(args.horizon_dag_sizes)
     horizon_batch_sizes = _parse_int_list(args.horizon_batch_sizes)
 
+    _import_runtime(args.import_mode)
     domain_obj, problem_obj = _load_problem(args.domain, args.problem, args.mode)
     root = problem_obj.get_initial_state()
     states_pool, transitions_pool = _collect_state_pool(
@@ -854,6 +1094,7 @@ def main(argv: list[str]) -> int:
                 "domain": args.domain,
                 "problem": args.problem,
                 "mode": args.mode,
+                "import_mode": args.import_mode,
                 "max_states": args.max_states,
                 "max_branch": args.max_branch,
                 "max_actions_per_state": args.max_actions_per_state,

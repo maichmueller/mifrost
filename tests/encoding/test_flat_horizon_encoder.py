@@ -244,3 +244,22 @@ def test_flat_horizon_encode_rejects_explicit_actions_and_history(small_blocks):
         match="FlatHorizonEncoder does not support history_subgoals payloads",
     ):
         encoder.encode(root, goals=goals, history_subgoals=[(-1, goals[:1])])
+
+
+def test_flat_horizon_batch_accepts_empty_unsupported_payloads(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions)
+    goals = list(problem.get_goal_condition().get_literals())
+    encoder = FlatHorizonEncoder(domain, ignore_actions=False)
+
+    encoding = encoder.encode_batch(
+        [root],
+        dags=[dag],
+        goals=[goals],
+        actions=[],
+        history_subgoals=[],
+    )
+
+    assert encoding.num_graphs == 1
