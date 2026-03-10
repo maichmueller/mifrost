@@ -87,7 +87,7 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ):
         return super().encode(
             current,
@@ -162,7 +162,7 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ):
         return super().encode_batch(
             states,
@@ -238,7 +238,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
 class FlatTransitionEncoder(_FlatTransitionEncoderBase):
     """Flat full successor encoder backed by state-target carrier rows."""
 
-    def __init__(self, domain, **kwargs: object) -> None:
+    def __init__(self, domain, **kwargs) -> None:
         super().__init__(
             domain,
             transition_mode="full",
@@ -257,7 +257,7 @@ class FlatTransitionEncoder(_FlatTransitionEncoderBase):
 class FlatTransitionEffectsEncoder(_FlatTransitionEncoderBase):
     """Flat delta/effects successor encoder backed by state-target carrier rows."""
 
-    def __init__(self, domain, **kwargs: object) -> None:
+    def __init__(self, domain, **kwargs) -> None:
         super().__init__(
             domain,
             transition_mode="delta",

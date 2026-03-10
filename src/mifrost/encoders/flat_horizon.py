@@ -52,7 +52,9 @@ from .types import (
 )
 
 
-def _normalize_flat_horizon_mode(mode: object | None) -> FlatHorizonEncoderMode | None:
+def _normalize_flat_horizon_mode(
+    mode: FlatHorizonEncoderMode | HorizonEncoderMode | str | None,
+) -> FlatHorizonEncoderMode | None:
     if mode is None:
         return None
     if isinstance(mode, FlatHorizonEncoderMode):
@@ -136,7 +138,10 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         self,
         domain: DomainInput,
         *,
-        transition_mode: object | None = None,
+        transition_mode: FlatHorizonEncoderMode
+        | HorizonEncoderMode
+        | str
+        | None = None,
         target_symbol_prefix: str = "target:",
         parent_relation: str = DEFAULT_PARENT_RELATION,
         sibling_relation: str = "_sibling_",
@@ -151,9 +156,9 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
         ignore_actions: bool = True,
-        goal_satisfaction_derivations: object | None = None,
+        goal_satisfaction_derivations: Any | None = None,
     ) -> None:
-        config_kwargs: dict[str, object] = {
+        config_kwargs: dict[str, Any] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
             "include_static": include_static,
@@ -232,7 +237,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         return super().encode(
             root,
@@ -302,7 +307,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         return super().encode_batch(
             roots,

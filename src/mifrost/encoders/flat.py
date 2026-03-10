@@ -214,7 +214,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         ignore_zero_arity_relations: bool = True,
         target_sources: Iterable[TargetSource | str] | None = None,
         target_symbol_prefix: str = "target:",
-        goal_satisfaction_derivations: Iterable[object] | None = None,
+        goal_satisfaction_derivations: Iterable[Any] | None = None,
     ) -> None:
         normalized_target_sources = normalize_target_sources(target_sources)
         if normalized_target_sources is not None:
@@ -227,7 +227,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                     "{'action', 'goal', 'subgoal', 'history'} only; 'state' "
                     "is reserved for the upcoming flat successor/horizon encoders"
                 )
-        config_kwargs: dict[str, object] = {
+        config_kwargs: dict[str, Any] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
             "include_static": include_static,
@@ -302,7 +302,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> HomoEncoding:
         return super().encode(
             state,
@@ -371,7 +371,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> HomoEncoding:
         return super().encode_batch(
             states,
@@ -439,7 +439,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             if target_depths_tensor is not None
             else [None] * len(target_positions)
         )
-        target_rows_by_position: dict[int, list[dict[str, object]]] = {}
+        target_rows_by_position: dict[int, list[dict[str, Any]]] = {}
         for (
             position,
             target_index,

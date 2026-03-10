@@ -24,7 +24,7 @@ def _is_iterable_but_not_str_bytes(value: object) -> bool:
 
 
 def validate_no_nested_actions(
-    flat_actions: Iterable[object],
+    flat_actions: Iterable[GroundActionInput],
 ) -> list[GroundActionInput]:
     materialized = list(flat_actions)
     for action in materialized:

@@ -71,7 +71,7 @@ class GraphFieldSpec:
         if self.inc.kind == "node_offset" and self.dtype is not DType.I64:
             raise ValueError("NODE_OFFSET increment requires dtype=DType.I64")
 
-    def to_core_dict(self) -> dict[str, object]:
+    def to_core_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode.value,
             "dtype": self.dtype.value,
@@ -133,8 +133,8 @@ class CollateSpec:
                 )
         object.__setattr__(self, "cat_dim", normalized_cat_dim)
 
-    def to_core_dict(self) -> dict[str, object]:
-        out: dict[str, object] = {"mode": self.mode.value, "dtype": self.dtype.value}
+    def to_core_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"mode": self.mode.value, "dtype": self.dtype.value}
         if self.dtype in (DType.F32, DType.I64):
             out["dim"] = int(self.dim)
             out["cat_dim"] = int(self.cat_dim)

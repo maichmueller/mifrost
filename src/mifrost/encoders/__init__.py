@@ -22,6 +22,8 @@ from ..schema_keys import (
     make_type_attr_key,
 )
 from .types import (
+    BatchEncodingInput,
+    BatchEncodingLike,
     BatchParam,
     register_action_adapter,
     register_domain_adapter,
@@ -155,6 +157,8 @@ __all__ = [
     "BATCH_ATTR",
     "make_type_attr_key",
     "make_edge_type_key",
+    "BatchEncodingLike",
+    "BatchEncodingInput",
     "BatchParam",
     "register_state_adapter",
     "unregister_state_adapter",

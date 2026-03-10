@@ -18,13 +18,13 @@ from .common import _encoding_dict_to_pyg
 from ._rustworkx_dag import RXStateDAG
 from ..graph_fields import CollateSpec
 from .types import (
+    BatchEncodingInput,
+    BatchEncodingLike,
     BatchParam,
     EncodingDict,
     GoalLiteralInput,
     GroundActionInput,
     HistorySubgoalInput,
-    NativeEncoding,
-    NativeEncodingInput,
     StateInput,
 )
 from .._core import BatchEncoding, TransitionDAG
@@ -74,13 +74,13 @@ DagBatchParam: TypeAlias = (
 CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, Any]] | None
 
 
-def _is_native_encoding(value: Any) -> TypeGuard[NativeEncoding]:
-    return hasattr(value, "as_dict") and hasattr(value, "as_pyg")
+def _is_batch_encoding_like(value: object) -> TypeGuard[BatchEncodingLike]:
+    return isinstance(value, BatchEncoding) or isinstance(value, BatchEncodingLike)
 
 
 def _normalize_collate_spec(
     collate_spec: CollateSpecParam,
-) -> dict[str, dict[str, object]] | None:
+) -> dict[str, dict[str, Any]] | None:
     if collate_spec is None:
         return None
     out: dict[str, dict[str, Any]] = {}
@@ -244,12 +244,12 @@ class EncoderBase(ABC, Generic[PygDataT]):
 
     def _to_pyg(
         self,
-        encoding: NativeEncodingInput,
+        encoding: BatchEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        if _is_native_encoding(encoding):
+        if _is_batch_encoding_like(encoding):
             uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
             if include_metadata and uses_default_converter:
                 return encoding.as_pyg(as_batch=as_batch)
@@ -292,7 +292,7 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
             )
         stream.set_reuse_removed(bool(value))
 
-    def update(self, stream_id: int, *args: object, **kwargs) -> None:
+    def update(self, stream_id: int, *args, **kwargs) -> None:
         """Re-encode and replace a previously appended item in the stream."""
         raise NotImplementedError("update is not implemented for this stream")
 
@@ -338,12 +338,12 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
 
     def _to_pyg(
         self,
-        encoding: NativeEncodingInput,
+        encoding: BatchEncodingInput,
         *,
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
-        if _is_native_encoding(encoding):
+        if _is_batch_encoding_like(encoding):
             uses_default_converter = (
                 type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
             )

@@ -67,7 +67,7 @@ _HGraphMutableStreamEncoder = getattr(
 )
 
 
-def _build_config(config_cls, **kwargs: object):
+def _build_config(config_cls, **kwargs: Any):
     """Build a nanobind config object from non-None keyword values."""
     clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
     return config_cls(**clean_kwargs)
@@ -533,14 +533,14 @@ class HGraphEncoder(EncoderBase[HeteroData]):
     """
 
     @staticmethod
-    def _make_config(config_cls, **kwargs: object):
+    def _make_config(config_cls, **kwargs: Any):
         """Create a config object with optional-field filtering."""
         return _build_config(config_cls, **kwargs)
 
     def _init_engine_from_config(
         self,
         domain: DomainInput,
-        config: object,
+        config: Any,
         *,
         engine_cls=HGraphEncoderEngine,
     ) -> None:
@@ -586,7 +586,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_link_relation: str = DEFAULT_HISTORY_LINK_RELATION,
         _config_cls=HGraphEncoderConfig,
         _engine_cls=HGraphEncoderEngine,
-        **extra_config_kwargs: object,
+        **extra_config_kwargs,
     ) -> None:
         """Create an HGraph encoder for one domain."""
         config = self._make_config(
@@ -709,7 +709,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one state into native ``BatchEncoding``."""
         return super().encode(
@@ -780,7 +780,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(

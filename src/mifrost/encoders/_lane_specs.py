@@ -10,6 +10,7 @@ from .common import _advanced_state, _prepare_history_subgoals, _split_goals
 from .types import (
     BatchParam,
     GoalLiteralInput,
+    GroundActionInput,
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
@@ -193,10 +194,10 @@ def require_batch_payload(spec: EncoderLaneSpec, value: object) -> None:
 def validate_single_optional_payloads(
     spec: EncoderLaneSpec,
     *,
-    actions: Iterable[object] | None,
+    actions: Iterable[GroundActionInput] | None,
     history_subgoals: HistorySubgoalInput | None,
     history_max_steps: int | None,
-) -> tuple[list[object], list[tuple[int, list[GoalLiteralInput]]]]:
+) -> tuple[list[GroundActionInput], list[tuple[int, list[GoalLiteralInput]]]]:
     action_list = parse_flat_actions(actions)
     history_list = _prepare_history_subgoals(history_subgoals)
     if action_list and spec.single_action_error is not None:

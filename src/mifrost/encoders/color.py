@@ -156,7 +156,7 @@ class ColorEncoder(EncoderBase[Data]):
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> HomoEncoding:
         """Encode one state into native ``BatchEncoding``."""
         return super().encode(
@@ -214,7 +214,7 @@ class ColorEncoder(EncoderBase[Data]):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> HomoEncoding:
         """Encode one or many states into native ``BatchEncoding``."""
         return super().encode_batch(

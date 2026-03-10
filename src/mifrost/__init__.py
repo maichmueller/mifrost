@@ -1,6 +1,7 @@
 """Python bindings for the mifrost extension module."""
 
 import sys as _sys
+from typing import Any
 
 _in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
 
@@ -42,15 +43,15 @@ else:
         return _core.BatchEncoding.loads(payload)
 
     def _normalize_collate_spec(
-        collate_spec: _ABCMapping[str, CollateSpec | _ABCMapping[str, object]] | None,
-    ) -> dict[str, dict[str, object]] | None:
+        collate_spec: _ABCMapping[str, CollateSpec | _ABCMapping[str, Any]] | None,
+    ) -> dict[str, dict[str, Any]] | None:
         if collate_spec is None:
             return None
         if not isinstance(collate_spec, _ABCMapping):
             raise TypeError(
                 f"batch_encodings collate_spec must be a mapping, got {type(collate_spec)!r}"
             )
-        out: dict[str, dict[str, object]] = {}
+        out: dict[str, dict[str, Any]] = {}
         for key, spec in collate_spec.items():
             out[str(key)] = CollateSpec.from_spec(spec).to_core_dict()
         return out
@@ -58,7 +59,7 @@ else:
     def batch_encodings(
         encodings,
         collate_spec: (
-            _ABCMapping[str, CollateSpec | _ABCMapping[str, object]] | None
+            _ABCMapping[str, CollateSpec | _ABCMapping[str, Any]] | None
         ) = None,
         fast_path: bool = False,
     ) -> BatchEncoding:
@@ -97,6 +98,8 @@ else:
         "StreamEncoderBase",
         "transition_dag_from_rustworkx",
         "encoding_to_tensors",
+        "BatchEncodingLike",
+        "BatchEncodingInput",
         "register_state_adapter",
         "unregister_state_adapter",
         "register_domain_adapter",
@@ -112,6 +115,8 @@ else:
         from .encoders import (  # noqa: F401
             ColorEncoder,
             ColorEncoderStream,
+            BatchEncodingInput,
+            BatchEncodingLike,
             EncoderBase,
             FlatRelationData,
             FlatHorizonEncoder,

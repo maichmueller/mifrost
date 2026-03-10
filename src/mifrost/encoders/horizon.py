@@ -124,7 +124,7 @@ class HorizonEncoder(HGraphEncoder):
         self,
         domain: DomainInput,
         *,
-        transition_mode: object | None = None,
+        transition_mode: HorizonEncoderMode | str | None = None,
         target_symbol_prefix: str | None = None,
         target_sources: Iterable[TargetSource | str] | None = None,
         parent_relation: str | None = None,
@@ -200,7 +200,7 @@ class HorizonEncoder(HGraphEncoder):
         subgoal_layers: SubgoalLayersInput = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-        **_: object,
+        **_,
     ) -> BatchEncoding:
         """Encode one root/DAG pair."""
         validate_single_optional_payloads(
@@ -225,7 +225,7 @@ class HorizonEncoder(HGraphEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one root/DAG pair into native ``BatchEncoding``."""
         return super().encode(
@@ -253,7 +253,7 @@ class HorizonEncoder(HGraphEncoder):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into native ``BatchEncoding``."""
         return super().encode_batch(

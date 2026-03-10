@@ -119,7 +119,7 @@ def _wrap_map_view_method(owner_cls: type[object], name: str) -> None:
     if getattr(original, "__mifrost_map_view_wrapped__", False):
         return
 
-    def wrapped(self: object, *args: object, **kwargs: object) -> MapView[Any, Any]:
+    def wrapped(self: object, *args, **kwargs) -> MapView[Any, Any]:
         return MapView.from_impl(original(self, *args, **kwargs))
 
     wrapped.__name__ = getattr(original, "__name__", name)

@@ -23,10 +23,13 @@ import pymimir.wrapper_formalism as wf
 if TYPE_CHECKING:
     import torch
     from torch_geometric.data import Data, HeteroData
+    from .._core import BatchEncoding
     from mifrost._core import HeteroBatchEncodingView, HomoBatchEncodingView
 
     PygDataLike: TypeAlias = Data | HeteroData
 else:
+    from .._core import BatchEncoding
+
     PygDataLike: TypeAlias = Any
 
 # Canonical input types supported by mifrost encoders.
@@ -56,7 +59,7 @@ class BatchParam(Generic[_BatchT]):
     """Explicit shared/separate wrapper for batch inputs."""
 
     kind: Literal["shared", "separate", "none"]
-    value: object | None = None
+    value: Any | None = None
 
     @classmethod
     def shared(cls, value: _BatchT) -> "BatchParam[_BatchT]":
@@ -116,7 +119,7 @@ EdgeType: TypeAlias = tuple[str, str, str]
 @runtime_checkable
 class HeteroBatchEncodingViewLike(Protocol):
     object_names: Sequence[str]
-    base: NativeEncoding
+    base: "BatchEncodingLike"
     x_dict: Mapping[str, "torch.Tensor"]
     edge_index_dict: Mapping[EdgeType, "torch.Tensor"]
     batch_dict: Mapping[str, "torch.Tensor"]
@@ -129,7 +132,7 @@ class HeteroBatchEncodingViewLike(Protocol):
 @runtime_checkable
 class HomoBatchEncodingViewLike(Protocol):
     object_names: Sequence[str]
-    base: NativeEncoding
+    base: "BatchEncodingLike"
     x: "torch.Tensor | None"
     edge_index: "torch.Tensor | None"
     batch: "torch.Tensor | None"
@@ -140,7 +143,7 @@ class HomoBatchEncodingViewLike(Protocol):
 
 
 @runtime_checkable
-class NativeEncoding(Protocol):
+class BatchEncodingLike(Protocol):
     """
     Structural type for native C++ ``BatchEncoding``-like objects.
 
@@ -166,13 +169,13 @@ class NativeEncoding(Protocol):
 
     def as_homo(self) -> "HomoBatchEncodingView": ...
 
-    def to(self, device: Any) -> "NativeEncoding": ...
+    def to(self, device: Any) -> "BatchEncodingLike": ...
 
     def schema_fingerprint(self) -> int: ...
 
 
 @runtime_checkable
-class HeteroEncoding(NativeEncoding, Protocol):
+class HeteroEncoding(BatchEncodingLike, Protocol):
     """Refined protocol for hetero native encodings."""
 
     graph_kind: Literal["hetero"]
@@ -181,7 +184,7 @@ class HeteroEncoding(NativeEncoding, Protocol):
 
 
 @runtime_checkable
-class HomoEncoding(NativeEncoding, Protocol):
+class HomoEncoding(BatchEncodingLike, Protocol):
     """Refined protocol for homo native encodings."""
 
     graph_kind: Literal["homo"]
@@ -189,7 +192,7 @@ class HomoEncoding(NativeEncoding, Protocol):
     def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
 
 
-NativeEncodingInput: TypeAlias = NativeEncoding | EncodingDict
+BatchEncodingInput: TypeAlias = BatchEncoding | BatchEncodingLike | EncodingDict
 
 
 def register_state_adapter(state_type: type[object], adapter: StateAdapter) -> None:

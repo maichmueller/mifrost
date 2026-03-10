@@ -445,7 +445,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         goals: GoalBatchInput = None,
         actions: ActionBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one state into ILG format."""
         builder = BatchBuilder()
@@ -462,7 +462,7 @@ class ILGEncoder(EncoderBase[HeteroData]):
         goals: GoalBatchParam = None,
         actions: ActionBatchParam = None,
         subgoal_layers: SubgoalLayersBatchParam = None,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one or many states into ILG batch format."""
         if is_state_input(states):

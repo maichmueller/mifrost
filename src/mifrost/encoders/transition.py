@@ -122,7 +122,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         successor: StateInput | None = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition."""
         require_single_payload(TRANSITION_LANE_SPEC, successor)
@@ -151,7 +151,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition into native ``BatchEncoding``."""
         return super().encode(
@@ -179,7 +179,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         batch_attrs: Mapping[str, Any] | None = None,
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
-        **kwargs: object,
+        **kwargs,
     ) -> HeteroEncoding:
         """Encode one or many ``state -> successor`` transitions into native ``BatchEncoding``."""
         return super().encode_batch(
@@ -206,7 +206,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         successors: SuccessorBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
-        **kwargs: object,
+        **kwargs,
     ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
         require_batch_payload(TRANSITION_LANE_SPEC, successors)
@@ -252,7 +252,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         """Create a stream wrapper for transition encoding."""
         return _TransitionEncoderStream(self)
 
-    def draw(self, data: HeteroData, **kwargs: object) -> Any:
+    def draw(self, data: HeteroData, **kwargs) -> Any:
         """Reuse generic heterogeneous graph drawing from ``HGraphEncoder``."""
         return HGraphEncoder.draw(self, data, **kwargs)
 
@@ -318,7 +318,7 @@ class TransitionHGraphEncoder(_TransitionEncoderBase):
         domain: DomainInput,
         *,
         successor_suffix: str = "[suc]",
-        **kwargs: object,
+        **kwargs,
     ) -> None:
         super().__init__(
             domain,
@@ -339,7 +339,7 @@ class TransitionEffectsHGraphEncoder(_TransitionEncoderBase):
         domain: DomainInput,
         *,
         successor_suffix: str = "",
-        **kwargs: object,
+        **kwargs,
     ) -> None:
         super().__init__(
             domain,

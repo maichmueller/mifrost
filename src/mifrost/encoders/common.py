@@ -10,13 +10,13 @@ import torch
 from torch_geometric.data import Batch, Data, HeteroData
 
 from .types import (
+    BatchEncodingInput,
     BatchParam,
     EncodingDict,
     DomainInput,
     GoalLiteralInput,
     HistorySubgoalInput,
     GroundActionInput,
-    NativeEncodingInput,
     PygDataLike,
     StateInput,
     to_advanced_action,
@@ -136,11 +136,11 @@ def _prepare_history_subgoals(
 
 
 def _convert_batch_payload(
-    value: object,
+    value: Any,
     *,
     is_leaf: Callable[[object], bool],
-    convert_leaf: Callable[[object], object],
-) -> object:
+    convert_leaf: Callable[[Any], Any],
+) -> Any:
     if value is None:
         return None
     if isinstance(value, BatchParam):
@@ -215,7 +215,7 @@ def _convert_batch_payload(
     return value
 
 
-def _coerce_encoding_dict(encoding: NativeEncodingInput | Any) -> EncodingDict:
+def _coerce_encoding_dict(encoding: BatchEncodingInput) -> EncodingDict:
     if isinstance(encoding, Mapping):
         # already is an EncodingDict
         return encoding
@@ -247,7 +247,7 @@ def _coerce_schema_dict(encoding_dict: EncodingDict) -> Mapping[str, Any]:
 
 
 def _encoding_dict_to_pyg_hetero(
-    encoding: NativeEncodingInput | Any,
+    encoding: BatchEncodingInput,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -440,7 +440,7 @@ def _encoding_dict_to_pyg_hetero(
 
 
 def _encoding_dict_to_pyg_homo(
-    encoding: NativeEncodingInput | Any,
+    encoding: BatchEncodingInput,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -542,7 +542,7 @@ def _encoding_dict_to_pyg_homo(
 
 
 def _encoding_dict_to_pyg_flat(
-    encoding: NativeEncodingInput | Any,
+    encoding: BatchEncodingInput,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -592,7 +592,7 @@ def _encoding_dict_to_pyg_flat(
 
 
 def _encoding_dict_to_pyg(
-    encoding: NativeEncodingInput | Any,
+    encoding: BatchEncodingInput,
     *,
     as_batch: bool | None = None,
     include_metadata: bool = True,
@@ -622,7 +622,7 @@ def _encoding_dict_to_pyg(
 
 
 def encoding_to_tensors(
-    encoding: Mapping[str, Any] | Any,
+    encoding: BatchEncodingInput,
 ) -> Mapping[str, torch.Tensor]:
     """Return ``encoding['tensors']`` as a plain ``str -> torch.Tensor`` mapping."""
     encoding_dict = _coerce_encoding_dict(encoding)
