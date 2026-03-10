@@ -52,6 +52,32 @@ def test_horizon_config_accepts_kwargs() -> None:
     assert config.target_symbol_prefix == "T@"
 
 
+def test_flat_relation_config_accepts_lgan_kwargs() -> None:
+    config = mifrost.FlatRelationEncoderConfig(
+        include_lgan_edges=True,
+        lgan_tn_edge_pos="_flat_tn_",
+        lgan_nn_edge_pos="_flat_nn_",
+        lgan_rr_edge_pos="_flat_rr_",
+    )
+    assert config.include_lgan_edges is True
+    assert config.lgan_tn_edge_pos == "_flat_tn_"
+    assert config.lgan_nn_edge_pos == "_flat_nn_"
+    assert config.lgan_rr_edge_pos == "_flat_rr_"
+
+
+def test_flat_horizon_config_accepts_lgan_kwargs() -> None:
+    config = mifrost.FlatHorizonEncoderConfig(
+        include_lgan_edges=True,
+        lgan_tn_edge_pos="_flat_tn_",
+        lgan_nn_edge_pos="_flat_nn_",
+        lgan_rr_edge_pos="_flat_rr_",
+    )
+    assert config.include_lgan_edges is True
+    assert config.lgan_tn_edge_pos == "_flat_tn_"
+    assert config.lgan_nn_edge_pos == "_flat_nn_"
+    assert config.lgan_rr_edge_pos == "_flat_rr_"
+
+
 def test_successor_config_accepts_kwargs() -> None:
     config = mifrost.SuccessorEncoderConfig(
         successor_mode=mifrost.SuccessorEncoderMode.Delta,
@@ -107,6 +133,32 @@ def test_transition_encoder_exposes_unified_config(small_blocks) -> None:
     assert encoder.config.lgan_tn_edge_pos == "_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_rr_custom_"
     assert encoder.config.max_goal_level == 1
+
+
+def test_flat_relation_encoder_exposes_unified_lgan_config(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.FlatRelationEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_tn_edge_pos="_flat_tn_custom_",
+        lgan_rr_edge_pos="_flat_rr_custom_",
+    )
+    assert encoder.config.include_lgan_edges is True
+    assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
+    assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
+
+
+def test_flat_horizon_encoder_exposes_unified_lgan_config(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    encoder = mifrost.FlatHorizonEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_tn_edge_pos="_flat_tn_custom_",
+        lgan_rr_edge_pos="_flat_rr_custom_",
+    )
+    assert encoder.config.include_lgan_edges is True
+    assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
+    assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
 
 
 def test_hgraph_encoder_lgan_requires_explicit_targets(small_blocks) -> None:

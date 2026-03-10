@@ -27,12 +27,14 @@ void init_schema(nb::module_& m)
 
    nb::enum_< GraphFieldInc::Kind >(m, "GraphFieldIncKind")
       .value("NONE", GraphFieldInc::Kind::NONE)
-      .value("NODE_OFFSET", GraphFieldInc::Kind::NODE_OFFSET);
+      .value("NODE_OFFSET", GraphFieldInc::Kind::NODE_OFFSET)
+      .value("FIELD_OFFSET", GraphFieldInc::Kind::FIELD_OFFSET);
 
    nb::class_< GraphFieldInc >(m, "GraphFieldInc")
       .def(nb::init<>())
       .def_rw("kind", &GraphFieldInc::kind)
-      .def_rw("node_type", &GraphFieldInc::node_type);
+      .def_rw("node_type", &GraphFieldInc::node_type)
+      .def_rw("field_key", &GraphFieldInc::field_key);
 
    nb::class_< EdgeType >(m, "EdgeType")
       .def(nb::init<>())

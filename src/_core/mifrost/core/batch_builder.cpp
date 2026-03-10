@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <optional>
 #include <range/v3/view/enumerate.hpp>
 #include <set>
@@ -43,6 +44,33 @@ const std::vector< T >& expect_column(const NumericColumnData& data, const std::
       throw std::invalid_argument("Graph field '" + key + "' dtype mismatch");
    }
    return *ptr;
+}
+
+int64_t committed_field_offset(
+   const hash_map< std::string, GraphField >& fields,
+   const std::string& key,
+   const GraphFieldSpec& spec
+)
+{
+   const auto field_it = fields.find(spec.inc.field_key);
+   if(field_it == fields.end()) {
+      throw std::invalid_argument(
+         "Graph field '" + key + "' FIELD_OFFSET references missing field '" + spec.inc.field_key
+         + "'"
+      );
+   }
+
+   const auto& offset_field = field_it->second;
+   if(offset_field.spec.mode != GraphFieldMode::STACK
+      or offset_field.spec.dtype != GraphFieldDType::I64 or offset_field.spec.dim != 1) {
+      throw std::invalid_argument(
+         "Graph field '" + key + "' FIELD_OFFSET requires referenced field '" + spec.inc.field_key
+         + "' to be STACK/i64/dim=1"
+      );
+   }
+
+   const auto& values = expect_column< int64_t >(offset_field.values, spec.inc.field_key);
+   return std::accumulate(values.begin(), values.end(), int64_t{0});
 }
 
 bool is_reserved_pyg_graph_attr_key(std::string_view key)
@@ -685,15 +713,24 @@ void BatchBuilder::commit_graph_fields()
       return;
    }
 
-   for(auto& [key, field] : *graph_fields) {
-      const bool has_value = field.pending.has_value();
+   hash_map< std::string, int64_t > graph_field_incs;
+   graph_field_incs.reserve(graph_fields->size());
+   for(const auto& [key, field] : *graph_fields) {
       int64_t inc = 0;
       if(field.spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
          auto it = node_offsets.find(field.spec.inc.node_type);
          if(it != node_offsets.end()) {
             inc = it->second;
          }
+      } else if(field.spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+         inc = committed_field_offset(*graph_fields, key, field.spec);
       }
+      graph_field_incs.emplace(key, inc);
+   }
+
+   for(auto& [key, field] : *graph_fields) {
+      const bool has_value = field.pending.has_value();
+      const int64_t inc = graph_field_incs.at(key);
       switch(field.spec.mode) {
          case GraphFieldMode::STACK: {
             if(not has_value) {
@@ -1632,6 +1669,8 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
          int64_t inc = 0;
          if(field.spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
             inc = offset_for(field.spec.inc.node_type);
+         } else if(field.spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+            inc = committed_field_offset(*graph_fields, key, field.spec);
          }
 
          switch(field.spec.mode) {

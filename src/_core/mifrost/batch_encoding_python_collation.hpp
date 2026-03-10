@@ -4,6 +4,7 @@
 #include <nanobind/nanobind.h>
 
 #include <cstdint>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -143,14 +144,37 @@ nb::object collate_numeric_field(
    const int64_t cat_dim = graph_field_cat_dim_is_one(spec.cat_dim) ? 1 : 0;
 
    std::vector< int64_t > offsets(source_attrs.size(), 0);
-   if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
-      offsets.reserve(source_encodings.size());
+   if(spec.inc.kind != GraphFieldInc::Kind::NONE) {
       int64_t running = 0;
+      size_t source_idx = 0;
       for(const auto* encoding : source_encodings) {
-         offsets.push_back(running);
-         if(const auto it = encoding->node_counts.find(spec.inc.node_type);
-            it != encoding->node_counts.end()) {
-            running += std::max< int64_t >(0, it->second);
+         offsets[source_idx++] = running;
+         if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
+            if(const auto it = encoding->node_counts.find(spec.inc.node_type);
+               it != encoding->node_counts.end()) {
+               running += std::max< int64_t >(0, it->second);
+            }
+            continue;
+         }
+
+         if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+            const auto field_it = encoding->graph_fields.find(spec.inc.field_key);
+            if(field_it == encoding->graph_fields.end()) {
+               throw std::invalid_argument(
+                  "Field '" + key + "' FIELD_OFFSET references missing field '" + spec.inc.field_key
+                  + "'"
+               );
+            }
+            const auto& offset_field = field_it->second;
+            if(offset_field.spec.mode != GraphFieldMode::STACK
+               or offset_field.spec.dtype != GraphFieldDType::I64 or offset_field.spec.dim != 1) {
+               throw std::invalid_argument(
+                  "Field '" + key + "' FIELD_OFFSET requires referenced field '"
+                  + spec.inc.field_key + "' to be STACK/i64/dim=1"
+               );
+            }
+            const auto& values = std::get< std::vector< int64_t > >(offset_field.values);
+            running += std::accumulate(values.begin(), values.end(), int64_t{0});
          }
       }
    }
@@ -177,7 +201,7 @@ nb::object collate_numeric_field(
       }
 
       nb::object tensor = normalize_numeric_tensor(key, spec, value);
-      if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET and offsets[source_idx] != 0) {
+      if(spec.inc.kind != GraphFieldInc::Kind::NONE and offsets[source_idx] != 0) {
          tensor = tensor.attr("__add__")(offsets[source_idx]);
       }
 

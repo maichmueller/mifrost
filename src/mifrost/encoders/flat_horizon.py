@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .._core import (
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_PARENT_RELATION,
     HorizonEncoderMode,
     FlatHorizonEncoderConfig,
@@ -156,6 +159,10 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
         ignore_actions: bool = True,
+        include_lgan_edges: bool = False,
+        lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
+        lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
+        lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         goal_satisfaction_derivations: Any | None = None,
     ) -> None:
         config_kwargs: dict[str, Any] = {
@@ -165,10 +172,14 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             "export_node_names": export_node_names,
             "ignore_zero_arity_relations": ignore_zero_arity_relations,
             "ignore_actions": ignore_actions,
+            "include_lgan_edges": include_lgan_edges,
             "target_symbol_prefix": target_symbol_prefix,
             "parent_relation": parent_relation,
             "sibling_relation": sibling_relation,
             "cousin_relation": cousin_relation,
+            "lgan_tn_edge_pos": lgan_tn_edge_pos,
+            "lgan_nn_edge_pos": lgan_nn_edge_pos,
+            "lgan_rr_edge_pos": lgan_rr_edge_pos,
             "enable_parent_relation": enable_parent_relation,
             "enable_sibling_relation": enable_sibling_relation,
             "enable_cousin_relation": enable_cousin_relation,
@@ -188,6 +199,15 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         self.parent_relation = config.parent_relation
         self.sibling_relation = config.sibling_relation
         self.cousin_relation = config.cousin_relation
+        self.include_lgan_edges = bool(config.include_lgan_edges)
+        self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
+        self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
+        self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)
+        self._lgan_edge_positions = {
+            self.lgan_tn_edge_pos,
+            self.lgan_nn_edge_pos,
+            self.lgan_rr_edge_pos,
+        }
 
     @property
     def engine(self) -> FlatHorizonEncoderEngine:

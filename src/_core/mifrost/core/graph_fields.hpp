@@ -17,9 +17,10 @@ enum class GraphFieldDType { F32, I64 };
 enum class GraphFieldMode { STACK, CAT, RAGGED_CAT, CONST };
 
 struct GraphFieldInc {
-   enum class Kind { NONE, NODE_OFFSET };
+   enum class Kind { NONE, NODE_OFFSET, FIELD_OFFSET };
    Kind kind = Kind::NONE;
    std::string node_type;
+   std::string field_key;
 
    auto operator<=>(const GraphFieldInc&) const noexcept = default;
 };
@@ -74,6 +75,7 @@ inline const char* graph_field_inc_kind_name(GraphFieldInc::Kind kind)
    switch(kind) {
       case GraphFieldInc::Kind::NONE: return "none";
       case GraphFieldInc::Kind::NODE_OFFSET: return "node_offset";
+      case GraphFieldInc::Kind::FIELD_OFFSET: return "field_offset";
    }
    throw std::logic_error("Unknown GraphFieldInc::Kind");
 }
@@ -141,6 +143,9 @@ inline GraphFieldInc::Kind graph_field_inc_kind_from_name(const std::string_view
    if(ascii_iequals(value, "node_offset")) {
       return GraphFieldInc::Kind::NODE_OFFSET;
    }
+   if(ascii_iequals(value, "field_offset")) {
+      return GraphFieldInc::Kind::FIELD_OFFSET;
+   }
    throw std::invalid_argument("Unknown graph field inc kind: " + std::string(value));
 }
 
@@ -184,6 +189,16 @@ inline void validate_graph_field_spec(const std::string_view key, const GraphFie
    if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET and spec.inc.node_type.empty()) {
       throw std::invalid_argument(
          "Graph field '" + key_str + "' NODE_OFFSET increment requires non-empty node_type"
+      );
+   }
+   if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET and spec.dtype != GraphFieldDType::I64) {
+      throw std::invalid_argument(
+         "Graph field '" + key_str + "' FIELD_OFFSET increment requires dtype=i64"
+      );
+   }
+   if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET and spec.inc.field_key.empty()) {
+      throw std::invalid_argument(
+         "Graph field '" + key_str + "' FIELD_OFFSET increment requires non-empty field_key"
       );
    }
 }

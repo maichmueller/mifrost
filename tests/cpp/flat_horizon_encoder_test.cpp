@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <string>
@@ -110,6 +111,7 @@ TEST_P(FlatHorizonEncoderTest, EmitsStateTargetMetadataAndCarrierRows)
    const auto target_indices = i64_field(encoding, "target_indices");
    const auto target_candidate_ids = i64_field(encoding, "target_candidate_ids");
    const auto target_depths = i64_field(encoding, "target_depths");
+   const auto relation_instance_sizes = i64_field(encoding, "relation_instance_sizes");
 
    ASSERT_EQ(target_entity_sizes, std::vector< int64_t >({2}));
    ASSERT_EQ(target_entity_indices.size(), 2u);
@@ -121,6 +123,7 @@ TEST_P(FlatHorizonEncoderTest, EmitsStateTargetMetadataAndCarrierRows)
    EXPECT_EQ(target_indices, std::vector< int64_t >({1}));
    EXPECT_EQ(target_candidate_ids, std::vector< int64_t >({101}));
    EXPECT_EQ(target_depths, std::vector< int64_t >({1}));
+   ASSERT_EQ(relation_instance_sizes.size(), 1u);
    EXPECT_EQ(str_attr(encoding, "target_entity_groups"), std::vector< std::string >({"state"}));
    EXPECT_EQ(str_attr(encoding, "target_groups"), std::vector< std::string >({"state"}));
    EXPECT_EQ(entity_names[target_entity_indices[0]], "target:0");
@@ -178,6 +181,86 @@ TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
    );
    ASSERT_LT(action_slot, relation_args.size());
    EXPECT_EQ(relation_args[action_slot], target_positions.front());
+}
+
+TEST_P(FlatHorizonEncoderTest, LGANCandidateRowsEmitPackedFields)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, succ_state, succ_action, int64_t{101});
+
+   FlatHorizonEncoderEngine::Config config;
+   config.ignore_actions = false;
+   config.include_lgan_edges = true;
+   FlatHorizonEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   const auto encoding = encode_single(
+      engine, ctx.root, dag, mifrost_test::make_goal_inputs(ctx.problem)
+   );
+
+   const auto relation_counts = i64_field(encoding, "relation_counts");
+   const auto relation_instance_sizes = i64_field(encoding, "relation_instance_sizes");
+   const auto lgan_tn_sizes = i64_field(encoding, "lgan_tn_sizes");
+   const auto lgan_tn_relation_indices = i64_field(encoding, "lgan_tn_relation_indices");
+   const auto lgan_tn_entity_indices = i64_field(encoding, "lgan_tn_entity_indices");
+   const auto lgan_nn_relation_indices = i64_field(encoding, "lgan_nn_relation_indices");
+   const auto lgan_nn_entity_indices = i64_field(encoding, "lgan_nn_entity_indices");
+   const auto lgan_rr_src_relation_indices = i64_field(encoding, "lgan_rr_src_relation_indices");
+   const auto lgan_rr_dst_relation_indices = i64_field(encoding, "lgan_rr_dst_relation_indices");
+   const auto target_positions = i64_field(encoding, "target_positions");
+
+   ASSERT_EQ(relation_instance_sizes.size(), 1u);
+   EXPECT_EQ(
+      relation_instance_sizes.front(),
+      std::accumulate(relation_counts.begin(), relation_counts.end(), int64_t{0})
+   );
+   ASSERT_EQ(
+      lgan_tn_sizes,
+      std::vector< int64_t >({static_cast< int64_t >(lgan_tn_relation_indices.size())})
+   );
+   ASSERT_EQ(lgan_tn_relation_indices.size(), lgan_tn_entity_indices.size());
+   ASSERT_EQ(lgan_nn_relation_indices.size(), lgan_nn_entity_indices.size());
+   ASSERT_EQ(lgan_rr_src_relation_indices.size(), lgan_rr_dst_relation_indices.size());
+   ASSERT_FALSE(lgan_tn_relation_indices.empty());
+
+   std::unordered_set< int64_t > candidate_rows(target_positions.begin(), target_positions.end());
+   for(const auto entity_index : lgan_tn_entity_indices) {
+      EXPECT_TRUE(candidate_rows.contains(entity_index));
+   }
+}
+
+TEST_P(FlatHorizonEncoderTest, LGANRejectsMissingCandidateRows)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   TransitionDAG dag(ctx.root);
+
+   FlatHorizonEncoderEngine::Config config;
+   config.ignore_actions = false;
+   config.include_lgan_edges = true;
+   FlatHorizonEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   EXPECT_THROW(
+      {
+         try {
+            BatchBuilder builder;
+            engine.encode(ctx.root, dag, mifrost_test::make_goal_inputs(ctx.problem), builder);
+            builder.next_graph();
+            (void) builder.build();
+         } catch(const std::invalid_argument& e) {
+            EXPECT_NE(
+               std::string(e.what()).find("requires surviving candidate state rows"),
+               std::string::npos
+            );
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
 }
 
 TEST_P(FlatHorizonEncoderTest, RejectsPartialExplicitCandidateIds)

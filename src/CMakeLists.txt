@@ -222,6 +222,7 @@ add_library(
         "_core/mifrost/core/schema.cpp"
         "_core/mifrost/core/color_encoder.cpp"
         "_core/mifrost/core/flat_horizon_encoder.cpp"
+        "_core/mifrost/core/flat_lgan.cpp"
         "_core/mifrost/core/flat_relation_encoder.cpp"
         "_core/mifrost/core/hgraph_stream_encoder.cpp"
         "_core/mifrost/core/target_metadata.cpp"

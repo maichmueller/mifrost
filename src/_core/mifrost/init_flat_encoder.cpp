@@ -44,8 +44,12 @@ void init_flat_encoder(nb::module_& m)
          "ignore_zero_arity_relations",
          &FlatRelationEncoderEngine::Config::ignore_zero_arity_relations
       )
+      .def_rw("include_lgan_edges", &FlatRelationEncoderEngine::Config::include_lgan_edges)
       .def_rw("target_sources", &FlatRelationEncoderEngine::Config::target_sources)
       .def_rw("target_symbol_prefix", &FlatRelationEncoderEngine::Config::target_symbol_prefix)
+      .def_rw("lgan_tn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_tn_edge_pos)
+      .def_rw("lgan_nn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_nn_edge_pos)
+      .def_rw("lgan_rr_edge_pos", &FlatRelationEncoderEngine::Config::lgan_rr_edge_pos)
       .def_rw(
          "goal_satisfaction_derivations",
          &FlatRelationEncoderEngine::Config::goal_satisfaction_derivations

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <string>
@@ -198,6 +199,7 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
    const auto history_entity_dt = i64_field(encoding, "history_entity_dt");
    const auto target_entity_sizes = i64_field(encoding, "target_entity_sizes");
    const auto target_entity_indices = i64_field(encoding, "target_entity_indices");
+   const auto relation_instance_sizes = i64_field(encoding, "relation_instance_sizes");
    const auto relation_counts = i64_field(encoding, "relation_counts");
    const auto relation_args = i64_field(encoding, "relation_args");
 
@@ -205,6 +207,7 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
    ASSERT_EQ(object_sizes.size(), 1u);
    ASSERT_EQ(history_entity_sizes.size(), 1u);
    ASSERT_EQ(target_entity_sizes.size(), 1u);
+   ASSERT_EQ(relation_instance_sizes.size(), 1u);
    ASSERT_EQ(node_sizes.front(), static_cast< int64_t >(entity_names.size()));
    ASSERT_EQ(object_sizes.front(), static_cast< int64_t >(object_names.size()));
    ASSERT_EQ(history_entity_sizes.front(), 0);
@@ -218,6 +221,10 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
    }
 
    ASSERT_EQ(relation_counts.size(), relation_names.size());
+   EXPECT_EQ(
+      relation_instance_sizes.front(),
+      std::accumulate(relation_counts.begin(), relation_counts.end(), int64_t{0})
+   );
    const size_t expected_slots = total_slots(
       std::span{relation_counts}, std::span{relation_arities}
    );
@@ -226,6 +233,96 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
       EXPECT_GE(arg, 0);
       EXPECT_LT(arg, node_sizes.front());
    }
+}
+
+TEST_P(FlatRelationEncoderTest, LGANActionAnchorsEmitPackedFields)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+   (void) succ_state;
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.include_lgan_edges = true;
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   std::array actions{succ_action};
+   const auto encoding = encode_single(engine, ctx.root, std::span{actions});
+
+   const auto relation_counts = i64_field(encoding, "relation_counts");
+   const auto relation_instance_sizes = i64_field(encoding, "relation_instance_sizes");
+   const auto lgan_tn_sizes = i64_field(encoding, "lgan_tn_sizes");
+   const auto lgan_tn_relation_indices = i64_field(encoding, "lgan_tn_relation_indices");
+   const auto lgan_tn_entity_indices = i64_field(encoding, "lgan_tn_entity_indices");
+   const auto lgan_nn_sizes = i64_field(encoding, "lgan_nn_sizes");
+   const auto lgan_nn_relation_indices = i64_field(encoding, "lgan_nn_relation_indices");
+   const auto lgan_nn_entity_indices = i64_field(encoding, "lgan_nn_entity_indices");
+   const auto lgan_rr_sizes = i64_field(encoding, "lgan_rr_sizes");
+   const auto lgan_rr_src_relation_indices = i64_field(encoding, "lgan_rr_src_relation_indices");
+   const auto lgan_rr_dst_relation_indices = i64_field(encoding, "lgan_rr_dst_relation_indices");
+   const auto target_entity_indices = i64_field(encoding, "target_entity_indices");
+
+   ASSERT_EQ(relation_instance_sizes.size(), 1u);
+   EXPECT_EQ(
+      relation_instance_sizes.front(),
+      std::accumulate(relation_counts.begin(), relation_counts.end(), int64_t{0})
+   );
+   ASSERT_EQ(
+      lgan_tn_sizes,
+      std::vector< int64_t >({static_cast< int64_t >(lgan_tn_relation_indices.size())})
+   );
+   ASSERT_EQ(
+      lgan_nn_sizes,
+      std::vector< int64_t >({static_cast< int64_t >(lgan_nn_relation_indices.size())})
+   );
+   ASSERT_EQ(
+      lgan_rr_sizes,
+      std::vector< int64_t >({static_cast< int64_t >(lgan_rr_src_relation_indices.size())})
+   );
+   ASSERT_EQ(lgan_tn_relation_indices.size(), lgan_tn_entity_indices.size());
+   ASSERT_EQ(lgan_nn_relation_indices.size(), lgan_nn_entity_indices.size());
+   ASSERT_EQ(lgan_rr_src_relation_indices.size(), lgan_rr_dst_relation_indices.size());
+   ASSERT_FALSE(lgan_tn_relation_indices.empty());
+   ASSERT_FALSE(lgan_nn_relation_indices.empty());
+   ASSERT_FALSE(lgan_rr_src_relation_indices.empty());
+
+   std::unordered_set< int64_t > action_anchor_rows(
+      target_entity_indices.begin(), target_entity_indices.end()
+   );
+   for(const auto relation_index : lgan_tn_relation_indices) {
+      EXPECT_GE(relation_index, 0);
+      EXPECT_LT(relation_index, relation_instance_sizes.front());
+   }
+   for(const auto entity_index : lgan_tn_entity_indices) {
+      EXPECT_TRUE(action_anchor_rows.contains(entity_index));
+   }
+}
+
+TEST_P(FlatRelationEncoderTest, LGANRejectsMissingAnchorRows)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.include_lgan_edges = true;
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   EXPECT_THROW(
+      {
+         try {
+            BatchBuilder builder;
+            engine.encode(ctx.root, builder);
+            builder.next_graph();
+            (void) builder.build();
+         } catch(const std::invalid_argument& e) {
+            EXPECT_NE(
+               std::string(e.what()).find("requires LGAN anchor entity rows"), std::string::npos
+            );
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
 }
 
 TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)

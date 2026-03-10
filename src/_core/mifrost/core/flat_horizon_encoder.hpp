@@ -43,11 +43,15 @@ class FlatHorizonEncoderEngine {
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
       bool ignore_actions = true;
+      bool include_lgan_edges = false;
       Mode transition_mode = Mode::Full;
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::string parent_relation = defaults::parent_relation;
       std::string sibling_relation = defaults::sibling_relation;
       std::string cousin_relation = defaults::cousin_relation;
+      std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
+      std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
+      std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
@@ -148,11 +152,15 @@ BOOST_DESCRIBE_STRUCT(
     export_node_names,
     ignore_zero_arity_relations,
     ignore_actions,
+    include_lgan_edges,
     transition_mode,
     target_symbol_prefix,
     parent_relation,
     sibling_relation,
     cousin_relation,
+    lgan_tn_edge_pos,
+    lgan_nn_edge_pos,
+    lgan_rr_edge_pos,
     enable_parent_relation,
     enable_sibling_relation,
     enable_cousin_relation,

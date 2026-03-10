@@ -23,6 +23,7 @@ class DType(str, Enum):
 class Inc:
     kind: str
     node_type: str = ""
+    field_key: str = ""
 
     @staticmethod
     def none() -> "Inc":
@@ -34,12 +35,22 @@ class Inc:
             raise ValueError("Inc.node_offset requires a non-empty node_type")
         return Inc(kind="node_offset", node_type=node_type)
 
+    @staticmethod
+    def field_offset(field_key: str) -> "Inc":
+        if not field_key:
+            raise ValueError("Inc.field_offset requires a non-empty field_key")
+        return Inc(kind="field_offset", field_key=field_key)
+
     def to_core_dict(self) -> dict[str, str]:
         payload = {"kind": self.kind}
         if self.kind == "node_offset":
             if not self.node_type:
                 raise ValueError("Inc.node_offset requires a non-empty node_type")
             payload["node_type"] = self.node_type
+        elif self.kind == "field_offset":
+            if not self.field_key:
+                raise ValueError("Inc.field_offset requires a non-empty field_key")
+            payload["field_key"] = self.field_key
         return payload
 
 
@@ -70,6 +81,8 @@ class GraphFieldSpec:
         object.__setattr__(self, "cat_dim", normalized_cat_dim)
         if self.inc.kind == "node_offset" and self.dtype is not DType.I64:
             raise ValueError("NODE_OFFSET increment requires dtype=DType.I64")
+        if self.inc.kind == "field_offset" and self.dtype is not DType.I64:
+            raise ValueError("FIELD_OFFSET increment requires dtype=DType.I64")
 
     def to_core_dict(self) -> dict[str, Any]:
         return {
@@ -124,6 +137,8 @@ class CollateSpec:
                 raise ValueError("CollateSpec.cat_dim must be 0 for STACK/CONST")
             if self.inc.kind == "node_offset" and self.dtype is not DType.I64:
                 raise ValueError("NODE_OFFSET increment requires dtype=DType.I64")
+            if self.inc.kind == "field_offset" and self.dtype is not DType.I64:
+                raise ValueError("FIELD_OFFSET increment requires dtype=DType.I64")
         else:
             if self.mode is Mode.CAT:
                 raise ValueError("CollateSpec CAT mode requires numeric dtype")
@@ -192,6 +207,10 @@ def _normalize_inc(inc: Inc | Mapping[str, Any]) -> Inc:
         if "node_type" not in inc:
             raise ValueError("Graph field inc kind='node_offset' requires 'node_type'")
         return Inc.node_offset(str(inc["node_type"]))
+    if kind == "field_offset":
+        if "field_key" not in inc:
+            raise ValueError("Graph field inc kind='field_offset' requires 'field_key'")
+        return Inc.field_offset(str(inc["field_key"]))
     if kind == "none":
         return Inc.none()
     raise ValueError(f"Unsupported graph field inc kind: {kind!r}")

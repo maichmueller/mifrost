@@ -84,11 +84,34 @@ def _assert_flat_batch_equal(
         assert actual_target_sizes is expected_target_sizes
     else:
         assert torch.equal(actual_target_sizes, expected_target_sizes)
+    actual_relation_instance_sizes = getattr(actual, "relation_instance_sizes", None)
+    expected_relation_instance_sizes = getattr(
+        expected, "relation_instance_sizes", None
+    )
+    if (
+        actual_relation_instance_sizes is None
+        or expected_relation_instance_sizes is None
+    ):
+        assert actual_relation_instance_sizes is expected_relation_instance_sizes
+    else:
+        assert torch.equal(
+            actual_relation_instance_sizes,
+            expected_relation_instance_sizes,
+        )
     for field_name in (
         "target_positions",
         "target_indices",
         "target_candidate_ids",
         "target_group_ids",
+        "lgan_tn_sizes",
+        "lgan_tn_relation_indices",
+        "lgan_tn_entity_indices",
+        "lgan_nn_sizes",
+        "lgan_nn_relation_indices",
+        "lgan_nn_entity_indices",
+        "lgan_rr_sizes",
+        "lgan_rr_src_relation_indices",
+        "lgan_rr_dst_relation_indices",
     ):
         actual_field = getattr(actual, field_name, None)
         expected_field = getattr(expected, field_name, None)
@@ -125,6 +148,15 @@ def _assert_flat_batch_equal(
     )
     assert getattr(actual, "target_symbol_prefix", None) == getattr(
         expected, "target_symbol_prefix", None
+    )
+    assert getattr(actual, "lgan_tn_edge_pos", None) == getattr(
+        expected, "lgan_tn_edge_pos", None
+    )
+    assert getattr(actual, "lgan_nn_edge_pos", None) == getattr(
+        expected, "lgan_nn_edge_pos", None
+    )
+    assert getattr(actual, "lgan_rr_edge_pos", None) == getattr(
+        expected, "lgan_rr_edge_pos", None
     )
 
 
@@ -792,6 +824,146 @@ def test_flat_relation_encoder_rejects_reserved_state_target_source(
         match="reserved for the upcoming flat successor/horizon encoders",
     ):
         FlatRelationEncoder(domain, target_sources=[mifrost.TargetSource.States])
+
+
+def test_flat_relation_lgan_actions_use_action_target_entities_without_target_metadata(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+    encoder = FlatRelationEncoder(domain, include_lgan_edges=True)
+
+    data = encoder.encode_pyg(state, actions=[action])
+
+    assert data.relation_instance_sizes.tolist() == [
+        int(data.relation_counts.sum().item())
+    ]
+    assert getattr(data, "target_sizes", None) is None
+    assert data.graph_target_entity_names(0, group="action")
+    tn_edges = data.graph_lgan_tn_edges(0)
+    nn_edges = data.graph_lgan_nn_edges(0)
+    rr_edges = data.graph_lgan_rr_edges(0)
+    assert tn_edges.shape[1] > 0
+    assert nn_edges.shape[1] > 0
+    assert rr_edges.shape[1] > 0
+    action_entity_indices = set(
+        data.graph_target_entity_indices(0, group="action").tolist()
+    )
+    assert set(tn_edges[1].tolist()).issubset(action_entity_indices)
+
+
+def test_flat_relation_lgan_rejects_missing_anchor_rows(small_blocks):
+    _space, domain, problem = small_blocks
+    encoder = FlatRelationEncoder(domain, include_lgan_edges=True)
+
+    with pytest.raises(ValueError, match="requires LGAN anchor entity rows"):
+        encoder.encode(problem.get_initial_state())
+
+
+def test_flat_relation_lgan_goal_target_entities_are_used_as_anchors(small_blocks):
+    _space, domain, problem = small_blocks
+    goals = _problem_goals(problem)
+    encoder = FlatRelationEncoder(
+        domain,
+        include_lgan_edges=True,
+        target_sources=[mifrost.TargetSource.Goals],
+    )
+
+    data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)
+
+    goal_target_entities = set(
+        data.graph_target_entity_indices(0, group="goal").tolist()
+    )
+    assert goal_target_entities
+    tn_edges = data.graph_lgan_tn_edges(0)
+    assert tn_edges.shape[1] > 0
+    assert set(tn_edges[1].tolist()).issubset(goal_target_entities)
+
+
+def test_flat_relation_lgan_does_not_change_relation_schema_or_payload(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+    base_encoder = FlatRelationEncoder(domain)
+    lgan_encoder = FlatRelationEncoder(domain, include_lgan_edges=True)
+
+    base = base_encoder.encode_pyg(state, actions=[action])
+    lgan = lgan_encoder.encode_pyg(state, actions=[action])
+
+    assert base.schema.names == lgan.schema.names
+    assert base.schema.arities == lgan.schema.arities
+    assert base.schema.sources == lgan.schema.sources
+    assert torch.equal(base.relation_counts, lgan.relation_counts)
+    assert torch.equal(base.relation_args, lgan.relation_args)
+
+
+def test_flat_relation_lgan_batch_matches_from_data_list(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+    encoder = FlatRelationEncoder(domain, include_lgan_edges=True)
+
+    actual = encoder.encode_batch([state, state], actions=[[action], [action]]).as_pyg(
+        as_batch=True
+    )
+    expected = flat_relation_data_from_pyg(
+        Batch.from_data_list(
+            [
+                encoder.encode_pyg(state, actions=[action]),
+                encoder.encode_pyg(state, actions=[action]),
+            ]
+        )
+    )
+
+    assert actual.graph_relation_instance_range(0) == (
+        0,
+        int(actual.relation_instance_sizes[0].item()),
+    )
+    assert actual.graph_relation_instance_range(1) == (
+        int(actual.relation_instance_sizes[0].item()),
+        int(actual.relation_instance_sizes.sum().item()),
+    )
+    _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_relation_lgan_visualization_overlays_packed_edges(small_blocks):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+    encoder = FlatRelationEncoder(domain, include_lgan_edges=True)
+    data = encoder.encode_pyg(state, actions=[action])
+    graph = encoder.to_networkx(data)
+
+    lgan_edge_count = (
+        data.graph_lgan_tn_edges(0).shape[1]
+        + data.graph_lgan_nn_edges(0).shape[1]
+        + data.graph_lgan_rr_edges(0).shape[1]
+    )
+    lgan_edges = [
+        (src, dst, attrs.get("lgan_kind"))
+        for src, dst, attrs in graph.edges(data=True)
+        if attrs.get("lgan_kind") is not None
+    ]
+
+    assert lgan_edges
+    assert len(lgan_edges) == lgan_edge_count
+    assert (
+        graph.number_of_edges()
+        == sum(
+            tensor.shape[0] * tensor.shape[1]
+            for tensor in data.flattened_relations_view(graph_index=0).values()
+        )
+        + lgan_edge_count
+    )
+
+    ax = encoder.draw(data)
+    assert ax is not None
 
 
 def test_flat_relation_visualization_is_reconstructable(small_blocks):

@@ -17,6 +17,7 @@
 
 #include "batch_builder.hpp"
 #include "common_types.hpp"
+#include "default_relations.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "stream_encoder_base.hpp"
@@ -41,8 +42,12 @@ class FlatRelationEncoderEngine {
       bool include_static = true;
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
+      bool include_lgan_edges = false;
       std::set< TargetSource > target_sources = {};
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
+      std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
+      std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
+      std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {
          GoalSatisfaction::satisfied,
       };
@@ -211,8 +216,12 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     export_node_names,
     ignore_zero_arity_relations,
+    include_lgan_edges,
     target_sources,
     target_symbol_prefix,
+    lgan_tn_edge_pos,
+    lgan_nn_edge_pos,
+    lgan_rr_edge_pos,
     goal_satisfaction_derivations)
 )
 

@@ -12,6 +12,7 @@
 #include <string_view>
 #include <utility>
 
+#include "flat_lgan.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 #include "state_fact_iteration.hpp"
 
@@ -35,8 +36,21 @@ constexpr std::string_view kTargetEntityIndicesField = "target_entity_indices";
 constexpr std::string_view kTargetEntityGroupIdsField = "target_entity_group_ids";
 constexpr std::string_view kTargetEntityGroupsAttr = "target_entity_groups";
 constexpr std::string_view kTargetSizesField = "target_sizes";
+constexpr std::string_view kRelationInstanceSizesField = "relation_instance_sizes";
 constexpr std::string_view kRelationCountsField = "relation_counts";
 constexpr std::string_view kRelationArgsField = "relation_args";
+constexpr std::string_view kLGANTNSizesField = "lgan_tn_sizes";
+constexpr std::string_view kLGANTNRelationIndicesField = "lgan_tn_relation_indices";
+constexpr std::string_view kLGANTNEntityIndicesField = "lgan_tn_entity_indices";
+constexpr std::string_view kLGANNNSizesField = "lgan_nn_sizes";
+constexpr std::string_view kLGANNNRelationIndicesField = "lgan_nn_relation_indices";
+constexpr std::string_view kLGANNNEntityIndicesField = "lgan_nn_entity_indices";
+constexpr std::string_view kLGANRRSizesField = "lgan_rr_sizes";
+constexpr std::string_view kLGANRRSrcRelationIndicesField = "lgan_rr_src_relation_indices";
+constexpr std::string_view kLGANRRDstRelationIndicesField = "lgan_rr_dst_relation_indices";
+constexpr std::string_view kLGANTNEdgePosAttr = "lgan_tn_edge_pos";
+constexpr std::string_view kLGANNNEdgePosAttr = "lgan_nn_edge_pos";
+constexpr std::string_view kLGANRREdgePosAttr = "lgan_rr_edge_pos";
 constexpr std::string_view kHistoryRelationSuffix = "[hist]";
 
 GoalInputs default_goal_inputs_for_state(const mimir::search::State& state)
@@ -236,50 +250,6 @@ int history_relation_arity(const FlatRelationEncoderEngine& engine, int base_ari
    return base_arity + 1
           + static_cast< int >(engine.get_config().target_sources.contains(TargetSource::History));
 }
-
-class FlatRelationSink {
-  public:
-   explicit FlatRelationSink(size_t relation_count)
-       : relation_counts_(relation_count, 0), relation_args_by_relation_(relation_count)
-   {
-   }
-
-   void emit(int relation_id, std::span< const int64_t > args)
-   {
-      if(relation_id < 0 or static_cast< size_t >(relation_id) >= relation_counts_.size()) {
-         throw std::invalid_argument("FlatRelationSink relation id out of range");
-      }
-      relation_counts_[static_cast< size_t >(relation_id)] += 1;
-      auto& bucket = relation_args_by_relation_[static_cast< size_t >(relation_id)];
-      bucket.insert(bucket.end(), args.begin(), args.end());
-      relation_args_dirty_ = true;
-   }
-
-   [[nodiscard]] const std::vector< int64_t >& relation_counts() const { return relation_counts_; }
-
-   [[nodiscard]] const std::vector< int64_t >& relation_args() const
-   {
-      if(relation_args_dirty_) {
-         relation_args_.clear();
-         size_t total_slots = 0;
-         for(const auto& bucket : relation_args_by_relation_) {
-            total_slots += bucket.size();
-         }
-         relation_args_.reserve(total_slots);
-         for(const auto& bucket : relation_args_by_relation_) {
-            relation_args_.insert(relation_args_.end(), bucket.begin(), bucket.end());
-         }
-         relation_args_dirty_ = false;
-      }
-      return relation_args_;
-   }
-
-  private:
-   std::vector< int64_t > relation_counts_;
-   mutable std::vector< std::vector< int64_t > > relation_args_by_relation_;
-   mutable std::vector< int64_t > relation_args_;
-   mutable bool relation_args_dirty_ = false;
-};
 
 template < typename GoalLevelsMap, typename LiteralTag >
 std::optional< size_t > goal_level_for(
@@ -973,6 +943,9 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
    builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);
    builder.set_graph_attr(std::string(kTargetEntityGroupsAttr), target_entity_group_names_);
+   builder.set_graph_attr(std::string(kLGANTNEdgePosAttr), config_.lgan_tn_edge_pos);
+   builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config_.lgan_nn_edge_pos);
+   builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config_.lgan_rr_edge_pos);
 
    builder.register_field(
       std::string(kNodeSizesField),
@@ -1088,6 +1061,14 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
       }
    );
    builder.register_field(
+      std::string(kRelationInstanceSizesField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::STACK,
+         .dim = 1,
+      }
+   );
+   builder.register_field(
       std::string(kRelationArgsField),
       GraphFieldSpec{
          .dtype = GraphFieldDType::I64,
@@ -1099,6 +1080,104 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
          },
       }
    );
+   if(config_.include_lgan_edges) {
+      builder.register_field(
+         std::string(kLGANTNSizesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+         }
+      );
+      builder.register_field(
+         std::string(kLGANTNRelationIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+               .field_key = std::string(kRelationInstanceSizesField),
+            },
+         }
+      );
+      builder.register_field(
+         std::string(kLGANTNEntityIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::NODE_OFFSET,
+               .node_type = std::string(kEntityNodeType),
+            },
+         }
+      );
+      builder.register_field(
+         std::string(kLGANNNSizesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+         }
+      );
+      builder.register_field(
+         std::string(kLGANNNRelationIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+               .field_key = std::string(kRelationInstanceSizesField),
+            },
+         }
+      );
+      builder.register_field(
+         std::string(kLGANNNEntityIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::NODE_OFFSET,
+               .node_type = std::string(kEntityNodeType),
+            },
+         }
+      );
+      builder.register_field(
+         std::string(kLGANRRSizesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+         }
+      );
+      builder.register_field(
+         std::string(kLGANRRSrcRelationIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+               .field_key = std::string(kRelationInstanceSizesField),
+            },
+         }
+      );
+      builder.register_field(
+         std::string(kLGANRRDstRelationIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = GraphFieldInc{
+               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+               .field_key = std::string(kRelationInstanceSizesField),
+            },
+         }
+      );
+   }
 }
 
 FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_context(
@@ -1424,7 +1503,7 @@ void FlatRelationEncoderEngine::encode_impl(
 {
    prepare_builder(builder);
    const auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
-   FlatRelationSink sink(relation_names_.size());
+   FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
    hash_set< uint64_t > fact_keys;
    collect_state_fact_keys(state, config_.include_static, fact_keys);
@@ -1510,10 +1589,63 @@ void FlatRelationEncoderEngine::encode_impl(
       std::string(kRelationCountsField),
       std::span< const int64_t >(sink.relation_counts().data(), sink.relation_counts().size())
    );
+   const int64_t relation_instance_size = sink.relation_instance_count();
+   builder.set_field(
+      std::string(kRelationInstanceSizesField),
+      std::span< const int64_t >(&relation_instance_size, 1)
+   );
    builder.set_field(
       std::string(kRelationArgsField),
       std::span< const int64_t >(sink.relation_args().data(), sink.relation_args().size())
    );
+   if(config_.include_lgan_edges) {
+      if(context.target_entity_indices.empty()) {
+         throw std::invalid_argument(
+            "FlatRelationEncoder include_lgan_edges=true requires LGAN anchor entity rows, "
+            "but none were encoded. Encode explicit actions or enable target-row-emitting "
+            "target_sources such as 'goal', 'subgoal', or 'history'."
+         );
+      }
+      const auto lgan = build_flat_lgan(sink, std::span{context.target_entity_indices});
+      const int64_t tn_size = static_cast< int64_t >(lgan.tn_relation_indices.size());
+      const int64_t nn_size = static_cast< int64_t >(lgan.nn_relation_indices.size());
+      const int64_t rr_size = static_cast< int64_t >(lgan.rr_src_relation_indices.size());
+      builder.set_field(std::string(kLGANTNSizesField), std::span< const int64_t >(&tn_size, 1));
+      builder.set_field(
+         std::string(kLGANTNRelationIndicesField),
+         std::span< const int64_t >(
+            lgan.tn_relation_indices.data(), lgan.tn_relation_indices.size()
+         )
+      );
+      builder.set_field(
+         std::string(kLGANTNEntityIndicesField),
+         std::span< const int64_t >(lgan.tn_entity_indices.data(), lgan.tn_entity_indices.size())
+      );
+      builder.set_field(std::string(kLGANNNSizesField), std::span< const int64_t >(&nn_size, 1));
+      builder.set_field(
+         std::string(kLGANNNRelationIndicesField),
+         std::span< const int64_t >(
+            lgan.nn_relation_indices.data(), lgan.nn_relation_indices.size()
+         )
+      );
+      builder.set_field(
+         std::string(kLGANNNEntityIndicesField),
+         std::span< const int64_t >(lgan.nn_entity_indices.data(), lgan.nn_entity_indices.size())
+      );
+      builder.set_field(std::string(kLGANRRSizesField), std::span< const int64_t >(&rr_size, 1));
+      builder.set_field(
+         std::string(kLGANRRSrcRelationIndicesField),
+         std::span< const int64_t >(
+            lgan.rr_src_relation_indices.data(), lgan.rr_src_relation_indices.size()
+         )
+      );
+      builder.set_field(
+         std::string(kLGANRRDstRelationIndicesField),
+         std::span< const int64_t >(
+            lgan.rr_dst_relation_indices.data(), lgan.rr_dst_relation_indices.size()
+         )
+      );
+   }
 }
 
 BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(

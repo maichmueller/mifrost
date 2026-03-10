@@ -425,6 +425,13 @@ PythonFieldSpec parse_python_field_spec(const std::string_view key, nb::handle s
             );
          }
          spec.inc.node_type = nb::str(inc_dict["node_type"]).c_str();
+      } else if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+         if(not inc_dict.contains("field_key")) {
+            throw std::invalid_argument(
+               fmt::format("Field '{}' inc FIELD_OFFSET requires field_key", key)
+            );
+         }
+         spec.inc.field_key = nb::str(inc_dict["field_key"]).c_str();
       }
    }
    spec.inferred = false;
@@ -651,6 +658,8 @@ nb::dict python_collate_spec_to_dict(const PythonFieldSpecMap& specs)
          inc["kind"] = graph_field_inc_kind_name(spec.inc.kind);
          if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
             inc["node_type"] = spec.inc.node_type;
+         } else if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+            inc["field_key"] = spec.inc.field_key;
          }
          normalized["inc"] = std::move(inc);
       }

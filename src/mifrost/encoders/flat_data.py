@@ -154,6 +154,15 @@ def normalize_flat_relation_batch_metadata(
     data.target_symbol_prefix = _normalize_shared_scalar(
         getattr(data, "target_symbol_prefix", None)
     )
+    data.lgan_tn_edge_pos = _normalize_shared_scalar(
+        getattr(data, "lgan_tn_edge_pos", None)
+    )
+    data.lgan_nn_edge_pos = _normalize_shared_scalar(
+        getattr(data, "lgan_nn_edge_pos", None)
+    )
+    data.lgan_rr_edge_pos = _normalize_shared_scalar(
+        getattr(data, "lgan_rr_edge_pos", None)
+    )
     for attr in (
         "target_positions_ptr",
         "target_indices_ptr",
@@ -188,8 +197,17 @@ class FlatRelationData(Data):
             "history_entity_indices",
             "target_entity_indices",
             "target_positions",
+            "lgan_tn_entity_indices",
+            "lgan_nn_entity_indices",
         }:
             return int(getattr(self, "num_nodes", 0))
+        if key in {
+            "lgan_tn_relation_indices",
+            "lgan_nn_relation_indices",
+            "lgan_rr_src_relation_indices",
+            "lgan_rr_dst_relation_indices",
+        }:
+            return self._relation_instance_offset()
         return super().__inc__(key, value, *args, **kwargs)
 
     @cached_property
@@ -418,6 +436,55 @@ class FlatRelationData(Data):
             return [str(name) for name in target_names[graph_index]]
         return [str(name) for name in target_names]
 
+    def graph_relation_instance_range(self, graph_index: int = 0) -> tuple[int, int]:
+        relation_instance_sizes = getattr(self, "relation_instance_sizes", None)
+        if relation_instance_sizes is None:
+            counts = getattr(self, "relation_counts", None)
+            if counts is None:
+                return (0, 0)
+            counts = counts.long()
+            if counts.dim() == 1:
+                total = int(counts.sum().item())
+                return (0, total)
+            if graph_index < 0 or graph_index >= counts.size(0):
+                raise IndexError(
+                    f"graph_index {graph_index} out of range for {counts.size(0)} graphs"
+                )
+            sizes = counts.sum(dim=1)
+        else:
+            sizes = relation_instance_sizes.long().view(-1)
+            if graph_index < 0 or graph_index >= len(sizes):
+                raise IndexError(
+                    f"graph_index {graph_index} out of range for {len(sizes)} graphs"
+                )
+        start = int(sizes[:graph_index].sum().item()) if graph_index > 0 else 0
+        end = start + int(sizes[graph_index].item())
+        return start, end
+
+    def graph_lgan_tn_edges(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_edge_slice(
+            src_field_name="lgan_tn_relation_indices",
+            dst_field_name="lgan_tn_entity_indices",
+            size_field_name="lgan_tn_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_lgan_nn_edges(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_edge_slice(
+            src_field_name="lgan_nn_relation_indices",
+            dst_field_name="lgan_nn_entity_indices",
+            size_field_name="lgan_nn_sizes",
+            graph_index=graph_index,
+        )
+
+    def graph_lgan_rr_edges(self, graph_index: int = 0) -> torch.Tensor:
+        return self._graph_edge_slice(
+            src_field_name="lgan_rr_src_relation_indices",
+            dst_field_name="lgan_rr_dst_relation_indices",
+            size_field_name="lgan_rr_sizes",
+            graph_index=graph_index,
+        )
+
     def graph_node_range(self, graph_index: int = 0) -> tuple[int, int]:
         node_sizes = getattr(self, "node_sizes", None)
         if node_sizes is None:
@@ -478,6 +545,29 @@ class FlatRelationData(Data):
         end = start + int(sizes[graph_index].item())
         return values[start:end]
 
+    def _graph_edge_slice(
+        self,
+        *,
+        src_field_name: str,
+        dst_field_name: str,
+        size_field_name: str,
+        graph_index: int,
+    ) -> torch.Tensor:
+        src = self._graph_cat_field_slice(
+            field_name=src_field_name,
+            size_field_name=size_field_name,
+            graph_index=graph_index,
+        )
+        dst = self._graph_cat_field_slice(
+            field_name=dst_field_name,
+            size_field_name=size_field_name,
+            graph_index=graph_index,
+        )
+        if src.numel() == 0 or dst.numel() == 0:
+            device = src.device if src.numel() else dst.device
+            return torch.empty((2, 0), dtype=torch.long, device=device)
+        return torch.stack((src, dst), dim=0)
+
     def _relation_arities_tensor(
         self, device: torch.device | None = None
     ) -> torch.Tensor:
@@ -522,6 +612,14 @@ class FlatRelationData(Data):
                 f"Unknown {attr_name} group {group!r}; expected one of {names!r}"
             )
         return names.index(group)
+
+    def _relation_instance_offset(self) -> int:
+        relation_instance_sizes = getattr(self, "relation_instance_sizes", None)
+        if relation_instance_sizes is None:
+            return 0
+        if torch.is_tensor(relation_instance_sizes):
+            return int(relation_instance_sizes.long().sum().item())
+        return int(sum(int(value) for value in relation_instance_sizes))
 
 
 def flat_relation_data_from_pyg(

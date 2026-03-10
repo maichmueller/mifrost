@@ -11,7 +11,7 @@ from mifrost.encoders.flat_data import flat_relation_data_from_pyg
 
 from .test_flat_horizon_encoder import _first_distinct_changed_transitions
 from .test_flat_relation_encoder import _assert_flat_batch_equal
-from .test_utils import predicate, predicate_arity, state_atoms
+from .test_utils import adv_action, adv_state, predicate, predicate_arity, state_atoms
 
 import mifrost
 
@@ -232,3 +232,42 @@ def test_flat_transition_to_networkx_exposes_successor_target_metadata(small_blo
     assert attrs["target_index"] == 1
     assert attrs["target_depth"] == 1
     assert attrs["target_candidate_id"] == 1
+
+
+def test_flat_transition_lgan_matches_one_step_flat_horizon(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, state, count=1)
+    action, successor = transitions[0]
+    transition_encoder = FlatTransitionEncoder(domain, include_lgan_edges=True)
+    horizon_encoder = mifrost.FlatHorizonEncoder(
+        domain,
+        transition_mode="full",
+        include_lgan_edges=True,
+        exclude_root_candidate=True,
+        ignore_actions=True,
+    )
+    dag = mifrost.TransitionDAG(adv_state(state))
+    dag.register_transition(adv_state(state), adv_state(successor), adv_action(action))
+
+    transition_data = transition_encoder.encode_pyg(state, successor=successor)
+    horizon_data = horizon_encoder.encode_pyg(state, dag=dag)
+
+    assert transition_data.relation_instance_sizes.tolist() == [
+        int(transition_data.relation_counts.sum().item())
+    ]
+    assert horizon_data.relation_instance_sizes.tolist() == [
+        int(horizon_data.relation_counts.sum().item())
+    ]
+    assert (
+        transition_data.graph_lgan_tn_edges(0).tolist()
+        == horizon_data.graph_lgan_tn_edges(0).tolist()
+    )
+    assert (
+        transition_data.graph_lgan_nn_edges(0).tolist()
+        == horizon_data.graph_lgan_nn_edges(0).tolist()
+    )
+    assert (
+        transition_data.graph_lgan_rr_edges(0).tolist()
+        == horizon_data.graph_lgan_rr_edges(0).tolist()
+    )

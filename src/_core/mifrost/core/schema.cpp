@@ -223,6 +223,8 @@ nb::dict Schema::to_dict() const
       inc["kind"] = graph_field_inc_kind_name(spec.inc.kind);
       if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
          inc["node_type"] = spec.inc.node_type;
+      } else if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+         inc["field_key"] = spec.inc.field_key;
       }
       entry["inc"] = std::move(inc);
       graph_tensor_list.append(entry);
@@ -331,6 +333,8 @@ Schema Schema::from_dict(const nb::dict& schema)
             inc.kind = graph_field_inc_kind_from_name(inc_kind.c_str());
             if(inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
                inc.node_type = nb::str(inc_entry["node_type"]).c_str();
+            } else if(inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+               inc.field_key = nb::str(inc_entry["field_key"]).c_str();
             }
          }
          const auto mode = nb::str(entry["mode"]);

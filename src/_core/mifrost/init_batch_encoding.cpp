@@ -172,6 +172,11 @@ GraphFieldSpec graph_field_spec_from_dict(const nb::dict& spec_dict)
             throw std::invalid_argument("field spec inc NODE_OFFSET requires node_type");
          }
          spec.inc.node_type = py::to_std_string(inc_dict["node_type"]);
+      } else if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+         if(not inc_dict.contains("field_key")) {
+            throw std::invalid_argument("field spec inc FIELD_OFFSET requires field_key");
+         }
+         spec.inc.field_key = py::to_std_string(inc_dict["field_key"]);
       }
    }
    return spec;
@@ -188,6 +193,8 @@ nb::dict graph_field_spec_to_dict(const GraphFieldSpec& spec)
    inc["kind"] = graph_field_inc_kind_name(spec.inc.kind);
    if(spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET) {
       inc["node_type"] = spec.inc.node_type;
+   } else if(spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET) {
+      inc["field_key"] = spec.inc.field_key;
    }
    out["inc"] = std::move(inc);
    return out;
@@ -1081,6 +1088,7 @@ uint64_t schema_fingerprint(const BatchBuilder::BatchEncoding& encoding)
       fnv_mix_int(h, spec.cat_dim);
       fnv_mix_string(h, graph_field_inc_kind_name(spec.inc.kind));
       fnv_mix_string(h, spec.inc.node_type);
+      fnv_mix_string(h, spec.inc.field_key);
    }
    for(const auto& [key, value] : schema.flags) {
       fnv_mix_string(h, key);

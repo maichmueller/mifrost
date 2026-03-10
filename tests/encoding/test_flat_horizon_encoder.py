@@ -225,6 +225,69 @@ def test_flat_horizon_to_networkx_exposes_state_target_metadata(small_blocks):
     assert len(attrs["target_rows"]) == 1
 
 
+def test_flat_horizon_lgan_uses_candidate_state_rows(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    encoder = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        include_lgan_edges=True,
+    )
+
+    data = encoder.encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    assert data.relation_instance_sizes.tolist() == [
+        int(data.relation_counts.sum().item())
+    ]
+    tn_edges = data.graph_lgan_tn_edges(0)
+    nn_edges = data.graph_lgan_nn_edges(0)
+    rr_edges = data.graph_lgan_rr_edges(0)
+    assert tn_edges.shape[1] > 0
+    assert nn_edges.shape[0] == 2
+    assert rr_edges.shape[0] == 2
+    assert set(tn_edges[1].tolist()).issubset(
+        set(data.graph_target_positions(0).tolist())
+    )
+
+
+def test_flat_horizon_lgan_respects_root_candidate_exclusion(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    encoder = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        include_lgan_edges=True,
+        exclude_root_candidate=True,
+    )
+
+    data = encoder.encode_pyg(root, dag=dag)
+
+    root_position = int(data.graph_target_entity_indices(0)[0].item())
+    tn_entity_indices = set(data.graph_lgan_tn_edges(0)[1].tolist())
+    assert root_position not in tn_entity_indices
+
+
+def test_flat_horizon_lgan_rejects_missing_candidate_rows(small_blocks):
+    _space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    encoder = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        include_lgan_edges=True,
+    )
+
+    with pytest.raises(ValueError, match="requires surviving candidate state rows"):
+        encoder.encode(root)
+
+
 def test_flat_horizon_encode_rejects_explicit_actions_and_history(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

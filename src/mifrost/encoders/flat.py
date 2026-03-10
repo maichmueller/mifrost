@@ -7,6 +7,9 @@ import networkx as nx
 import torch
 
 from .._core import (
+    DEFAULT_LGAN_NN_EDGE_POS,
+    DEFAULT_LGAN_RR_EDGE_POS,
+    DEFAULT_LGAN_TN_EDGE_POS,
     FlatRelationEncoderConfig,
     FlatRelationEncoderEngine,
     FlatRelationMutableStreamEncoder as _FlatRelationMutableStreamEncoder,
@@ -212,8 +215,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         include_static: bool = True,
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
+        include_lgan_edges: bool = False,
         target_sources: Iterable[TargetSource | str] | None = None,
         target_symbol_prefix: str = "target:",
+        lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
+        lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
+        lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         goal_satisfaction_derivations: Iterable[Any] | None = None,
     ) -> None:
         normalized_target_sources = normalize_target_sources(target_sources)
@@ -233,7 +240,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             "include_static": include_static,
             "export_node_names": export_node_names,
             "ignore_zero_arity_relations": ignore_zero_arity_relations,
+            "include_lgan_edges": include_lgan_edges,
             "target_symbol_prefix": target_symbol_prefix,
+            "lgan_tn_edge_pos": lgan_tn_edge_pos,
+            "lgan_nn_edge_pos": lgan_nn_edge_pos,
+            "lgan_rr_edge_pos": lgan_rr_edge_pos,
         }
         if normalized_target_sources is not None:
             config_kwargs["target_sources"] = normalized_target_sources
@@ -244,6 +255,15 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         config = FlatRelationEncoderConfig(**config_kwargs)
         self._engine = FlatRelationEncoderEngine(_advanced_domain(domain), config)
         self._config = config
+        self.include_lgan_edges = bool(config.include_lgan_edges)
+        self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
+        self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
+        self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)
+        self._lgan_edge_positions = {
+            self.lgan_tn_edge_pos,
+            self.lgan_nn_edge_pos,
+            self.lgan_rr_edge_pos,
+        }
 
     @property
     def engine(self) -> FlatRelationEncoderEngine:
@@ -403,6 +423,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             raise ValueError(f"Unsupported flat visualization mode: {mode!r}")
 
         graph = nx.MultiDiGraph()
+        lgan_tn_edge_pos = str(getattr(data, "lgan_tn_edge_pos", self.lgan_tn_edge_pos))
+        lgan_nn_edge_pos = str(getattr(data, "lgan_nn_edge_pos", self.lgan_nn_edge_pos))
+        lgan_rr_edge_pos = str(getattr(data, "lgan_rr_edge_pos", self.lgan_rr_edge_pos))
         start, end = data.graph_node_range(graph_index)
         node_names = data.graph_node_names(graph_index)
         name_by_global = {start + idx: node_names[idx] for idx in range(end - start)}
@@ -502,6 +525,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
 
         flattened = data.flattened_relations_view(graph_index=graph_index)
         schema = data.schema
+        relation_cursor, _ = data.graph_relation_instance_range(graph_index)
+        relation_node_by_global: dict[int, str] = {}
         for relation_idx, relation_name in enumerate(schema.names):
             instances = flattened[relation_name]
             source = (
@@ -519,7 +544,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                     relation_name=relation_name,
                     relation_id=relation_idx,
                     instance_index=instance_idx,
+                    global_relation_index=relation_cursor,
                 )
+                relation_node_by_global[relation_cursor] = relation_node
                 for slot, global_idx in enumerate(args):
                     entity_node = name_by_global.get(global_idx, f"entity:{global_idx}")
                     graph.add_edge(
@@ -528,6 +555,44 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                         position=str(slot),
                         slot=slot,
                     )
+                relation_cursor += 1
+
+        lgan_specs = (
+            ("tn", data.graph_lgan_tn_edges(graph_index), lgan_tn_edge_pos),
+            ("nn", data.graph_lgan_nn_edges(graph_index), lgan_nn_edge_pos),
+        )
+        for lgan_kind, edges, edge_pos in lgan_specs:
+            if edges.numel() == 0:
+                continue
+            for relation_index, entity_index in edges.t().tolist():
+                relation_node = relation_node_by_global.get(int(relation_index))
+                if relation_node is None:
+                    continue
+                entity_node = name_by_global.get(
+                    int(entity_index), f"entity:{int(entity_index)}"
+                )
+                graph.add_edge(
+                    relation_node,
+                    entity_node,
+                    position=edge_pos,
+                    lgan_kind=lgan_kind,
+                    style="dashed",
+                )
+
+        rr_edges = data.graph_lgan_rr_edges(graph_index)
+        if rr_edges.numel() > 0:
+            for src_relation_index, dst_relation_index in rr_edges.t().tolist():
+                src_relation_node = relation_node_by_global.get(int(src_relation_index))
+                dst_relation_node = relation_node_by_global.get(int(dst_relation_index))
+                if src_relation_node is None or dst_relation_node is None:
+                    continue
+                graph.add_edge(
+                    src_relation_node,
+                    dst_relation_node,
+                    position=lgan_rr_edge_pos,
+                    lgan_kind="rr",
+                    style="dashed",
+                )
         return graph
 
     def draw(
@@ -622,7 +687,44 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 ax=ax,
             )
 
-        nx.draw_networkx_edges(graph, pos, ax=ax, arrows=True, width=1.2, alpha=0.8)
+        normal_edges = []
+        lgan_edges = []
+        lgan_colors = []
+        lgan_palette = {
+            "tn": "#d35454",
+            "nn": "#4f7cac",
+            "rr": "#5a9367",
+        }
+        for u, v, attrs in graph.edges(data=True):
+            lgan_kind = attrs.get("lgan_kind")
+            if lgan_kind is None:
+                normal_edges.append((u, v))
+                continue
+            lgan_edges.append((u, v))
+            lgan_colors.append(lgan_palette.get(str(lgan_kind), "#666666"))
+
+        if normal_edges:
+            nx.draw_networkx_edges(
+                graph,
+                pos,
+                edgelist=normal_edges,
+                ax=ax,
+                arrows=True,
+                width=1.2,
+                alpha=0.8,
+            )
+        if lgan_edges:
+            nx.draw_networkx_edges(
+                graph,
+                pos,
+                edgelist=lgan_edges,
+                ax=ax,
+                arrows=True,
+                width=1.4,
+                alpha=0.85,
+                style="dashed",
+                edge_color=lgan_colors,
+            )
 
         if with_labels:
             nx.draw_networkx_labels(graph, pos, ax=ax, font_size=8)
