@@ -43,6 +43,7 @@ class FlatRelationEncoderEngine {
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
       bool include_lgan_edges = false;
+      std::set< TargetSource > lgan_anchor_sources = {};
       std::set< TargetSource > target_sources = {};
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
@@ -186,6 +187,8 @@ class FlatRelationEncoderEngine {
    ) const;
    int relation_id_for(const std::string& name) const;
    [[nodiscard]] bool has_target_source(TargetSource source) const;
+   [[nodiscard]] bool has_lgan_anchor_source(TargetSource source) const;
+   [[nodiscard]] bool has_anchor_entity_source(TargetSource source) const;
    [[nodiscard]] bool supports_target_metadata() const;
    [[nodiscard]] int64_t target_entity_group_id(TargetSource source) const;
    [[nodiscard]] int64_t target_metadata_group_id(TargetSource source) const;
@@ -217,6 +220,7 @@ BOOST_DESCRIBE_STRUCT(
     export_node_names,
     ignore_zero_arity_relations,
     include_lgan_edges,
+    lgan_anchor_sources,
     target_sources,
     target_symbol_prefix,
     lgan_tn_edge_pos,

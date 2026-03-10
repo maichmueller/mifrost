@@ -861,12 +861,36 @@ def test_flat_relation_lgan_rejects_missing_anchor_rows(small_blocks):
         encoder.encode(problem.get_initial_state())
 
 
+def test_flat_relation_lgan_goal_anchor_sources_work_without_target_metadata(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    goals = _problem_goals(problem)
+    encoder = FlatRelationEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+    )
+
+    data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)
+
+    assert getattr(data, "target_sizes", None) is None
+    goal_target_entities = set(
+        data.graph_target_entity_indices(0, group="goal").tolist()
+    )
+    assert goal_target_entities
+    tn_edges = data.graph_lgan_tn_edges(0)
+    assert tn_edges.shape[1] > 0
+    assert set(tn_edges[1].tolist()).issubset(goal_target_entities)
+
+
 def test_flat_relation_lgan_goal_target_entities_are_used_as_anchors(small_blocks):
     _space, domain, problem = small_blocks
     goals = _problem_goals(problem)
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.Goals],
         target_sources=[mifrost.TargetSource.Goals],
     )
 
@@ -879,6 +903,49 @@ def test_flat_relation_lgan_goal_target_entities_are_used_as_anchors(small_block
     tn_edges = data.graph_lgan_tn_edges(0)
     assert tn_edges.shape[1] > 0
     assert set(tn_edges[1].tolist()).issubset(goal_target_entities)
+
+
+def test_flat_relation_lgan_history_anchor_sources_work_without_target_metadata(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    _goals, history_subgoals = _history_inputs(problem)
+    encoder = FlatRelationEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.History],
+    )
+
+    data = encoder.encode_pyg(
+        problem.get_initial_state(),
+        history_subgoals=history_subgoals,
+    )
+
+    assert getattr(data, "target_sizes", None) is None
+    history_target_entities = set(
+        data.graph_target_entity_indices(0, group="history").tolist()
+    )
+    assert history_target_entities
+    tn_edges = data.graph_lgan_tn_edges(0)
+    assert tn_edges.shape[1] > 0
+    assert set(tn_edges[1].tolist()).issubset(history_target_entities)
+
+
+def test_flat_relation_lgan_anchor_sources_are_ignored_when_lgan_is_disabled(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    goals = _problem_goals(problem)
+    encoder = FlatRelationEncoder(
+        domain,
+        include_lgan_edges=False,
+        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+    )
+
+    data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)
+
+    assert data.target_entity_sizes.tolist() == [0]
+    assert getattr(data, "lgan_tn_sizes", None) is None
 
 
 def test_flat_relation_lgan_does_not_change_relation_schema_or_payload(

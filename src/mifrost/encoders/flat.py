@@ -216,6 +216,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
         include_lgan_edges: bool = False,
+        lgan_anchor_sources: Iterable[TargetSource | str] | None = None,
         target_sources: Iterable[TargetSource | str] | None = None,
         target_symbol_prefix: str = "target:",
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
@@ -224,16 +225,25 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goal_satisfaction_derivations: Iterable[Any] | None = None,
     ) -> None:
         normalized_target_sources = normalize_target_sources(target_sources)
-        if normalized_target_sources is not None:
-            unsupported_sources = normalized_target_sources.intersection(
-                {TargetSource.States}
-            )
+        normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
+
+        def _validate_flat_sources(
+            sources: set[TargetSource] | None,
+            field_name: str,
+        ) -> None:
+            if sources is None:
+                return
+            unsupported_sources = sources.intersection({TargetSource.States})
             if unsupported_sources:
                 raise ValueError(
-                    "FlatRelationEncoder currently supports target_sources="
-                    "{'action', 'goal', 'subgoal', 'history'} only; 'state' "
-                    "is reserved for the upcoming flat successor/horizon encoders"
+                    "FlatRelationEncoder currently supports "
+                    f"{field_name}={{'action', 'goal', 'subgoal', 'history'}} "
+                    "only; 'state' is reserved for the upcoming flat "
+                    "successor/horizon encoders"
                 )
+
+        _validate_flat_sources(normalized_target_sources, "target_sources")
+        _validate_flat_sources(normalized_lgan_anchor_sources, "lgan_anchor_sources")
         config_kwargs: dict[str, Any] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
@@ -246,6 +256,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             "lgan_nn_edge_pos": lgan_nn_edge_pos,
             "lgan_rr_edge_pos": lgan_rr_edge_pos,
         }
+        if normalized_lgan_anchor_sources is not None:
+            config_kwargs["lgan_anchor_sources"] = normalized_lgan_anchor_sources
         if normalized_target_sources is not None:
             config_kwargs["target_sources"] = normalized_target_sources
         if goal_satisfaction_derivations is not None:
@@ -256,6 +268,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         self._engine = FlatRelationEncoderEngine(_advanced_domain(domain), config)
         self._config = config
         self.include_lgan_edges = bool(config.include_lgan_edges)
+        self.lgan_anchor_sources = set(config.lgan_anchor_sources)
         self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
         self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
         self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)

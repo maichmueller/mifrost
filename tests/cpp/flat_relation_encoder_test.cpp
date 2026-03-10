@@ -325,6 +325,79 @@ TEST_P(FlatRelationEncoderTest, LGANRejectsMissingAnchorRows)
    );
 }
 
+TEST_P(FlatRelationEncoderTest, LGANGoalAnchorSourcesEmitAnchorRowsWithoutTargetMetadata)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto goals = goal_literals(ctx.problem);
+   if(goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   mifrost::GoalInputs inputs;
+   std::string relation_name;
+   std::visit(
+      [&](const auto& literal) {
+         inputs.append(literal, 0);
+         relation_name = mifrost::RelationFormatter::format_predicate(
+            literal->get_atom()->get_predicate(),
+            mifrost::GoalLevel(0),
+            std::nullopt,
+            literal->get_polarity()
+         );
+      },
+      goals.front()
+   );
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.include_lgan_edges = true;
+   config.lgan_anchor_sources = {mifrost::TargetSource::Goals};
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+   mifrost::FlatRelationEncoderEngine base_engine(ctx.problem->get_domain());
+
+   const auto encoded = encode_single(
+      engine,
+      ctx.root,
+      inputs,
+      std::span< const mimir::formalism::GroundAction >{},
+      std::span< const mifrost::FlatRelationEncoderEngine::HistorySubgoal >{}
+   );
+   const auto base = encode_single(
+      base_engine,
+      ctx.root,
+      inputs,
+      std::span< const mimir::formalism::GroundAction >{},
+      std::span< const mifrost::FlatRelationEncoderEngine::HistorySubgoal >{}
+   );
+
+   const auto relation_names = str_attr(encoded, "relation_names");
+   const auto relation_arities = i64_attr(encoded, "relation_arities");
+   const auto base_relation_arities = i64_attr(base, "relation_arities");
+   const auto target_entity_sizes = i64_field(encoded, "target_entity_sizes");
+   const auto target_entity_indices = i64_field(encoded, "target_entity_indices");
+   const auto target_entity_group_ids = i64_field(encoded, "target_entity_group_ids");
+   const auto lgan_tn_entity_indices = i64_field(encoded, "lgan_tn_entity_indices");
+   const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
+
+   ASSERT_FALSE(encoded.graph_fields.contains("target_sizes"));
+   ASSERT_EQ(target_entity_sizes, (std::vector< int64_t >{1}));
+   ASSERT_EQ(target_entity_indices.size(), 1u);
+   ASSERT_EQ(target_entity_group_ids, (std::vector< int64_t >{0}));
+   EXPECT_EQ(target_entity_groups, (std::vector< std::string >{"goal", "action"}));
+
+   const auto relation_idx = relation_index_for(relation_names, relation_name);
+   ASSERT_TRUE(relation_idx.has_value());
+   ASSERT_LT(*relation_idx, relation_arities.size());
+   ASSERT_LT(*relation_idx, base_relation_arities.size());
+   EXPECT_EQ(relation_arities[*relation_idx], base_relation_arities[*relation_idx] + 1);
+   EXPECT_FALSE(lgan_tn_entity_indices.empty());
+   EXPECT_TRUE(
+      std::all_of(lgan_tn_entity_indices.begin(), lgan_tn_entity_indices.end(), [&](int64_t value) {
+         return value == target_entity_indices.front();
+      })
+   );
+}
+
 TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)
 {
    const auto param = GetParam();
@@ -914,6 +987,22 @@ TEST_P(FlatRelationEncoderTest, ReservedTargetSourcesAreRejected)
 
    mifrost::FlatRelationEncoderEngine::Config config;
    config.target_sources = {mifrost::TargetSource::States};
+   EXPECT_THROW(
+      {
+         auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);
+         (void) engine;
+      },
+      std::invalid_argument
+   );
+}
+
+TEST_P(FlatRelationEncoderTest, ReservedLGANAnchorSourcesAreRejected)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.lgan_anchor_sources = {mifrost::TargetSource::States};
    EXPECT_THROW(
       {
          auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);

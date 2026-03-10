@@ -95,18 +95,28 @@ class RelationSchemaRegistry {
    std::map< std::string, Entry > entries_;
 };
 
-std::optional< TargetSource > target_source_for_goal_level(
-   const FlatRelationEncoderEngine& engine,
+bool has_lgan_anchor_source(const FlatRelationEncoderEngine::Config& config, TargetSource source)
+{
+   return config.include_lgan_edges and config.lgan_anchor_sources.contains(source);
+}
+
+bool has_anchor_entity_source(const FlatRelationEncoderEngine::Config& config, TargetSource source)
+{
+   return config.target_sources.contains(source) or has_lgan_anchor_source(config, source);
+}
+
+std::optional< TargetSource > anchor_source_for_goal_level(
+   const FlatRelationEncoderEngine::Config& config,
    const std::optional< size_t >& goal_level
 )
 {
    if(goal_level.has_value() and *goal_level > 0) {
-      if(engine.get_config().target_sources.contains(TargetSource::Subgoals)) {
+      if(has_anchor_entity_source(config, TargetSource::Subgoals)) {
          return TargetSource::Subgoals;
       }
       return std::nullopt;
    }
-   if(engine.get_config().target_sources.contains(TargetSource::Goals)) {
+   if(has_anchor_entity_source(config, TargetSource::Goals)) {
       return TargetSource::Goals;
    }
    return std::nullopt;
@@ -119,7 +129,9 @@ int goal_relation_arity(
 )
 {
    return base_arity
-          + static_cast< int >(target_source_for_goal_level(engine, goal_level).has_value());
+          + static_cast< int >(
+             anchor_source_for_goal_level(engine.get_config(), goal_level).has_value()
+          );
 }
 
 template < typename GoalTag >
@@ -248,7 +260,9 @@ history_relation_name(const mimir::formalism::Predicate< HistoryTag >& predicate
 int history_relation_arity(const FlatRelationEncoderEngine& engine, int base_arity)
 {
    return base_arity + 1
-          + static_cast< int >(engine.get_config().target_sources.contains(TargetSource::History));
+          + static_cast< int >(
+             has_anchor_entity_source(engine.get_config(), TargetSource::History)
+          );
 }
 
 template < typename GoalLevelsMap, typename LiteralTag >
@@ -371,7 +385,7 @@ std::vector< int64_t > local_arg_rows_for_goal_literal(
 )
 {
    auto args = local_arg_rows_for_atom(context, literal->get_atom());
-   if(const auto target_source = target_source_for_goal_level(engine, goal_level);
+   if(const auto target_source = anchor_source_for_goal_level(engine.get_config(), goal_level);
       target_source.has_value()) {
       args.insert(
          args.begin(), lookup_goal_target_entity_index(context, *target_source, literal, goal_level)
@@ -392,7 +406,7 @@ std::vector< int64_t > local_arg_rows_for_history_literal(
 {
    auto args = local_arg_rows_for_atom(context, literal->get_atom());
    args.insert(args.begin(), history_entity_index);
-   if(engine.get_config().target_sources.contains(TargetSource::History)) {
+   if(has_anchor_entity_source(engine.get_config(), TargetSource::History)) {
       args.insert(
          args.begin(), lookup_history_target_entity_index(context, dt, entry_idx, literal)
       );
@@ -794,17 +808,31 @@ FlatRelationEncoderEngine::~FlatRelationEncoderEngine() = default;
 
 void FlatRelationEncoderEngine::validate_config() const
 {
-   for(const auto source : config_.target_sources) {
-      if(source == TargetSource::Actions or source == TargetSource::Goals
-         or source == TargetSource::Subgoals or source == TargetSource::History) {
-         continue;
+   auto validate_sources = [](std::span< const TargetSource > sources,
+                              std::string_view field_name) {
+      for(const auto source : sources) {
+         if(source == TargetSource::Actions or source == TargetSource::Goals
+            or source == TargetSource::Subgoals or source == TargetSource::History) {
+            continue;
+         }
+         throw std::invalid_argument(
+            fmt::format(
+               "FlatRelationEncoder currently supports {}={{'action', 'goal', "
+               "'subgoal', 'history'}} only; 'state' is reserved for the upcoming flat "
+               "successor/horizon encoders",
+               field_name
+            )
+         );
       }
-      throw std::invalid_argument(
-         "FlatRelationEncoder currently supports target_sources={'action', 'goal', "
-         "'subgoal', 'history'} only; 'state' is reserved for the upcoming flat "
-         "successor/horizon encoders"
-      );
-   }
+   };
+   std::vector< TargetSource > target_sources(
+      config_.target_sources.begin(), config_.target_sources.end()
+   );
+   validate_sources(std::span{target_sources}, "target_sources");
+   std::vector< TargetSource > lgan_anchor_sources(
+      config_.lgan_anchor_sources.begin(), config_.lgan_anchor_sources.end()
+   );
+   validate_sources(std::span{lgan_anchor_sources}, "lgan_anchor_sources");
 }
 
 void FlatRelationEncoderEngine::initialize_from_domain()
@@ -871,7 +899,7 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    };
 
    for(const auto source : kCanonicalTargetSourceOrder) {
-      if(source == TargetSource::Actions or has_target_source(source)) {
+      if(source == TargetSource::Actions or has_anchor_entity_source(source)) {
          if(source == TargetSource::States) {
             continue;
          }
@@ -1304,11 +1332,13 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
             const auto local_index = ensure_target_entity(
                goal_target_entity_key(source, literal, goal_level), source, display_name
             );
-            append_target_row(source, local_index, display_name);
+            if(has_target_source(source)) {
+               append_target_row(source, local_index, display_name);
+            }
          }
       };
 
-   if(has_target_source(TargetSource::Goals)) {
+   if(has_anchor_entity_source(TargetSource::Goals)) {
       collect_goal_targets(
          std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::Goals
       );
@@ -1320,7 +1350,7 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       );
    }
 
-   if(has_target_source(TargetSource::Subgoals)) {
+   if(has_anchor_entity_source(TargetSource::Subgoals)) {
       collect_goal_targets(
          std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::Subgoals
       );
@@ -1354,7 +1384,7 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       );
    }
 
-   if(has_target_source(TargetSource::History)) {
+   if(has_anchor_entity_source(TargetSource::History)) {
       for(const auto& entry : context.history_entries) {
          for(const auto& literal_variant : entry.literals) {
             std::visit(
@@ -1374,7 +1404,9 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
                      TargetSource::History,
                      display_name
                   );
-                  append_target_row(TargetSource::History, local_index, display_name);
+                  if(has_target_source(TargetSource::History)) {
+                     append_target_row(TargetSource::History, local_index, display_name);
+                  }
                },
                literal_variant
             );
@@ -1397,6 +1429,16 @@ int FlatRelationEncoderEngine::relation_id_for(const std::string& name) const
 bool FlatRelationEncoderEngine::has_target_source(TargetSource source) const
 {
    return config_.target_sources.contains(source);
+}
+
+bool FlatRelationEncoderEngine::has_lgan_anchor_source(TargetSource source) const
+{
+   return config_.include_lgan_edges and config_.lgan_anchor_sources.contains(source);
+}
+
+bool FlatRelationEncoderEngine::has_anchor_entity_source(TargetSource source) const
+{
+   return has_target_source(source) or has_lgan_anchor_source(source);
 }
 
 bool FlatRelationEncoderEngine::supports_target_metadata() const
@@ -1602,8 +1644,8 @@ void FlatRelationEncoderEngine::encode_impl(
       if(context.target_entity_indices.empty()) {
          throw std::invalid_argument(
             "FlatRelationEncoder include_lgan_edges=true requires LGAN anchor entity rows, "
-            "but none were encoded. Encode explicit actions or enable target-row-emitting "
-            "target_sources such as 'goal', 'subgoal', or 'history'."
+            "but none were encoded. Encode explicit actions or enable anchor-row-emitting "
+            "lgan_anchor_sources/target_sources such as 'goal', 'subgoal', or 'history'."
          );
       }
       const auto lgan = build_flat_lgan(sink, std::span{context.target_entity_indices});

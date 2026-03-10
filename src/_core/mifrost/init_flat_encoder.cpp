@@ -45,6 +45,7 @@ void init_flat_encoder(nb::module_& m)
          &FlatRelationEncoderEngine::Config::ignore_zero_arity_relations
       )
       .def_rw("include_lgan_edges", &FlatRelationEncoderEngine::Config::include_lgan_edges)
+      .def_rw("lgan_anchor_sources", &FlatRelationEncoderEngine::Config::lgan_anchor_sources)
       .def_rw("target_sources", &FlatRelationEncoderEngine::Config::target_sources)
       .def_rw("target_symbol_prefix", &FlatRelationEncoderEngine::Config::target_symbol_prefix)
       .def_rw("lgan_tn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_tn_edge_pos)
