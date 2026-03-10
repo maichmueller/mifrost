@@ -6,6 +6,7 @@
 #include <mimir/search/state.hpp>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include "default_relations.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
+#include "stream_encoder_base.hpp"
 #include "target_metadata.hpp"
 #include "target_source.hpp"
 #include "transition_dag.hpp"
@@ -157,5 +159,78 @@ BOOST_DESCRIBE_STRUCT(
     exclude_root_candidate,
     goal_satisfaction_derivations)
 )
+
+struct FlatHorizonStepInput {
+   const mimir::search::State* root = nullptr;
+   const TransitionDAG* dag = nullptr;
+   const GoalInputs* goals = nullptr;
+};
+
+class FlatHorizonStreamEncoder:
+    public StreamEncoderBase< FlatHorizonStreamEncoder, FlatHorizonStepInput > {
+  public:
+   static constexpr std::string_view graph_kind() { return "homo"; }
+
+   explicit FlatHorizonStreamEncoder(FlatHorizonEncoderEngine& engine) : engine_(&engine)
+   {
+      reset();
+   }
+
+   int64_t
+   append(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
+   {
+      FlatHorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(const mimir::search::State& root, const GoalInputs& goals)
+   {
+      TransitionDAG dag(root);
+      FlatHorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& root,
+      const TransitionDAG& dag,
+      const GoalInputs& goals
+   )
+   {
+      FlatHorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(int64_t id, const mimir::search::State& root, const GoalInputs& goals)
+   {
+      TransitionDAG dag(root);
+      FlatHorizonStepInput step;
+      step.root = &root;
+      step.dag = &dag;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void encode_step(const FlatHorizonStepInput& step, BatchBuilder& builder)
+   {
+      if(engine_ == nullptr or step.root == nullptr or step.dag == nullptr
+         or step.goals == nullptr) {
+         throw std::invalid_argument("FlatHorizonStreamEncoder requires root/dag/goals");
+      }
+      engine_->encode(*step.root, *step.dag, *step.goals, builder);
+   }
+
+  private:
+   FlatHorizonEncoderEngine* engine_ = nullptr;
+};
 
 }  // namespace mifrost

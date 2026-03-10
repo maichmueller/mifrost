@@ -11,6 +11,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,7 @@
 #include "common_types.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
+#include "stream_encoder_base.hpp"
 #include "target_metadata.hpp"
 #include "target_source.hpp"
 
@@ -213,5 +215,271 @@ BOOST_DESCRIBE_STRUCT(
     target_symbol_prefix,
     goal_satisfaction_derivations)
 )
+
+struct FlatRelationStepInput {
+   const mimir::search::State* state = nullptr;
+   const GoalInputs* goals = nullptr;
+   const std::vector< mimir::formalism::GroundAction >* actions = nullptr;
+   const std::vector< FlatRelationEncoderEngine::HistorySubgoal >* history_subgoals = nullptr;
+   std::optional< int > history_max_steps = std::nullopt;
+};
+
+class FlatRelationMutableStreamEncoder:
+    public StreamEncoderBase< FlatRelationMutableStreamEncoder, FlatRelationStepInput > {
+  public:
+   static constexpr std::string_view graph_kind() { return "homo"; }
+
+   explicit FlatRelationMutableStreamEncoder(FlatRelationEncoderEngine& engine) : engine_(&engine)
+   {
+      reset();
+   }
+
+   int64_t append(const mimir::search::State& state)
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.actions = &actions;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(const mimir::search::State& state, const GoalInputs& goals)
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      return StreamEncoderBase::append(step);
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
+      std::optional< int > history_max_steps
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      step.history_subgoals = &history_subgoals;
+      step.history_max_steps = history_max_steps;
+      return StreamEncoderBase::append(step);
+   }
+
+   void update(int64_t id, const mimir::search::State& state)
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& state,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.actions = &actions;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(int64_t id, const mimir::search::State& state, const GoalInputs& goals)
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void update(
+      int64_t id,
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
+      std::optional< int > history_max_steps
+   )
+   {
+      FlatRelationStepInput step;
+      step.state = &state;
+      step.goals = &goals;
+      step.actions = &actions;
+      step.history_subgoals = &history_subgoals;
+      step.history_max_steps = history_max_steps;
+      StreamEncoderBase::update(id, step);
+   }
+
+   void encode_step(const FlatRelationStepInput& step, BatchBuilder& builder)
+   {
+      if(engine_ == nullptr or step.state == nullptr) {
+         throw std::invalid_argument("FlatRelationMutableStreamEncoder requires state");
+      }
+
+      const std::span< const mimir::formalism::GroundAction >
+         actions = (step.actions == nullptr)
+                      ? std::span< const mimir::formalism::GroundAction >{}
+                      : std::span< const mimir::formalism::GroundAction >(*step.actions);
+      const std::span< const FlatRelationEncoderEngine::HistorySubgoal >
+         history_subgoals = (step.history_subgoals == nullptr)
+                               ? std::span< const FlatRelationEncoderEngine::HistorySubgoal >{}
+                               : std::span< const FlatRelationEncoderEngine::HistorySubgoal >(
+                                    *step.history_subgoals
+                                 );
+
+      if(not history_subgoals.empty()) {
+         if(step.goals == nullptr) {
+            throw std::invalid_argument(
+               "FlatRelationMutableStreamEncoder history encoding requires GoalInputs"
+            );
+         }
+         engine_->encode(
+            *step.state, *step.goals, actions, history_subgoals, step.history_max_steps, builder
+         );
+         return;
+      }
+
+      if(step.goals != nullptr) {
+         engine_->encode(*step.state, *step.goals, actions, builder);
+         return;
+      }
+      if(not actions.empty()) {
+         engine_->encode(*step.state, actions, builder);
+         return;
+      }
+      engine_->encode(*step.state, builder);
+   }
+
+  private:
+   FlatRelationEncoderEngine* engine_ = nullptr;
+};
+
+class FlatRelationStreamEncoder {
+  public:
+   static constexpr std::string_view graph_kind() { return "homo"; }
+
+   explicit FlatRelationStreamEncoder(FlatRelationEncoderEngine& engine) : engine_(&engine)
+   {
+      reset();
+   }
+
+   int64_t append(const mimir::search::State& state)
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      engine_->encode(state, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      engine_->encode(state, actions, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(const mimir::search::State& state, const GoalInputs& goals)
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      engine_->encode(state, goals, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions
+   )
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      engine_->encode(state, goals, actions, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   int64_t append(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      const std::vector< mimir::formalism::GroundAction >& actions,
+      const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
+      std::optional< int > history_max_steps
+   )
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      engine_->encode(state, goals, actions, history_subgoals, history_max_steps, builder_);
+      builder_.next_graph();
+      return next_id_++;
+   }
+
+   BatchEncoding flush() { return builder_.build(); }
+
+   nb::object flush_pyg() { return builder_.build_pyg(); }
+
+   void reset()
+   {
+      builder_ = BatchBuilder{};
+      builder_.set_graph_kind(std::string(graph_kind()));
+      next_id_ = 0;
+   }
+
+  private:
+   FlatRelationEncoderEngine* engine_ = nullptr;
+   BatchBuilder builder_;
+   int64_t next_id_ = 0;
+};
 
 }  // namespace mifrost

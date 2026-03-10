@@ -71,10 +71,10 @@ DagBatchParam: TypeAlias = (
     | RXStateDAG
     | None
 )
-CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, object]] | None
+CollateSpecParam: TypeAlias = Mapping[str, CollateSpec | Mapping[str, Any]] | None
 
 
-def _is_native_encoding(value: object) -> TypeGuard[NativeEncoding]:
+def _is_native_encoding(value: Any) -> TypeGuard[NativeEncoding]:
     return hasattr(value, "as_dict") and hasattr(value, "as_pyg")
 
 
@@ -83,7 +83,7 @@ def _normalize_collate_spec(
 ) -> dict[str, dict[str, object]] | None:
     if collate_spec is None:
         return None
-    out: dict[str, dict[str, object]] = {}
+    out: dict[str, dict[str, Any]] = {}
     for key, spec in collate_spec.items():
         out[str(key)] = CollateSpec.from_spec(spec).to_core_dict()
     return out
@@ -103,7 +103,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
         """Return keyword names accepted by this encoder."""
         return set()
 
-    def _filter_kwargs(self, kwargs: Mapping[str, object]) -> dict[str, object]:
+    def _filter_kwargs(self, kwargs: Mapping[str, Any]) -> dict[str, Any]:
         """Drop kwargs that are not explicitly supported by this encoder."""
         accepted = self._accepted_kwargs()
         if not accepted:
@@ -267,11 +267,11 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
     """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
-    def append(self, *args: object, **kwargs) -> int:
+    def append(self, *args, **kwargs) -> int:
         """Append one item to the in-memory stream and return its stream id."""
         ...
 
-    def _coerce_stream_id(self, value: object) -> int:
+    def _coerce_stream_id(self, value: Any) -> int:
         """Normalize a C++ stream id, falling back to a local counter when needed."""
         if isinstance(value, Integral):
             return int(value)

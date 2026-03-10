@@ -16,4 +16,5 @@
 ## Streams and Dynamic Fields Coverage
 
 - Stream semantics/parity: `tests/encoding/test_stream_encoder.py`
+- Flat stream semantics/parity: `tests/encoding/test_flat_stream_encoder.py`
 - Dynamic graph fields/collation: `tests/encoding/test_dynamic_graph_fields.py`

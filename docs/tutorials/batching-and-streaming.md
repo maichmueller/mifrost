@@ -12,11 +12,25 @@ Use `stream()` when samples arrive incrementally and only append semantics are n
 
 --8<-- "_includes/snippets/hgraph_stream_append_only.md"
 
+Flat append-only support:
+
+- `FlatRelationEncoder.stream()`
+- This stream accepts the same main-lane payloads as `FlatRelationEncoder.encode(...)`:
+  `goals`, `actions`, `subgoal_layers`, `history_subgoals`, `history_max_steps`
+
 ## Mutable Stream
 
 Use `mutable_stream()` when you need stable IDs and update/remove semantics.
 
 --8<-- "_includes/snippets/hgraph_stream_mutable.md"
+
+Flat mutable support:
+
+- `FlatRelationEncoder.mutable_stream()`
+- `FlatHorizonEncoder.stream()`
+- `FlatTransitionEncoder.stream()`
+- `FlatTransitionEffectsEncoder.stream()`
+- Flat transition streams are wrapper-level mutable streams built on top of flat horizon streaming.
 
 ## Semantics
 
@@ -49,8 +63,11 @@ Use `mutable_stream()` when you need stable IDs and update/remove semantics.
     `fallback_missing_candidate_id_to_node_index=True` on explicit conversion to fill gaps.
 - The interop path assumes the `PyDiGraph` is already the correct single-root horizon
   DAG/tree. `mifrost` does not run a semantic DAG verification pass during conversion.
+- After conversion, stream and non-stream horizon paths both validate that the DAG root
+  matches the provided root state.
 - Horizon/HGraph target rows expose aligned identity metadata:
   `target_positions[i]`, `target_indices[i]`, and `target_candidate_ids[i]` refer to the same target row.
 - Append-only stream intentionally does not provide `update/remove`.
 - Mutable stream provides ID-based mutation and merges cached entries at flush.
 - Both stream variants return native `BatchEncoding` via `flush()`.
+- Flat `flush_pyg()` returns `FlatRelationData`, not generic `Data`.

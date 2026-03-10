@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 import networkx as nx
 import torch
 
-from .._core import FlatRelationEncoderConfig, FlatRelationEncoderEngine
+from .._core import (
+    FlatRelationEncoderConfig,
+    FlatRelationEncoderEngine,
+    FlatRelationMutableStreamEncoder as _FlatRelationMutableStreamEncoder,
+    FlatRelationStreamEncoder as _FlatRelationStreamEncoder,
+)
 from ._action_contract import parse_flat_actions
 from ._target_sources import TargetSource, normalize_target_sources
 from .base import (
@@ -17,6 +23,7 @@ from .base import (
     GoalBatchParam,
     HistorySubgoalsBatchParam,
     StateBatchInput,
+    StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
@@ -43,6 +50,154 @@ from .types import (
     to_advanced_literal,
     to_advanced_state,
 )
+
+
+@dataclass
+class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
+    """Append-only stream wrapper for ``FlatRelationEncoderEngine``."""
+
+    _encoder: "FlatRelationEncoder"
+
+    def __post_init__(self) -> None:
+        self._stream = _FlatRelationStreamEncoder(self._encoder.engine)
+        self._reset_builder()
+
+    def append(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> int:
+        adv_state = _advanced_state(state)
+        action_inputs = parse_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if goals is None and subgoal_layers is None and not history_list:
+            if action_list:
+                return self._coerce_stream_id(
+                    self._stream.append(adv_state, action_list)
+                )
+            return self._coerce_stream_id(self._stream.append(adv_state))
+
+        goals_input = goals if goals is not None else default_goals_from_state(state)
+        split_goals = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            return self._coerce_stream_id(
+                self._stream.append(
+                    adv_state,
+                    split_goals,
+                    action_list,
+                    history_list,
+                    history_max_steps,
+                )
+            )
+        if action_list:
+            return self._coerce_stream_id(
+                self._stream.append(adv_state, split_goals, action_list)
+            )
+        return self._coerce_stream_id(self._stream.append(adv_state, split_goals))
+
+    def _reset_builder(self) -> None:
+        self._stream.reset()
+
+
+@dataclass
+class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
+    """Mutable stream wrapper for ``FlatRelationEncoderEngine``."""
+
+    _encoder: "FlatRelationEncoder"
+
+    def __post_init__(self) -> None:
+        self._stream = _FlatRelationMutableStreamEncoder(self._encoder.engine)
+        self._reset_builder()
+
+    def append(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> int:
+        adv_state = _advanced_state(state)
+        action_inputs = parse_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if goals is None and subgoal_layers is None and not history_list:
+            if action_list:
+                return self._coerce_stream_id(
+                    self._stream.append(adv_state, action_list)
+                )
+            return self._coerce_stream_id(self._stream.append(adv_state))
+
+        goals_input = goals if goals is not None else default_goals_from_state(state)
+        split_goals = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            return self._coerce_stream_id(
+                self._stream.append(
+                    adv_state,
+                    split_goals,
+                    action_list,
+                    history_list,
+                    history_max_steps,
+                )
+            )
+        if action_list:
+            return self._coerce_stream_id(
+                self._stream.append(adv_state, split_goals, action_list)
+            )
+        return self._coerce_stream_id(self._stream.append(adv_state, split_goals))
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        adv_state = _advanced_state(state)
+        action_inputs = parse_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if goals is None and subgoal_layers is None and not history_list:
+            if action_list:
+                self._stream.update(stream_id, adv_state, action_list)
+                return
+            self._stream.update(stream_id, adv_state)
+            return
+
+        goals_input = goals if goals is not None else default_goals_from_state(state)
+        split_goals = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            self._stream.update(
+                stream_id,
+                adv_state,
+                split_goals,
+                action_list,
+                history_list,
+                history_max_steps,
+            )
+            return
+        if action_list:
+            self._stream.update(stream_id, adv_state, split_goals, action_list)
+            return
+        self._stream.update(stream_id, adv_state, split_goals)
+
+    def _reset_builder(self) -> None:
+        self._stream.reset()
 
 
 class FlatRelationEncoder(EncoderBase[FlatRelationData]):
@@ -230,6 +385,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             include_metadata=include_metadata,
             **kwargs,
         )
+
+    def stream(self) -> FlatRelationEncoderStream:
+        return FlatRelationEncoderStream(self)
+
+    def mutable_stream(self) -> FlatRelationMutableEncoderStream:
+        return FlatRelationMutableEncoderStream(self)
 
     def to_networkx(
         self,
@@ -485,4 +646,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         return ax
 
 
-__all__ = ["FlatRelationEncoder"]
+__all__ = [
+    "FlatRelationEncoder",
+    "FlatRelationEncoderStream",
+    "FlatRelationMutableEncoderStream",
+]

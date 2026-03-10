@@ -221,6 +221,194 @@ void init_flat_encoder(nb::module_& m)
          "history_subgoals"_a = nb::none(),
          "history_max_steps"_a = std::nullopt
       );
+
+   nb::class_< FlatRelationMutableStreamEncoder >(m, "FlatRelationMutableStreamEncoder")
+      .def(nb::init< FlatRelationEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State& >(
+            &FlatRelationMutableStreamEncoder::append
+         ),
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationMutableStreamEncoder::append
+         ),
+         "state"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
+            &FlatRelationMutableStreamEncoder::append
+         ),
+         "state"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationMutableStreamEncoder::append
+         ),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >&,
+            const std::vector< FlatRelationEncoderEngine::HistorySubgoal >&,
+            std::optional< int > >(&FlatRelationMutableStreamEncoder::append),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State& >(
+            &FlatRelationMutableStreamEncoder::update
+         ),
+         "id"_a,
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationMutableStreamEncoder::update
+         ),
+         "id"_a,
+         "state"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State&, const GoalInputs& >(
+            &FlatRelationMutableStreamEncoder::update
+         ),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationMutableStreamEncoder::update
+         ),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >&,
+            const std::vector< FlatRelationEncoderEngine::HistorySubgoal >&,
+            std::optional< int > >(&FlatRelationMutableStreamEncoder::update),
+         "id"_a,
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &FlatRelationMutableStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &FlatRelationMutableStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush", &FlatRelationMutableStreamEncoder::flush)
+      .def("flush_pyg", &FlatRelationMutableStreamEncoder::flush_pyg)
+      .def("reset", &FlatRelationMutableStreamEncoder::reset);
+
+   nb::class_< FlatRelationStreamEncoder >(m, "FlatRelationStreamEncoder")
+      .def(nb::init< FlatRelationEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State& >(&FlatRelationStreamEncoder::append),
+         "state"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationStreamEncoder::append
+         ),
+         "state"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
+            &FlatRelationStreamEncoder::append
+         ),
+         "state"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >& >(
+            &FlatRelationStreamEncoder::append
+         ),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast<
+            const mimir::search::State&,
+            const GoalInputs&,
+            const std::vector< mimir::formalism::GroundAction >&,
+            const std::vector< FlatRelationEncoderEngine::HistorySubgoal >&,
+            std::optional< int > >(&FlatRelationStreamEncoder::append),
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "history_max_steps"_a = std::nullopt,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("flush", &FlatRelationStreamEncoder::flush)
+      .def("flush_pyg", &FlatRelationStreamEncoder::flush_pyg)
+      .def("reset", &FlatRelationStreamEncoder::reset);
 }
 
 }  // namespace mifrost

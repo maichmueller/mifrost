@@ -29,9 +29,12 @@
 
 ## Stream Support
 
-- `HGraphEncoder`, `HorizonEncoder`, transition encoders, and `ColorEncoder` provide stream wrappers.
+- `HGraphEncoder`, `HorizonEncoder`, transition encoders, `ColorEncoder`, and the flat encoder family provide stream wrappers.
 - `HGraphEncoder` also exposes a mutable stream with `update/remove`.
-- Flat encoders do not provide stream wrappers yet.
+- `FlatRelationEncoder.stream()` is append-only.
+- `FlatRelationEncoder.mutable_stream()` supports `update/remove`.
+- `FlatHorizonEncoder.stream()` is mutable.
+- `FlatTransitionEncoder.stream()` and `FlatTransitionEffectsEncoder.stream()` are mutable wrapper-level streams built on flat horizon streaming.
 
 ## Action Contract
 

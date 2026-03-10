@@ -3,25 +3,11 @@
 Exports concrete encoders, stream variants, and shared base/helpers.
 """
 
-import sys as _sys
-
-_in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
+from importlib import import_module as _import_module
 
 from .base import EncoderBase, StreamEncoderBase
 from ._rustworkx_dag import transition_dag_from_rustworkx
 from .common import _encoding_dict_to_pyg, _split_goals, encoding_to_tensors
-from .hgraph import HGraphEncoder, HGraphEncoderStream, HGraphMutableEncoderStream
-from .horizon import HorizonEncoder, HorizonEncoderStream
-from .color import ColorEncoder, ColorEncoderStream
-from .flat_data import FlatRelationData, FlatRelationSchema
-from .transition import (
-    TransitionEffectsHGraphEncoder,
-    TransitionEffectsHGraphEncoderStream,
-    TransitionHGraphEncoder,
-    TransitionHGraphEncoderStream,
-)
-from .ilg import ILGEncoder, ILGEncoderStream, AtomStatus
-from .custom_example import ExampleConstantEncoder, ExampleConstantStreamEncoder
 from ..graph_fields import CollateSpec
 from ..schema_keys import (
     BATCH_ATTR,
@@ -47,36 +33,81 @@ from .types import (
     unregister_state_adapter,
 )
 
-if not _in_stubgen:
-    from .flat import FlatRelationEncoder
-    from .flat_horizon import FlatHorizonEncoder
-    from .flat_transition import FlatTransitionEncoder, FlatTransitionEffectsEncoder
+# Keep all encoder wrappers behind one declarative lazy-export table. This keeps
+# `mifrost.encoders` lightweight at import time while preserving the flat public API.
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "HGraphEncoder": (".hgraph", "HGraphEncoder"),
+    "HGraphEncoderStream": (".hgraph", "HGraphEncoderStream"),
+    "HGraphMutableEncoderStream": (".hgraph", "HGraphMutableEncoderStream"),
+    "HorizonEncoder": (".horizon", "HorizonEncoder"),
+    "HorizonEncoderStream": (".horizon", "HorizonEncoderStream"),
+    "ColorEncoder": (".color", "ColorEncoder"),
+    "ColorEncoderStream": (".color", "ColorEncoderStream"),
+    "FlatRelationEncoder": (".flat", "FlatRelationEncoder"),
+    "FlatRelationEncoderStream": (".flat", "FlatRelationEncoderStream"),
+    "FlatRelationMutableEncoderStream": (
+        ".flat",
+        "FlatRelationMutableEncoderStream",
+    ),
+    "FlatHorizonEncoder": (".flat_horizon", "FlatHorizonEncoder"),
+    "FlatHorizonEncoderStream": (".flat_horizon", "FlatHorizonEncoderStream"),
+    "FlatTransitionEncoder": (".flat_transition", "FlatTransitionEncoder"),
+    "FlatTransitionEffectsEncoder": (
+        ".flat_transition",
+        "FlatTransitionEffectsEncoder",
+    ),
+    "FlatTransitionEncoderStream": (
+        ".flat_transition",
+        "FlatTransitionEncoderStream",
+    ),
+    "FlatTransitionEffectsEncoderStream": (
+        ".flat_transition",
+        "FlatTransitionEffectsEncoderStream",
+    ),
+    "FlatRelationData": (".flat_data", "FlatRelationData"),
+    "FlatRelationSchema": (".flat_data", "FlatRelationSchema"),
+    "TransitionHGraphEncoder": (
+        ".transition",
+        "TransitionHGraphEncoder",
+    ),
+    "TransitionEffectsHGraphEncoder": (
+        ".transition",
+        "TransitionEffectsHGraphEncoder",
+    ),
+    "TransitionHGraphEncoderStream": (
+        ".transition",
+        "TransitionHGraphEncoderStream",
+    ),
+    "TransitionEffectsHGraphEncoderStream": (
+        ".transition",
+        "TransitionEffectsHGraphEncoderStream",
+    ),
+    "ILGEncoder": (".ilg", "ILGEncoder"),
+    "ILGEncoderStream": (".ilg", "ILGEncoderStream"),
+    "AtomStatus": (".ilg", "AtomStatus"),
+    "ExampleConstantEncoder": (
+        ".custom_example",
+        "ExampleConstantEncoder",
+    ),
+    "ExampleConstantStreamEncoder": (
+        ".custom_example",
+        "ExampleConstantStreamEncoder",
+    ),
+}
 
 
 def __getattr__(name: str):
-    if name == "FlatRelationEncoder":
-        from .flat import FlatRelationEncoder as _FlatRelationEncoder
-
-        globals()[name] = _FlatRelationEncoder
-        return _FlatRelationEncoder
-    if name == "FlatHorizonEncoder":
-        from .flat_horizon import FlatHorizonEncoder as _FlatHorizonEncoder
-
-        globals()[name] = _FlatHorizonEncoder
-        return _FlatHorizonEncoder
-    if name == "FlatTransitionEncoder":
-        from .flat_transition import FlatTransitionEncoder as _FlatTransitionEncoder
-
-        globals()[name] = _FlatTransitionEncoder
-        return _FlatTransitionEncoder
-    if name == "FlatTransitionEffectsEncoder":
-        from .flat_transition import (
-            FlatTransitionEffectsEncoder as _FlatTransitionEffectsEncoder,
-        )
-
-        globals()[name] = _FlatTransitionEffectsEncoder
-        return _FlatTransitionEffectsEncoder
+    target = _LAZY_EXPORTS.get(name)
+    if target is not None:
+        module_name, attr_name = target
+        value = getattr(_import_module(module_name, __name__), attr_name)
+        globals()[name] = value
+        return value
     raise AttributeError(name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__) | set(_LAZY_EXPORTS))
 
 
 __all__ = [
@@ -88,9 +119,14 @@ __all__ = [
     "ColorEncoder",
     "ColorEncoderStream",
     "FlatRelationEncoder",
+    "FlatRelationEncoderStream",
+    "FlatRelationMutableEncoderStream",
     "FlatHorizonEncoder",
+    "FlatHorizonEncoderStream",
     "FlatTransitionEncoder",
     "FlatTransitionEffectsEncoder",
+    "FlatTransitionEncoderStream",
+    "FlatTransitionEffectsEncoderStream",
     "FlatRelationData",
     "FlatRelationSchema",
     "TransitionHGraphEncoder",

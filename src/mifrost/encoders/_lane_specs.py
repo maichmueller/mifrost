@@ -227,15 +227,18 @@ def ensure_transition_dag(
     root: StateInput,
     dag: TransitionDAG | RXStateDAG | None,
 ) -> TransitionDAG:
+    adv_root = _advanced_state(root)
     if dag is not None:
         normalized = _normalize_dag_leaf(dag)
         if isinstance(normalized, TransitionDAG):
+            if normalized.root().get_index() != adv_root.get_index():
+                raise ValueError("dag root must match root state")
             return normalized
         raise TypeError(
             "dag must be a TransitionDAG, rustworkx.PyDiGraph, or None, "
             f"got {type(dag)!r}"
         )
-    return TransitionDAG(_advanced_state(root))
+    return TransitionDAG(adv_root)
 
 
 def prepare_goal_inputs(

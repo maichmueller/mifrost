@@ -285,6 +285,56 @@ void init_horizon_encoder(nb::module_& m)
          "history_subgoals"_a = nb::none(),
          "history_max_steps"_a = std::nullopt
       );
+
+   nb::class_< FlatHorizonStreamEncoder >(m, "FlatHorizonStreamEncoder")
+      .def(nb::init< FlatHorizonEncoderEngine& >(), nb::keep_alive< 1, 2 >())
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const TransitionDAG&, const GoalInputs& >(
+            &FlatHorizonStreamEncoder::append
+         ),
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "append",
+         nb::overload_cast< const mimir::search::State&, const GoalInputs& >(
+            &FlatHorizonStreamEncoder::append
+         ),
+         "root"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast<
+            int64_t,
+            const mimir::search::State&,
+            const TransitionDAG&,
+            const GoalInputs& >(&FlatHorizonStreamEncoder::update),
+         "id"_a,
+         "root"_a,
+         "dag"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def(
+         "update",
+         nb::overload_cast< int64_t, const mimir::search::State&, const GoalInputs& >(
+            &FlatHorizonStreamEncoder::update
+         ),
+         "id"_a,
+         "root"_a,
+         "goals"_a,
+         nb::call_guard< nb::gil_scoped_release >()
+      )
+      .def("remove", &FlatHorizonStreamEncoder::remove, "id"_a)
+      .def("set_reuse_removed", &FlatHorizonStreamEncoder::set_reuse_removed, "value"_a)
+      .def("flush", &FlatHorizonStreamEncoder::flush)
+      .def("flush_pyg", &FlatHorizonStreamEncoder::flush_pyg)
+      .def("reset", &FlatHorizonStreamEncoder::reset);
 }
 
 }  // namespace mifrost

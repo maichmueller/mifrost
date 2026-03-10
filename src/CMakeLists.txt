@@ -483,6 +483,7 @@ if (BUILD_TESTING)
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/color_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_horizon_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_relation_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_stream_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_history_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hgraph_stream_cache_test.cpp"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .._core import (
@@ -8,6 +9,7 @@ from .._core import (
     FlatHorizonEncoderConfig,
     FlatHorizonEncoderEngine,
     FlatHorizonEncoderMode,
+    FlatHorizonStreamEncoder as _FlatHorizonStreamEncoder,
     TransitionDAG,
     BatchEncoding,
 )
@@ -21,6 +23,7 @@ from .base import (
     GoalBatchParam,
     HistorySubgoalsBatchParam,
     StateBatchInput,
+    StreamEncoderBase,
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
@@ -73,6 +76,57 @@ def _normalize_flat_horizon_mode(mode: object | None) -> FlatHorizonEncoderMode 
         "transition_mode must be a FlatHorizonEncoderMode, HorizonEncoderMode, "
         f"or str, got {type(mode)!r}"
     )
+
+
+@dataclass
+class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
+    """Mutable stream wrapper for ``FlatHorizonEncoderEngine``."""
+
+    _encoder: "FlatHorizonEncoder"
+
+    def __post_init__(self) -> None:
+        self._stream = _FlatHorizonStreamEncoder(self._encoder.engine)
+        self._reset_builder()
+
+    def append(
+        self,
+        root: StateInput,
+        dag: TransitionDAG | RXStateDAG | None = None,
+        *,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> int:
+        adv_root = _advanced_state(root)
+        normalized_dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        if dag is None:
+            return self._coerce_stream_id(self._stream.append(adv_root, inputs))
+        return self._coerce_stream_id(
+            self._stream.append(adv_root, normalized_dag, inputs)
+        )
+
+    def remove(self, stream_id: int) -> None:
+        self._stream.remove(stream_id)
+
+    def update(
+        self,
+        stream_id: int,
+        root: StateInput,
+        dag: TransitionDAG | RXStateDAG | None = None,
+        *,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> None:
+        adv_root = _advanced_state(root)
+        normalized_dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        if dag is None:
+            self._stream.update(stream_id, adv_root, inputs)
+            return
+        self._stream.update(stream_id, adv_root, normalized_dag, inputs)
+
+    def _reset_builder(self) -> None:
+        self._stream.reset()
 
 
 class FlatHorizonEncoder(FlatRelationEncoder):
@@ -264,7 +318,11 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             **kwargs,
         )
 
+    def stream(self) -> FlatHorizonEncoderStream:
+        return FlatHorizonEncoderStream(self)
+
 
 __all__ = [
     "FlatHorizonEncoder",
+    "FlatHorizonEncoderStream",
 ]
