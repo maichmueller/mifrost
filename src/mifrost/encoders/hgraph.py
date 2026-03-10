@@ -558,6 +558,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             config, "lgan_rr_edge_pos", DEFAULT_LGAN_RR_EDGE_POS
         )
         self.include_lgan_edges = getattr(config, "include_lgan_edges", False)
+        self.lgan_anchor_sources = set(getattr(config, "lgan_anchor_sources", set()))
         self._lgan_edge_positions = {
             self.lgan_tn_edge_pos,
             self.lgan_nn_edge_pos,
@@ -573,6 +574,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         ignore_actions: bool = True,
         add_nullary_predicates: bool = False,
         include_lgan_edges: bool = False,
+        lgan_anchor_sources: Iterable[TargetSource | str] | None = None,
         include_static: bool = True,
         include_empty_edge_types: bool = True,
         export_node_names: bool = True,
@@ -588,7 +590,23 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         _engine_cls=HGraphEncoderEngine,
         **extra_config_kwargs,
     ) -> None:
-        """Create an HGraph encoder for one domain."""
+        """Create an HGraph encoder for one domain.
+
+        `target_sources` controls prediction/readout targets. When
+        `include_lgan_edges=True`, `lgan_anchor_sources` can additionally create
+        LGAN-only anchor symbols for `goal`, `subgoal`, and `history` without
+        adding target metadata.
+        """
+        normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
+        if (
+            normalized_lgan_anchor_sources is not None
+            and TargetSource.States in normalized_lgan_anchor_sources
+        ):
+            raise ValueError(
+                "HGraphEncoder currently supports lgan_anchor_sources="
+                "{'action', 'goal', 'subgoal', 'history'} only; 'state' "
+                "belongs to HorizonEncoder candidate targets"
+            )
         config = self._make_config(
             _config_cls,
             symbol_type_id=symbol_type_id,
@@ -596,6 +614,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             ignore_actions=ignore_actions,
             add_nullary_predicates=add_nullary_predicates,
             include_lgan_edges=include_lgan_edges,
+            lgan_anchor_sources=normalized_lgan_anchor_sources,
             include_static=include_static,
             include_empty_edge_types=include_empty_edge_types,
             export_node_names=export_node_names,

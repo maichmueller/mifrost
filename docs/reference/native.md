@@ -26,12 +26,14 @@ stored as a python shadow attribute.
 
 `target_indices` semantics are encoder-dependent:
 - `HorizonEncoder`: `TransitionDAG` node indices.
-- `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
+- `HGraphEncoder` with `target_sources=["action"]`: per-graph action input positions.
+- `FlatRelationEncoder` with `target_sources=["action"]`: per-graph action input positions.
 
 `target_candidate_ids` is row-aligned with `target_indices` and `target_positions`:
 - `HorizonEncoder`: explicit `TransitionDAG` node `candidate_id` values when provided for all
   emitted targets; otherwise falls back to DAG node indices.
-- `HGraphEncoder` with `export_action_targets=True`: per-graph action input positions.
+- `HGraphEncoder` with `target_sources=["action"]`: per-graph action input positions.
+- `FlatRelationEncoder` with `target_sources=["action"]`: per-graph action input positions.
 
 `BatchEncoding.as_pyg(...)` exposes native graph attrs as top-level PyG attrs
 (`data.target_names`, `data.target_symbol_prefix`, etc.). Collisions with
@@ -85,3 +87,10 @@ Key config classes (bindings-defined):
 - `HorizonEncoderConfig`
 - `SuccessorEncoderConfig`
 - `ColorEncoderConfig`
+
+LGAN config note:
+
+- Main state lanes (`HGraphEncoder`, `FlatRelationEncoder`) separate
+  `target_sources` from `lgan_anchor_sources`.
+- Horizon and transition lanes use candidate state rows as LGAN anchors and do
+  not expose `lgan_anchor_sources`.

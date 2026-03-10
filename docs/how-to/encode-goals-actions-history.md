@@ -20,11 +20,15 @@ Action inputs are supported in `HGraphEncoder` state-step workflows:
 enc = encoder.encode(state, goals=goals, actions=actions)
 ```
 
-If you want Horizon-like target metadata for encoded action targets, enable
-`export_action_targets` on `HGraphEncoder`:
+If you want prediction/readout metadata for encoded action targets, enable
+`target_sources=["action"]` on `HGraphEncoder`:
 
 ```python
-encoder = mifrost.HGraphEncoder(domain, ignore_actions=False, export_action_targets=True)
+encoder = mifrost.HGraphEncoder(
+    domain,
+    ignore_actions=False,
+    target_sources=["action"],
+)
 enc = encoder.encode_batch(states, actions=per_state_actions)
 data = enc.as_pyg(as_batch=True)
 ```
@@ -37,6 +41,21 @@ When enabled, HGraph emits:
 
 On `as_pyg(...)` outputs these attrs are available directly as top-level PyG attrs
 (for example `data.target_names`, `data.target_symbol_prefix`).
+
+If you only need LGAN anchors and do not want prediction targets, use
+`lgan_anchor_sources` instead of `target_sources` on the main state lanes:
+
+```python
+encoder = mifrost.HGraphEncoder(
+    domain,
+    include_lgan_edges=True,
+    lgan_anchor_sources=["goal", "history"],
+)
+```
+
+`FlatRelationEncoder` follows the same split:
+- `target_sources` creates prediction target metadata
+- `lgan_anchor_sources` creates extra LGAN anchor rows
 
 `HGraphEncoder` action inputs must be flat. Nested or tuple/macro action payloads are rejected.
 If your planner emits lookahead or macro-transition structures (for example from IW), use
@@ -91,3 +110,5 @@ History `dt` values must be negative. `-1` means one step in the past.
 - `HorizonEncoder` and transition encoders currently expose `actions` / `history_subgoals`
   parameters for API consistency, but non-empty payloads are rejected by their current encoding
   implementations.
+- `HorizonEncoder`, `FlatHorizonEncoder`, and both transition lanes do not use
+  `lgan_anchor_sources`. Their LGAN anchors come from candidate state rows.

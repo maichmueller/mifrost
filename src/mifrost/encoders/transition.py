@@ -57,7 +57,12 @@ from .types import (
 
 
 class _TransitionEncoderBase(HGraphEncoder):
-    """Shared implementation for transition-state encoders."""
+    """Shared successor encoder base.
+
+    Transition encoders reuse the horizon-style LGAN contract: LGAN anchors are
+    state candidates from the one-step successor structure. They do not accept
+    `lgan_anchor_sources`.
+    """
 
     def __init__(
         self,
@@ -80,7 +85,11 @@ class _TransitionEncoderBase(HGraphEncoder):
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
     ) -> None:
-        """Create a transition encoder C++ engine with the given mode/config."""
+        """Create a transition encoder.
+
+        `include_lgan_edges` uses successor-state candidates as anchors. Unlike
+        `HGraphEncoder`, this lane does not take `lgan_anchor_sources`.
+        """
         super().__init__(
             domain,
             symbol_type_id=symbol_type_id,

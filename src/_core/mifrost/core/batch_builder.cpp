@@ -804,8 +804,12 @@ void BatchBuilder::add_edges(
       edge_key_base, schema_key::kEdgeIndexDstComponent
    );
 
-   auto& col_src = get_column< int64_t >(src_key, 1);
-   auto& col_dst = get_column< int64_t >(dst_key, 1);
+   // Create both columns before taking references; inserting the second key may
+   // rehash the underlying map.
+   (void) get_column< int64_t >(src_key, 1);
+   (void) get_column< int64_t >(dst_key, 1);
+   auto& col_src = std::get< LongCol >(columns.at(src_key).data);
+   auto& col_dst = std::get< LongCol >(columns.at(dst_key).data);
 
    int64_t src_offset = node_offsets.try_emplace(src_type, 0).first->second;
    int64_t dst_offset = node_offsets.try_emplace(dst_type, 0).first->second;
@@ -836,8 +840,12 @@ void BatchBuilder::add_edge(
       edge_key_base, schema_key::kEdgeIndexDstComponent
    );
 
-   auto& col_src = get_column< int64_t >(src_key, 1);
-   auto& col_dst = get_column< int64_t >(dst_key, 1);
+   // Create both columns before taking references; inserting the second key may
+   // rehash the underlying map.
+   (void) get_column< int64_t >(src_key, 1);
+   (void) get_column< int64_t >(dst_key, 1);
+   auto& col_src = std::get< LongCol >(columns.at(src_key).data);
+   auto& col_dst = std::get< LongCol >(columns.at(dst_key).data);
 
    int64_t src_offset = node_offsets.try_emplace(src_type, 0).first->second;
    int64_t dst_offset = node_offsets.try_emplace(dst_type, 0).first->second;

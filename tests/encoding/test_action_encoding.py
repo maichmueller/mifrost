@@ -142,6 +142,33 @@ def test_hgraph_action_target_metadata_can_be_disabled(small_blocks):
     assert not hasattr(data, "target_names")
 
 
+def test_hgraph_lgan_goal_anchor_sources_work_without_target_metadata(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _first_goal(problem)
+
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=True,
+        include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+    )
+    data = encoder.encode_pyg(state, goals=[goal])
+
+    assert not hasattr(data, "target_positions")
+    symbol_names = list(getattr(data[mifrost.DEFAULT_SYMBOL_TYPE_ID], "node_names", []))
+    assert any(name.startswith("target:goal|") for name in symbol_names)
+    tn_edge_types = [
+        edge_type
+        for edge_type in data.edge_types
+        if edge_type[1] == encoder.lgan_tn_edge_pos
+    ]
+    assert tn_edge_types
+    assert (
+        sum(int(data[edge_type].edge_index.size(1)) for edge_type in tn_edge_types) > 0
+    )
+
+
 def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

@@ -13,6 +13,7 @@ def test_hgraph_config_accepts_kwargs() -> None:
         include_static=False,
         symbol_type_id="_sym_",
         target_symbol_prefix="tg:",
+        lgan_anchor_sources={mifrost.TargetSource.Goals},
         target_sources={mifrost.TargetSource.Actions, mifrost.TargetSource.Goals},
         lgan_tn_edge_pos="_tn_",
         lgan_nn_edge_pos="_nn_",
@@ -21,6 +22,7 @@ def test_hgraph_config_accepts_kwargs() -> None:
     assert config.include_static is False
     assert config.symbol_type_id == "_sym_"
     assert config.target_symbol_prefix == "tg:"
+    assert set(config.lgan_anchor_sources) == {mifrost.TargetSource.Goals}
     assert set(config.target_sources) == {
         mifrost.TargetSource.Actions,
         mifrost.TargetSource.Goals,
@@ -135,6 +137,20 @@ def test_transition_encoder_exposes_unified_config(small_blocks) -> None:
     assert encoder.config.lgan_tn_edge_pos == "_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_rr_custom_"
     assert encoder.config.max_goal_level == 1
+
+
+def test_transition_encoders_do_not_accept_lgan_anchor_sources(small_blocks) -> None:
+    _, domain, _ = small_blocks
+    with pytest.raises(TypeError, match="lgan_anchor_sources"):
+        mifrost.TransitionHGraphEncoder(
+            domain,
+            lgan_anchor_sources=["goal"],
+        )
+    with pytest.raises(TypeError, match="lgan_anchor_sources"):
+        mifrost.FlatTransitionEncoder(
+            domain,
+            lgan_anchor_sources=["goal"],
+        )
 
 
 def test_flat_relation_encoder_exposes_unified_lgan_config(small_blocks) -> None:

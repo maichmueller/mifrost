@@ -144,6 +144,7 @@ class HGraphEncoderEngine {
       bool include_static = true;
       bool include_empty_edge_types = true;
       bool export_node_names = true;
+      std::set< TargetSource > lgan_anchor_sources = {};
       std::set< TargetSource > target_sources = {};
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };
@@ -508,6 +509,8 @@ class HGraphEncoderEngine {
 
    std::string symbol_node_key(const mimir::formalism::Object& obj) const;
    [[nodiscard]] bool has_target_source(TargetSource source) const;
+   [[nodiscard]] bool has_lgan_anchor_source(TargetSource source) const;
+   [[nodiscard]] bool has_anchor_symbol_source(TargetSource source) const;
    [[nodiscard]] static std::string_view target_group_name(TargetSource source);
    int64_t get_or_assign_target_group_id(TargetSource source);
    int64_t append_target_candidate(
@@ -602,6 +605,7 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     include_empty_edge_types,
     export_node_names,
+    lgan_anchor_sources,
     target_sources,
     goal_satisfaction_derivations)
 )
@@ -864,9 +868,9 @@ void HGraphEncoderEngine::encode_literals(
                                                  : std::nullopt;
       const bool is_subgoal = goal_level.has_value() and (*goal_level > 0);
       std::optional< TargetSource > target_source = std::nullopt;
-      if(is_subgoal and has_target_source(TargetSource::Subgoals)) {
+      if(is_subgoal and has_anchor_symbol_source(TargetSource::Subgoals)) {
          target_source = TargetSource::Subgoals;
-      } else if((not is_subgoal) and has_target_source(TargetSource::Goals)) {
+      } else if((not is_subgoal) and has_anchor_symbol_source(TargetSource::Goals)) {
          target_source = TargetSource::Goals;
       }
 
@@ -951,7 +955,9 @@ void HGraphEncoderEngine::encode_literals(
          if(config_.include_lgan_edges) {
             workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
          }
-         append_target_candidate(target_symbol_idx, *target_source, formatted_literal);
+         if(has_target_source(*target_source)) {
+            append_target_candidate(target_symbol_idx, *target_source, formatted_literal);
+         }
          extra_symbol_ids.emplace_back(target_symbol_id);
          const std::string pos_str = std::to_string(pos++);
          append_edges(

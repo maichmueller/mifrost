@@ -85,7 +85,11 @@ def _normalize_flat_horizon_mode(
 
 @dataclass
 class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
-    """Mutable stream wrapper for ``FlatHorizonEncoderEngine``."""
+    """Mutable stream for flat horizon encodings.
+
+    Each item is a root state plus an optional `TransitionDAG`. The flushed
+    result matches direct horizon batch encoding.
+    """
 
     _encoder: "FlatHorizonEncoder"
 
@@ -101,6 +105,7 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
+        """Append one root/DAG input and return its stream id."""
         adv_root = _advanced_state(root)
         normalized_dag = ensure_transition_dag(root, dag)
         inputs = prepare_goal_inputs(root, goals, subgoal_layers)
@@ -122,6 +127,7 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
+        """Replace one root/DAG input in place."""
         adv_root = _advanced_state(root)
         normalized_dag = ensure_transition_dag(root, dag)
         inputs = prepare_goal_inputs(root, goals, subgoal_layers)
@@ -135,7 +141,7 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
 
 
 class FlatHorizonEncoder(FlatRelationEncoder):
-    """Flat packed horizon encoder with state-target carrier rows."""
+    """Encode a root state plus lookahead candidates as packed flat relations."""
 
     def __init__(
         self,
@@ -165,6 +171,12 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         goal_satisfaction_derivations: Any | None = None,
     ) -> None:
+        """Create a flat horizon encoder.
+
+        This lane reads a root state plus a `TransitionDAG` and creates
+        candidate state rows. When `include_lgan_edges=True`, LGAN anchors are
+        those candidate rows. There is no `lgan_anchor_sources` switch here.
+        """
         config_kwargs: dict[str, Any] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
@@ -211,14 +223,17 @@ class FlatHorizonEncoder(FlatRelationEncoder):
 
     @property
     def engine(self) -> FlatHorizonEncoderEngine:
+        """Expose the native flat horizon engine."""
         return self._engine
 
     @property
     def config(self) -> FlatHorizonEncoderConfig:
+        """Expose the resolved native config."""
         return self._config
 
     @property
     def relation_dict(self):
+        """Expose the relation schema used by the native engine."""
         return self._engine.relation_dict
 
     def _accepted_kwargs(self) -> set[str]:
@@ -259,6 +274,12 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         include_metadata: bool = True,
         **kwargs,
     ) -> BatchEncoding:
+        """Encode one root state and optional lookahead DAG.
+
+        If `dag` is omitted, a one-node DAG for the root is used. `actions` and
+        `history_subgoals` are accepted for API consistency but non-empty
+        payloads are rejected on this lane.
+        """
         return super().encode(
             root,
             goals=goals,
@@ -329,6 +350,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         include_metadata: bool = True,
         **kwargs,
     ) -> BatchEncoding:
+        """Encode many root/DAG inputs into one flat batch."""
         return super().encode_batch(
             roots,
             goals=goals,
@@ -344,6 +366,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         )
 
     def stream(self) -> FlatHorizonEncoderStream:
+        """Return a mutable stream for root/DAG horizon inputs."""
         return FlatHorizonEncoderStream(self)
 
 

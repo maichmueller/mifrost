@@ -152,6 +152,16 @@ HGraphEncoderEngine::HeteroEncodingWorkspace& HGraphEncoderEngine::init_hetero_w
    return workspace_;
 }
 
+bool HGraphEncoderEngine::has_lgan_anchor_source(TargetSource source) const
+{
+   return config_.include_lgan_edges and config_.lgan_anchor_sources.contains(source);
+}
+
+bool HGraphEncoderEngine::has_anchor_symbol_source(TargetSource source) const
+{
+   return has_target_source(source) or has_lgan_anchor_source(source);
+}
+
 void HGraphEncoderEngine::track_relation_symbols_if_enabled(
    RelationRef rel_ref,
    std::span< const int64_t > object_symbol_ids,
@@ -692,6 +702,7 @@ void HGraphEncoderEngine::encode_history(
 {
    builder.set_node_feature_dim("history", 1);
    const bool target_history = has_target_source(TargetSource::History);
+   const bool anchor_history = has_anchor_symbol_source(TargetSource::History);
 
    struct HistoryEntry {
       int dt = 0;
@@ -782,7 +793,7 @@ void HGraphEncoderEngine::encode_history(
                }
 
                std::vector< int64_t > extra_symbol_ids;
-               if(target_history) {
+               if(anchor_history) {
                   const std::string formatted_literal = RelationFormatter::format_literal< Tag >(
                      literal, std::nullopt
                   );
@@ -819,7 +830,9 @@ void HGraphEncoderEngine::encode_history(
                   if(config_.include_lgan_edges) {
                      workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
                   }
-                  append_target_candidate(target_symbol_idx, TargetSource::History, target_name);
+                  if(target_history) {
+                     append_target_candidate(target_symbol_idx, TargetSource::History, target_name);
+                  }
                   extra_symbol_ids.emplace_back(target_symbol_id);
                   const std::string pos_str = std::to_string(object_symbol_ids.size());
                   append_edges(
@@ -905,8 +918,10 @@ void HGraphEncoderEngine::add_lgan_edges(
    if(lgan_target_symbol_ids.empty()) {
       throw std::invalid_argument(
          "include_lgan_edges=true requires explicit target symbols, but none were encoded. "
-         "For HGraph/Successor, pass actions with ignore_actions=false; for Horizon, ensure "
-         "candidate target symbols exist (exclude_root_candidate may remove all)."
+         "For HGraph/Successor, pass actions with ignore_actions=false or enable "
+         "lgan_anchor_sources/target_sources such as 'goal', 'subgoal', or 'history'; "
+         "for Horizon, ensure candidate target symbols exist "
+         "(exclude_root_candidate may remove all)."
       );
    }
    if(symbol_indices.empty() or relation_to_symbols.empty()) {

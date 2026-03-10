@@ -57,7 +57,12 @@ from .types import (
 
 @dataclass
 class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
-    """Append-only stream wrapper for ``FlatRelationEncoderEngine``."""
+    """Append-only stream for flat state encodings.
+
+    Each appended item follows the same input contract as
+    :meth:`FlatRelationEncoder.encode`. The flushed result is the same flat
+    packed carrier you would get from direct batch encoding.
+    """
 
     _encoder: "FlatRelationEncoder"
 
@@ -75,6 +80,12 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> int:
+        """Append one state payload and return its stream id.
+
+        `goals`, `actions`, `subgoal_layers`, and `history_subgoals` are all
+        optional. If `goals` are omitted, the problem goals from `state` are
+        used when subgoals or history are requested.
+        """
         adv_state = _advanced_state(state)
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
@@ -110,7 +121,12 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
 
 @dataclass
 class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
-    """Mutable stream wrapper for ``FlatRelationEncoderEngine``."""
+    """Mutable stream for flat state encodings.
+
+    This stream accepts the same payloads as
+    :meth:`FlatRelationEncoder.encode`, but also supports `update` and
+    `remove`.
+    """
 
     _encoder: "FlatRelationEncoder"
 
@@ -128,6 +144,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> int:
+        """Append one state payload and return its stream id."""
         adv_state = _advanced_state(state)
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
@@ -158,6 +175,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         return self._coerce_stream_id(self._stream.append(adv_state, split_goals))
 
     def remove(self, stream_id: int) -> None:
+        """Remove one previously appended item by id."""
         self._stream.remove(stream_id)
 
     def update(
@@ -171,6 +189,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> None:
+        """Replace one previously appended item in place."""
         adv_state = _advanced_state(state)
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
@@ -204,7 +223,12 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
 
 
 class FlatRelationEncoder(EncoderBase[FlatRelationData]):
-    """Flat packed relation encoder for state/goal workloads."""
+    """Encode one planning state as packed flat relations.
+
+    The output uses one flat entity table and packed relation tensors instead
+    of relation nodes. Optional goals, subgoals, explicit actions, and history
+    payloads can add more relations and helper rows on that same table.
+    """
 
     def __init__(
         self,
@@ -224,6 +248,23 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         goal_satisfaction_derivations: Iterable[Any] | None = None,
     ) -> None:
+        """Build a flat encoder for state-style workloads.
+
+        Parameters follow the flat state lane:
+
+        - `goals` and `subgoal_layers` change which goal relations are emitted.
+        - `actions` add grounded-action rows and action relations.
+        - `history_subgoals` adds history carrier rows and history relations.
+        - `target_sources` creates prediction/readout target metadata.
+        - `lgan_anchor_sources` creates extra LGAN anchor rows for `goal`,
+          `subgoal`, and `history` without turning them into prediction
+          targets.
+        - `include_lgan_edges` emits the packed LGAN edge tensors.
+
+        `state` targets are not supported on this lane. Use
+        `FlatHorizonEncoder` or the flat transition encoders for state
+        candidates.
+        """
         normalized_target_sources = normalize_target_sources(target_sources)
         normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
 
@@ -280,14 +321,17 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
 
     @property
     def engine(self) -> FlatRelationEncoderEngine:
+        """Expose the native flat relation engine."""
         return self._engine
 
     @property
     def config(self) -> FlatRelationEncoderConfig:
+        """Expose the resolved native config."""
         return self._config
 
     @property
     def relation_dict(self):
+        """Expose the relation schema used by the native engine."""
         return self._engine.relation_dict
 
     def _accepted_kwargs(self) -> set[str]:
@@ -337,6 +381,13 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         include_metadata: bool = True,
         **kwargs,
     ) -> HomoEncoding:
+        """Encode one state into the native flat carrier.
+
+        If `goals` are omitted, the problem goals from `state` are used when
+        needed. `actions`, `subgoal_layers`, and `history_subgoals` are all
+        optional. Use `encode_pyg()` when you want a `FlatRelationData`
+        wrapper directly.
+        """
         return super().encode(
             state,
             goals=goals,
@@ -406,6 +457,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         include_metadata: bool = True,
         **kwargs,
     ) -> HomoEncoding:
+        """Encode many states with shared or per-state optional payloads.
+
+        Batch kwargs follow the same rules as `encode`: each optional payload
+        may be shared for all states or given separately per state.
+        """
         return super().encode_batch(
             states,
             goals=goals,
@@ -420,9 +476,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         )
 
     def stream(self) -> FlatRelationEncoderStream:
+        """Return an append-only stream for flat state encodings."""
         return FlatRelationEncoderStream(self)
 
     def mutable_stream(self) -> FlatRelationMutableEncoderStream:
+        """Return a mutable stream with `append`, `update`, and `remove`."""
         return FlatRelationMutableEncoderStream(self)
 
     def to_networkx(
@@ -432,6 +490,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         graph_index: int = 0,
         mode: str = "star",
     ) -> nx.MultiDiGraph:
+        """Build a debug graph view for one encoded flat graph.
+
+        The returned graph is only for inspection. It expands each relation
+        instance into a synthetic node and can overlay LGAN edges when they are
+        present in `data`.
+        """
         if mode != "star":
             raise ValueError(f"Unsupported flat visualization mode: {mode!r}")
 
@@ -618,6 +682,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         edge_labels: bool = True,
         layout: dict | None = None,
     ):
+        """Draw a flat debug graph with matplotlib.
+
+        Pass either `FlatRelationData` or a graph produced by
+        :meth:`to_networkx`. LGAN edges are shown as dashed overlays when they
+        exist.
+        """
         try:
             import matplotlib.pyplot as plt
         except ModuleNotFoundError as exc:

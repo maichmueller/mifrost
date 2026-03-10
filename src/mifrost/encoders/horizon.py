@@ -149,7 +149,12 @@ class HorizonEncoder(HGraphEncoder):
         lgan_rr_edge_pos: str | None = DEFAULT_LGAN_RR_EDGE_POS,
         history_link_relation: str | None = DEFAULT_HISTORY_LINK_RELATION,
     ) -> None:
-        """Create a horizon encoder for one domain."""
+        """Create a hetero horizon encoder.
+
+        This lane reads a root state plus a `TransitionDAG` and creates
+        candidate target rows. When `include_lgan_edges=True`, LGAN anchors are
+        those candidate rows. There is no `lgan_anchor_sources` switch here.
+        """
         super().__init__(
             domain,
             symbol_type_id=symbol_type_id,

@@ -18,3 +18,11 @@
 - Stream semantics/parity: `tests/encoding/test_stream_encoder.py`
 - Flat stream semantics/parity: `tests/encoding/test_flat_stream_encoder.py`
 - Dynamic graph fields/collation: `tests/encoding/test_dynamic_graph_fields.py`
+
+## LGAN Surface
+
+- `HGraphEncoder` and `FlatRelationEncoder` share the same main-lane LGAN API:
+  `include_lgan_edges`, `lgan_*_edge_pos`, and `lgan_anchor_sources`.
+- `HorizonEncoder` and `FlatHorizonEncoder` use candidate state rows as LGAN
+  anchors and do not expose `lgan_anchor_sources`.
+- Transition encoders on both lanes follow the horizon rule.

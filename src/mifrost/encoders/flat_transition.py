@@ -41,7 +41,11 @@ from .types import (
 
 
 class _FlatTransitionEncoderBase(FlatHorizonEncoder):
-    """Shared successor wrapper backed by the flat horizon engine."""
+    """Shared flat transition wrapper.
+
+    This lane builds a one-step `TransitionDAG` from `current` and `successor`
+    and then reuses `FlatHorizonEncoder`.
+    """
 
     def _accepted_kwargs(self) -> set[str]:
         return {"successor", "successors", "history_subgoals", "history_max_steps"}
@@ -89,6 +93,7 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         include_metadata: bool = True,
         **kwargs,
     ):
+        """Encode one current/successor pair."""
         return super().encode(
             current,
             goals=goals,
@@ -164,6 +169,7 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         include_metadata: bool = True,
         **kwargs,
     ):
+        """Encode many current/successor pairs into one flat batch."""
         return super().encode_batch(
             states,
             goals=goals,
@@ -179,12 +185,13 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         )
 
     def stream(self) -> "_FlatTransitionEncoderStream":
+        """Return a mutable stream backed by flat horizon streaming."""
         return _FlatTransitionEncoderStream(self)
 
 
 @dataclass
 class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
-    """Wrapper-level mutable stream for flat transition encoders."""
+    """Mutable stream for flat transition encoders."""
 
     _encoder: _FlatTransitionEncoderBase
 
@@ -200,6 +207,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
+        """Append one current/successor pair and return its stream id."""
         dag = single_transition_dag(current, successor)
         return self._coerce_stream_id(
             self._stream.append(
@@ -222,6 +230,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
+        """Replace one current/successor pair in place."""
         dag = single_transition_dag(current, successor)
         self._stream.update(
             stream_id,
@@ -236,9 +245,14 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
 
 
 class FlatTransitionEncoder(_FlatTransitionEncoderBase):
-    """Flat full successor encoder backed by state-target carrier rows."""
+    """Encode full current-to-successor structure on the flat carrier."""
 
     def __init__(self, domain, **kwargs) -> None:
+        """Create a full flat transition encoder.
+
+        LGAN, when enabled, uses successor-state candidate rows from the
+        underlying flat horizon lane.
+        """
         super().__init__(
             domain,
             transition_mode="full",
@@ -251,13 +265,15 @@ class FlatTransitionEncoder(_FlatTransitionEncoderBase):
         )
 
     def stream(self) -> "FlatTransitionEncoderStream":
+        """Return a mutable stream for full flat transitions."""
         return FlatTransitionEncoderStream(self)
 
 
 class FlatTransitionEffectsEncoder(_FlatTransitionEncoderBase):
-    """Flat delta/effects successor encoder backed by state-target carrier rows."""
+    """Encode only changed successor structure on the flat carrier."""
 
     def __init__(self, domain, **kwargs) -> None:
+        """Create a delta/effects flat transition encoder."""
         super().__init__(
             domain,
             transition_mode="delta",
@@ -270,6 +286,7 @@ class FlatTransitionEffectsEncoder(_FlatTransitionEncoderBase):
         )
 
     def stream(self) -> "FlatTransitionEffectsEncoderStream":
+        """Return a mutable stream for flat delta/effects transitions."""
         return FlatTransitionEffectsEncoderStream(self)
 
 

@@ -36,6 +36,20 @@
 - `FlatHorizonEncoder.stream()` is mutable.
 - `FlatTransitionEncoder.stream()` and `FlatTransitionEffectsEncoder.stream()` are mutable wrapper-level streams built on flat horizon streaming.
 
+## LGAN API
+
+- `HGraphEncoder` and `FlatRelationEncoder` share the same main-lane LGAN knobs:
+  - `include_lgan_edges`
+  - `lgan_tn_edge_pos`, `lgan_nn_edge_pos`, `lgan_rr_edge_pos`
+  - `lgan_anchor_sources` for extra `goal` / `subgoal` / `history` LGAN anchors without prediction targets
+- `target_sources` stays separate from `lgan_anchor_sources` on those main lanes:
+  - `target_sources` controls prediction/readout targets
+  - `lgan_anchor_sources` only creates extra LGAN anchor rows
+- `HorizonEncoder` and `FlatHorizonEncoder` do not use `lgan_anchor_sources`.
+  Their LGAN anchors are candidate state rows from the DAG.
+- `Transition*Encoder` and `FlatTransition*Encoder` follow the horizon rule:
+  LGAN anchors come from successor-state candidates, not from `lgan_anchor_sources`.
+
 ## Action Contract
 
 - `HGraphEncoder` expects flat action inputs (single action list or per-state flat lists).

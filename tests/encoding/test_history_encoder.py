@@ -216,6 +216,43 @@ def test_history_target_metadata(domain_name, problem_name):
         assert literal_name in str(target_name)
 
 
+@pytest.mark.parametrize(
+    "domain_name,problem_name",
+    DOMAIN_CASES,
+    ids=[f"{d}:{p}" for d, p in DOMAIN_CASES],
+)
+def test_history_lgan_anchor_sources_work_without_target_metadata(
+    domain_name, problem_name
+):
+    _, domain, problem = problem_setup(domain_name, problem_name)
+    encoder = HGraphEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.History],
+    )
+    state = problem.get_initial_state()
+    goals, history_subgoals = _history_inputs(problem)
+
+    data = encoder.encode_pyg(
+        state,
+        goals=goals,
+        history_subgoals=history_subgoals,
+    )
+
+    assert not hasattr(data, "target_positions")
+    symbol_names = list(getattr(data[mifrost.DEFAULT_SYMBOL_TYPE_ID], "node_names", []))
+    assert any(name.startswith("target:history|") for name in symbol_names)
+    tn_edge_types = [
+        edge_type
+        for edge_type in data.edge_types
+        if edge_type[1] == encoder.lgan_tn_edge_pos
+    ]
+    assert tn_edge_types
+    assert (
+        sum(int(data[edge_type].edge_index.size(1)) for edge_type in tn_edge_types) > 0
+    )
+
+
 def test_history_target_metadata_disambiguates_same_literal_across_timesteps():
     _, domain, problem = problem_setup("blocks", "smedium")
     goals = list(problem.get_goal_condition().get_literals())

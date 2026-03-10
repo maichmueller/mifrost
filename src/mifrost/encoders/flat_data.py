@@ -126,6 +126,11 @@ def _normalize_shared_scalar(value: object | None) -> object | None:
 def normalize_flat_relation_batch_metadata(
     data: FlatRelationData | Batch,
 ) -> FlatRelationData | Batch:
+    """Normalize flat metadata after native or PyG batching.
+
+    This makes shared schema labels and per-graph name lists easier to use from
+    Python. It does not change the stored flat relation tensors.
+    """
     num_graphs = int(getattr(data, "num_graphs", getattr(data, "_num_graphs", 1)))
     target_sizes = getattr(data, "target_sizes", None)
     if target_sizes is None:
@@ -177,6 +182,8 @@ def normalize_flat_relation_batch_metadata(
 
 @dataclass(frozen=True)
 class FlatRelationSchema:
+    """Small immutable view of the flat relation schema."""
+
     names: tuple[str, ...]
     arities: tuple[int, ...]
     sources: tuple[str, ...] = ()
@@ -184,6 +191,7 @@ class FlatRelationSchema:
 
     @cached_property
     def name_to_id(self) -> dict[str, int]:
+        """Map each relation name to its fixed schema index."""
         return {name: idx for idx, name in enumerate(self.names)}
 
 
@@ -212,6 +220,7 @@ class FlatRelationData(Data):
 
     @cached_property
     def schema(self) -> FlatRelationSchema:
+        """Return the normalized flat relation schema for this batch."""
         return FlatRelationSchema(
             names=_normalize_str_tuple(getattr(self, "relation_names", ()) or ()),
             arities=_normalize_int_tuple(getattr(self, "relation_arities", ()) or ()),
@@ -223,9 +232,11 @@ class FlatRelationData(Data):
 
     @property
     def flattened_relations(self) -> dict[str, torch.Tensor]:
+        """Return the flat relations grouped by relation name."""
         return self.flattened_relations_view()
 
     def relation_instance_counts_total(self) -> torch.Tensor:
+        """Return total instance counts per relation across the whole batch."""
         counts = getattr(self, "relation_counts", None)
         if counts is None:
             return torch.zeros((len(self.schema.names),), dtype=torch.long)
@@ -235,6 +246,7 @@ class FlatRelationData(Data):
         return counts.sum(dim=0)
 
     def relation_slot_offsets(self, graph_index: int | None = None) -> torch.Tensor:
+        """Return slot offsets into `relation_args` for one graph or the whole batch."""
         counts = self._relation_counts_for(graph_index)
         arities = self._relation_arities_tensor(counts.device)
         slot_counts = counts * arities
@@ -248,6 +260,11 @@ class FlatRelationData(Data):
     def flattened_relations_view(
         self, graph_index: int | None = None
     ) -> dict[str, torch.Tensor]:
+        """Slice `relation_args` into per-relation matrices.
+
+        With `graph_index=None`, the result covers the whole batch. With a graph
+        index, the result is limited to one graph.
+        """
         relation_args = getattr(self, "relation_args", None)
         if relation_args is None:
             return {
@@ -307,6 +324,7 @@ class FlatRelationData(Data):
         return out
 
     def graph_node_names(self, graph_index: int = 0) -> list[str]:
+        """Return entity-row names for one graph."""
         node_names = getattr(self, "node_names", None)
         if node_names is None:
             start, end = self.graph_node_range(graph_index)
@@ -316,6 +334,7 @@ class FlatRelationData(Data):
         return [str(name) for name in node_names]
 
     def graph_object_names(self, graph_index: int = 0) -> list[str]:
+        """Return object names for one graph."""
         object_names = getattr(self, "object_names", None)
         if object_names is None:
             return self.graph_node_names(graph_index)
@@ -324,6 +343,7 @@ class FlatRelationData(Data):
         return [str(name) for name in object_names]
 
     def graph_object_indices(self, graph_index: int = 0) -> torch.Tensor:
+        """Return global entity rows that correspond to objects."""
         return self._graph_cat_field_slice(
             field_name="object_indices",
             size_field_name="object_sizes",
@@ -331,6 +351,7 @@ class FlatRelationData(Data):
         )
 
     def graph_history_entity_indices(self, graph_index: int = 0) -> torch.Tensor:
+        """Return global entity rows used as history carriers."""
         return self._graph_cat_field_slice(
             field_name="history_entity_indices",
             size_field_name="history_entity_sizes",
@@ -338,6 +359,7 @@ class FlatRelationData(Data):
         )
 
     def graph_history_entity_dt(self, graph_index: int = 0) -> torch.Tensor:
+        """Return the `dt` values for history carrier rows."""
         return self._graph_cat_field_slice(
             field_name="history_entity_dt",
             size_field_name="history_entity_sizes",
@@ -345,6 +367,7 @@ class FlatRelationData(Data):
         )
 
     def graph_history_entity_names(self, graph_index: int = 0) -> list[str]:
+        """Return names for the history carrier rows of one graph."""
         history_entity_indices = self.graph_history_entity_indices(graph_index)
         if history_entity_indices.numel() == 0:
             return []
@@ -358,6 +381,11 @@ class FlatRelationData(Data):
     def graph_target_entity_indices(
         self, graph_index: int = 0, group: str | int | None = None
     ) -> torch.Tensor:
+        """Return candidate-carrier rows for one graph.
+
+        Use `group` to limit the result to one source, such as `goal`,
+        `subgoal`, `action`, or `history`.
+        """
         indices = self._graph_cat_field_slice(
             field_name="target_entity_indices",
             size_field_name="target_entity_sizes",
@@ -372,6 +400,7 @@ class FlatRelationData(Data):
         return indices[mask]
 
     def graph_target_entity_group_ids(self, graph_index: int = 0) -> torch.Tensor:
+        """Return source-group ids for target-entity rows."""
         return self._graph_cat_field_slice(
             field_name="target_entity_group_ids",
             size_field_name="target_entity_sizes",
@@ -381,6 +410,7 @@ class FlatRelationData(Data):
     def graph_target_entity_names(
         self, graph_index: int = 0, group: str | int | None = None
     ) -> list[str]:
+        """Return names for target-entity rows, optionally filtered by group."""
         target_entity_indices = self.graph_target_entity_indices(
             graph_index, group=group
         )
@@ -394,6 +424,7 @@ class FlatRelationData(Data):
         ]
 
     def graph_target_positions(self, graph_index: int = 0) -> torch.Tensor:
+        """Return entity-row positions for prediction targets."""
         return self._graph_cat_field_slice(
             field_name="target_positions",
             size_field_name="target_sizes",
@@ -401,6 +432,7 @@ class FlatRelationData(Data):
         )
 
     def graph_target_indices(self, graph_index: int = 0) -> torch.Tensor:
+        """Return per-graph target indices in encounter order."""
         return self._graph_cat_field_slice(
             field_name="target_indices",
             size_field_name="target_sizes",
@@ -408,6 +440,7 @@ class FlatRelationData(Data):
         )
 
     def graph_target_candidate_ids(self, graph_index: int = 0) -> torch.Tensor:
+        """Return stable candidate ids for prediction targets."""
         return self._graph_cat_field_slice(
             field_name="target_candidate_ids",
             size_field_name="target_sizes",
@@ -415,6 +448,7 @@ class FlatRelationData(Data):
         )
 
     def graph_target_depths(self, graph_index: int = 0) -> torch.Tensor:
+        """Return target depths when the encoder emitted them."""
         return self._graph_cat_field_slice(
             field_name="target_depths",
             size_field_name="target_sizes",
@@ -422,6 +456,7 @@ class FlatRelationData(Data):
         )
 
     def graph_target_group_ids(self, graph_index: int = 0) -> torch.Tensor:
+        """Return source-group ids for prediction targets."""
         return self._graph_cat_field_slice(
             field_name="target_group_ids",
             size_field_name="target_sizes",
@@ -429,6 +464,7 @@ class FlatRelationData(Data):
         )
 
     def graph_target_names(self, graph_index: int = 0) -> list[str]:
+        """Return display names for prediction targets."""
         target_names = getattr(self, "target_names", None)
         if target_names is None:
             return []
@@ -437,6 +473,7 @@ class FlatRelationData(Data):
         return [str(name) for name in target_names]
 
     def graph_relation_instance_range(self, graph_index: int = 0) -> tuple[int, int]:
+        """Return the global relation-instance index range for one graph."""
         relation_instance_sizes = getattr(self, "relation_instance_sizes", None)
         if relation_instance_sizes is None:
             counts = getattr(self, "relation_counts", None)
@@ -462,6 +499,7 @@ class FlatRelationData(Data):
         return start, end
 
     def graph_lgan_tn_edges(self, graph_index: int = 0) -> torch.Tensor:
+        """Return packed TN LGAN edges for one graph."""
         return self._graph_edge_slice(
             src_field_name="lgan_tn_relation_indices",
             dst_field_name="lgan_tn_entity_indices",
@@ -470,6 +508,7 @@ class FlatRelationData(Data):
         )
 
     def graph_lgan_nn_edges(self, graph_index: int = 0) -> torch.Tensor:
+        """Return packed NN LGAN edges for one graph."""
         return self._graph_edge_slice(
             src_field_name="lgan_nn_relation_indices",
             dst_field_name="lgan_nn_entity_indices",
@@ -478,6 +517,7 @@ class FlatRelationData(Data):
         )
 
     def graph_lgan_rr_edges(self, graph_index: int = 0) -> torch.Tensor:
+        """Return packed RR LGAN edges for one graph."""
         return self._graph_edge_slice(
             src_field_name="lgan_rr_src_relation_indices",
             dst_field_name="lgan_rr_dst_relation_indices",
@@ -486,6 +526,7 @@ class FlatRelationData(Data):
         )
 
     def graph_node_range(self, graph_index: int = 0) -> tuple[int, int]:
+        """Return the global entity-row range for one graph."""
         node_sizes = getattr(self, "node_sizes", None)
         if node_sizes is None:
             return (0, int(getattr(self, "num_nodes", 0)))
@@ -500,6 +541,7 @@ class FlatRelationData(Data):
 
     @property
     def num_graphs(self) -> int:
+        """Return how many graphs are stored in this flat carrier."""
         if hasattr(self, "_num_graphs"):
             return int(self._num_graphs)
         node_sizes = getattr(self, "node_sizes", None)
@@ -627,6 +669,11 @@ def flat_relation_data_from_pyg(
     *,
     schema_fingerprint: int | None = None,
 ) -> FlatRelationData | Batch:
+    """Cast a PyG `Data` or `Batch` into `FlatRelationData`.
+
+    This keeps existing tensors and only normalizes the flat schema and shared
+    metadata fields.
+    """
     if isinstance(data, Batch):
         out = Batch(_base_cls=FlatRelationData)
     else:
