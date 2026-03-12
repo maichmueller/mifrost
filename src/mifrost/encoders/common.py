@@ -600,16 +600,21 @@ def _encoding_dict_to_pyg(
     """
     Convert normalized encoder dictionaries into PyG output.
 
-    Conversion dispatches on ``schema["graph_kind"]``.
+    Conversion dispatches on ``schema["graph_kind"]`` with a legacy fallback
+    for flat encodings tagged only via ``schema["flags"]["flat_relations"]``.
     """
     encoding_dict = _coerce_encoding_dict(encoding)
     schema = _coerce_schema_dict(encoding_dict)
+    graph_kind = schema.get("graph_kind")
+    if graph_kind == "flat":
+        return _encoding_dict_to_pyg_flat(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
     flags = schema.get("flags", {})
     if isinstance(flags, Mapping) and bool(flags.get("flat_relations", False)):
         return _encoding_dict_to_pyg_flat(
             encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
-    graph_kind = schema.get("graph_kind")
     if graph_kind == "homo":
         return _encoding_dict_to_pyg_homo(
             encoding_dict, as_batch=as_batch, include_metadata=include_metadata

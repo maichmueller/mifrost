@@ -177,7 +177,7 @@ struct FlatHorizonStepInput {
 class FlatHorizonStreamEncoder:
     public StreamEncoderBase< FlatHorizonStreamEncoder, FlatHorizonStepInput > {
   public:
-   static constexpr std::string_view graph_kind() { return "homo"; }
+   static constexpr std::string_view graph_kind() { return "flat"; }
 
    explicit FlatHorizonStreamEncoder(FlatHorizonEncoderEngine& engine) : engine_(&engine)
    {

@@ -176,7 +176,7 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
    mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain());
    const auto encoding = encode_single(engine, ctx.root);
 
-   ASSERT_EQ(encoding.graph_kind, "homo");
+   ASSERT_EQ(encoding.graph_kind, "flat");
    ASSERT_EQ(encoding.num_graphs, 1);
    ASSERT_TRUE(encoding.schema_flags.contains("flat_relations"));
    EXPECT_TRUE(encoding.schema_flags.at("flat_relations"));

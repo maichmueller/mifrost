@@ -394,7 +394,7 @@ def _encoding_with_target_groups_attr(*, graph_kind: str) -> mifrost.BatchEncodi
 
 def _encoding_with_flat_target_depths() -> mifrost.BatchEncoding:
     builder = mifrost.BatchBuilder()
-    builder.set_graph_kind("homo")
+    builder.set_graph_kind("flat")
     builder.set_schema_flag("flat_relations", True)
     builder.add_node_features("entity", "x", torch.zeros(3, 1))
     builder.register_field(
@@ -423,7 +423,7 @@ def _encoding_with_flat_target_depths() -> mifrost.BatchEncoding:
 
 def _batched_encoding_with_flat_target_depths() -> mifrost.BatchEncoding:
     builder = mifrost.BatchBuilder()
-    builder.set_graph_kind("homo")
+    builder.set_graph_kind("flat")
     builder.set_schema_flag("flat_relations", True)
     builder.register_field(
         "target_sizes",
@@ -508,6 +508,14 @@ def test_flat_as_pyg_exposes_target_depths_from_base():
     _assert_tensor_equal(data.target_depths, encoding.get_field("target_depths"))
     assert data.graph_target_depths(0).tolist() == [3, 5]
     assert not hasattr(data, "target_depths_ptr")
+
+
+def test_flat_as_homo_accepts_flat_graph_kind():
+    encoding = _encoding_with_flat_target_depths()
+    view = encoding.as_homo()
+
+    assert view.graph_kind == "flat"
+    _assert_tensor_equal(view.target_depths, encoding.get_field("target_depths"))
 
 
 def test_flat_as_pyg_slices_target_depths_by_target_sizes():

@@ -249,7 +249,7 @@ void init_horizon_encoder(nb::module_& m)
             const TransitionDAG& dag,
             const GoalInputs& goals) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(root, dag, goals, builder);
             return builder.build();
          },

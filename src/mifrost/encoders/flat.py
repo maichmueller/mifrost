@@ -7,6 +7,7 @@ import networkx as nx
 import torch
 
 from .._core import (
+    BatchBuilder,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
@@ -41,9 +42,9 @@ from .common import (
 from .flat_data import FlatRelationData
 from .types import (
     DomainInput,
+    FlatEncoding,
     GoalLiteralInput,
     HistorySubgoalInput,
-    HomoEncoding,
     StateInput,
     default_goals_from_state,
     is_action_input,
@@ -334,6 +335,61 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         """Expose the relation schema used by the native engine."""
         return self._engine.relation_dict
 
+    @property
+    def relation_names(self) -> tuple[str, ...]:
+        """Expose the ordered flat relation names declared by the native engine."""
+        return tuple(str(name) for name in self._engine.relation_names)
+
+    @property
+    def relation_arities(self) -> tuple[int, ...]:
+        """Expose the ordered flat relation arities declared by the native engine."""
+        return tuple(int(arity) for arity in self._engine.relation_arities)
+
+    @property
+    def relation_sources(self) -> tuple[str, ...]:
+        """Expose the ordered flat relation source labels declared by the native engine."""
+        return tuple(str(source) for source in self._engine.relation_sources)
+
+    def _encode_one_into_builder(
+        self,
+        state: StateInput,
+        builder: BatchBuilder,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        """Append one flat encoding step into a caller-owned builder."""
+        adv_state = _advanced_state(state)
+        action_inputs = parse_flat_actions(actions)
+        action_list = _prepare_actions(action_inputs)
+        history_list = _prepare_history_subgoals(history_subgoals)
+        if goals is None and subgoal_layers is None and not history_list:
+            if action_list:
+                self._engine.encode(adv_state, action_list, builder)
+                return
+            self._engine.encode(adv_state, builder)
+            return
+
+        goals_input = goals if goals is not None else default_goals_from_state(state)
+        split_goals = _split_goals(goals_input, subgoal_layers)
+        if history_list:
+            self._engine.encode(
+                adv_state,
+                split_goals,
+                action_list,
+                history_list,
+                history_max_steps,
+                builder,
+            )
+            return
+        if action_list:
+            self._engine.encode(adv_state, split_goals, action_list, builder)
+            return
+        self._engine.encode(adv_state, split_goals, builder)
+
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}
 
@@ -346,28 +402,20 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         subgoal_layers: SubgoalLayersInput = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-    ) -> HomoEncoding:
-        adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
-        history_list = _prepare_history_subgoals(history_subgoals)
-        if goals is None and subgoal_layers is None and not history_list:
-            if action_list:
-                return self._engine.encode(adv_state, action_list)
-            return self._engine.encode(adv_state)
-        goals_input = goals if goals is not None else default_goals_from_state(state)
-        split_goals = _split_goals(goals_input, subgoal_layers)
-        if history_list:
-            return self._engine.encode(
-                adv_state,
-                split_goals,
-                action_list,
-                history_list,
-                history_max_steps,
-            )
-        if action_list:
-            return self._engine.encode(adv_state, split_goals, action_list)
-        return self._engine.encode(adv_state, split_goals)
+    ) -> FlatEncoding:
+        builder = BatchBuilder()
+        builder.set_graph_kind("flat")
+        self._encode_one_into_builder(
+            state,
+            builder,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        builder.next_graph()
+        return builder.build()
 
     def encode(
         self,
@@ -380,7 +428,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> HomoEncoding:
+    ) -> FlatEncoding:
         """Encode one state into the native flat carrier.
 
         If `goals` are omitted, the problem goals from `state` are used when
@@ -408,7 +456,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         subgoal_layers: SubgoalLayersBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
-    ) -> HomoEncoding:
+    ) -> FlatEncoding:
         states_for_core = _convert_batch_payload(
             states,
             is_leaf=is_state_input,
@@ -456,7 +504,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> HomoEncoding:
+    ) -> FlatEncoding:
         """Encode many states with shared or per-state optional payloads.
 
         Batch kwargs follow the same rules as `encode`: each optional payload

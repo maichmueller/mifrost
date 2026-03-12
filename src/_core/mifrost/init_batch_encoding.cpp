@@ -1255,6 +1255,10 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
 {
    validate_batch_encoding_graph_fields(encoding, "BatchEncoding.as_pyg");
    const bool want_batch = as_batch.value_or(encoding.num_graphs != 1);
+   const bool is_flat =
+      encoding.graph_kind == "flat"
+      || (encoding.schema.flags.contains("flat_relations") && encoding.schema.flags.at("flat_relations"));
+   const bool is_homo_like = encoding.graph_kind == "homo" || is_flat;
    BatchBuilder builder;
    builder.set_graph_kind(encoding.graph_kind);
    builder.load_from_batch_encoding(encoding);
@@ -1265,10 +1269,9 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
    }
 
    if(not want_batch) {
-      if(encoding.graph_kind == "homo") {
+      if(is_homo_like) {
          nb::object out = batch_to_single_homo_data(pyg_batch);
-         if(const auto it = encoding.schema.flags.find("flat_relations");
-            it != encoding.schema.flags.end() and it->second) {
+         if(is_flat) {
             return py::mifrost_flat_relation_data_from_pyg_fn()(
                out, nb::arg("schema_fingerprint") = schema_fingerprint(encoding)
             );
@@ -1278,10 +1281,9 @@ batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional
       return batch_to_single_hetero_data(pyg_batch);
    }
 
-   if(encoding.graph_kind == "homo") {
+   if(is_homo_like) {
       nb::object out = batch_to_batch_homo_data(pyg_batch);
-      if(const auto it = encoding.schema.flags.find("flat_relations");
-         it != encoding.schema.flags.end() and it->second) {
+      if(is_flat) {
          return py::mifrost_flat_relation_data_from_pyg_fn()(
             out, nb::arg("schema_fingerprint") = schema_fingerprint(encoding)
          );
@@ -2060,8 +2062,10 @@ void init_batch_encoding(nb::module_& m)
                auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
                   self, "BatchEncoding.as_homo called with invalid instance"
                );
-               if(encoding->graph_kind != "homo") {
-                  throw std::invalid_argument("BatchEncoding graph_kind mismatch: expected 'homo'");
+               if(encoding->graph_kind != "homo" && encoding->graph_kind != "flat") {
+                  throw std::invalid_argument(
+                     "BatchEncoding graph_kind mismatch: expected 'homo' or 'flat'"
+                  );
                }
                if(encoding->schema.node_types.size() > 1
                   or encoding->schema.edge_types.size() > 1) {

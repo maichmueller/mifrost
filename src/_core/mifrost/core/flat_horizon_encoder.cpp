@@ -308,7 +308,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
 
 void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
 {
-   builder.set_graph_kind("homo");
+   builder.set_graph_kind("flat");
    builder.set_schema_flag("flat_relations", true);
    builder.set_graph_attr(std::string(kFlatEntityTypeAttr), std::string(kEntityNodeType));
    builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
@@ -1206,7 +1206,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
 )
 {
    BatchBuilder builder;
-   builder.set_graph_kind("homo");
+   builder.set_graph_kind("flat");
    prepare_builder(builder);
 
    const size_t state_count = inputs.roots.states.size();

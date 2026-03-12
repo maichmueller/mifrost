@@ -8,13 +8,12 @@ from .._core import (
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_PARENT_RELATION,
-    HorizonEncoderMode,
+    TransitionDAG,
     FlatHorizonEncoderConfig,
     FlatHorizonEncoderEngine,
     FlatHorizonEncoderMode,
     FlatHorizonStreamEncoder as _FlatHorizonStreamEncoder,
-    TransitionDAG,
-    BatchEncoding,
+    HorizonEncoderMode,
 )
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
 from .base import (
@@ -45,8 +44,8 @@ from ._lane_specs import (
 from .flat import FlatRelationEncoder
 from .types import (
     DomainInput,
+    FlatEncoding,
     HistorySubgoalInput,
-    HomoEncoding,
     StateInput,
     is_goal_literal_input,
     is_state_input,
@@ -249,7 +248,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         dag: TransitionDAG | RXStateDAG | None = None,
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
-    ) -> HomoEncoding:
+    ) -> FlatEncoding:
         validate_single_optional_payloads(
             FLAT_HORIZON_LANE_SPEC,
             actions=actions,
@@ -273,7 +272,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_max_steps: int | None = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> BatchEncoding:
+    ) -> FlatEncoding:
         """Encode one root state and optional lookahead DAG.
 
         If `dag` is omitted, a one-node DAG for the root is used. `actions` and
@@ -302,7 +301,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         actions: ActionBatchParam = None,
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
-    ) -> HomoEncoding:
+    ) -> FlatEncoding:
         validate_batch_optional_payloads(
             FLAT_HORIZON_LANE_SPEC,
             actions=actions,
@@ -349,7 +348,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         collate_spec: CollateSpecParam = None,
         include_metadata: bool = True,
         **kwargs,
-    ) -> BatchEncoding:
+    ) -> FlatEncoding:
         """Encode many root/DAG inputs into one flat batch."""
         return super().encode_batch(
             roots,

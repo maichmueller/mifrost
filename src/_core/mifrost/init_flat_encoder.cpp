@@ -76,7 +76,7 @@ void init_flat_encoder(nb::module_& m)
          "encode",
          [](FlatRelationEncoderEngine& encoder, const mimir::search::State& state) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(state, builder);
             builder.next_graph();
             return builder.build();
@@ -89,7 +89,7 @@ void init_flat_encoder(nb::module_& m)
             const mimir::search::State& state,
             const std::vector< mimir::formalism::GroundAction >& actions) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(state, actions, builder);
             builder.next_graph();
             return builder.build();
@@ -106,7 +106,7 @@ void init_flat_encoder(nb::module_& m)
             const std::vector< FlatRelationEncoderEngine::HistorySubgoal >& history_subgoals,
             std::optional< int > history_max_steps) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
             builder.next_graph();
             return builder.build();
@@ -124,7 +124,7 @@ void init_flat_encoder(nb::module_& m)
             const GoalInputs& goals,
             const std::vector< mimir::formalism::GroundAction >& actions) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(state, goals, actions, builder);
             builder.next_graph();
             return builder.build();
@@ -139,7 +139,7 @@ void init_flat_encoder(nb::module_& m)
             const mimir::search::State& state,
             const GoalInputs& goals) {
             BatchBuilder builder;
-            builder.set_graph_kind("homo");
+            builder.set_graph_kind("flat");
             encoder.encode(state, goals, builder);
             builder.next_graph();
             return builder.build();

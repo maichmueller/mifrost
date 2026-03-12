@@ -97,7 +97,7 @@ TEST_P(FlatHorizonEncoderTest, EmitsStateTargetMetadataAndCarrierRows)
       engine, ctx.root, dag, mifrost_test::make_goal_inputs(ctx.problem)
    );
 
-   ASSERT_EQ(encoding.graph_kind, "homo");
+   ASSERT_EQ(encoding.graph_kind, "flat");
    ASSERT_EQ(encoding.num_graphs, 1);
    ASSERT_TRUE(encoding.schema_flags.contains("flat_relations"));
    EXPECT_TRUE(encoding.schema_flags.at("flat_relations"));

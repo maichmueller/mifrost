@@ -85,8 +85,8 @@ void Schema::validate_base() const
 void Schema::validate() const
 {
    validate_base();
-   if(graph_kind != "hetero" and graph_kind != "homo") {
-      throw std::invalid_argument("Schema graph_kind must be 'hetero' or 'homo'");
+   if(graph_kind != "hetero" and graph_kind != "homo" and graph_kind != "flat") {
+      throw std::invalid_argument("Schema graph_kind must be 'hetero', 'homo', or 'flat'");
    }
    validate_history();
 }

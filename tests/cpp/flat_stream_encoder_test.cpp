@@ -121,7 +121,7 @@ TEST_P(FlatStreamEncoderTest, FlatRelationAppendOnlyMatchesDirectBatch)
    const auto actual = stream.flush();
 
    BatchBuilder builder;
-   builder.set_graph_kind("homo");
+   builder.set_graph_kind("flat");
    engine.encode(ctx.root, builder);
    builder.next_graph();
    engine.encode(succ_state, builder);
@@ -149,7 +149,7 @@ TEST_P(FlatStreamEncoderTest, FlatRelationMutableRemoveUpdateAndReuseMatchDirect
    auto actual = stream.flush();
 
    BatchBuilder builder;
-   builder.set_graph_kind("homo");
+   builder.set_graph_kind("flat");
    engine.encode(succ_state, builder);
    builder.next_graph();
    auto expected = builder.build();
@@ -168,7 +168,7 @@ TEST_P(FlatStreamEncoderTest, FlatRelationMutableRemoveUpdateAndReuseMatchDirect
    actual = reuse_stream.flush();
 
    BatchBuilder reuse_builder;
-   reuse_builder.set_graph_kind("homo");
+   reuse_builder.set_graph_kind("flat");
    engine.encode(ctx.root, reuse_builder);
    reuse_builder.next_graph();
    engine.encode(succ_state, reuse_builder);
@@ -200,7 +200,7 @@ TEST_P(FlatStreamEncoderTest, FlatHorizonMutableRemoveUpdateAndReuseMatchDirectB
    auto actual = stream.flush();
 
    BatchBuilder builder;
-   builder.set_graph_kind("homo");
+   builder.set_graph_kind("flat");
    engine.encode(ctx.root, successor_dag, goals, builder);
    builder.next_graph();
    auto expected = builder.build();
@@ -219,7 +219,7 @@ TEST_P(FlatStreamEncoderTest, FlatHorizonMutableRemoveUpdateAndReuseMatchDirectB
    actual = reuse_stream.flush();
 
    BatchBuilder reuse_builder;
-   reuse_builder.set_graph_kind("homo");
+   reuse_builder.set_graph_kind("flat");
    engine.encode(ctx.root, empty_dag, goals, reuse_builder);
    reuse_builder.next_graph();
    engine.encode(ctx.root, successor_dag, goals, reuse_builder);

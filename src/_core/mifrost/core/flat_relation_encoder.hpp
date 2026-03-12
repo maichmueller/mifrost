@@ -240,7 +240,7 @@ struct FlatRelationStepInput {
 class FlatRelationMutableStreamEncoder:
     public StreamEncoderBase< FlatRelationMutableStreamEncoder, FlatRelationStepInput > {
   public:
-   static constexpr std::string_view graph_kind() { return "homo"; }
+   static constexpr std::string_view graph_kind() { return "flat"; }
 
    explicit FlatRelationMutableStreamEncoder(FlatRelationEncoderEngine& engine) : engine_(&engine)
    {
@@ -408,7 +408,7 @@ class FlatRelationMutableStreamEncoder:
 
 class FlatRelationStreamEncoder {
   public:
-   static constexpr std::string_view graph_kind() { return "homo"; }
+   static constexpr std::string_view graph_kind() { return "flat"; }
 
    explicit FlatRelationStreamEncoder(FlatRelationEncoderEngine& engine) : engine_(&engine)
    {

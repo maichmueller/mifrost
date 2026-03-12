@@ -192,6 +192,20 @@ class HomoEncoding(BatchEncodingLike, Protocol):
     def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
 
 
+@runtime_checkable
+class FlatEncoding(BatchEncodingLike, Protocol):
+    """
+    Refined protocol for flat native encodings.
+
+    Flat encodings use `graph_kind == "flat"` even though their tensor layout is
+    still homo-shaped and converts through the flat PyG carrier.
+    """
+
+    graph_kind: Literal["flat"]
+
+    def as_pyg(self, *, as_batch: bool | None = None) -> PygDataLike: ...
+
+
 BatchEncodingInput: TypeAlias = BatchEncoding | BatchEncodingLike | EncodingDict
 
 
