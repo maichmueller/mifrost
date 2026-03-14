@@ -20,6 +20,40 @@ NB_MAKE_OPAQUE(std::vector< mifrost::TransitionDAG::Node >);
 
 namespace mifrost {
 
+namespace {
+
+std::optional< std::vector< LiteralVariant > > parse_delta_literals(nb::handle value)
+{
+   if(value.is_none()) {
+      return std::nullopt;
+   }
+   if(not PySequence_Check(value.ptr()) || nb::isinstance< nb::str >(value)
+      || nb::isinstance< nb::bytes >(value)) {
+      throw nb::type_error("delta_literals must be a sequence of ground literals or None");
+   }
+   std::vector< LiteralVariant > out;
+   const size_t length = nb::len(value);
+   out.reserve(length);
+   static nb::object* to_advanced_literal = [] {
+      auto types_module = nb::module_::import_("mifrost.encoders.types");
+      return new nb::object(types_module.attr("to_advanced_literal"));
+   }();
+   for(size_t idx = 0; idx < length; ++idx) {
+      nb::handle item = value[idx];
+      try {
+         out.push_back(nb::cast< LiteralVariant >((*to_advanced_literal)(item)));
+      } catch(...) {
+         PyErr_Clear();
+         throw nb::type_error(("delta_literals entry at index " + std::to_string(idx)
+                               + " must be a ground literal")
+                                 .c_str());
+      }
+   }
+   return out;
+}
+
+}  // namespace
+
 void init_transition_dag(nb::module_& m)
 {
    nb::bind_vector< std::vector< TransitionDAG::Node > >(m, "TransitionNodeList");
@@ -98,8 +132,11 @@ void init_transition_dag(nb::module_& m)
 
                hash_map< int64_t, mimir::search::State > node_states;
                hash_map< int64_t, std::optional< int64_t > > node_candidate_ids;
+               hash_map< int64_t, std::optional< std::vector< LiteralVariant > > >
+                  node_delta_literals;
                node_states.reserve(node_indices.size());
                node_candidate_ids.reserve(node_indices.size());
+               node_delta_literals.reserve(node_indices.size());
 
                for(const int64_t node_idx : node_indices) {
                   const nb::object node_data = nb::cast< nb::object >(
@@ -124,22 +161,29 @@ void init_transition_dag(nb::module_& m)
                   );
                   if(not has_candidate_id || raw_candidate_id.is_none()) {
                      node_candidate_ids.emplace(node_idx, std::nullopt);
-                     continue;
-                  }
-
-                  if(nb::isinstance< nb::bool_ >(raw_candidate_id)
-                     || not nb::isinstance< nb::int_ >(raw_candidate_id)) {
-                     throw nb::type_error(
-                        fmt::format(
-                           "rustworkx PyDiGraph node data 'candidate_id' at index {} must be an "
-                           "int or None",
-                           node_idx
-                        )
-                           .c_str()
+                  } else {
+                     if(nb::isinstance< nb::bool_ >(raw_candidate_id)
+                        || not nb::isinstance< nb::int_ >(raw_candidate_id)) {
+                        throw nb::type_error(
+                           fmt::format(
+                              "rustworkx PyDiGraph node data 'candidate_id' at index {} must be "
+                              "an int or None",
+                              node_idx
+                           )
+                              .c_str()
+                        );
+                     }
+                     node_candidate_ids.emplace(
+                        node_idx, std::optional{nb::cast< int64_t >(raw_candidate_id)}
                      );
                   }
-                  node_candidate_ids.emplace(
-                     node_idx, std::optional{nb::cast< int64_t >(raw_candidate_id)}
+
+                  auto [raw_delta_literals, has_delta_literals] = mapping_or_attr(
+                     node_data, "delta_literals"
+                  );
+                  node_delta_literals.emplace(
+                     node_idx,
+                     has_delta_literals ? parse_delta_literals(raw_delta_literals) : std::nullopt
                   );
                }
 
@@ -246,8 +290,20 @@ void init_transition_dag(nb::module_& m)
                                                                       ? std::nullopt
                                                                       : candidate_id_it->second;
 
+                     const auto delta_literals_it = node_delta_literals.find(dst_idx);
+                     const std::optional< std::vector< LiteralVariant > >
+                        delta_literals = delta_literals_it == node_delta_literals.end()
+                                            ? std::nullopt
+                                            : delta_literals_it->second;
+
                      records.emplace_back(
-                        node_states.at(src_idx), node_states.at(dst_idx), action, candidate_id
+                        TransitionDAG::TransitionRecord{
+                           .parent = node_states.at(src_idx),
+                           .child = node_states.at(dst_idx),
+                           .action = action,
+                           .candidate_id = candidate_id,
+                           .delta_literals = delta_literals,
+                        }
                      );
                      available_nodes.insert(dst_idx);
                      progressed = true;
@@ -274,13 +330,17 @@ void init_transition_dag(nb::module_& m)
                const mimir::search::State& parent,
                const mimir::search::State& child,
                const std::optional< mimir::formalism::GroundAction >& action,
-               const std::optional< int64_t >& candidate_id) {
-               return dag.register_transition(parent, child, action, candidate_id);
+               const std::optional< int64_t >& candidate_id,
+               nb::handle delta_literals) {
+               return dag.register_transition(
+                  parent, child, action, candidate_id, parse_delta_literals(delta_literals)
+               );
             },
             "parent"_a,
             "child"_a,
             "action"_a = std::nullopt,
-            "candidate_id"_a = std::nullopt
+            "candidate_id"_a = std::nullopt,
+            "delta_literals"_a = std::nullopt
          )
          .def(
             "register_transitions",
@@ -318,11 +378,32 @@ void init_transition_dag(nb::module_& m)
                            .child = std::move(child),
                            .action = std::move(action),
                            .candidate_id = candidate_id,
+                           .delta_literals = std::nullopt,
                         }
                      );
                      continue;
                   }
-                  throw nb::type_error("register_transitions expects 3-tuple or 4-tuple records");
+                  if(nb::len(record) == 5) {
+                     auto parent = nb::cast< mimir::search::State >(record[0]);
+                     auto child = nb::cast< mimir::search::State >(record[1]);
+                     auto action = nb::cast< std::optional< mimir::formalism::GroundAction > >(
+                        record[2]
+                     );
+                     auto candidate_id = nb::cast< std::optional< int64_t > >(record[3]);
+                     records.push_back(
+                        TransitionDAG::TransitionRecord{
+                           .parent = std::move(parent),
+                           .child = std::move(child),
+                           .action = std::move(action),
+                           .candidate_id = candidate_id,
+                           .delta_literals = parse_delta_literals(record[4]),
+                        }
+                     );
+                     continue;
+                  }
+                  throw nb::type_error(
+                     "register_transitions expects 3-tuple, 4-tuple, or 5-tuple records"
+                  );
                }
                dag.register_transitions(records);
             },
@@ -354,7 +435,20 @@ void init_transition_dag(nb::module_& m)
                       .def_ro("index", &TransitionDAG::Node::index)
                       .def_ro("depth", &TransitionDAG::Node::depth)
                       .def_ro("action", &TransitionDAG::Node::action)
-                      .def_ro("candidate_id", &TransitionDAG::Node::candidate_id);
+                      .def_ro("candidate_id", &TransitionDAG::Node::candidate_id)
+                      .def_prop_ro("delta_literals", [](const TransitionDAG::Node& node) {
+                         if(not node.delta_literals.has_value()) {
+                            return nb::none();
+                         }
+                         nb::list out;
+                         for(const auto& literal_variant : *node.delta_literals) {
+                            std::visit(
+                               [&](const auto& literal) { out.append(nb::cast(literal)); },
+                               literal_variant
+                            );
+                         }
+                         return nb::cast(out);
+                      });
 
    dag_cls.attr("Node") = node_cls;
 }

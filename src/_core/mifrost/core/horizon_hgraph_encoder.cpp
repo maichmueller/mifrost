@@ -700,6 +700,47 @@ void HorizonHGraphEncoderEngine::encode_impl(
    // Precompute root atoms (no statics) for delta mode.
    hash_set< int > root_fluent_indices;
    hash_set< int > root_derived_indices;
+   const auto encode_provided_delta_literals = [&](
+                                                  const TransitionDAG::Node& node,
+                                                  const std::string& prefix,
+                                                  const auto& succ_extra,
+                                                  hash_set< int >& added_fluents,
+                                                  hash_set< int >& removed_fluents,
+                                                  hash_set< int >& added_derived,
+                                                  hash_set< int >& removed_derived
+                                               ) {
+      if(not node.delta_literals.has_value()) {
+         return false;
+      }
+      for(const auto& literal_variant : *node.delta_literals) {
+         std::visit(
+            [&]< typename Tag >(const mimir::formalism::GroundLiteral< Tag >& literal) {
+               const auto atom = literal->get_atom();
+               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
+                  return;
+               }
+               encode_literal_atom_with_prefix(
+                  atom, literal->get_polarity(), node.index, prefix, succ_extra
+               );
+               if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
+                  if(literal->get_polarity()) {
+                     added_fluents.insert(atom->get_index());
+                  } else {
+                     removed_fluents.insert(atom->get_index());
+                  }
+               } else if constexpr(std::is_same_v< Tag, mimir::formalism::DerivedTag >) {
+                  if(literal->get_polarity()) {
+                     added_derived.insert(atom->get_index());
+                  } else {
+                     removed_derived.insert(atom->get_index());
+                  }
+               }
+            },
+            literal_variant
+         );
+      }
+      return true;
+   };
    if(horizon_config_.transition_mode == Mode::Delta) {
       const auto& repos = root.get_problem().get_repositories();
       const auto root_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
@@ -763,61 +804,69 @@ void HorizonHGraphEncoderEngine::encode_impl(
                );
          }
       } else if(horizon_config_.transition_mode == Mode::Delta) {
-         const auto& repos = node.state.get_problem().get_repositories();
-         const auto succ_fluents = repos
-                                      .get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-                                         node.state.get_atoms< mimir::formalism::FluentTag >()
-                                      );
-         const auto
-            succ_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-               node.state.get_atoms< mimir::formalism::DerivedTag >()
-            );
          hash_set< int > added_fluents;
          hash_set< int > removed_fluents;
          hash_set< int > added_derived;
          hash_set< int > removed_derived;
+         const bool used_provided_delta = encode_provided_delta_literals(
+            node, prefix, succ_extra, added_fluents, removed_fluents, added_derived, removed_derived
+         );
 
-         hash_set< int > succ_fluent_indices;
-         for(const auto& atom : succ_fluents) {
-            if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
-               continue;
-            }
-            succ_fluent_indices.insert(atom->get_index());
-            if(not root_fluent_indices.contains(atom->get_index())) {
-               added_fluents.insert(atom->get_index());
-               encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
-            }
-         }
-         for(const auto& idx : root_fluent_indices) {
-            if(not succ_fluent_indices.contains(idx)) {
-               removed_fluents.insert(idx);
-               auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
+         if(not used_provided_delta) {
+            const auto& repos = node.state.get_problem().get_repositories();
+            const auto
+               succ_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
+                  node.state.get_atoms< mimir::formalism::FluentTag >()
+               );
+            const auto
+               succ_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
+                  node.state.get_atoms< mimir::formalism::DerivedTag >()
+               );
+
+            hash_set< int > succ_fluent_indices;
+            for(const auto& atom : succ_fluents) {
                if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
+               succ_fluent_indices.insert(atom->get_index());
+               if(not root_fluent_indices.contains(atom->get_index())) {
+                  added_fluents.insert(atom->get_index());
+                  encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
+               }
             }
-         }
+            for(const auto& idx : root_fluent_indices) {
+               if(not succ_fluent_indices.contains(idx)) {
+                  removed_fluents.insert(idx);
+                  auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
+                  if(atom->get_predicate()->get_arity() == 0
+                     and not config_.add_nullary_predicates) {
+                     continue;
+                  }
+                  encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
+               }
+            }
 
-         hash_set< int > succ_derived_indices;
-         for(const auto& atom : succ_derived) {
-            if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
-               continue;
-            }
-            succ_derived_indices.insert(atom->get_index());
-            if(not root_derived_indices.contains(atom->get_index())) {
-               added_derived.insert(atom->get_index());
-               encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
-            }
-         }
-         for(const auto& idx : root_derived_indices) {
-            if(not succ_derived_indices.contains(idx)) {
-               removed_derived.insert(idx);
-               auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
+            hash_set< int > succ_derived_indices;
+            for(const auto& atom : succ_derived) {
                if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
                   continue;
                }
-               encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
+               succ_derived_indices.insert(atom->get_index());
+               if(not root_derived_indices.contains(atom->get_index())) {
+                  added_derived.insert(atom->get_index());
+                  encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
+               }
+            }
+            for(const auto& idx : root_derived_indices) {
+               if(not succ_derived_indices.contains(idx)) {
+                  removed_derived.insert(idx);
+                  auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
+                  if(atom->get_predicate()->get_arity() == 0
+                     and not config_.add_nullary_predicates) {
+                     continue;
+                  }
+                  encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
+               }
             }
          }
 

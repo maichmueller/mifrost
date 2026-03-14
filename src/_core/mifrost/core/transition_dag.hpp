@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "common_types.hpp"
+#include "goal_inputs.hpp"
 #include "mifrost/core/utils/type_traits.hpp"
 
 // Delegate to mimir's existing loki::Hash<State> specialization
@@ -48,6 +49,7 @@ class TransitionDAG {
       mimir::search::State child;
       std::optional< mimir::formalism::GroundAction > action;
       std::optional< int64_t > candidate_id;
+      std::optional< std::vector< LiteralVariant > > delta_literals;
    };
 
    /// One transition DAG node.
@@ -62,6 +64,8 @@ class TransitionDAG {
       std::optional< mimir::formalism::GroundAction > action;
       /// Optional caller-provided candidate identity for this node.
       std::optional< int64_t > candidate_id;
+      /// Optional caller-provided transition delta literals for this node.
+      std::optional< std::vector< LiteralVariant > > delta_literals;
    };
 
    /**
@@ -83,7 +87,8 @@ class TransitionDAG {
       const mimir::search::State& parent,
       const mimir::search::State& child,
       std::optional< mimir::formalism::GroundAction > action = std::nullopt,
-      std::optional< int64_t > candidate_id = std::nullopt
+      std::optional< int64_t > candidate_id = std::nullopt,
+      std::optional< std::vector< LiteralVariant > > delta_literals = std::nullopt
    );
 
    /**
@@ -120,7 +125,37 @@ class TransitionDAG {
             }
             return std::nullopt;
          }();
-         register_transition_impl(rec.parent, rec.child, rec.action, candidate_id, false, false);
+         const auto delta_literals = [&]() -> std::optional< std::vector< LiteralVariant > > {
+            if constexpr(requires { rec.delta_literals; }) {
+               using delta_ref_t = detail::raw_t< decltype(rec.delta_literals) >;
+               if constexpr(std::is_convertible_v<
+                               delta_ref_t,
+                               std::optional< std::vector< LiteralVariant > > >) {
+                  return static_cast< std::optional< std::vector< LiteralVariant > > >(
+                     rec.delta_literals
+                  );
+               } else if constexpr(std::is_convertible_v<
+                                      delta_ref_t,
+                                      std::vector< LiteralVariant > >) {
+                  return std::optional< std::vector< LiteralVariant > >{
+                     static_cast< std::vector< LiteralVariant > >(rec.delta_literals)
+                  };
+               } else {
+                  static_assert(
+                     std::is_convertible_v<
+                        delta_ref_t,
+                        std::optional< std::vector< LiteralVariant > > >
+                        or std::is_convertible_v< delta_ref_t, std::vector< LiteralVariant > >,
+                     "delta_literals must be convertible to optional<vector<LiteralVariant>> "
+                     "or vector<LiteralVariant>"
+                  );
+               }
+            }
+            return std::nullopt;
+         }();
+         register_transition_impl(
+            rec.parent, rec.child, rec.action, candidate_id, delta_literals, false, false
+         );
       }
       if(has_records) {
          finalize_depths();
@@ -187,16 +222,22 @@ class TransitionDAG {
    int get_or_add_node(
       const mimir::search::State& state,
       const std::optional< mimir::formalism::GroundAction >& action_for_new_node,
-      const std::optional< int64_t >& candidate_id_for_new_node
+      const std::optional< int64_t >& candidate_id_for_new_node,
+      const std::optional< std::vector< LiteralVariant > >& delta_literals_for_new_node
    );
 
    void set_or_validate_candidate_id(int node_idx, const std::optional< int64_t >& candidate_id);
+   void set_or_validate_delta_literals(
+      int node_idx,
+      const std::optional< std::vector< LiteralVariant > >& delta_literals
+   );
 
    std::pair< int, int > register_transition_impl(
       const mimir::search::State& parent,
       const mimir::search::State& child,
       const std::optional< mimir::formalism::GroundAction >& action,
       const std::optional< int64_t >& candidate_id,
+      const std::optional< std::vector< LiteralVariant > >& delta_literals,
       bool recompute_depths,
       bool require_parent_exists
    );

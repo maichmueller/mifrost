@@ -26,7 +26,8 @@ TransitionDAG::TransitionDAG(mimir::search::State root) : root_(std::move(root))
 int TransitionDAG::get_or_add_node(
    const mimir::search::State& state,
    const std::optional< mimir::formalism::GroundAction >& action_for_new_node,
-   const std::optional< int64_t >& candidate_id_for_new_node
+   const std::optional< int64_t >& candidate_id_for_new_node,
+   const std::optional< std::vector< LiteralVariant > >& delta_literals_for_new_node
 )
 {
    auto it = state_to_index_.find(state);
@@ -36,6 +37,7 @@ int TransitionDAG::get_or_add_node(
          nodes_ordered_[existing_idx].action = action_for_new_node;
       }
       set_or_validate_candidate_id(existing_idx, candidate_id_for_new_node);
+      set_or_validate_delta_literals(existing_idx, delta_literals_for_new_node);
       return existing_idx;
    }
 
@@ -46,6 +48,7 @@ int TransitionDAG::get_or_add_node(
       .depth = -1,
       .action = action_for_new_node,
       .candidate_id = candidate_id_for_new_node,
+      .delta_literals = delta_literals_for_new_node,
    };
    state_to_index_.emplace(state, idx);
    nodes_ordered_.push_back(std::move(node));
@@ -72,11 +75,32 @@ void TransitionDAG::set_or_validate_candidate_id(
    }
 }
 
+void TransitionDAG::set_or_validate_delta_literals(
+   const int node_idx,
+   const std::optional< std::vector< LiteralVariant > >& delta_literals
+)
+{
+   if(not delta_literals.has_value()) {
+      return;
+   }
+   auto& node = nodes_ordered_[static_cast< size_t >(node_idx)];
+   if(not node.delta_literals.has_value()) {
+      node.delta_literals = delta_literals;
+      return;
+   }
+   if(node.delta_literals != delta_literals) {
+      throw std::invalid_argument(
+         "conflicting delta_literals for node index " + std::to_string(node_idx)
+      );
+   }
+}
+
 std::pair< int, int > TransitionDAG::register_transition_impl(
    const mimir::search::State& parent,
    const mimir::search::State& child,
    const std::optional< mimir::formalism::GroundAction >& action,
    const std::optional< int64_t >& candidate_id,
+   const std::optional< std::vector< LiteralVariant > >& delta_literals,
    const bool recompute_depths,
    const bool require_parent_exists
 )
@@ -87,8 +111,8 @@ std::pair< int, int > TransitionDAG::register_transition_impl(
 
    const int parent_idx = require_parent_exists
                              ? state_to_index_.at(parent)
-                             : get_or_add_node(parent, std::nullopt, std::nullopt);
-   const int child_idx = get_or_add_node(child, action, candidate_id);
+                             : get_or_add_node(parent, std::nullopt, std::nullopt, std::nullopt);
+   const int child_idx = get_or_add_node(child, action, candidate_id, delta_literals);
 
    adjacency_[parent_idx].push_back(child_idx);
 
@@ -103,10 +127,11 @@ std::pair< int, int > TransitionDAG::register_transition(
    const mimir::search::State& parent,
    const mimir::search::State& child,
    const std::optional< mimir::formalism::GroundAction > action,
-   const std::optional< int64_t > candidate_id
+   const std::optional< int64_t > candidate_id,
+   const std::optional< std::vector< LiteralVariant > > delta_literals
 )
 {
-   return register_transition_impl(parent, child, action, candidate_id, true, true);
+   return register_transition_impl(parent, child, action, candidate_id, delta_literals, true, true);
 }
 
 int TransitionDAG::index(const mimir::search::State& state) const

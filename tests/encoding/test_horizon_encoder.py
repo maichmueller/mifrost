@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mifrost
+import pymimir as mimir
 import pytest
 
 from .test_utils import (
@@ -28,6 +29,20 @@ def _first_distinct_changed_transitions(space, root, count: int = 2):
         if len(out) >= count:
             return out
     pytest.skip("Fixture should yield enough distinct changed transitions")
+
+
+def _delta_literals(root, target, problem):
+    root_atoms = set(root.get_atoms(ignore_static=True))
+    target_atoms = set(target.get_atoms(ignore_static=True))
+    out = [
+        mimir.GroundLiteral.new(atom, True, problem)
+        for atom in (target_atoms - root_atoms)
+    ]
+    out.extend(
+        mimir.GroundLiteral.new(atom, False, problem)
+        for atom in (root_atoms - target_atoms)
+    )
+    return out
 
 
 def test_horizon_encoder_target_mapping_and_order(small_blocks):
@@ -257,7 +272,6 @@ def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
 
 def test_horizon_encode_accepts_rustworkx_digraph(small_blocks):
     rx = pytest.importorskip("rustworkx")
-
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
     transitions = [
@@ -294,6 +308,42 @@ def test_horizon_encode_accepts_rustworkx_digraph(small_blocks):
     assert hetero_data_equal(
         encoder.encode(root, dag=single_root_graph, goals=goals),
         encoder.encode(root, goals=goals),
+    )
+
+
+def test_horizon_delta_literals_match_state_diff_fallback(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action, target) = _first_distinct_changed_transitions(space, root, count=1)[0]
+
+    baseline_dag = mifrost.TransitionDAG(adv_state(root))
+    baseline_dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        candidate_id=101,
+    )
+
+    annotated_dag = mifrost.TransitionDAG(adv_state(root))
+    annotated_dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        candidate_id=101,
+        delta_literals=_delta_literals(root, target, problem),
+    )
+
+    encoder = mifrost.HorizonEncoder(
+        domain,
+        transition_mode=mifrost.HorizonEncoderMode.Delta,
+        ignore_actions=False,
+    )
+    actual = encoder.encode(root, dag=annotated_dag).as_pyg(as_batch=True)
+    expected = encoder.encode(root, dag=baseline_dag).as_pyg(as_batch=True)
+
+    assert hetero_data_equal(actual, expected)
+    assert (
+        actual.target_candidate_ids.tolist() == expected.target_candidate_ids.tolist()
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import networkx as nx
+import pymimir as mimir
 import pytest
 from torch_geometric.data import Batch
 
@@ -44,6 +45,20 @@ def _single_step_dag(root, transitions, *, candidate_ids: list[int] | None = Non
             **kwargs,
         )
     return dag
+
+
+def _delta_literals(root, target, problem):
+    root_atoms = set(root.get_atoms(ignore_static=True))
+    target_atoms = set(target.get_atoms(ignore_static=True))
+    out = [
+        mimir.GroundLiteral.new(atom, True, problem)
+        for atom in (target_atoms - root_atoms)
+    ]
+    out.extend(
+        mimir.GroundLiteral.new(atom, False, problem)
+        for atom in (root_atoms - target_atoms)
+    )
+    return out
 
 
 def test_flat_horizon_encoder_emits_state_target_entities_and_metadata(small_blocks):
@@ -256,6 +271,34 @@ def test_flat_horizon_lgan_uses_candidate_state_rows(small_blocks):
     )
     assert data.include_lgan_edges is True
     assert data.entity_node_type == encoder.entity_node_type
+
+
+def test_flat_horizon_delta_literals_match_state_diff_fallback(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    action, target = transitions[0]
+
+    baseline_dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    annotated_dag = mifrost.TransitionDAG(adv_state(root))
+    annotated_dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        candidate_id=101,
+        delta_literals=_delta_literals(root, target, problem),
+    )
+
+    encoder = FlatHorizonEncoder(
+        domain,
+        transition_mode="delta",
+        ignore_actions=False,
+        ignore_zero_arity_relations=False,
+    )
+    actual = encoder.encode(root, dag=annotated_dag).as_pyg(as_batch=True)
+    expected = encoder.encode(root, dag=baseline_dag).as_pyg(as_batch=True)
+
+    _assert_flat_batch_equal(actual, expected)
 
 
 def test_flat_horizon_lgan_respects_root_candidate_exclusion(small_blocks):

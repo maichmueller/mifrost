@@ -126,6 +126,53 @@ def test_transition_dag_candidate_id_assignment_and_conflicts(test_setup):
         dag.register_transition(root_adv, succ_adv, action_a_adv, candidate_id=12)
 
 
+def test_transition_dag_delta_literals_assignment_and_conflicts(test_setup):
+    prob = test_setup
+    domain = prob.get_domain()
+    root = prob.get_initial_state()
+    root_adv = root._advanced_state
+
+    obj_a = prob.get_object("a")
+    action_schema = domain.get_action("test-action")
+    action_a = prob.new_ground_action(action_schema, [obj_a])
+    action_a_adv = action_a._advanced_ground_action
+    succ = action_a.apply(root)
+    succ_adv = succ._advanced_state
+    succ_atoms = list(succ.get_atoms(ignore_static=True))
+    assert succ_atoms
+    delta_literals = [mimir.GroundLiteral.new(succ_atoms[0], True, prob)]
+
+    dag = mifrost.TransitionDAG(root_adv)
+    dag.register_transition(
+        root_adv,
+        succ_adv,
+        action_a_adv,
+        candidate_id=11,
+        delta_literals=delta_literals,
+    )
+    assert dag.nodes()[1].delta_literals is not None
+    assert len(dag.nodes()[1].delta_literals) == 1
+    assert str(dag.nodes()[1].delta_literals[0]) == str(delta_literals[0])
+
+    dag.register_transition(
+        root_adv,
+        succ_adv,
+        action_a_adv,
+        candidate_id=11,
+        delta_literals=delta_literals,
+    )
+    assert len(dag.nodes()[1].delta_literals) == 1
+
+    with pytest.raises(ValueError, match="conflicting delta_literals"):
+        dag.register_transition(
+            root_adv,
+            succ_adv,
+            action_a_adv,
+            candidate_id=11,
+            delta_literals=[],
+        )
+
+
 def test_transition_dag_dag_property(test_setup):
     prob = test_setup
     root = prob.get_initial_state()
@@ -217,6 +264,35 @@ def test_transition_dag_register_transitions_bulk_matches_incremental(test_setup
     ]
     assert bulk.nodes()[1].candidate_id is None
     assert bulk.nodes()[2].candidate_id == 42
+
+
+def test_transition_dag_register_transitions_accepts_delta_literals(test_setup):
+    prob = test_setup
+    domain = prob.get_domain()
+    root = prob.get_initial_state()
+    root_adv = root._advanced_state
+
+    obj_a = prob.get_object("a")
+    action_schema = domain.get_action("test-action")
+    action_a = prob.new_ground_action(action_schema, [obj_a])
+    action_a_adv = action_a._advanced_ground_action
+    state_a = action_a.apply(root)
+    state_a_adv = state_a._advanced_state
+    state_a_atoms = list(state_a.get_atoms(ignore_static=True))
+    assert state_a_atoms
+    delta_literals = [mimir.GroundLiteral.new(state_a_atoms[0], True, prob)]
+
+    bulk = mifrost.TransitionDAG(root_adv)
+    bulk.register_transitions(
+        [
+            (root_adv, state_a_adv, action_a_adv, 7, delta_literals),
+        ]
+    )
+
+    assert bulk.nodes()[1].candidate_id == 7
+    assert [str(literal) for literal in bulk.nodes()[1].delta_literals] == [
+        str(literal) for literal in delta_literals
+    ]
 
 
 def test_transition_dag_register_transitions_accepts_unordered_edges(test_setup):
