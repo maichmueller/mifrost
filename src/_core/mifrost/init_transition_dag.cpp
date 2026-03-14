@@ -3,6 +3,7 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 #include <optional>
@@ -44,9 +45,16 @@ std::optional< std::vector< LiteralVariant > > parse_delta_literals(nb::handle v
          out.push_back(nb::cast< LiteralVariant >((*to_advanced_literal)(item)));
       } catch(...) {
          PyErr_Clear();
-         throw nb::type_error(("delta_literals entry at index " + std::to_string(idx)
-                               + " must be a ground literal")
-                                 .c_str());
+         throw nb::type_error(
+            fmt ::format(
+               "delta_literals entry at index {} must be a ground literal. "
+               "Got type: {}, after advanced accessor, got type: {}",
+               idx,
+               nb::str(item.type()).c_str(),
+               nb::str(((*to_advanced_literal)(item)).type()).c_str()
+            )
+               .c_str()
+         );
       }
    }
    return out;
