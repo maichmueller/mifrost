@@ -22,6 +22,9 @@ namespace {
 
 constexpr std::string_view kEntityNodeType = "entity";
 constexpr std::string_view kFlatEntityTypeAttr = "entity_node_type";
+constexpr std::string_view kIncludeLGANEdgesAttr = "include_lgan_edges";
+constexpr std::string_view kTargetSourcesAttr = "target_sources";
+constexpr std::string_view kLGANAnchorSourcesAttr = "lgan_anchor_sources";
 constexpr std::string_view kRelationNamesAttr = "relation_names";
 constexpr std::string_view kRelationAritiesAttr = "relation_arities";
 constexpr std::string_view kRelationSourcesAttr = "relation_sources";
@@ -67,6 +70,18 @@ GoalInputs default_goal_inputs_for_state(const mimir::search::State& state)
       inputs.append(goal, 0);
    }
    return inputs;
+}
+
+std::vector< std::string > source_names_for(const std::set< TargetSource >& sources)
+{
+   std::vector< std::string > out;
+   out.reserve(sources.size());
+   for(const auto source : kCanonicalTargetSourceOrder) {
+      if(sources.contains(source)) {
+         out.emplace_back(target_source_group_name(source));
+      }
+   }
+   return out;
 }
 
 class RelationSchemaRegistry {
@@ -967,10 +982,20 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_kind("flat");
    builder.set_schema_flag("flat_relations", true);
    builder.set_graph_attr(std::string(kFlatEntityTypeAttr), std::string(kEntityNodeType));
+   builder.set_graph_attr(
+      std::string(kIncludeLGANEdgesAttr), static_cast< int64_t >(config_.include_lgan_edges)
+   );
+   builder.set_graph_attr(
+      std::string(kTargetSourcesAttr), source_names_for(config_.target_sources)
+   );
+   builder.set_graph_attr(
+      std::string(kLGANAnchorSourcesAttr), source_names_for(config_.lgan_anchor_sources)
+   );
    builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
    builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
    builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);
    builder.set_graph_attr(std::string(kTargetEntityGroupsAttr), target_entity_group_names_);
+   builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    builder.set_graph_attr(std::string(kLGANTNEdgePosAttr), config_.lgan_tn_edge_pos);
    builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config_.lgan_nn_edge_pos);
    builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config_.lgan_rr_edge_pos);

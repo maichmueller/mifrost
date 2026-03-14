@@ -254,6 +254,8 @@ def test_flat_horizon_lgan_uses_candidate_state_rows(small_blocks):
     assert set(tn_edges[1].tolist()).issubset(
         set(data.graph_target_positions(0).tolist())
     )
+    assert data.include_lgan_edges is True
+    assert data.entity_node_type == encoder.entity_node_type
 
 
 def test_flat_horizon_lgan_respects_root_candidate_exclusion(small_blocks):

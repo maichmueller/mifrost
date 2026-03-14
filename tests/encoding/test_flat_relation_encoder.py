@@ -146,8 +146,20 @@ def _assert_flat_batch_equal(
     assert getattr(actual, "target_entity_groups", None) == getattr(
         expected, "target_entity_groups", None
     )
+    assert getattr(actual, "target_sources", None) == getattr(
+        expected, "target_sources", None
+    )
+    assert getattr(actual, "lgan_anchor_sources", None) == getattr(
+        expected, "lgan_anchor_sources", None
+    )
+    assert getattr(actual, "include_lgan_edges", None) == getattr(
+        expected, "include_lgan_edges", None
+    )
     assert getattr(actual, "target_symbol_prefix", None) == getattr(
         expected, "target_symbol_prefix", None
+    )
+    assert getattr(actual, "entity_node_type", None) == getattr(
+        expected, "entity_node_type", None
     )
     assert getattr(actual, "lgan_tn_edge_pos", None) == getattr(
         expected, "lgan_tn_edge_pos", None
@@ -219,6 +231,30 @@ def test_flat_relation_encoder_returns_flat_relation_data(small_blocks):
         data.object_indices,
         torch.arange(data.object_sizes[0].item(), dtype=torch.long),
     )
+
+
+def test_flat_relation_pyg_output_exposes_encoder_config_attrs(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+    goals, history_subgoals = _history_inputs(problem)
+    encoder = FlatRelationEncoder(
+        domain,
+        include_lgan_edges=True,
+        lgan_anchor_sources=[mifrost.TargetSource.Goals, mifrost.TargetSource.History],
+        target_sources=[mifrost.TargetSource.Actions, mifrost.TargetSource.Goals],
+        target_symbol_prefix="tg:",
+    )
+
+    data = encoder.encode(
+        state, goals=goals, actions=[action], history_subgoals=history_subgoals
+    ).as_pyg(as_batch=False)
+
+    assert data.entity_node_type == encoder.entity_node_type
+    assert data.include_lgan_edges is encoder.include_lgan_edges
+    assert list(data.target_sources) == ["goal", "action"]
+    assert list(data.lgan_anchor_sources) == ["goal", "history"]
+    assert data.target_symbol_prefix == encoder.target_symbol_prefix
     flattened = data.flattened_relations
     assert set(flattened.keys()) == set(data.schema.names)
     for relation_name, tensor in flattened.items():

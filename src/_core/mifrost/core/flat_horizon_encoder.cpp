@@ -19,6 +19,7 @@ namespace {
 
 constexpr std::string_view kEntityNodeType = "entity";
 constexpr std::string_view kFlatEntityTypeAttr = "entity_node_type";
+constexpr std::string_view kIncludeLGANEdgesAttr = "include_lgan_edges";
 constexpr std::string_view kRelationNamesAttr = "relation_names";
 constexpr std::string_view kRelationAritiesAttr = "relation_arities";
 constexpr std::string_view kRelationSourcesAttr = "relation_sources";
@@ -311,6 +312,9 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_kind("flat");
    builder.set_schema_flag("flat_relations", true);
    builder.set_graph_attr(std::string(kFlatEntityTypeAttr), std::string(kEntityNodeType));
+   builder.set_graph_attr(
+      std::string(kIncludeLGANEdgesAttr), static_cast< int64_t >(config_.include_lgan_edges)
+   );
    builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
    builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
    builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);

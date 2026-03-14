@@ -123,6 +123,32 @@ def _normalize_shared_scalar(value: object | None) -> object | None:
     return value
 
 
+def _normalize_shared_bool(value: object | None) -> bool | None:
+    if value is None:
+        return None
+    if torch.is_tensor(value):
+        flat = [bool(entry) for entry in value.view(-1).tolist()]
+        if not flat:
+            return None
+        first = flat[0]
+        if all(entry == first for entry in flat[1:]):
+            return first
+        raise ValueError(
+            "FlatRelationData include_lgan_edges must be constant across the batch"
+        )
+    if isinstance(value, list):
+        if not value:
+            return None
+        flat = [bool(entry) for entry in value]
+        first = flat[0]
+        if all(entry == first for entry in flat[1:]):
+            return first
+        raise ValueError(
+            "FlatRelationData include_lgan_edges must be constant across the batch"
+        )
+    return bool(value)
+
+
 def normalize_flat_relation_batch_metadata(
     data: FlatRelationData | Batch,
 ) -> FlatRelationData | Batch:
@@ -153,8 +179,20 @@ def normalize_flat_relation_batch_metadata(
     data.target_groups = _normalize_shared_str_list(
         getattr(data, "target_groups", None)
     )
+    data.target_sources = _normalize_shared_str_list(
+        getattr(data, "target_sources", None)
+    )
     data.target_entity_groups = _normalize_shared_str_list(
         getattr(data, "target_entity_groups", None)
+    )
+    data.lgan_anchor_sources = _normalize_shared_str_list(
+        getattr(data, "lgan_anchor_sources", None)
+    )
+    data.include_lgan_edges = _normalize_shared_bool(
+        getattr(data, "include_lgan_edges", None)
+    )
+    data.entity_node_type = _normalize_shared_scalar(
+        getattr(data, "entity_node_type", None)
     )
     data.target_symbol_prefix = _normalize_shared_scalar(
         getattr(data, "target_symbol_prefix", None)

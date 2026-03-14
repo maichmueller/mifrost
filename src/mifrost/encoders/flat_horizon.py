@@ -206,6 +206,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         config = FlatHorizonEncoderConfig(**config_kwargs)
         self._engine = FlatHorizonEncoderEngine(_advanced_domain(domain), config)
         self._config = config
+        self.entity_node_type = "entity"
         self.target_symbol_prefix = config.target_symbol_prefix
         self.parent_relation = config.parent_relation
         self.sibling_relation = config.sibling_relation

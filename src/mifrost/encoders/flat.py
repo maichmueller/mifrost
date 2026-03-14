@@ -309,8 +309,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         config = FlatRelationEncoderConfig(**config_kwargs)
         self._engine = FlatRelationEncoderEngine(_advanced_domain(domain), config)
         self._config = config
+        self.entity_node_type = "entity"
         self.include_lgan_edges = bool(config.include_lgan_edges)
+        self.target_sources = set(config.target_sources)
         self.lgan_anchor_sources = set(config.lgan_anchor_sources)
+        self.target_symbol_prefix = str(config.target_symbol_prefix)
         self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
         self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
         self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)
