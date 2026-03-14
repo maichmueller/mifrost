@@ -196,7 +196,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
     _encoder: _FlatTransitionEncoderBase
 
     def __post_init__(self) -> None:
-        self._stream = FlatHorizonEncoder.stream(self._encoder)
+        self._stream = FlatHorizonEncoder.mutable_stream(self._encoder)
         self._reset_builder()
 
     def append(

@@ -84,11 +84,43 @@ def _normalize_flat_horizon_mode(
 
 @dataclass
 class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
-    """Mutable stream for flat horizon encodings.
+    """Append-only stream for flat horizon encodings.
 
     Each item is a root state plus an optional `TransitionDAG`. The flushed
     result matches direct horizon batch encoding.
     """
+
+    _encoder: "FlatHorizonEncoder"
+
+    def __post_init__(self) -> None:
+        self._stream = _FlatHorizonStreamEncoder(self._encoder.engine)
+        self._reset_builder()
+
+    def append(
+        self,
+        root: StateInput,
+        dag: TransitionDAG | RXStateDAG | None = None,
+        *,
+        goals: GoalBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+    ) -> int:
+        """Append one root/DAG input and return its stream id."""
+        adv_root = _advanced_state(root)
+        normalized_dag = ensure_transition_dag(root, dag)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        if dag is None:
+            return self._coerce_stream_id(self._stream.append(adv_root, inputs))
+        return self._coerce_stream_id(
+            self._stream.append(adv_root, normalized_dag, inputs)
+        )
+
+    def _reset_builder(self) -> None:
+        self._stream.reset()
+
+
+@dataclass
+class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
+    """Mutable stream for flat horizon encodings."""
 
     _encoder: "FlatHorizonEncoder"
 
@@ -366,11 +398,16 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         )
 
     def stream(self) -> FlatHorizonEncoderStream:
-        """Return a mutable stream for root/DAG horizon inputs."""
+        """Return an append-only stream for root/DAG horizon inputs."""
         return FlatHorizonEncoderStream(self)
+
+    def mutable_stream(self) -> FlatHorizonMutableEncoderStream:
+        """Return a mutable stream with `append`, `update`, and `remove`."""
+        return FlatHorizonMutableEncoderStream(self)
 
 
 __all__ = [
     "FlatHorizonEncoder",
     "FlatHorizonEncoderStream",
+    "FlatHorizonMutableEncoderStream",
 ]

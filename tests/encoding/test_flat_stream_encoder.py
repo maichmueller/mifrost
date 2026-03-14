@@ -5,6 +5,7 @@ import pytest
 import mifrost
 from mifrost.encoders import (
     FlatHorizonEncoder,
+    FlatHorizonMutableEncoderStream,
     FlatHorizonEncoderStream,
     FlatRelationData,
     FlatRelationEncoder,
@@ -136,6 +137,45 @@ def test_flat_horizon_stream_matches_direct_encode_and_accepts_rustworkx(small_b
     stream = encoder.stream()
 
     assert isinstance(stream, FlatHorizonEncoderStream)
+    stream.append(root, goals=goals)
+    stream.append(root, dag=dag, goals=goals)
+
+    actual = stream.flush_pyg()
+    expected = encoder.encode_batch(
+        [root, root], dags=[None, dag], goals=[goals, goals]
+    ).as_pyg(as_batch=True)
+
+    _assert_flat_batch_equal(actual, expected)
+    assert actual.graph_target_depths(1).tolist() == [1]
+
+
+def test_flat_horizon_append_only_stream_has_no_update_remove(small_blocks):
+    _space, domain, _problem = small_blocks
+    stream = FlatHorizonEncoder(domain).stream()
+
+    with pytest.raises(NotImplementedError):
+        stream.remove(0)
+    with pytest.raises(NotImplementedError):
+        stream.update(0, object())
+
+
+def test_flat_horizon_mutable_stream_matches_direct_encode_and_accepts_rustworkx(
+    small_blocks,
+):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    action, successor = transitions[0]
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    goals = list(problem.get_goal_condition().get_literals())
+    graph = _horizon_pygraph(root, action, successor)
+
+    encoder = FlatHorizonEncoder(domain, ignore_actions=False)
+    stream = encoder.mutable_stream()
+
+    assert isinstance(stream, FlatHorizonMutableEncoderStream)
     empty_id = stream.append(root, goals=goals)
     full_id = stream.append(root, dag=dag, goals=goals)
     stream.update(empty_id, root, dag=graph, goals=goals)
@@ -222,5 +262,6 @@ def test_flat_stream_classes_export_from_root_module():
     assert hasattr(mifrost, "FlatRelationEncoderStream")
     assert hasattr(mifrost, "FlatRelationMutableEncoderStream")
     assert hasattr(mifrost, "FlatHorizonEncoderStream")
+    assert hasattr(mifrost, "FlatHorizonMutableEncoderStream")
     assert hasattr(mifrost, "FlatTransitionEncoderStream")
     assert hasattr(mifrost, "FlatTransitionEffectsEncoderStream")
