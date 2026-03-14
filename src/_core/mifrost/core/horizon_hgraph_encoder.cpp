@@ -116,7 +116,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
    const mimir::search::State& root,
    const TransitionDAG& dag,
    const GoalInputs& goals,
-   BatchBuilder& builder
+   BatchBuilder& builder,
+   std::vector< mimir::search::State >* batch_target_name_states
 )
 {
    auto& workspace = init_hetero_workspace(builder);
@@ -1102,6 +1103,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    maybe_add_lgan_edges(builder, workspace);
 
    TargetColumns target_columns;
+   std::vector< mimir::search::State > target_name_states;
    const bool export_state_targets = has_target_source(TargetSource::States);
    if(not nodes.empty()) {
       const std::optional< int64_t > state_target_group_id = export_state_targets
@@ -1136,7 +1138,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             target_positions_by_index,
             horizon_config_.exclude_root_candidate,
             state_target_group_id,
-            config_.export_node_names
+            /*include_names=*/false
          );
          append_target_candidate_rows(
             target_columns,
@@ -1148,6 +1150,18 @@ void HorizonHGraphEncoderEngine::encode_impl(
                .duplicate_candidate_id_prefix = "duplicate candidate_id ",
             }
          );
+         if(config_.export_node_names) {
+            target_name_states.reserve(candidate_rows.size());
+            for(const auto& node : nodes) {
+               if(horizon_config_.exclude_root_candidate and node.index == root_index) {
+                  continue;
+               }
+               if(not target_positions_by_index.contains(node.index)) {
+                  continue;
+               }
+               target_name_states.push_back(node.state);
+            }
+         }
       }
    }
 
@@ -1157,11 +1171,26 @@ void HorizonHGraphEncoderEngine::encode_impl(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = true,
          .include_group = true,
-         .include_names = config_.export_node_names,
+         .include_names = false,
          .groups = workspace.target_groups,
          .parent_relation = horizon_config_.parent_relation,
       };
       emit_target_metadata(builder, target_columns, target_emit_config);
+      if(config_.export_node_names) {
+         if(batch_target_name_states != nullptr) {
+            if(not target_name_states.empty()) {
+               batch_target_name_states->insert(
+                  batch_target_name_states->end(),
+                  target_name_states.begin(),
+                  target_name_states.end()
+               );
+            }
+         } else if(target_name_states.empty()) {
+            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+         } else {
+            builder.add_lazy_target_names(std::span(target_name_states));
+         }
+      }
    }
 
    std::vector< std::string > object_names_override;
@@ -1197,6 +1226,7 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
 {
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
+   std::vector< mimir::search::State > batch_target_name_states;
 
    const size_t state_count = inputs.roots.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
@@ -1224,8 +1254,16 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
          }
       }
 
-      encode(root_entry.state, dag_ref, goal_inputs, builder);
+      encode_impl(root_entry.state, dag_ref, goal_inputs, builder, &batch_target_name_states);
       builder.next_graph();
+   }
+
+   if(config_.export_node_names) {
+      if(batch_target_name_states.empty()) {
+         builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+      } else {
+         builder.add_lazy_target_names(std::span(batch_target_name_states));
+      }
    }
 
    return builder.build();

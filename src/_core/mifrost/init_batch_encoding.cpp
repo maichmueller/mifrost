@@ -20,10 +20,12 @@
 #include <mimir/formalism/problem.hpp>
 #include <mimir/search/axiom_evaluators/grounded/grounded.hpp>
 #include <mimir/search/axiom_evaluators/interface.hpp>
+#include <mimir/search/formatter.hpp>
 #include <mimir/search/grounders/lifted.hpp>
 #include <mimir/search/state_repository.hpp>
 #include <optional>
 #include <ranges>
+#include <sstream>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -44,6 +46,7 @@
 #include "mifrost/core/nb_instance.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/core/successor_hgraph_encoder.hpp"
+#include "mifrost/core/target_metadata.hpp"
 #include "mifrost/core/transition_dag.hpp"
 #include "mifrost/pyg_views.hpp"
 
@@ -728,8 +731,45 @@ nb::object batch_to_single_homo_data(nb::object& pyg_batch)
    return out;
 }
 
-nb::dict
-batch_encoding_to_state_dict(const BatchBuilder::BatchEncoding& encoding, bool include_metadata)
+std::vector< std::string > materialize_target_name_states(
+   std::span< const mimir::search::State > states
+)
+{
+   std::vector< std::string > names;
+   names.reserve(states.size());
+   for(const auto& state : states) {
+      std::ostringstream stream;
+      stream << state;
+      names.push_back(stream.str());
+   }
+   return names;
+}
+
+void materialize_batch_encoding_lazy_graph_attrs(BatchBuilder::BatchEncoding& encoding)
+{
+   if(not encoding.lazy_target_name_states.empty()) {
+      auto names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
+      const auto graph_attr_it = encoding.graph_attrs.find(std::string(kTargetNamesAttr));
+      if(graph_attr_it == encoding.graph_attrs.end()) {
+         encoding.graph_attrs.emplace(std::string(kTargetNamesAttr), std::move(names));
+      } else {
+         auto* existing = std::get_if< std::vector< std::string > >(&graph_attr_it->second);
+         if(existing == nullptr) {
+            throw std::invalid_argument(
+               "BatchEncoding target_names graph attr must be a string vector"
+            );
+         }
+         existing->insert(
+            existing->end(),
+            std::make_move_iterator(names.begin()),
+            std::make_move_iterator(names.end())
+         );
+      }
+      encoding.lazy_target_name_states.clear();
+   }
+}
+
+nb::dict batch_encoding_to_state_dict(BatchBuilder::BatchEncoding& encoding, bool include_metadata)
 {
    auto map_to_dict =
       []< typename value_t >(const absl::btree_map< std::string, value_t >& values) {
@@ -741,6 +781,7 @@ batch_encoding_to_state_dict(const BatchBuilder::BatchEncoding& encoding, bool i
       };
 
    nb::dict state;
+   materialize_batch_encoding_lazy_graph_attrs(encoding);
    state["format_version"] = 1;
    state["graph_kind"] = encoding.graph_kind;
    state["num_graphs"] = encoding.num_graphs;
@@ -1139,6 +1180,7 @@ nb::list batch_encoding_edge_types(const BatchBuilder::BatchEncoding& encoding)
 
 nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handle owner)
 {
+   materialize_batch_encoding_lazy_graph_attrs(encoding);
    nb::dict tensors;
 
    for(auto& [key, col] : encoding.columns) {
@@ -1238,11 +1280,12 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
    return out;
 }
 
-std::optional< nb::object > batch_encoding_graph_attr_if_present(
-   const BatchBuilder::BatchEncoding& encoding,
-   std::string_view key
-)
+std::optional< nb::object >
+batch_encoding_graph_attr_if_present(BatchBuilder::BatchEncoding& encoding, std::string_view key)
 {
+   if(key == kTargetNamesAttr) {
+      materialize_batch_encoding_lazy_graph_attrs(encoding);
+   }
    auto it = encoding.graph_attrs.find(std::string(key));
    if(it == encoding.graph_attrs.end()) {
       return std::nullopt;
@@ -1251,8 +1294,9 @@ std::optional< nb::object > batch_encoding_graph_attr_if_present(
 }
 
 nb::object
-batch_encoding_as_pyg(const BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
+batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch)
 {
+   materialize_batch_encoding_lazy_graph_attrs(encoding);
    validate_batch_encoding_graph_fields(encoding, "BatchEncoding.as_pyg");
    const bool want_batch = as_batch.value_or(encoding.num_graphs != 1);
    const bool is_flat =
@@ -1817,7 +1861,16 @@ void init_batch_encoding(nb::module_& m)
             nb::rv_policy::move
          )
          .def_ro("node_feature_dims", &BatchBuilder::BatchEncoding::node_feature_dims)
-         .def_ro("graph_attrs", &BatchBuilder::BatchEncoding::graph_attrs)
+         .def_prop_ro(
+            "graph_attrs",
+            [](nb::handle self) {
+               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+                  self, "BatchEncoding.graph_attrs called with invalid instance"
+               );
+               materialize_batch_encoding_lazy_graph_attrs(*encoding);
+               return encoding->graph_attrs;
+            }
+         )
          .def(
             "schema_flags_view",
             [](nb::handle self) {

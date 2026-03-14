@@ -71,7 +71,8 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       const mimir::search::State& root,
       const TransitionDAG& dag,
       const GoalInputs& goals,
-      BatchBuilder& builder
+      BatchBuilder& builder,
+      std::vector< mimir::search::State >* batch_target_name_states = nullptr
    );
 
    /// Register transition relation types based on config flags.

@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <array>
+#include <mimir/search/formatter.hpp>
 #include <numeric>
 #include <optional>
 #include <range/v3/view/enumerate.hpp>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -20,6 +22,7 @@
 #include "mifrost/core/dlpack_utils.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "schema.hpp"
+#include "target_metadata.hpp"
 #include "utils/macro.hpp"
 
 namespace mifrost {
@@ -176,6 +179,46 @@ bool key_has_batch_suffix(std::string_view key)
    const auto suffix_pos = key.size() - schema_key::kBatchAttr.size();
    return key[suffix_pos - 1] == schema_key::kTypeAttrSeparator
           and key.substr(suffix_pos) == schema_key::kBatchAttr;
+}
+
+std::vector< std::string > format_target_name_states(std::span< const mimir::search::State > states)
+{
+   std::vector< std::string > names;
+   names.reserve(states.size());
+   for(const auto& state : states) {
+      std::ostringstream stream;
+      stream << state;
+      names.push_back(stream.str());
+   }
+   return names;
+}
+
+void append_target_name_strings(BatchBuilder& builder, const std::vector< std::string >& names)
+{
+   if(names.empty()) {
+      return;
+   }
+   auto graph_attr_it = builder.graph_attrs.find(std::string(kTargetNamesAttr));
+   if(graph_attr_it == builder.graph_attrs.end()) {
+      builder.graph_attrs.emplace(std::string(kTargetNamesAttr), names);
+      return;
+   }
+   auto* existing = std::get_if< std::vector< std::string > >(&graph_attr_it->second);
+   if(existing == nullptr) {
+      throw std::invalid_argument("Graph attr 'target_names' must be a string vector");
+   }
+   existing->insert(existing->end(), names.begin(), names.end());
+}
+
+void materialize_builder_lazy_target_names(BatchBuilder& builder)
+{
+   if(builder.lazy_target_name_states.empty()) {
+      return;
+   }
+   append_target_name_strings(
+      builder, format_target_name_states(std::span(builder.lazy_target_name_states))
+   );
+   builder.lazy_target_name_states.clear();
 }
 
 void set_graph_attrs_on_pyg_batch(
@@ -436,6 +479,8 @@ void BatchBuilder::reset()
 
    graph_attrs.clear();
    graph_attrs.reserve(kSmallReserve);
+   lazy_target_name_states.clear();
+   lazy_target_name_states.reserve(kSmallReserve);
 
    if(graph_fields) {
       graph_fields->clear();
@@ -561,6 +606,19 @@ void BatchBuilder::set_graph_attr(const std::string& key, int64_t value)
 void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
 {
    graph_attrs[key] = std::move(value);
+}
+
+void BatchBuilder::add_lazy_target_names(std::span< const mimir::search::State > states)
+{
+   if(states.empty()) {
+      return;
+   }
+   if(graph_attrs.contains(std::string(kTargetNamesAttr))) {
+      append_target_name_strings(*this, format_target_name_states(states));
+      return;
+   }
+   lazy_target_name_states.reserve(lazy_target_name_states.size() + states.size());
+   lazy_target_name_states.insert(lazy_target_name_states.end(), states.begin(), states.end());
 }
 
 void BatchBuilder::register_field(const std::string& key, const GraphFieldSpec& spec)
@@ -1212,6 +1270,7 @@ nb::object BatchBuilder::build_pyg()
       }
    }
 
+   materialize_builder_lazy_target_names(*this);
    set_graph_attrs_on_pyg_batch(batch, graph_attrs, graph_fields);
 
    if(graph_fields) {
@@ -1522,6 +1581,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
       .object_names = std::move(object_names),
       .node_feature_dims = std::move(node_feature_dims),
       .graph_attrs = std::move(graph_attrs),
+      .lazy_target_name_states = std::move(lazy_target_name_states),
       .graph_fields = std::move(built_graph_fields),
       .ptrs = std::move(ptrs),
       .schema_flags = std::move(schema_flags),
@@ -1574,7 +1634,22 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
    if(not batch_encoding.object_names.empty()) {
       set_object_names(batch_encoding.object_names);
    }
+   if(const auto target_names_it = batch_encoding.graph_attrs.find(std::string(kTargetNamesAttr));
+      target_names_it != batch_encoding.graph_attrs.end()) {
+      const auto* names = std::get_if< std::vector< std::string > >(&target_names_it->second);
+      if(names == nullptr) {
+         throw std::invalid_argument(
+            "append_batch_encoding target_names graph attr must be a string vector"
+         );
+      }
+      append_target_name_strings(*this, *names);
+   } else if(not batch_encoding.lazy_target_name_states.empty()) {
+      add_lazy_target_names(std::span(batch_encoding.lazy_target_name_states));
+   }
    for(const auto& [key, value] : batch_encoding.graph_attrs) {
+      if(key == kTargetNamesAttr) {
+         continue;
+      }
       std::visit([&](const auto& v) { set_graph_attr(key, v); }, value);
    }
 
@@ -1805,6 +1880,7 @@ void BatchBuilder::load_from_batch_encoding(const BatchEncoding& batch_encoding)
    object_names = batch_encoding.object_names;
    node_feature_dims = batch_encoding.node_feature_dims;
    graph_attrs = batch_encoding.graph_attrs;
+   lazy_target_name_states = batch_encoding.lazy_target_name_states;
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();
    } else {
@@ -1843,6 +1919,7 @@ void BatchBuilder::load_from_batch_encoding(BatchEncoding&& batch_encoding)
    object_names = std::move(batch_encoding.object_names);
    node_feature_dims = std::move(batch_encoding.node_feature_dims);
    graph_attrs = std::move(batch_encoding.graph_attrs);
+   lazy_target_name_states = std::move(batch_encoding.lazy_target_name_states);
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();
    } else {

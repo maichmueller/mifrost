@@ -108,6 +108,7 @@ class FlatHorizonEncoderEngine {
       std::vector< int64_t > object_indices;
       std::vector< int64_t > target_entity_indices;
       std::vector< int64_t > target_entity_group_ids;
+      std::vector< mimir::search::State > target_name_states;
       TargetColumns target_columns;
    };
 
@@ -119,7 +120,7 @@ class FlatHorizonEncoderEngine {
       const TransitionDAG& dag,
       const GoalInputs& goals,
       BatchBuilder& builder,
-      std::vector< std::string >* batch_target_names = nullptr,
+      std::vector< mimir::search::State >* batch_target_name_states = nullptr,
       bool prepare_builder = true
    );
    [[nodiscard]] EncodingContext

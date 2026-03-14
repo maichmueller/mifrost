@@ -487,7 +487,7 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
       .symbol_prefix = config_.target_symbol_prefix,
       .include_depth = true,
       .include_group = true,
-      .include_names = config_.export_node_names,
+      .include_names = false,
       .groups = target_metadata_group_names_,
       .parent_relation = config_.parent_relation,
    };
@@ -644,6 +644,7 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    context.state_entity_index_by_node_index.reserve(nodes.size());
    context.target_entity_indices.reserve(nodes.size());
    context.target_entity_group_ids.reserve(nodes.size());
+   context.target_name_states.reserve(nodes.size());
    context.target_columns.reserve(
       (config_.exclude_root_candidate and not nodes.empty()) ? nodes.size() - 1 : nodes.size(),
       /*include_depth=*/true,
@@ -679,7 +680,7 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
       target_positions_by_index,
       config_.exclude_root_candidate,
       int64_t{0},
-      config_.export_node_names
+      /*include_names=*/false
    );
    append_target_candidate_rows(
       context.target_columns,
@@ -691,6 +692,17 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
          .duplicate_candidate_id_prefix = "duplicate candidate_id ",
       }
    );
+   if(config_.export_node_names) {
+      for(const auto& node : nodes) {
+         if(config_.exclude_root_candidate and node.index == dag.root_index()) {
+            continue;
+         }
+         if(not target_positions_by_index.contains(node.index)) {
+            continue;
+         }
+         context.target_name_states.push_back(node.state);
+      }
+   }
 
    return context;
 }
@@ -739,7 +751,7 @@ void FlatHorizonEncoderEngine::encode_impl(
    const TransitionDAG& dag,
    const GoalInputs& goals,
    BatchBuilder& builder,
-   std::vector< std::string >* batch_target_names,
+   std::vector< mimir::search::State >* batch_target_name_states,
    bool prepare_builder_once
 )
 {
@@ -1311,18 +1323,28 @@ void FlatHorizonEncoderEngine::encode_impl(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = true,
          .include_group = true,
-         .include_names = config_.export_node_names,
+         .include_names = false,
          .groups = target_metadata_group_names_,
          .parent_relation = config_.parent_relation,
       };
       set_target_fields(builder, context.target_columns, target_emit_config);
       set_target_graph_attrs(builder, context.target_columns, target_emit_config);
-      if(batch_target_names != nullptr) {
-         batch_target_names->insert(
-            batch_target_names->end(),
-            context.target_columns.names.begin(),
-            context.target_columns.names.end()
-         );
+      if(config_.export_node_names) {
+         if(batch_target_name_states != nullptr) {
+            if(not context.target_name_states.empty()) {
+               batch_target_name_states->insert(
+                  batch_target_name_states->end(),
+                  context.target_name_states.begin(),
+                  context.target_name_states.end()
+               );
+            }
+         } else {
+            if(context.target_name_states.empty()) {
+               builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+            } else {
+               builder.add_lazy_target_names(std::span(context.target_name_states));
+            }
+         }
       }
 
       builder.set_field(
@@ -1423,7 +1445,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    }
 
    const size_t state_count = inputs.roots.states.size();
-   std::vector< std::string > batch_target_names;
+   std::vector< mimir::search::State > batch_target_name_states;
    for(size_t idx = 0; idx < state_count; ++idx) {
       const auto& root_entry = inputs.roots.states[idx];
       const auto& dag_entry = inputs.dags.at(idx);
@@ -1465,7 +1487,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
             *dag_ptr,
             goal_inputs,
             builder,
-            &batch_target_names,
+            &batch_target_name_states,
             /*prepare_builder_once=*/false
          );
       }
@@ -1473,7 +1495,11 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    }
 
    if(config_.export_node_names) {
-      builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+      if(batch_target_name_states.empty()) {
+         builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+      } else {
+         builder.add_lazy_target_names(std::span(batch_target_name_states));
+      }
    }
    builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);

@@ -167,6 +167,35 @@ def test_horizon_export_node_names_false_skips_target_names(small_blocks):
     assert not hasattr(data, "target_names")
 
 
+def test_horizon_batch_target_names_cover_all_candidates(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=2)
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    for action, target in transitions[:2]:
+        dag.register_transition(
+            adv_state(root),
+            adv_state(target),
+            adv_action(action),
+        )
+
+    second_root = adv_state(transitions[0][1])
+    empty_dag = mifrost.TransitionDAG(second_root)
+    encoder = mifrost.HorizonEncoder(domain)
+    data = encoder.encode_batch(
+        [root, second_root],
+        dags=[dag, empty_dag],
+        goals=[
+            list(problem.get_goal_condition().get_literals()),
+            list(problem.get_goal_condition().get_literals()),
+        ],
+    ).as_pyg(as_batch=True)
+
+    assert hasattr(data, "target_names")
+    assert len(list(data.target_names)) == len(data.target_indices.tolist())
+
+
 def test_horizon_target_candidate_ids_from_explicit_dag_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

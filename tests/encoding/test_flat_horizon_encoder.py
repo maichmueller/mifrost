@@ -134,6 +134,24 @@ def test_flat_horizon_export_node_names_false_skips_target_names(small_blocks):
     assert data.graph_target_names(0) == []
 
 
+def test_flat_horizon_native_target_names_materialize_on_access(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    encoding = FlatHorizonEncoder(domain, ignore_actions=False).encode(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    target_names = list(encoding.target_names)
+    assert len(target_names) == 1
+    assert encoding.graph_attrs["target_names"] == target_names
+    assert encoding.as_dict()["graph_attrs"]["target_names"] == target_names
+
+
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
