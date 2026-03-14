@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <mimir/formalism/problem.hpp>
 #include <optional>
 #include <ranges>
@@ -62,6 +65,98 @@ uint32_t fact_tag_id()
 uint64_t pack_u32_u32(uint32_t hi, uint32_t lo)
 {
    return (static_cast< uint64_t >(hi) << 32) | static_cast< uint64_t >(lo);
+}
+
+struct FlatHorizonBatchProfile {
+   using Clock = std::chrono::steady_clock;
+
+   bool enabled = false;
+   double prepare_builder_s = 0.0;
+   double goal_inputs_s = 0.0;
+   double default_dag_s = 0.0;
+   double encode_impl_s = 0.0;
+   double make_context_s = 0.0;
+   double root_emit_s = 0.0;
+   double root_delta_setup_s = 0.0;
+   double candidate_loop_s = 0.0;
+   double delta_fallback_s = 0.0;
+   double topology_relations_s = 0.0;
+   double finalize_builder_s = 0.0;
+   double lgan_s = 0.0;
+   int64_t graphs = 0;
+   int64_t dag_nodes = 0;
+   int64_t candidate_nodes = 0;
+   int64_t entity_rows = 0;
+   int64_t relation_instances = 0;
+   int64_t provided_delta_nodes = 0;
+   int64_t fallback_delta_nodes = 0;
+};
+
+thread_local FlatHorizonBatchProfile* g_flat_horizon_batch_profile = nullptr;
+
+bool flat_horizon_batch_profile_enabled()
+{
+   static const bool enabled = [] {
+      const char* value = std::getenv("MIFROST_PROFILE_FLAT_HORIZON");
+      return value != nullptr && std::string_view(value) != "0"
+             && std::string_view(value) != "false";
+   }();
+   return enabled;
+}
+
+struct ScopedProfileTimer {
+   using Clock = FlatHorizonBatchProfile::Clock;
+
+   double* accum = nullptr;
+   Clock::time_point start{};
+
+   explicit ScopedProfileTimer(double* accum_ptr) : accum(accum_ptr)
+   {
+      if(accum != nullptr) {
+         start = Clock::now();
+      }
+   }
+
+   ~ScopedProfileTimer()
+   {
+      if(accum != nullptr) {
+         *accum += std::chrono::duration< double >(Clock::now() - start).count();
+      }
+   }
+};
+
+void print_flat_horizon_batch_profile(const FlatHorizonBatchProfile& profile)
+{
+   if(not profile.enabled) {
+      return;
+   }
+   std::fprintf(
+      stderr,
+      "[mifrost.flat_horizon] graphs=%lld dag_nodes=%lld candidates=%lld "
+      "entities=%lld relation_instances=%lld provided_delta=%lld fallback_delta=%lld\n"
+      "  prepare_builder=%.6fs goal_inputs=%.6fs default_dag=%.6fs encode_impl=%.6fs\n"
+      "  make_context=%.6fs root_emit=%.6fs root_delta_setup=%.6fs candidate_loop=%.6fs\n"
+      "  delta_fallback=%.6fs topology_relations=%.6fs finalize_builder=%.6fs lgan=%.6fs\n",
+      static_cast< long long >(profile.graphs),
+      static_cast< long long >(profile.dag_nodes),
+      static_cast< long long >(profile.candidate_nodes),
+      static_cast< long long >(profile.entity_rows),
+      static_cast< long long >(profile.relation_instances),
+      static_cast< long long >(profile.provided_delta_nodes),
+      static_cast< long long >(profile.fallback_delta_nodes),
+      profile.prepare_builder_s,
+      profile.goal_inputs_s,
+      profile.default_dag_s,
+      profile.encode_impl_s,
+      profile.make_context_s,
+      profile.root_emit_s,
+      profile.root_delta_setup_s,
+      profile.candidate_loop_s,
+      profile.delta_fallback_s,
+      profile.topology_relations_s,
+      profile.finalize_builder_s,
+      profile.lgan_s
+   );
 }
 
 FlatHorizonEncoderEngine::Config normalize_config(FlatHorizonEncoderEngine::Config config)
@@ -392,6 +487,7 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
       .symbol_prefix = config_.target_symbol_prefix,
       .include_depth = true,
       .include_group = true,
+      .include_names = config_.export_node_names,
       .groups = target_metadata_group_names_,
       .parent_relation = config_.parent_relation,
    };
@@ -579,7 +675,11 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    }
 
    const auto rows = collect_transition_dag_target_candidate_rows(
-      dag, target_positions_by_index, config_.exclude_root_candidate, int64_t{0}
+      dag,
+      target_positions_by_index,
+      config_.exclude_root_candidate,
+      int64_t{0},
+      config_.export_node_names
    );
    append_target_candidate_rows(
       context.target_columns,
@@ -639,11 +739,19 @@ void FlatHorizonEncoderEngine::encode_impl(
    const TransitionDAG& dag,
    const GoalInputs& goals,
    BatchBuilder& builder,
-   std::vector< std::string >* batch_target_names
+   std::vector< std::string >* batch_target_names,
+   bool prepare_builder_once
 )
 {
-   prepare_builder(builder);
-   const auto context = make_context(root, dag);
+   auto* profile = g_flat_horizon_batch_profile;
+   if(prepare_builder_once) {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->prepare_builder_s : nullptr);
+      prepare_builder(builder);
+   }
+   const auto context = [&]() {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->make_context_s : nullptr);
+      return make_context(root, dag);
+   }();
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
    auto emit_state_facts =
@@ -850,27 +958,31 @@ void FlatHorizonEncoderEngine::encode_impl(
       sink.emit(relation_id, args);
    };
 
-   const auto root_fact_keys = emit_state_for_candidate(
-      root, dag.root_index(), config_.include_static
-   );
-   emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
-      std::span{goals.static_goals}, goals.static_goal_levels, dag.root_index()
-   );
-   emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
-      std::span{goals.fluent_goals}, goals.fluent_goal_levels, dag.root_index()
-   );
-   emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
-      std::span{goals.derived_goals}, goals.derived_goal_levels, dag.root_index()
-   );
-   emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-      std::span{goals.static_goals}, goals.static_goal_levels, root_fact_keys, dag.root_index()
-   );
-   emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-      std::span{goals.fluent_goals}, goals.fluent_goal_levels, root_fact_keys, dag.root_index()
-   );
-   emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-      std::span{goals.derived_goals}, goals.derived_goal_levels, root_fact_keys, dag.root_index()
-   );
+   const auto root_fact_keys = [&]() {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->root_emit_s : nullptr);
+      const auto fact_keys = emit_state_for_candidate(
+         root, dag.root_index(), config_.include_static
+      );
+      emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
+         std::span{goals.static_goals}, goals.static_goal_levels, dag.root_index()
+      );
+      emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
+         std::span{goals.fluent_goals}, goals.fluent_goal_levels, dag.root_index()
+      );
+      emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
+         std::span{goals.derived_goals}, goals.derived_goal_levels, dag.root_index()
+      );
+      emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+         std::span{goals.static_goals}, goals.static_goal_levels, fact_keys, dag.root_index()
+      );
+      emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+         std::span{goals.fluent_goals}, goals.fluent_goal_levels, fact_keys, dag.root_index()
+      );
+      emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+         std::span{goals.derived_goals}, goals.derived_goal_levels, fact_keys, dag.root_index()
+      );
+      return fact_keys;
+   }();
 
    const bool encode_actions = (not config_.ignore_actions)
                                or (config_.transition_mode == Mode::Action);
@@ -915,6 +1027,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       return true;
    };
    if(config_.transition_mode == Mode::Delta) {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->root_delta_setup_s : nullptr);
       const auto& repos = root.get_problem().get_repositories();
       const auto root_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          root.get_atoms< mimir::formalism::FluentTag >()
@@ -936,192 +1049,211 @@ void FlatHorizonEncoderEngine::encode_impl(
       }
    }
 
-   for(const auto& node : dag.nodes()) {
-      if(node.index == dag.root_index()) {
-         continue;
-      }
-
-      if(config_.transition_mode == Mode::Full) {
-         const auto succ_fact_keys = emit_state_for_candidate(node.state, node.index, false);
-         if(encode_actions and node.action.has_value()) {
-            emit_action(*node.action, node.index);
+   {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->candidate_loop_s : nullptr);
+      for(const auto& node : dag.nodes()) {
+         if(node.index == dag.root_index()) {
+            continue;
          }
-         emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-            std::span{goals.static_goals}, goals.static_goal_levels, succ_fact_keys, node.index
-         );
-         emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-            std::span{goals.fluent_goals}, goals.fluent_goal_levels, succ_fact_keys, node.index
-         );
-         emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-            std::span{goals.derived_goals}, goals.derived_goal_levels, succ_fact_keys, node.index
-         );
-      } else if(config_.transition_mode == Mode::Delta) {
-         hash_set< int > added_fluents;
-         hash_set< int > removed_fluents;
-         hash_set< int > added_derived;
-         hash_set< int > removed_derived;
-         const bool used_provided_delta = emit_provided_delta_literals(
-            node, added_fluents, removed_fluents, added_derived, removed_derived
-         );
 
-         if(not used_provided_delta) {
-            const auto& repos = node.state.get_problem().get_repositories();
-            const auto
-               succ_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-                  node.state.get_atoms< mimir::formalism::FluentTag >()
+         if(config_.transition_mode == Mode::Full) {
+            const auto succ_fact_keys = emit_state_for_candidate(node.state, node.index, false);
+            if(encode_actions and node.action.has_value()) {
+               emit_action(*node.action, node.index);
+            }
+            emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+               std::span{goals.static_goals}, goals.static_goal_levels, succ_fact_keys, node.index
+            );
+            emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+               std::span{goals.fluent_goals}, goals.fluent_goal_levels, succ_fact_keys, node.index
+            );
+            emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+               std::span{goals.derived_goals}, goals.derived_goal_levels, succ_fact_keys, node.index
+            );
+         } else if(config_.transition_mode == Mode::Delta) {
+            hash_set< int > added_fluents;
+            hash_set< int > removed_fluents;
+            hash_set< int > added_derived;
+            hash_set< int > removed_derived;
+            const bool used_provided_delta = emit_provided_delta_literals(
+               node, added_fluents, removed_fluents, added_derived, removed_derived
+            );
+            if(profile != nullptr) {
+               if(used_provided_delta) {
+                  ++profile->provided_delta_nodes;
+               } else {
+                  ++profile->fallback_delta_nodes;
+               }
+            }
+
+            if(not used_provided_delta) {
+               ScopedProfileTimer delta_timer(
+                  profile != nullptr ? &profile->delta_fallback_s : nullptr
                );
-            const auto
-               succ_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
+               const auto& repos = node.state.get_problem().get_repositories();
+               const auto
+                  succ_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
+                     node.state.get_atoms< mimir::formalism::FluentTag >()
+                  );
+               const auto succ_derived = repos.get_ground_atoms_from_indices<
+                  mimir::formalism::DerivedTag >(
                   node.state.get_atoms< mimir::formalism::DerivedTag >()
                );
 
-            hash_set< int > succ_fluent_indices;
-            for(const auto& atom : succ_fluents) {
-               if(config_.ignore_zero_arity_relations and atom->get_predicate()->get_arity() == 0) {
-                  continue;
+               hash_set< int > succ_fluent_indices;
+               for(const auto& atom : succ_fluents) {
+                  if(config_.ignore_zero_arity_relations
+                     and atom->get_predicate()->get_arity() == 0) {
+                     continue;
+                  }
+                  succ_fluent_indices.insert(atom->get_index());
+                  if(not root_fluent_indices.contains(atom->get_index())) {
+                     added_fluents.insert(atom->get_index());
+                     emit_delta_literal(atom, true, node.index);
+                  }
                }
-               succ_fluent_indices.insert(atom->get_index());
-               if(not root_fluent_indices.contains(atom->get_index())) {
-                  added_fluents.insert(atom->get_index());
-                  emit_delta_literal(atom, true, node.index);
+               for(const auto idx : root_fluent_indices) {
+                  if(not succ_fluent_indices.contains(idx)) {
+                     removed_fluents.insert(idx);
+                     const auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
+                     emit_delta_literal(atom, false, node.index);
+                  }
                }
-            }
-            for(const auto idx : root_fluent_indices) {
-               if(not succ_fluent_indices.contains(idx)) {
-                  removed_fluents.insert(idx);
-                  const auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
-                  emit_delta_literal(atom, false, node.index);
+
+               hash_set< int > succ_derived_indices;
+               for(const auto& atom : succ_derived) {
+                  if(config_.ignore_zero_arity_relations
+                     and atom->get_predicate()->get_arity() == 0) {
+                     continue;
+                  }
+                  succ_derived_indices.insert(atom->get_index());
+                  if(not root_derived_indices.contains(atom->get_index())) {
+                     added_derived.insert(atom->get_index());
+                     emit_delta_literal(atom, true, node.index);
+                  }
+               }
+               for(const auto idx : root_derived_indices) {
+                  if(not succ_derived_indices.contains(idx)) {
+                     removed_derived.insert(idx);
+                     const auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
+                     emit_delta_literal(atom, false, node.index);
+                  }
                }
             }
 
-            hash_set< int > succ_derived_indices;
-            for(const auto& atom : succ_derived) {
-               if(config_.ignore_zero_arity_relations and atom->get_predicate()->get_arity() == 0) {
-                  continue;
-               }
-               succ_derived_indices.insert(atom->get_index());
-               if(not root_derived_indices.contains(atom->get_index())) {
-                  added_derived.insert(atom->get_index());
-                  emit_delta_literal(atom, true, node.index);
-               }
+            if(encode_actions and node.action.has_value()) {
+               emit_action(*node.action, node.index);
             }
-            for(const auto idx : root_derived_indices) {
-               if(not succ_derived_indices.contains(idx)) {
-                  removed_derived.insert(idx);
-                  const auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
-                  emit_delta_literal(atom, false, node.index);
-               }
+
+            emit_delta_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+               std::span{goals.static_goals},
+               goals.static_goal_levels,
+               hash_set< int >{},
+               hash_set< int >{},
+               node.index
+            );
+            emit_delta_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+               std::span{goals.fluent_goals},
+               goals.fluent_goal_levels,
+               added_fluents,
+               removed_fluents,
+               node.index
+            );
+            emit_delta_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+               std::span{goals.derived_goals},
+               goals.derived_goal_levels,
+               added_derived,
+               removed_derived,
+               node.index
+            );
+         } else {
+            if(encode_actions and node.action.has_value()) {
+               emit_action(*node.action, node.index);
             }
-         }
-
-         if(encode_actions and node.action.has_value()) {
-            emit_action(*node.action, node.index);
-         }
-
-         emit_delta_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-            std::span{goals.static_goals},
-            goals.static_goal_levels,
-            hash_set< int >{},
-            hash_set< int >{},
-            node.index
-         );
-         emit_delta_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-            std::span{goals.fluent_goals},
-            goals.fluent_goal_levels,
-            added_fluents,
-            removed_fluents,
-            node.index
-         );
-         emit_delta_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-            std::span{goals.derived_goals},
-            goals.derived_goal_levels,
-            added_derived,
-            removed_derived,
-            node.index
-         );
-      } else {
-         if(encode_actions and node.action.has_value()) {
-            emit_action(*node.action, node.index);
          }
       }
    }
 
-   if(config_.enable_parent_relation) {
-      const int relation_id = relation_id_for(config_.parent_relation);
-      for(const auto& [parent_idx, child_idx] : dag.transitions()) {
-         const std::array< int64_t, 2 > args = {
-            state_entity_index_for(context, parent_idx),
-            state_entity_index_for(context, child_idx),
-         };
-         sink.emit(relation_id, args);
-      }
-   }
-
-   if(config_.enable_sibling_relation or config_.enable_cousin_relation) {
-      hash_map< int, std::vector< int > > parent_to_children;
-      for(const auto& [parent_idx, child_idx] : dag.transitions()) {
-         parent_to_children[parent_idx].push_back(child_idx);
-      }
-
-      auto emit_directed_pair_relation = [&](const std::string& relation_name, int src, int dst) {
-         const int relation_id = relation_id_for(relation_name);
-         const std::array< int64_t, 2 > args = {
-            state_entity_index_for(context, src),
-            state_entity_index_for(context, dst),
-         };
-         sink.emit(relation_id, args);
-      };
-
-      std::set< std::pair< int, int > > siblings_seen;
-      if(config_.enable_sibling_relation) {
-         for(auto& [_, children] : parent_to_children) {
-            std::ranges::sort(children);
-            for(size_t i = 0; i < children.size(); ++i) {
-               for(size_t j = i + 1; j < children.size(); ++j) {
-                  const int a = children[i];
-                  const int b = children[j];
-                  const auto pair = std::pair{a, b};
-                  if(siblings_seen.contains(pair)) {
-                     continue;
-                  }
-                  siblings_seen.insert(pair);
-                  emit_directed_pair_relation(config_.sibling_relation, a, b);
-                  emit_directed_pair_relation(config_.sibling_relation, b, a);
-               }
-            }
+   {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->topology_relations_s : nullptr);
+      if(config_.enable_parent_relation) {
+         const int relation_id = relation_id_for(config_.parent_relation);
+         for(const auto& [parent_idx, child_idx] : dag.transitions()) {
+            const std::array< int64_t, 2 > args = {
+               state_entity_index_for(context, parent_idx),
+               state_entity_index_for(context, child_idx),
+            };
+            sink.emit(relation_id, args);
          }
       }
 
-      if(config_.enable_cousin_relation) {
-         std::set< std::pair< int, int > > cousins_seen;
-         for(const auto& [_, parents] : parent_to_children) {
-            std::vector< int > par = parents;
-            std::ranges::sort(par);
-            for(size_t i = 0; i < par.size(); ++i) {
-               for(size_t j = i + 1; j < par.size(); ++j) {
-                  const int pu = par[i];
-                  const int pv = par[j];
-                  const auto cu_it = parent_to_children.find(pu);
-                  const auto cv_it = parent_to_children.find(pv);
-                  if(cu_it == parent_to_children.end() or cv_it == parent_to_children.end()) {
-                     continue;
+      if(config_.enable_sibling_relation or config_.enable_cousin_relation) {
+         hash_map< int, std::vector< int > > parent_to_children;
+         for(const auto& [parent_idx, child_idx] : dag.transitions()) {
+            parent_to_children[parent_idx].push_back(child_idx);
+         }
+
+         auto emit_directed_pair_relation =
+            [&](const std::string& relation_name, int src, int dst) {
+               const int relation_id = relation_id_for(relation_name);
+               const std::array< int64_t, 2 > args = {
+                  state_entity_index_for(context, src),
+                  state_entity_index_for(context, dst),
+               };
+               sink.emit(relation_id, args);
+            };
+
+         std::set< std::pair< int, int > > siblings_seen;
+         if(config_.enable_sibling_relation) {
+            for(auto& [_, children] : parent_to_children) {
+               std::ranges::sort(children);
+               for(size_t i = 0; i < children.size(); ++i) {
+                  for(size_t j = i + 1; j < children.size(); ++j) {
+                     const int a = children[i];
+                     const int b = children[j];
+                     const auto pair = std::pair{a, b};
+                     if(siblings_seen.contains(pair)) {
+                        continue;
+                     }
+                     siblings_seen.insert(pair);
+                     emit_directed_pair_relation(config_.sibling_relation, a, b);
+                     emit_directed_pair_relation(config_.sibling_relation, b, a);
                   }
-                  const auto& cu = cu_it->second;
-                  const auto& cv = cv_it->second;
-                  for(int u : cu) {
-                     for(int v : cv) {
-                        if(u == v) {
-                           continue;
+               }
+            }
+         }
+
+         if(config_.enable_cousin_relation) {
+            std::set< std::pair< int, int > > cousins_seen;
+            for(const auto& [_, parents] : parent_to_children) {
+               std::vector< int > par = parents;
+               std::ranges::sort(par);
+               for(size_t i = 0; i < par.size(); ++i) {
+                  for(size_t j = i + 1; j < par.size(); ++j) {
+                     const int pu = par[i];
+                     const int pv = par[j];
+                     const auto cu_it = parent_to_children.find(pu);
+                     const auto cv_it = parent_to_children.find(pv);
+                     if(cu_it == parent_to_children.end() or cv_it == parent_to_children.end()) {
+                        continue;
+                     }
+                     const auto& cu = cu_it->second;
+                     const auto& cv = cv_it->second;
+                     for(int u : cu) {
+                        for(int v : cv) {
+                           if(u == v) {
+                              continue;
+                           }
+                           const int a = std::min(u, v);
+                           const int b = std::max(u, v);
+                           const auto pair = std::pair{a, b};
+                           if(cousins_seen.contains(pair) or siblings_seen.contains(pair)) {
+                              continue;
+                           }
+                           cousins_seen.insert(pair);
+                           emit_directed_pair_relation(config_.cousin_relation, u, v);
+                           emit_directed_pair_relation(config_.cousin_relation, v, u);
                         }
-                        const int a = std::min(u, v);
-                        const int b = std::max(u, v);
-                        const auto pair = std::pair{a, b};
-                        if(cousins_seen.contains(pair) or siblings_seen.contains(pair)) {
-                           continue;
-                        }
-                        cousins_seen.insert(pair);
-                        emit_directed_pair_relation(config_.cousin_relation, u, v);
-                        emit_directed_pair_relation(config_.cousin_relation, v, u);
                      }
                   }
                }
@@ -1130,74 +1262,94 @@ void FlatHorizonEncoderEngine::encode_impl(
       }
    }
 
-   std::vector< float > zeros(context.entity_names.size(), 0.0f);
-   builder.add_node_features(
-      std::string(kEntityNodeType), "x", std::span< const float >(zeros.data(), zeros.size()), 1
-   );
-   if(config_.export_node_names) {
-      builder.set_node_names(std::string(kEntityNodeType), context.entity_names);
-      builder.set_object_names(context.object_names);
-   }
+   {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->finalize_builder_s : nullptr);
+      std::vector< float > zeros(context.entity_names.size(), 0.0f);
+      builder.add_node_features(
+         std::string(kEntityNodeType), "x", std::span< const float >(zeros.data(), zeros.size()), 1
+      );
+      if(config_.export_node_names) {
+         builder.set_node_names(std::string(kEntityNodeType), context.entity_names);
+         builder.set_object_names(context.object_names);
+      }
 
-   const int64_t node_size = static_cast< int64_t >(context.entity_names.size());
-   const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
-   const int64_t target_entity_size = static_cast< int64_t >(context.target_entity_indices.size());
-   const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
-   builder.set_field(std::string(kNodeSizesField), std::span< const int64_t >(&node_size, 1));
-   builder.set_field(std::string(kObjectSizesField), std::span< const int64_t >(&object_size, 1));
-   builder.set_field(
-      std::string(kObjectIndicesField),
-      std::span< const int64_t >(context.object_indices.data(), context.object_indices.size())
-   );
-   builder.set_field(
-      std::string(kTargetEntitySizesField), std::span< const int64_t >(&target_entity_size, 1)
-   );
-   builder.set_field(
-      std::string(kTargetEntityIndicesField),
-      std::span< const int64_t >(
-         context.target_entity_indices.data(), context.target_entity_indices.size()
-      )
-   );
-   builder.set_field(
-      std::string(kTargetEntityGroupIdsField),
-      std::span< const int64_t >(
-         context.target_entity_group_ids.data(), context.target_entity_group_ids.size()
-      )
-   );
-   builder.set_field(std::string(kTargetSizesField), std::span< const int64_t >(&target_size, 1));
+      const int64_t node_size = static_cast< int64_t >(context.entity_names.size());
+      const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
+      const int64_t target_entity_size = static_cast< int64_t >(
+         context.target_entity_indices.size()
+      );
+      const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
+      builder.set_field(std::string(kNodeSizesField), std::span< const int64_t >(&node_size, 1));
+      builder.set_field(
+         std::string(kObjectSizesField), std::span< const int64_t >(&object_size, 1)
+      );
+      builder.set_field(
+         std::string(kObjectIndicesField),
+         std::span< const int64_t >(context.object_indices.data(), context.object_indices.size())
+      );
+      builder.set_field(
+         std::string(kTargetEntitySizesField), std::span< const int64_t >(&target_entity_size, 1)
+      );
+      builder.set_field(
+         std::string(kTargetEntityIndicesField),
+         std::span< const int64_t >(
+            context.target_entity_indices.data(), context.target_entity_indices.size()
+         )
+      );
+      builder.set_field(
+         std::string(kTargetEntityGroupIdsField),
+         std::span< const int64_t >(
+            context.target_entity_group_ids.data(), context.target_entity_group_ids.size()
+         )
+      );
+      builder.set_field(
+         std::string(kTargetSizesField), std::span< const int64_t >(&target_size, 1)
+      );
 
-   const TargetMetadataEmitConfig target_emit_config{
-      .position_node_type_id = std::string(kEntityNodeType),
-      .symbol_prefix = config_.target_symbol_prefix,
-      .include_depth = true,
-      .include_group = true,
-      .groups = target_metadata_group_names_,
-      .parent_relation = config_.parent_relation,
-   };
-   set_target_fields(builder, context.target_columns, target_emit_config);
-   set_target_graph_attrs(builder, context.target_columns, target_emit_config);
-   if(batch_target_names != nullptr) {
-      batch_target_names->insert(
-         batch_target_names->end(),
-         context.target_columns.names.begin(),
-         context.target_columns.names.end()
+      const TargetMetadataEmitConfig target_emit_config{
+         .position_node_type_id = std::string(kEntityNodeType),
+         .symbol_prefix = config_.target_symbol_prefix,
+         .include_depth = true,
+         .include_group = true,
+         .include_names = config_.export_node_names,
+         .groups = target_metadata_group_names_,
+         .parent_relation = config_.parent_relation,
+      };
+      set_target_fields(builder, context.target_columns, target_emit_config);
+      set_target_graph_attrs(builder, context.target_columns, target_emit_config);
+      if(batch_target_names != nullptr) {
+         batch_target_names->insert(
+            batch_target_names->end(),
+            context.target_columns.names.begin(),
+            context.target_columns.names.end()
+         );
+      }
+
+      builder.set_field(
+         std::string(kRelationCountsField),
+         std::span< const int64_t >(sink.relation_counts().data(), sink.relation_counts().size())
+      );
+      const int64_t relation_instance_size = sink.relation_instance_count();
+      builder.set_field(
+         std::string(kRelationInstanceSizesField),
+         std::span< const int64_t >(&relation_instance_size, 1)
+      );
+      builder.set_field(
+         std::string(kRelationArgsField),
+         std::span< const int64_t >(sink.relation_args().data(), sink.relation_args().size())
       );
    }
-
-   builder.set_field(
-      std::string(kRelationCountsField),
-      std::span< const int64_t >(sink.relation_counts().data(), sink.relation_counts().size())
-   );
-   const int64_t relation_instance_size = sink.relation_instance_count();
-   builder.set_field(
-      std::string(kRelationInstanceSizesField),
-      std::span< const int64_t >(&relation_instance_size, 1)
-   );
-   builder.set_field(
-      std::string(kRelationArgsField),
-      std::span< const int64_t >(sink.relation_args().data(), sink.relation_args().size())
-   );
+   if(profile != nullptr) {
+      ++profile->graphs;
+      profile->dag_nodes += static_cast< int64_t >(dag.nodes().size());
+      profile->candidate_nodes += static_cast< int64_t >(
+         std::max< int64_t >(0, static_cast< int64_t >(dag.nodes().size()) - 1)
+      );
+      profile->entity_rows += static_cast< int64_t >(context.entity_names.size());
+      profile->relation_instances += sink.relation_instance_count();
+   }
    if(config_.include_lgan_edges) {
+      ScopedProfileTimer timer(profile != nullptr ? &profile->lgan_s : nullptr);
       if(context.target_columns.positions.empty()) {
          throw std::invalid_argument(
             "FlatHorizonEncoder include_lgan_edges=true requires surviving candidate state "
@@ -1251,9 +1403,24 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    const batch_input::parsed::HorizonBatchInputs& inputs
 )
 {
+   FlatHorizonBatchProfile profile;
+   profile.enabled = flat_horizon_batch_profile_enabled();
+   struct ProfileGuard {
+      FlatHorizonBatchProfile* previous = nullptr;
+      explicit ProfileGuard(FlatHorizonBatchProfile* current)
+          : previous(g_flat_horizon_batch_profile)
+      {
+         g_flat_horizon_batch_profile = current;
+      }
+      ~ProfileGuard() { g_flat_horizon_batch_profile = previous; }
+   } guard(profile.enabled ? &profile : nullptr);
+
    BatchBuilder builder;
    builder.set_graph_kind("flat");
-   prepare_builder(builder);
+   {
+      ScopedProfileTimer timer(profile.enabled ? &profile.prepare_builder_s : nullptr);
+      prepare_builder(builder);
+   }
 
    const size_t state_count = inputs.roots.states.size();
    std::vector< std::string > batch_target_names;
@@ -1264,17 +1431,20 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
 
       GoalInputs goal_inputs;
-      if(goals_entry.has_value()) {
-         const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
-                                                                   : nullptr;
-         goal_inputs = batch_input::compose_goal_inputs(*goals_entry, layers_ptr);
-      } else {
-         goal_inputs = batch_input::default_goal_inputs_for_batch_state(root_entry);
-         if(subgoal_layers_entry.has_value()) {
-            size_t level = 1;
-            for(const auto& layer : *subgoal_layers_entry) {
-               goal_inputs.extend(layer, level);
-               ++level;
+      {
+         ScopedProfileTimer timer(profile.enabled ? &profile.goal_inputs_s : nullptr);
+         if(goals_entry.has_value()) {
+            const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
+                                                                      : nullptr;
+            goal_inputs = batch_input::compose_goal_inputs(*goals_entry, layers_ptr);
+         } else {
+            goal_inputs = batch_input::default_goal_inputs_for_batch_state(root_entry);
+            if(subgoal_layers_entry.has_value()) {
+               size_t level = 1;
+               for(const auto& layer : *subgoal_layers_entry) {
+                  goal_inputs.extend(layer, level);
+                  ++level;
+               }
             }
          }
       }
@@ -1284,17 +1454,31 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       if(dag_entry.has_value()) {
          dag_ptr = &(*dag_entry);
       } else {
+         ScopedProfileTimer timer(profile.enabled ? &profile.default_dag_s : nullptr);
          default_dag.emplace(root_entry.state);
          dag_ptr = &(*default_dag);
       }
-      encode_impl(root_entry.state, *dag_ptr, goal_inputs, builder, &batch_target_names);
+      {
+         ScopedProfileTimer timer(profile.enabled ? &profile.encode_impl_s : nullptr);
+         encode_impl(
+            root_entry.state,
+            *dag_ptr,
+            goal_inputs,
+            builder,
+            &batch_target_names,
+            /*prepare_builder_once=*/false
+         );
+      }
       builder.next_graph();
    }
 
-   builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+   if(config_.export_node_names) {
+      builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+   }
    builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    builder.set_graph_attr(std::string(kParentRelationAttr), config_.parent_relation);
+   print_flat_horizon_batch_profile(profile);
    return builder.build();
 }
 

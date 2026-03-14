@@ -145,6 +145,28 @@ def test_horizon_as_pyg_exposes_target_graph_attrs(small_blocks):
     assert data.target_candidate_ids.tolist() == data.target_indices.tolist()
 
 
+def test_horizon_export_node_names_false_skips_target_names(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))[:1]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 transition")
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    for action, target in transitions:
+        dag.register_transition(
+            adv_state(root),
+            adv_state(target),
+            adv_action(action),
+        )
+
+    encoder = mifrost.HorizonEncoder(domain, export_node_names=False)
+    goals = list(problem.get_goal_condition().get_literals())
+    data = encoder.encode(root, dag=dag, goals=goals).as_pyg(as_batch=True)
+
+    assert not hasattr(data, "target_names")
+
+
 def test_horizon_target_candidate_ids_from_explicit_dag_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

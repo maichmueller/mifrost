@@ -1135,7 +1135,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
             dag,
             target_positions_by_index,
             horizon_config_.exclude_root_candidate,
-            state_target_group_id
+            state_target_group_id,
+            config_.export_node_names
          );
          append_target_candidate_rows(
             target_columns,
@@ -1156,6 +1157,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = true,
          .include_group = true,
+         .include_names = config_.export_node_names,
          .groups = workspace.target_groups,
          .parent_relation = horizon_config_.parent_relation,
       };

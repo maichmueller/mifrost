@@ -71,6 +71,7 @@ struct TargetMetadataEmitConfig {
    std::string symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
    bool include_depth = false;
    bool include_group = false;
+   bool include_names = true;
    std::vector< std::string > groups;
    std::optional< std::string > parent_relation = std::nullopt;
 };
@@ -89,7 +90,8 @@ std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    const TransitionDAG& dag,
    const hash_map< int64_t, int64_t >& positions_by_index,
    bool exclude_root_candidate,
-   std::optional< int64_t > group_id
+   std::optional< int64_t > group_id,
+   bool include_names = true
 );
 void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config);
 void set_target_fields(

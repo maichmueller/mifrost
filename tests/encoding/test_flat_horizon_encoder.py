@@ -114,6 +114,26 @@ def test_flat_horizon_explicit_candidate_ids_are_preserved(small_blocks):
     assert index_to_candidate == {1: 101, 2: 202}
 
 
+def test_flat_horizon_export_node_names_false_skips_target_names(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    data = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        export_node_names=False,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    assert not hasattr(data, "target_names")
+    assert data.graph_target_names(0) == []
+
+
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

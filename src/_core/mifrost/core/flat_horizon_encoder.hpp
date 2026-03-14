@@ -119,7 +119,8 @@ class FlatHorizonEncoderEngine {
       const TransitionDAG& dag,
       const GoalInputs& goals,
       BatchBuilder& builder,
-      std::vector< std::string >* batch_target_names = nullptr
+      std::vector< std::string >* batch_target_names = nullptr,
+      bool prepare_builder = true
    );
    [[nodiscard]] EncodingContext
    make_context(const mimir::search::State& root, const TransitionDAG& dag) const;

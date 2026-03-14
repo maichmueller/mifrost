@@ -176,7 +176,8 @@ class FlatRelationEncoderEngine {
       std::span< const HistorySubgoal > history_subgoals,
       std::optional< int > history_max_steps,
       BatchBuilder& builder,
-      std::vector< std::string >* batch_target_names = nullptr
+      std::vector< std::string >* batch_target_names = nullptr,
+      bool prepare_builder = true
    );
    EncodingContext make_context(
       const mimir::search::State& state,

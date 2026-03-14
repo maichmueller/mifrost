@@ -156,7 +156,8 @@ std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    const TransitionDAG& dag,
    const hash_map< int64_t, int64_t >& positions_by_index,
    bool exclude_root_candidate,
-   std::optional< int64_t > group_id
+   std::optional< int64_t > group_id,
+   bool include_names
 )
 {
    const auto& nodes = dag.nodes();
@@ -173,8 +174,6 @@ std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
       if(position_it == positions_by_index.end()) {
          continue;
       }
-      std::ostringstream stream;
-      stream << node.state;
       rows.push_back(
          TargetCandidateRow{
             .position = position_it->second,
@@ -182,7 +181,14 @@ std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
             .candidate_id = node.candidate_id,
             .depth = node.depth,
             .group_id = group_id,
-            .name = stream.str(),
+            .name = [&]() {
+               if(not include_names) {
+                  return std::string{};
+               }
+               std::ostringstream stream;
+               stream << node.state;
+               return stream.str();
+            }(),
          }
       );
    }
@@ -282,7 +288,9 @@ void set_target_graph_attrs(
 )
 {
    columns.validate(config.include_depth, config.include_group);
-   builder.set_graph_attr(std::string(kTargetNamesAttr), columns.names);
+   if(config.include_names) {
+      builder.set_graph_attr(std::string(kTargetNamesAttr), columns.names);
+   }
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config.symbol_prefix);
    if(config.include_group) {
       builder.set_graph_attr(std::string(kTargetGroupsAttr), config.groups);

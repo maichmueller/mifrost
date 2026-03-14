@@ -1098,6 +1098,7 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
+         .include_names = config_.export_node_names,
          .groups = target_metadata_group_names_,
          .parent_relation = std::nullopt,
       };
@@ -1565,10 +1566,13 @@ void FlatRelationEncoderEngine::encode_impl(
    std::span< const HistorySubgoal > history_subgoals,
    std::optional< int > history_max_steps,
    BatchBuilder& builder,
-   std::vector< std::string >* batch_target_names
+   std::vector< std::string >* batch_target_names,
+   bool prepare_builder_once
 )
 {
-   prepare_builder(builder);
+   if(prepare_builder_once) {
+      prepare_builder(builder);
+   }
    const auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
@@ -1639,6 +1643,7 @@ void FlatRelationEncoderEngine::encode_impl(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
+         .include_names = config_.export_node_names,
          .groups = target_metadata_group_names_,
          .parent_relation = std::nullopt,
       };
@@ -1764,13 +1769,16 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
          history_span,
          history_max_steps,
          builder,
-         &batch_target_names
+         &batch_target_names,
+         /*prepare_builder_once=*/false
       );
       builder.next_graph();
    }
 
    if(supports_target_metadata()) {
-      builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+      if(config_.export_node_names) {
+         builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+      }
       builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);
       builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    }
