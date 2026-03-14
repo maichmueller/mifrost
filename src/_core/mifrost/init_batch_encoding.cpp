@@ -1323,6 +1323,15 @@ void clear_owner_tensor_cache(nb::handle owner)
    }
 }
 
+bool owner_target_device_matches(nb::handle owner, nb::handle device)
+{
+   nb::object current = owner_target_device(owner);
+   if(current.is_none() or device.is_none()) {
+      return current.is_none() and device.is_none();
+   }
+   return py::to_std_string(nb::str(current)) == py::to_std_string(nb::str(device));
+}
+
 nb::object move_object_to_device(nb::handle value, nb::handle device)
 {
    if(device.is_none()) {
@@ -1848,8 +1857,9 @@ void init_batch_encoding(nb::module_& m)
                if(device.is_none()) {
                   return nb::borrow< nb::object >(self);
                }
-               set_owner_target_device(self, device);
-               nb::object normalized = owner_target_device(self);
+               nb::object normalized = py::torch_device_ctor()(device);
+               const bool same_device = owner_target_device_matches(self, normalized);
+               set_owner_target_device(self, normalized);
                nb::dict attrs = batch_encoding_python_attrs(self);
                for(auto [key_obj, value_obj] : attrs) {
                   const std::string key = py::to_std_string(key_obj);
@@ -1860,7 +1870,10 @@ void init_batch_encoding(nb::module_& m)
                      nb::borrow< nb::object >(value_obj), normalized
                   );
                }
-               materialize_owner_tensor_cache(self, *encoding);
+               if(not same_device) {
+                  clear_owner_tensor_cache(self);
+                  materialize_owner_tensor_cache(self, *encoding);
+               }
                return nb::borrow< nb::object >(self);
             },
             "device"_a

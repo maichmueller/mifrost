@@ -722,6 +722,20 @@ def test_batch_encoding_to_materializes_tensor_cache_eagerly_and_hides_it():
     assert "__mifrost_tensor_cache__" not in encoding.keys()
 
 
+def test_batch_encoding_to_same_device_preserves_native_tensor_cache():
+    encoding = _single_graph_with_ragged_i64_field([5, 6, 7])
+
+    encoding.to(torch.device("cpu"))
+    first_values = encoding.target_indices
+    first_cache = encoding.__dict__["__mifrost_tensor_cache__"]
+
+    out = encoding.to(torch.device("cpu"))
+
+    assert out is encoding
+    assert encoding.__dict__["__mifrost_tensor_cache__"] is first_cache
+    assert encoding.target_indices is first_values
+
+
 def test_batch_encoding_set_field_clears_tensor_cache():
     encoding = _single_graph_with_stack_field(1.0)
     encoding.to(torch.device("cpu"))
