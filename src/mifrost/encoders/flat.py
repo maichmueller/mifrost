@@ -251,16 +251,20 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
     ) -> None:
         """Build a flat encoder for state-style workloads.
 
-        Parameters follow the flat state lane:
+        Parameters follow the flat main state lane.
 
-        - `goals` and `subgoal_layers` change which goal relations are emitted.
-        - `actions` add grounded-action rows and action relations.
-        - `history_subgoals` adds history carrier rows and history relations.
-        - `target_sources` creates prediction/readout target metadata.
-        - `lgan_anchor_sources` creates extra LGAN anchor rows for `goal`,
-          `subgoal`, and `history` without turning them into prediction
-          targets.
-        - `include_lgan_edges` emits the packed LGAN edge tensors.
+        `target_sources` answers "what should count as a selectable target?":
+
+        - `action`: explicit grounded actions from `actions=...`
+        - `goal`: literals from the root `goals=...` input
+        - `subgoal`: literals from `subgoal_layers=...`
+        - `history`: literals from `history_subgoals=...`
+        - `state`: not used here; state targets belong to `FlatHorizonEncoder`
+
+        `lgan_anchor_sources` is separate. It only creates extra LGAN anchor
+        rows for `goal`, `subgoal`, and `history`, without turning them into
+        prediction targets. `include_lgan_edges=True` emits the packed LGAN
+        edge tensors.
 
         `state` targets are not supported on this lane. Use
         `FlatHorizonEncoder` or the flat transition encoders for state

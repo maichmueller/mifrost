@@ -43,7 +43,12 @@ class FlatRelationEncoderEngine {
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
       bool include_lgan_edges = false;
+      /// Extra rows that may anchor LGAN edges without becoming prediction targets.
       std::set< TargetSource > lgan_anchor_sources = {};
+      /// Which semantic sources should produce target metadata rows.
+      /// `Actions` = explicit grounded actions, `Goals` = root-goal literals,
+      /// `Subgoals` = layered goal literals, `History` = history literals.
+      /// `States` belongs to the horizon/transition flat lanes instead.
       std::set< TargetSource > target_sources = {};
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;

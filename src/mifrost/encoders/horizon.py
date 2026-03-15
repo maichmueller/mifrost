@@ -152,8 +152,16 @@ class HorizonEncoder(HGraphEncoder):
         """Create a hetero horizon encoder.
 
         This lane reads a root state plus a `TransitionDAG` and creates
-        candidate target rows. When `include_lgan_edges=True`, LGAN anchors are
-        those candidate rows. There is no `lgan_anchor_sources` switch here.
+        candidate state rows.
+
+        `target_sources` is therefore simple on this lane:
+
+        - `state`: successor or candidate states from the DAG
+
+        The main-lane sources `action`, `goal`, `subgoal`, and `history` do
+        not create separate targets here. When `include_lgan_edges=True`, LGAN
+        anchors are those candidate state rows. There is no
+        `lgan_anchor_sources` switch here.
         """
         super().__init__(
             domain,

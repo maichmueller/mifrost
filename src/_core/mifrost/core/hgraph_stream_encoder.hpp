@@ -144,7 +144,12 @@ class HGraphEncoderEngine {
       bool include_static = true;
       bool include_empty_edge_types = true;
       bool export_node_names = true;
+      /// Extra rows that may anchor LGAN edges without becoming prediction targets.
       std::set< TargetSource > lgan_anchor_sources = {};
+      /// Which semantic sources should produce target metadata rows.
+      /// `Goals` = root-goal literals, `Subgoals` = layered goal literals,
+      /// `Actions` = explicit grounded actions, `History` = history literals,
+      /// `States` = horizon candidate states.
       std::set< TargetSource > target_sources = {};
       std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
    };

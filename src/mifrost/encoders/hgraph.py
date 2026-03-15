@@ -592,10 +592,18 @@ class HGraphEncoder(EncoderBase[HeteroData]):
     ) -> None:
         """Create an HGraph encoder for one domain.
 
-        `target_sources` controls prediction/readout targets. When
-        `include_lgan_edges=True`, `lgan_anchor_sources` can additionally create
-        LGAN-only anchor symbols for `goal`, `subgoal`, and `history` without
-        adding target metadata.
+        `target_sources` answers "what should count as a selectable target?"
+        on the main hetero state lane:
+
+        - `action`: explicit grounded actions from `actions=...`
+        - `goal`: literals from the root `goals=...` input
+        - `subgoal`: literals from `subgoal_layers=...`
+        - `history`: literals from `history_subgoals=...`
+        - `state`: not used here; state targets belong to `HorizonEncoder`
+
+        When `include_lgan_edges=True`, `lgan_anchor_sources` can additionally
+        create LGAN-only anchor symbols for `goal`, `subgoal`, and `history`
+        without turning them into prediction targets.
         """
         normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
         if (
