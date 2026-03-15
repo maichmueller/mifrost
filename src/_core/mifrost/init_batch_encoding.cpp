@@ -747,6 +747,27 @@ std::vector< std::string > materialize_target_name_states(
 
 void materialize_batch_encoding_lazy_graph_attrs(BatchBuilder::BatchEncoding& encoding)
 {
+   if(not encoding.lazy_target_name_strings.empty()) {
+      const auto graph_attr_it = encoding.graph_attrs.find(std::string(kTargetNamesAttr));
+      if(graph_attr_it == encoding.graph_attrs.end()) {
+         encoding.graph_attrs.emplace(
+            std::string(kTargetNamesAttr), std::move(encoding.lazy_target_name_strings)
+         );
+      } else {
+         auto* existing = std::get_if< std::vector< std::string > >(&graph_attr_it->second);
+         if(existing == nullptr) {
+            throw std::invalid_argument(
+               "BatchEncoding target_names graph attr must be a string vector"
+            );
+         }
+         existing->insert(
+            existing->end(),
+            std::make_move_iterator(encoding.lazy_target_name_strings.begin()),
+            std::make_move_iterator(encoding.lazy_target_name_strings.end())
+         );
+         encoding.lazy_target_name_strings.clear();
+      }
+   }
    if(not encoding.lazy_target_name_states.empty()) {
       auto names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
       const auto graph_attr_it = encoding.graph_attrs.find(std::string(kTargetNamesAttr));

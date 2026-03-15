@@ -212,6 +212,10 @@ void append_target_name_strings(BatchBuilder& builder, const std::vector< std::s
 
 void materialize_builder_lazy_target_names(BatchBuilder& builder)
 {
+   if(not builder.lazy_target_name_strings.empty()) {
+      append_target_name_strings(builder, builder.lazy_target_name_strings);
+      builder.lazy_target_name_strings.clear();
+   }
    if(builder.lazy_target_name_states.empty()) {
       return;
    }
@@ -479,6 +483,8 @@ void BatchBuilder::reset()
 
    graph_attrs.clear();
    graph_attrs.reserve(kSmallReserve);
+   lazy_target_name_strings.clear();
+   lazy_target_name_strings.reserve(kSmallReserve);
    lazy_target_name_states.clear();
    lazy_target_name_states.reserve(kSmallReserve);
 
@@ -606,6 +612,20 @@ void BatchBuilder::set_graph_attr(const std::string& key, int64_t value)
 void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
 {
    graph_attrs[key] = std::move(value);
+}
+
+void BatchBuilder::add_lazy_target_names(std::span< const std::string > names)
+{
+   if(names.empty()) {
+      return;
+   }
+   if(const auto it = graph_attrs.find(std::string(kTargetNamesAttr)); it != graph_attrs.end()) {
+      if(std::get_if< std::vector< std::string > >(&it->second) == nullptr) {
+         throw std::invalid_argument("Graph attr 'target_names' must be a string vector");
+      }
+   }
+   lazy_target_name_strings.reserve(lazy_target_name_strings.size() + names.size());
+   lazy_target_name_strings.insert(lazy_target_name_strings.end(), names.begin(), names.end());
 }
 
 void BatchBuilder::add_lazy_target_names(std::span< const mimir::search::State > states)
@@ -1582,6 +1602,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
       .object_names = std::move(object_names),
       .node_feature_dims = std::move(node_feature_dims),
       .graph_attrs = std::move(graph_attrs),
+      .lazy_target_name_strings = std::move(lazy_target_name_strings),
       .lazy_target_name_states = std::move(lazy_target_name_states),
       .graph_fields = std::move(built_graph_fields),
       .ptrs = std::move(ptrs),
@@ -1644,6 +1665,8 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
          );
       }
       append_target_name_strings(*this, *names);
+   } else if(not batch_encoding.lazy_target_name_strings.empty()) {
+      add_lazy_target_names(std::span(batch_encoding.lazy_target_name_strings));
    } else if(not batch_encoding.lazy_target_name_states.empty()) {
       add_lazy_target_names(std::span(batch_encoding.lazy_target_name_states));
    }
@@ -1881,6 +1904,7 @@ void BatchBuilder::load_from_batch_encoding(const BatchEncoding& batch_encoding)
    object_names = batch_encoding.object_names;
    node_feature_dims = batch_encoding.node_feature_dims;
    graph_attrs = batch_encoding.graph_attrs;
+   lazy_target_name_strings = batch_encoding.lazy_target_name_strings;
    lazy_target_name_states = batch_encoding.lazy_target_name_states;
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();
@@ -1920,6 +1944,7 @@ void BatchBuilder::load_from_batch_encoding(BatchEncoding&& batch_encoding)
    object_names = std::move(batch_encoding.object_names);
    node_feature_dims = std::move(batch_encoding.node_feature_dims);
    graph_attrs = std::move(batch_encoding.graph_attrs);
+   lazy_target_name_strings = std::move(batch_encoding.lazy_target_name_strings);
    lazy_target_name_states = std::move(batch_encoding.lazy_target_name_states);
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();

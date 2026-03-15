@@ -465,6 +465,23 @@ def test_flat_relation_action_target_metadata_enabled_for_action_source(
     assert data.target_symbol_prefix == "target:"
 
 
+def test_flat_relation_native_target_names_materialize_on_access(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+
+    encoder = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
+    encoding = encoder.encode_batch([state], actions=[[action]])
+
+    target_names = list(encoding.target_names)
+    assert len(target_names) == 1
+    assert encoding.graph_attrs["target_names"] == target_names
+    assert encoding.as_dict()["graph_attrs"]["target_names"] == target_names
+
+
 def test_flat_relation_action_target_metadata_can_be_disabled(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

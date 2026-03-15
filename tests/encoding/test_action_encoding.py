@@ -126,6 +126,24 @@ def test_hgraph_action_target_metadata_enabled_for_action_source(small_blocks):
     assert data.target_group_ids.tolist() == [0]
 
 
+def test_hgraph_native_target_names_materialize_on_access(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(
+        domain,
+        ignore_actions=False,
+        target_sources=[mifrost.TargetSource.Actions],
+    )
+    encoding = encoder.encode_batch([state], actions=[[action0]])
+
+    target_names = list(encoding.target_names)
+    assert len(target_names) == 1
+    assert encoding.graph_attrs["target_names"] == target_names
+    assert encoding.as_dict()["graph_attrs"]["target_names"] == target_names
+
+
 def test_hgraph_action_target_metadata_can_be_disabled(small_blocks):
     space, domain, problem = small_blocks
     state = problem.get_initial_state()

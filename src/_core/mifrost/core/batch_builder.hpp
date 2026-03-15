@@ -83,6 +83,8 @@ class BatchBuilder {
       variant< int64_t, std::string, std::vector< int64_t >, std::vector< std::string > >;
    /// Graph-level attributes forwarded to Python metadata.
    hash_map< std::string, GraphAttrValue > graph_attrs;
+   /// Deferred preformatted target names that can be exposed lazily on demand.
+   std::vector< std::string > lazy_target_name_strings;
    /// Deferred target-state names that can be formatted lazily on demand.
    std::vector< mimir::search::State > lazy_target_name_states;
    /// Optional dynamic graph field store. Lazily allocated when used.
@@ -217,6 +219,8 @@ class BatchBuilder {
    void set_graph_attr(const std::string& key, int64_t value);
    /// Set string graph attribute.
    void set_graph_attr(const std::string& key, std::string value);
+   /// Append preformatted target names used to lazily expose ``target_names`` later.
+   void add_lazy_target_names(std::span< const std::string > names);
    /// Append target-state handles used to lazily format ``target_names`` later.
    void add_lazy_target_names(std::span< const mimir::search::State > states);
    /// Register one dynamic graph field with strict typed collation spec.
@@ -283,6 +287,7 @@ struct BatchBuilder::BatchEncoding {
    std::vector< std::string > object_names;
    hash_map< std::string, int > node_feature_dims;
    hash_map< std::string, GraphAttrValue > graph_attrs;
+   std::vector< std::string > lazy_target_name_strings;
    std::vector< mimir::search::State > lazy_target_name_states;
    hash_map< std::string, GraphField > graph_fields;
    hash_map< std::string, std::vector< int64_t > > ptrs;

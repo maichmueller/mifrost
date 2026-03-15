@@ -1098,7 +1098,7 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
-         .include_names = config_.export_node_names,
+         .include_names = false,
          .groups = target_metadata_group_names_,
          .parent_relation = std::nullopt,
       };
@@ -1643,18 +1643,26 @@ void FlatRelationEncoderEngine::encode_impl(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
-         .include_names = config_.export_node_names,
+         .include_names = false,
          .groups = target_metadata_group_names_,
          .parent_relation = std::nullopt,
       };
       set_target_fields(builder, context.target_columns, target_emit_config);
       set_target_graph_attrs(builder, context.target_columns, target_emit_config);
-      if(batch_target_names != nullptr) {
-         batch_target_names->insert(
-            batch_target_names->end(),
-            context.target_columns.names.begin(),
-            context.target_columns.names.end()
-         );
+      if(config_.export_node_names) {
+         if(batch_target_names != nullptr) {
+            if(not context.target_columns.names.empty()) {
+               batch_target_names->insert(
+                  batch_target_names->end(),
+                  context.target_columns.names.begin(),
+                  context.target_columns.names.end()
+               );
+            }
+         } else if(context.target_columns.names.empty()) {
+            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+         } else {
+            builder.add_lazy_target_names(std::span(context.target_columns.names));
+         }
       }
    }
    builder.set_field(
@@ -1777,7 +1785,11 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
 
    if(supports_target_metadata()) {
       if(config_.export_node_names) {
-         builder.set_graph_attr(std::string(kTargetNamesAttr), std::move(batch_target_names));
+         if(batch_target_names.empty()) {
+            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+         } else {
+            builder.add_lazy_target_names(std::span(batch_target_names));
+         }
       }
       builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);
       builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);

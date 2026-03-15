@@ -374,10 +374,18 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = false,
          .include_group = true,
+         .include_names = false,
          .groups = workspace.target_groups,
          .parent_relation = std::nullopt,
       };
       emit_target_metadata(builder, workspace.targets, emit_config);
+      if(config_.export_node_names) {
+         if(workspace.targets.names.empty()) {
+            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+         } else {
+            builder.add_lazy_target_names(std::span(workspace.targets.names));
+         }
+      }
    }
 
    ensure_empty_edge_types(builder);
