@@ -167,7 +167,6 @@ TEST_P(HGraphHistoryTest, HistoryTargetsEmitSharedTargetMetadata)
    EXPECT_TRUE(builder.graph_fields->contains("target_indices"));
    EXPECT_TRUE(builder.graph_fields->contains("target_candidate_ids"));
    EXPECT_TRUE(builder.graph_fields->contains("target_group_ids"));
-   ASSERT_TRUE(builder.graph_attrs.contains("target_names"));
    ASSERT_TRUE(builder.graph_attrs.contains("target_groups"));
 
    const auto& positions = std::get< std::vector< int64_t > >(
@@ -182,9 +181,7 @@ TEST_P(HGraphHistoryTest, HistoryTargetsEmitSharedTargetMetadata)
    const auto& group_ids = std::get< std::vector< int64_t > >(
       builder.graph_fields->at("target_group_ids").values
    );
-   const auto& target_names = std::get< std::vector< std::string > >(
-      builder.graph_attrs.at("target_names")
-   );
+   const auto target_names = mifrost_test::target_names_for(builder);
    const auto& target_groups = std::get< std::vector< std::string > >(
       builder.graph_attrs.at("target_groups")
    );

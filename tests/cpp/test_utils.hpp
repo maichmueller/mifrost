@@ -5,8 +5,10 @@
 #include <filesystem>
 #include <mimir/formalism/problem.hpp>
 #include <mimir/search/axiom_evaluators/grounded/grounded.hpp>
+#include <mimir/search/formatter.hpp>
 #include <mimir/search/grounders/lifted.hpp>
 #include <mimir/search/state_repository.hpp>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -167,6 +169,50 @@ inline EdgePairs edge_pairs_for(const mifrost::BatchBuilder& builder, const std:
 inline void sort_edge_pairs(EdgePairs& pairs)
 {
    std::sort(pairs.begin(), pairs.end());
+}
+
+inline std::vector< std::string > materialize_target_name_states(
+   std::span< const mimir::search::State > states
+)
+{
+   std::vector< std::string > names;
+   names.reserve(states.size());
+   for(const auto& state : states) {
+      std::ostringstream stream;
+      stream << state;
+      names.push_back(stream.str());
+   }
+   return names;
+}
+
+template < typename AttrMap >
+inline auto graph_attrs_without_target_names(const AttrMap& graph_attrs)
+{
+   auto filtered = graph_attrs;
+   filtered.erase("target_names");
+   return filtered;
+}
+
+template < typename EncodingLike >
+inline std::vector< std::string > target_names_for(const EncodingLike& encoding)
+{
+   std::vector< std::string > out;
+   if(const auto it = encoding.graph_attrs.find("target_names"); it != encoding.graph_attrs.end()) {
+      const auto* names = std::get_if< std::vector< std::string > >(&it->second);
+      if(names == nullptr) {
+         throw std::runtime_error("target_names graph attr must be a string vector");
+      }
+      out = *names;
+   }
+   if(not encoding.lazy_target_name_states.empty()) {
+      auto lazy_names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
+      out.insert(
+         out.end(),
+         std::make_move_iterator(lazy_names.begin()),
+         std::make_move_iterator(lazy_names.end())
+      );
+   }
+   return out;
 }
 
 }  // namespace mifrost_test

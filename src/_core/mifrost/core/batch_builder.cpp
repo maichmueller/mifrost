@@ -613,9 +613,10 @@ void BatchBuilder::add_lazy_target_names(std::span< const mimir::search::State >
    if(states.empty()) {
       return;
    }
-   if(graph_attrs.contains(std::string(kTargetNamesAttr))) {
-      append_target_name_strings(*this, format_target_name_states(states));
-      return;
+   if(const auto it = graph_attrs.find(std::string(kTargetNamesAttr)); it != graph_attrs.end()) {
+      if(std::get_if< std::vector< std::string > >(&it->second) == nullptr) {
+         throw std::invalid_argument("Graph attr 'target_names' must be a string vector");
+      }
    }
    lazy_target_name_states.reserve(lazy_target_name_states.size() + states.size());
    lazy_target_name_states.insert(lazy_target_name_states.end(), states.begin(), states.end());

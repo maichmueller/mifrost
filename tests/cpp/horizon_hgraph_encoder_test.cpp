@@ -55,7 +55,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       EXPECT_TRUE(builder.graph_fields->contains("target_indices"));
       EXPECT_TRUE(builder.graph_fields->contains("target_candidate_ids"));
       EXPECT_TRUE(builder.graph_fields->contains("target_depths"));
-      EXPECT_TRUE(builder.graph_attrs.contains("target_names"));
+      EXPECT_FALSE(builder.graph_attrs.contains("target_names"));
       EXPECT_TRUE(builder.graph_attrs.contains("target_symbol_prefix"));
       EXPECT_TRUE(builder.graph_attrs.contains("parent_relation"));
 
@@ -71,13 +71,12 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       const auto& depths = std::get< std::vector< int64_t > >(
          builder.graph_fields->at("target_depths").values
       );
-      const auto& names = std::get< std::vector< std::string > >(
-         builder.graph_attrs.at("target_names")
-      );
+      const auto names = mifrost_test::target_names_for(builder);
 
       ASSERT_EQ(positions.size(), indices.size());
       ASSERT_EQ(positions.size(), candidate_ids.size());
       ASSERT_EQ(positions.size(), depths.size());
+      ASSERT_EQ(builder.lazy_target_name_states.size(), positions.size());
       ASSERT_EQ(positions.size(), names.size());
       const size_t expected_candidates = config.exclude_root_candidate
                                             ? (dag.nodes().empty() ? 0u : dag.nodes().size() - 1u)

@@ -51,7 +51,11 @@ void expect_parts_equal(
    EXPECT_EQ(actual.node_names, expected.node_names);
    EXPECT_EQ(actual.object_names, expected.object_names);
    EXPECT_EQ(actual.node_counts, expected.node_counts);
-   EXPECT_EQ(actual.graph_attrs, expected.graph_attrs);
+   EXPECT_EQ(
+      mifrost_test::graph_attrs_without_target_names(actual.graph_attrs),
+      mifrost_test::graph_attrs_without_target_names(expected.graph_attrs)
+   );
+   EXPECT_EQ(mifrost_test::target_names_for(actual), mifrost_test::target_names_for(expected));
 
    expect_schema_equal(actual.schema, expected.schema);
 
