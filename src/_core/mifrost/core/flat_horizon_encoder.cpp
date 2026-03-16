@@ -371,16 +371,14 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
                );
             }
          }
-         if(config_.support_literals) {
-            for(bool polarity : {true, false}) {
-               add_predicate_relation(
-                  RelationFormatter::format_predicate(
-                     spec.name, std::nullopt, std::nullopt, polarity
-                  ),
-                  spec.arity,
-                  "state"
-               );
-            }
+      }
+      if(config_.support_literals) {
+         for(bool polarity : {true, false}) {
+            add_predicate_relation(
+               RelationFormatter::format_predicate(spec.name, std::nullopt, std::nullopt, polarity),
+               spec.arity,
+               "state"
+            );
          }
       }
       for(const auto derivation : goal_satisfaction_derivations(config_.goal_derivations)) {

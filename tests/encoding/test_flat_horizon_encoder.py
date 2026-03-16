@@ -178,6 +178,45 @@ def test_flat_horizon_goal_derivations_can_exclude_plain_goal_literals(small_blo
     )
 
 
+def test_flat_horizon_delta_registers_state_literal_relations_without_plain_goals(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    action, target = transitions[0]
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        delta_literals=_delta_literals(root, target, problem),
+    )
+
+    data = FlatHorizonEncoder(
+        domain,
+        transition_mode="delta",
+        root_policy="exclude",
+        ignore_actions=True,
+        goal_derivations={
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
+            mifrost.GoalDerivation.added_satisfied,
+            mifrost.GoalDerivation.added_unsatisfied,
+        },
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    assert any(
+        name.startswith("[+]") and name.endswith("[state]")
+        for name in data.schema.names
+    )
+
+
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

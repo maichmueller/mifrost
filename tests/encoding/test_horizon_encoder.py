@@ -233,6 +233,28 @@ def test_horizon_target_candidate_ids_from_explicit_dag_ids(small_blocks):
     assert index_to_candidate[dag.index(adv_state(target1))] == 202
 
 
+def test_horizon_delta_registers_state_literal_relations_without_plain_goals(
+    small_blocks,
+):
+    _space, domain, _problem = small_blocks
+
+    config = mifrost.HorizonEncoderConfig()
+    config.transition_mode = mifrost.HorizonEncoderMode.delta
+    config.root_policy = mifrost.RootPolicy.exclude
+    config.ignore_actions = True
+    config.goal_derivations = {
+        mifrost.GoalDerivation.satisfied,
+        mifrost.GoalDerivation.unsatisfied,
+        mifrost.GoalDerivation.added_satisfied,
+        mifrost.GoalDerivation.added_unsatisfied,
+    }
+    encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
+    assert any(
+        str(name).startswith("[+]") and str(name).endswith("[state]")
+        for name in encoder.relation_dict.keys()
+    )
+
+
 def test_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

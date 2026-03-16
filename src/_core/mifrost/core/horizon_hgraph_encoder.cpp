@@ -88,15 +88,15 @@ RelationDict build_horizon_relation_dict(
                      );
                   }
                }
-               if(config.support_literals) {
-                  for(bool polarity : {true, false}) {
-                     add_predicate_relation(
-                        RelationFormatter::format_predicate(
-                           base_name, std::nullopt, std::nullopt, polarity
-                        ),
-                        base_arity
-                     );
-                  }
+            }
+            if(config.support_literals) {
+               for(bool polarity : {true, false}) {
+                  add_predicate_relation(
+                     RelationFormatter::format_predicate(
+                        base_name, std::nullopt, std::nullopt, polarity
+                     ),
+                     base_arity
+                  );
                }
             }
             for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
