@@ -335,10 +335,11 @@ void append_zero_arity_relation_names(
                   predicate, goal_level, std::nullopt, polarity
                )
             );
-            for(const auto satisfaction : relation_dict.goal_satisfaction_derivations) {
+            for(const auto derivation :
+                mifrost::goal_satisfaction_derivations(relation_dict.goal_derivations)) {
                out.push_back(
                   mifrost::RelationFormatter::format_predicate(
-                     predicate, goal_level, satisfaction, polarity
+                     predicate, goal_level, derivation, polarity
                   )
                );
             }
@@ -353,10 +354,11 @@ void append_zero_arity_relation_names(
                predicate, std::nullopt, std::nullopt, polarity
             )
          );
-         for(const auto satisfaction : relation_dict.goal_satisfaction_derivations) {
+         for(const auto derivation :
+             mifrost::goal_satisfaction_derivations(relation_dict.goal_derivations)) {
             out.push_back(
                mifrost::RelationFormatter::format_predicate(
-                  predicate, std::nullopt, satisfaction, polarity
+                  predicate, std::nullopt, derivation, polarity
                )
             );
          }
