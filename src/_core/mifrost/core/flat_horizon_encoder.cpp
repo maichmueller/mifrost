@@ -60,6 +60,12 @@ std::string state_anchored_relation_name(const std::string_view name, Args&&... 
    );
 }
 
+bool split_full_state_relations(const FlatHorizonEncoderEngine::Config& config)
+{
+   return config.transition_mode == FlatHorizonEncoderEngine::Mode::full
+          && root_uses_split_state_relations(config.root_policy);
+}
+
 template < typename LiteralTag >
 uint32_t fact_tag_id()
 {
@@ -324,9 +330,10 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    }
    std::ranges::sort(action_specs_, predicate_order);
 
-   relation_dict_ = RelationDict(
-      domain_, actions, rel_config, root_in_state_relations(config_.root_policy) ? 1 : 0, 1
-   );
+   relation_dict_ = RelationDict{};
+   relation_dict_.max_goal_level = rel_config.max_goal_level;
+   relation_dict_.support_literals = rel_config.support_literals;
+   relation_dict_.goal_derivations = rel_config.goal_derivations;
    if(config_.enable_parent_relation) {
       relation_dict_.arity[config_.parent_relation] = 2;
    }
@@ -341,28 +348,39 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    target_metadata_group_names_ = target_entity_group_names_;
 
    std::map< std::string, std::string > relation_sources_by_name;
-   auto add_predicate_relation =
-      [&](const std::string& base_name, int base_arity, std::string source) {
-         relation_dict_.arity[base_name] = root_in_state_relations(config_.root_policy)
-                                              ? base_arity + 1
-                                              : base_arity;
-         relation_sources_by_name[base_name] = source;
-         if(root_uses_split_state_relations(config_.root_policy)) {
-            const auto candidate_name = state_anchored_relation_name(base_name);
-            relation_dict_.arity[candidate_name] = base_arity + 1;
-            relation_sources_by_name[candidate_name] = source;
+   const bool root_relations_use_state_slot = root_in_state_relations(config_.root_policy);
+   const bool split_candidate_relations = split_full_state_relations(config_);
+   auto register_relation = [&](const std::string& name, int arity, const std::string& source) {
+      relation_dict_.arity[name] = arity;
+      relation_sources_by_name[name] = source;
+   };
+   auto add_root_only_relation =
+      [&](const std::string& base_name, int base_arity, const std::string& source) {
+         register_relation(
+            base_name, root_relations_use_state_slot ? base_arity + 1 : base_arity, source
+         );
+      };
+   auto add_full_state_relation =
+      [&](const std::string& base_name, int base_arity, const std::string& source) {
+         add_root_only_relation(base_name, base_arity, source);
+         if(split_candidate_relations) {
+            register_relation(state_anchored_relation_name(base_name), base_arity + 1, source);
          }
+      };
+   auto add_delta_candidate_relation =
+      [&](const std::string& base_name, int base_arity, const std::string& source) {
+         register_relation(base_name, base_arity + 1, source);
       };
 
    for(const auto& spec : predicate_specs_) {
-      add_predicate_relation(spec.name, spec.arity, "state");
+      add_full_state_relation(spec.name, spec.arity, "state");
    }
    for(const auto& spec : regular_predicate_specs_) {
       if(includes_plain_goal_derivation(config_.goal_derivations)) {
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
-               add_predicate_relation(
+               add_root_only_relation(
                   RelationFormatter::format_predicate(
                      spec.name, goal_level, std::nullopt, polarity
                   ),
@@ -374,38 +392,107 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       }
       if(config_.support_literals) {
          for(bool polarity : {true, false}) {
-            add_predicate_relation(
-               RelationFormatter::format_predicate(spec.name, std::nullopt, std::nullopt, polarity),
-               spec.arity,
-               "state"
+            const auto relation_name = RelationFormatter::format_predicate(
+               spec.name, std::nullopt, std::nullopt, polarity
             );
+            if(config_.transition_mode == Mode::delta) {
+               add_delta_candidate_relation(relation_name, spec.arity, "state");
+            } else {
+               add_root_only_relation(relation_name, spec.arity, "state");
+            }
          }
       }
       for(const auto derivation : goal_satisfaction_derivations(config_.goal_derivations)) {
-         for(size_t level = 0; level <= config_.max_goal_level; ++level) {
-            const GoalLevel goal_level(level);
-            for(bool polarity : {true, false}) {
-               add_predicate_relation(
-                  RelationFormatter::format_predicate(spec.name, goal_level, derivation, polarity),
-                  spec.arity,
-                  "goal_satisfaction"
-               );
+         const bool emitted_on_root = derivation == GoalDerivation::satisfied
+                                      || derivation == GoalDerivation::unsatisfied;
+         const bool emitted_on_delta_candidate = derivation == GoalDerivation::added_satisfied
+                                                 || derivation == GoalDerivation::added_unsatisfied;
+         const bool emitted_on_full_candidate = derivation == GoalDerivation::satisfied
+                                                || derivation == GoalDerivation::unsatisfied;
+         if(emitted_on_root) {
+            for(size_t level = 0; level <= config_.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
+               for(bool polarity : {true, false}) {
+                  add_root_only_relation(
+                     RelationFormatter::format_predicate(
+                        spec.name, goal_level, derivation, polarity
+                     ),
+                     spec.arity,
+                     "goal_satisfaction"
+                  );
+               }
+            }
+            if(config_.support_literals) {
+               for(bool polarity : {true, false}) {
+                  add_root_only_relation(
+                     RelationFormatter::format_predicate(
+                        spec.name, std::nullopt, derivation, polarity
+                     ),
+                     spec.arity,
+                     "goal_satisfaction"
+                  );
+               }
             }
          }
-         if(config_.support_literals) {
-            for(bool polarity : {true, false}) {
-               add_predicate_relation(
-                  RelationFormatter::format_predicate(
-                     spec.name, std::nullopt, derivation, polarity
-                  ),
-                  spec.arity,
-                  "goal_satisfaction"
-               );
+         if(config_.transition_mode == Mode::full && emitted_on_full_candidate
+            && split_candidate_relations) {
+            for(size_t level = 0; level <= config_.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
+               for(bool polarity : {true, false}) {
+                  register_relation(
+                     state_anchored_relation_name(
+                        RelationFormatter::format_predicate(
+                           spec.name, goal_level, derivation, polarity
+                        )
+                     ),
+                     spec.arity + 1,
+                     "goal_satisfaction"
+                  );
+               }
+            }
+            if(config_.support_literals) {
+               for(bool polarity : {true, false}) {
+                  register_relation(
+                     state_anchored_relation_name(
+                        RelationFormatter::format_predicate(
+                           spec.name, std::nullopt, derivation, polarity
+                        )
+                     ),
+                     spec.arity + 1,
+                     "goal_satisfaction"
+                  );
+               }
+            }
+         }
+         if(config_.transition_mode == Mode::delta && emitted_on_delta_candidate) {
+            for(size_t level = 0; level <= config_.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
+               for(bool polarity : {true, false}) {
+                  add_delta_candidate_relation(
+                     RelationFormatter::format_predicate(
+                        spec.name, goal_level, derivation, polarity
+                     ),
+                     spec.arity,
+                     "goal_satisfaction"
+                  );
+               }
+            }
+            if(config_.support_literals) {
+               for(bool polarity : {true, false}) {
+                  add_delta_candidate_relation(
+                     RelationFormatter::format_predicate(
+                        spec.name, std::nullopt, derivation, polarity
+                     ),
+                     spec.arity,
+                     "goal_satisfaction"
+                  );
+               }
             }
          }
       }
    }
    for(const auto& spec : action_specs_) {
+      relation_dict_.arity[spec.name] = spec.arity;
       relation_sources_by_name.emplace(spec.name, "action");
    }
    if(config_.enable_parent_relation) {
@@ -827,7 +914,7 @@ void FlatHorizonEncoderEngine::encode_impl(
             atom->get_predicate()
          );
          const auto relation_id = relation_id_for(
-            state_entity_index.has_value() && root_uses_split_state_relations(config_.root_policy)
+            state_entity_index.has_value() && split_full_state_relations(config_)
                ? state_anchored_relation_name(base_relation_name)
                : base_relation_name
          );
@@ -917,8 +1004,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                   predicate, std::nullopt, std::nullopt, literal->get_polarity()
                );
             }
-            if(state_entity_index.has_value()
-               && root_uses_split_state_relations(config_.root_policy)) {
+            if(state_entity_index.has_value() && split_full_state_relations(config_)) {
                relation_name = state_anchored_relation_name(relation_name);
             }
             const auto relation_id = relation_id_for(relation_name);
@@ -970,8 +1056,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                   predicate, std::nullopt, satisfaction, literal->get_polarity()
                );
             }
-            if(state_entity_index.has_value()
-               && root_uses_split_state_relations(config_.root_policy)) {
+            if(state_entity_index.has_value() && split_full_state_relations(config_)) {
                relation_name = state_anchored_relation_name(relation_name);
             }
             const auto relation_id = relation_id_for(relation_name);
@@ -994,7 +1079,7 @@ void FlatHorizonEncoderEngine::encode_impl(
          std::string relation_name = RelationFormatter::format_predicate(
             atom->get_predicate(), std::nullopt, std::nullopt, polarity
          );
-         if(root_uses_split_state_relations(config_.root_policy)) {
+         if(split_full_state_relations(config_)) {
             relation_name = state_anchored_relation_name(relation_name);
          }
          const auto relation_id = relation_id_for(relation_name);
@@ -1040,7 +1125,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                   atom->get_predicate(), std::nullopt, *sat, goal->get_polarity()
                );
             }
-            if(root_uses_split_state_relations(config_.root_policy)) {
+            if(split_full_state_relations(config_)) {
                relation_name = state_anchored_relation_name(relation_name);
             }
             const auto relation_id = relation_id_for(relation_name);

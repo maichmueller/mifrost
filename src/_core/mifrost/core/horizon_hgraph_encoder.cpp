@@ -28,6 +28,12 @@ std::string state_anchored_relation_name(const std::string_view name, Args&&... 
    );
 }
 
+bool split_full_state_relations(const HorizonHGraphEncoderEngine::Config& config)
+{
+   return config.transition_mode == HorizonHGraphEncoderEngine::Mode::full
+          && root_uses_split_state_relations(config.root_policy);
+}
+
 HorizonHGraphEncoderEngine::Config normalize_horizon_config(
    HorizonHGraphEncoderEngine::Config config
 )
@@ -44,66 +50,83 @@ RelationDict build_horizon_relation_dict(
    const HorizonHGraphEncoderEngine::Config& config
 )
 {
-   RelationDictConfig rel_config;
-   rel_config.max_goal_level = static_cast< int >(config.max_goal_level);
-   rel_config.support_literals = config.support_literals;
-   rel_config.goal_derivations = config.goal_derivations;
-   rel_config.top_type_predicates.insert(config.symbol_type_id);
+   RelationDict relation_dict;
+   relation_dict.max_goal_level = static_cast< int >(config.max_goal_level);
+   relation_dict.support_literals = config.support_literals;
+   relation_dict.goal_derivations = config.goal_derivations;
 
-   std::vector< mimir::formalism::Action > actions;
-   if(not config.ignore_actions) {
-      actions.assign(domain.get_actions().begin(), domain.get_actions().end());
-   }
+   const std::set< std::string > top_type_predicates = {
+      "object",
+      "number",
+      defaults::symbol_type_id,
+      "_action_",
+      config.symbol_type_id,
+   };
+   const bool root_relations_use_state_slot = root_in_state_relations(config.root_policy);
+   const bool split_candidate_relations = split_full_state_relations(config);
 
-   auto relation_dict = RelationDict(
-      domain,
-      actions,
-      rel_config,
-      /*predicate_arity_offset=*/root_in_state_relations(config.root_policy) ? 1 : 0,
-      /*action_arity_offset=*/1
-   );
+   auto register_relation = [&](const std::string& name, int arity) {
+      relation_dict.arity[name] = arity;
+   };
+   auto add_root_only_relation = [&](const std::string& name, int base_arity) {
+      register_relation(name, root_relations_use_state_slot ? base_arity + 1 : base_arity);
+   };
+   auto add_full_state_relation = [&](const std::string& name, int base_arity) {
+      add_root_only_relation(name, base_arity);
+      if(split_candidate_relations) {
+         register_relation(state_anchored_relation_name(name), base_arity + 1);
+      }
+   };
+   auto add_delta_candidate_relation = [&](const std::string& name, int base_arity) {
+      register_relation(name, base_arity + 1);
+   };
 
-   if(root_uses_split_state_relations(config.root_policy)) {
-      const auto top_type_predicates = rel_config.top_type_predicates;
-      auto add_predicate_relation = [&](const std::string& base_name, int base_arity) {
-         relation_dict.arity[state_anchored_relation_name(base_name)] = base_arity + 1;
-      };
-      auto collect_predicates = [&]< typename Tag >(Tag) {
-         for(const auto predicate : domain.get_predicates< Tag >()) {
-            const std::string base_name = RelationFormatter::format_predicate(predicate);
-            const int base_arity = static_cast< int >(predicate->get_arity());
-            add_predicate_relation(base_name, base_arity);
-            if(top_type_predicates.contains(predicate->get_name())) {
-               continue;
-            }
-            if(includes_plain_goal_derivation(config.goal_derivations)) {
-               for(size_t level = 0; level <= config.max_goal_level; ++level) {
-                  const GoalLevel goal_level(level);
-                  for(bool polarity : {true, false}) {
-                     add_predicate_relation(
-                        RelationFormatter::format_predicate(
-                           base_name, goal_level, std::nullopt, polarity
-                        ),
-                        base_arity
-                     );
-                  }
-               }
-            }
-            if(config.support_literals) {
+   auto collect_predicates = [&]< typename Tag >(Tag) {
+      for(const auto predicate : domain.get_predicates< Tag >()) {
+         const std::string base_name = RelationFormatter::format_predicate(predicate);
+         const int base_arity = static_cast< int >(predicate->get_arity());
+         add_full_state_relation(base_name, base_arity);
+         if(top_type_predicates.contains(predicate->get_name())) {
+            continue;
+         }
+         if(includes_plain_goal_derivation(config.goal_derivations)) {
+            for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
-                  add_predicate_relation(
+                  add_root_only_relation(
                      RelationFormatter::format_predicate(
-                        base_name, std::nullopt, std::nullopt, polarity
+                        base_name, goal_level, std::nullopt, polarity
                      ),
                      base_arity
                   );
                }
             }
-            for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
+         }
+         if(config.support_literals) {
+            for(bool polarity : {true, false}) {
+               const auto relation_name = RelationFormatter::format_predicate(
+                  base_name, std::nullopt, std::nullopt, polarity
+               );
+               if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta) {
+                  add_delta_candidate_relation(relation_name, base_arity);
+               } else {
+                  add_root_only_relation(relation_name, base_arity);
+               }
+            }
+         }
+         for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
+            const bool emitted_on_root = derivation == GoalDerivation::satisfied
+                                         || derivation == GoalDerivation::unsatisfied;
+            const bool emitted_on_delta_candidate = derivation == GoalDerivation::added_satisfied
+                                                    || derivation
+                                                          == GoalDerivation::added_unsatisfied;
+            const bool emitted_on_full_candidate = derivation == GoalDerivation::satisfied
+                                                   || derivation == GoalDerivation::unsatisfied;
+            if(emitted_on_root) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
                   const GoalLevel goal_level(level);
                   for(bool polarity : {true, false}) {
-                     add_predicate_relation(
+                     add_root_only_relation(
                         RelationFormatter::format_predicate(
                            base_name, goal_level, derivation, polarity
                         ),
@@ -113,7 +136,59 @@ RelationDict build_horizon_relation_dict(
                }
                if(config.support_literals) {
                   for(bool polarity : {true, false}) {
-                     add_predicate_relation(
+                     add_root_only_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, std::nullopt, derivation, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+            }
+            if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::full
+               && emitted_on_full_candidate && split_candidate_relations) {
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
+                  for(bool polarity : {true, false}) {
+                     register_relation(
+                        state_anchored_relation_name(
+                           RelationFormatter::format_predicate(
+                              base_name, goal_level, derivation, polarity
+                           )
+                        ),
+                        base_arity + 1
+                     );
+                  }
+               }
+               if(config.support_literals) {
+                  for(bool polarity : {true, false}) {
+                     register_relation(
+                        state_anchored_relation_name(
+                           RelationFormatter::format_predicate(
+                              base_name, std::nullopt, derivation, polarity
+                           )
+                        ),
+                        base_arity + 1
+                     );
+                  }
+               }
+            }
+            if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta
+               && emitted_on_delta_candidate) {
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
+                  for(bool polarity : {true, false}) {
+                     add_delta_candidate_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, goal_level, derivation, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+               if(config.support_literals) {
+                  for(bool polarity : {true, false}) {
+                     add_delta_candidate_relation(
                         RelationFormatter::format_predicate(
                            base_name, std::nullopt, derivation, polarity
                         ),
@@ -123,10 +198,20 @@ RelationDict build_horizon_relation_dict(
                }
             }
          }
-      };
-      collect_predicates(mimir::formalism::StaticTag{});
-      collect_predicates(mimir::formalism::FluentTag{});
-      collect_predicates(mimir::formalism::DerivedTag{});
+      }
+   };
+
+   collect_predicates(mimir::formalism::StaticTag{});
+   collect_predicates(mimir::formalism::FluentTag{});
+   collect_predicates(mimir::formalism::DerivedTag{});
+
+   if(not config.ignore_actions) {
+      for(const auto& action : domain.get_actions()) {
+         register_relation(
+            RelationFormatter::format_action_schema(*action),
+            std::max(0, static_cast< int >(action->get_arity()) + 1)
+         );
+      }
    }
 
    return relation_dict;
@@ -232,8 +317,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             continue;
          }
          std::string node_type = RelationFormatter::format_predicate(predicate);
-         if(root_uses_split_state_relations(horizon_config_.root_policy)
-            and not extra_objects.empty()) {
+         if(split_full_state_relations(horizon_config_) and not extra_objects.empty()) {
             node_type = state_anchored_relation_name(node_type);
          }
          const uint64_t node_key = pack_u32_u32(
@@ -403,8 +487,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   format_with(std::nullopt, std::nullopt);
                }
             }
-            if(root_uses_split_state_relations(horizon_config_.root_policy)
-               and not extra_objects.empty()) {
+            if(split_full_state_relations(horizon_config_) and not extra_objects.empty()) {
                node_type = state_anchored_relation_name(node_type);
             }
 
@@ -489,8 +572,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       std::string node_type = RelationFormatter::format_predicate(
          predicate, std::nullopt, std::nullopt, polarity
       );
-      if(root_uses_split_state_relations(horizon_config_.root_policy)
-         and not extra_objects.empty()) {
+      if(split_full_state_relations(horizon_config_) and not extra_objects.empty()) {
          node_type = state_anchored_relation_name(node_type);
       }
       const std::string atom_str = RelationFormatter::format_atom(atom);
@@ -599,8 +681,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                               );
                }
             }
-            if(root_uses_split_state_relations(horizon_config_.root_policy)
-               and not extra_objects.empty()) {
+            if(split_full_state_relations(horizon_config_) and not extra_objects.empty()) {
                node_type = state_anchored_relation_name(node_type);
             }
 

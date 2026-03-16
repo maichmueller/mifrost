@@ -249,10 +249,9 @@ def test_horizon_delta_registers_state_literal_relations_without_plain_goals(
         mifrost.GoalDerivation.added_unsatisfied,
     }
     encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
-    assert any(
-        str(name).startswith("[+]") and str(name).endswith("[state]")
-        for name in encoder.relation_dict.keys()
-    )
+    relation_names = {str(name) for name in encoder.relation_dict.keys()}
+    assert any(name.startswith("[+]") for name in relation_names)
+    assert not any("[state]" in name for name in relation_names)
 
 
 def test_horizon_rejects_partial_explicit_candidate_ids(small_blocks):

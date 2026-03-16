@@ -196,10 +196,10 @@ def test_flat_transition_effects_encoder_emits_only_changed_successor_literals(
     }
     formatter = mifrost.RelationFormatter
     expected_successor_relations = {
-        f"{formatter.format_predicate(predicate(atom), polarity=True)}[state]"
+        formatter.format_predicate(predicate(atom), polarity=True)
         for atom in successor_atoms - current_atoms
     } | {
-        f"{formatter.format_predicate(predicate(atom), polarity=False)}[state]"
+        formatter.format_predicate(predicate(atom), polarity=False)
         for atom in current_atoms - successor_atoms
     }
 

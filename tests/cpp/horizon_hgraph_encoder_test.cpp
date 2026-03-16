@@ -375,7 +375,8 @@ TEST_P(HorizonHGraphEncoderTest, DeltaModeEncodesOnlyChangedLiteralsForSuccessor
       std::string node_type = RelationFormatter::format_predicate(
          atom->get_predicate(), std::nullopt, std::nullopt, polarity
       );
-      if(root_uses_split_state_relations(config.root_policy)) {
+      if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::full
+         && root_uses_split_state_relations(config.root_policy)) {
          node_type += "[state]";
       }
       const std::string atom_str = RelationFormatter::format_atom(atom);

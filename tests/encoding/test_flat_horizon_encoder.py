@@ -211,10 +211,8 @@ def test_flat_horizon_delta_registers_state_literal_relations_without_plain_goal
         goals=list(problem.get_goal_condition().get_literals()),
     )
 
-    assert any(
-        name.startswith("[+]") and name.endswith("[state]")
-        for name in data.schema.names
-    )
+    assert any(name.startswith("[+]") for name in data.schema.names)
+    assert not any("[state]" in name for name in data.schema.names)
 
 
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
