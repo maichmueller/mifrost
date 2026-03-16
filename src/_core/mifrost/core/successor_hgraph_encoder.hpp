@@ -18,13 +18,13 @@ struct SuccessorBatchInputs;
 class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
-      Full,  ///< Successor encodes full state.
-      Delta  ///< Successor encodes only changed literals (add/delete).
+      full,  ///< Successor encodes full state.
+      delta  ///< Successor encodes only changed literals (add/delete).
    };
 
    /// Runtime config for successor transition encoding.
    struct Config: HGraphEncoderEngine::Config {
-      Mode successor_mode = Mode::Full;
+      Mode successor_mode = Mode::full;
       std::string successor_suffix = "[suc]";
       bool include_successor_goal_satisfaction = false;
    };

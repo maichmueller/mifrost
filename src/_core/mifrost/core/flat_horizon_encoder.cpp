@@ -171,7 +171,7 @@ void print_flat_horizon_batch_profile(const FlatHorizonBatchProfile& profile)
 
 FlatHorizonEncoderEngine::Config normalize_config(FlatHorizonEncoderEngine::Config config)
 {
-   if(config.transition_mode == FlatHorizonEncoderEngine::Mode::Delta) {
+   if(config.transition_mode == FlatHorizonEncoderEngine::Mode::delta) {
       config.support_literals = true;
    }
    return config;
@@ -275,7 +275,7 @@ FlatHorizonEncoderEngine::~FlatHorizonEncoderEngine() = default;
 
 void FlatHorizonEncoderEngine::initialize_from_domain()
 {
-   if(config_.transition_mode == Mode::Action and config_.ignore_actions) {
+   if(config_.transition_mode == Mode::action and config_.ignore_actions) {
       throw std::invalid_argument("Action flat horizon encoding requires ignore_actions=false.");
    }
 
@@ -337,7 +337,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       relation_dict_.arity[config_.cousin_relation] = 2;
    }
 
-   target_entity_group_names_ = {std::string(target_source_group_name(TargetSource::States))};
+   target_entity_group_names_ = {std::string(target_source_group_name(TargetSource::states))};
    target_metadata_group_names_ = target_entity_group_names_;
 
    std::map< std::string, std::string > relation_sources_by_name;
@@ -1124,7 +1124,7 @@ void FlatHorizonEncoderEngine::encode_impl(
    }();
 
    const bool encode_actions = (not config_.ignore_actions)
-                               or (config_.transition_mode == Mode::Action);
+                               or (config_.transition_mode == Mode::action);
 
    hash_set< int > root_fluent_indices;
    hash_set< int > root_derived_indices;
@@ -1165,7 +1165,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       }
       return true;
    };
-   if(config_.transition_mode == Mode::Delta) {
+   if(config_.transition_mode == Mode::delta) {
       ScopedProfileTimer timer(profile != nullptr ? &profile->root_delta_setup_s : nullptr);
       const auto& repos = root.get_problem().get_repositories();
       const auto root_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
@@ -1195,7 +1195,7 @@ void FlatHorizonEncoderEngine::encode_impl(
             continue;
          }
 
-         if(config_.transition_mode == Mode::Full) {
+         if(config_.transition_mode == Mode::full) {
             const auto succ_fact_keys = emit_state_for_candidate(
                node.state, node.index, false, /*include_state_anchor=*/true
             );
@@ -1225,7 +1225,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                   /*include_state_anchor=*/true
                );
             }
-         } else if(config_.transition_mode == Mode::Delta) {
+         } else if(config_.transition_mode == Mode::delta) {
             hash_set< int > added_fluents;
             hash_set< int > removed_fluents;
             hash_set< int > added_derived;

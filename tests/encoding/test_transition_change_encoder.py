@@ -23,7 +23,7 @@ from .test_utils import (
 
 def _encode_delta_graph(domain, current, successor, goals, suffix="[suc]"):
     config = mifrost.SuccessorEncoderConfig()
-    config.successor_mode = mifrost.SuccessorEncoderMode.Delta
+    config.successor_mode = mifrost.SuccessorEncoderMode.delta
     config.successor_suffix = suffix
     config.add_nullary_predicates = False
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
@@ -142,7 +142,7 @@ def test_transition_change_encoder_nullary_placeholder(small_blocks):
 
     goals = goal_inputs_from_problem(problem)
     config = mifrost.SuccessorEncoderConfig()
-    config.successor_mode = mifrost.SuccessorEncoderMode.Delta
+    config.successor_mode = mifrost.SuccessorEncoderMode.delta
     config.successor_suffix = "[suc]"
     config.add_nullary_predicates = True
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)

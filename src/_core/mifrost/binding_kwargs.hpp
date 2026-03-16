@@ -91,16 +91,16 @@ inline std::optional< TargetSource > parse_target_source_alias(std::string_view 
 {
    const auto normalized = ascii_lower(value);
    if(normalized == "action" or normalized == "actions") {
-      return TargetSource::Actions;
+      return TargetSource::actions;
    }
    if(normalized == "goal" or normalized == "goals") {
-      return TargetSource::Goals;
+      return TargetSource::goals;
    }
    if(normalized == "subgoal" or normalized == "subgoals") {
-      return TargetSource::Subgoals;
+      return TargetSource::subgoals;
    }
    if(normalized == "state" or normalized == "states") {
-      return TargetSource::States;
+      return TargetSource::states;
    }
    if(normalized == "history") {
       return TargetSource::History;

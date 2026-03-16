@@ -74,7 +74,7 @@ def test_transition_encoder_preserves_state_structure(small_blocks):
         state,
         successor_state,
         goals,
-        mode=mifrost.SuccessorEncoderMode.Full,
+        mode=mifrost.SuccessorEncoderMode.full,
     )
     base_graph = to_named_networkx(base_encoder.encode(state))
 
@@ -96,7 +96,7 @@ def test_transition_encoder_successor_predicates_single_successor(small_blocks):
         state,
         successor_state,
         goals,
-        mode=mifrost.SuccessorEncoderMode.Full,
+        mode=mifrost.SuccessorEncoderMode.full,
         successor_suffix=successor_suffix,
     )
 
@@ -153,7 +153,7 @@ def test_transition_encoder_multiple_states_and_successors(medium_blocks):
                 state,
                 successor_state,
                 goals,
-                mode=mifrost.SuccessorEncoderMode.Full,
+                mode=mifrost.SuccessorEncoderMode.full,
                 successor_suffix=successor_suffix,
             )
             _assert_base_isomorphism(transition_graph, base_graph, successor_suffix)
@@ -191,7 +191,7 @@ def test_transition_encoder_roundtrip_pyg_networkx(small_blocks):
         state,
         successor,
         goals,
-        mode=mifrost.SuccessorEncoderMode.Full,
+        mode=mifrost.SuccessorEncoderMode.full,
     )
     reconstructed = graph
 
@@ -218,7 +218,7 @@ def test_transition_encoder_multiple_roundtrips(medium_blocks):
                 state,
                 target,
                 goals,
-                mode=mifrost.SuccessorEncoderMode.Full,
+                mode=mifrost.SuccessorEncoderMode.full,
             )
 
             node_match = iso.categorical_node_match(["type"], [None])
@@ -238,7 +238,7 @@ def test_transition_encoder_nullary_placeholder(small_blocks):
     goals = goal_inputs_from_problem(problem)
 
     config = mifrost.SuccessorEncoderConfig()
-    config.successor_mode = mifrost.SuccessorEncoderMode.Full
+    config.successor_mode = mifrost.SuccessorEncoderMode.full
     config.add_nullary_predicates = True
     encoder = mifrost.SuccessorHGraphEncoderEngine(adv_domain(domain), config)
 

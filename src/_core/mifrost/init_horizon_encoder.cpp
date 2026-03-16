@@ -51,17 +51,17 @@ void apply_horizon_config_kwargs(
 void init_horizon_encoder(nb::module_& m)
 {
    nb::enum_< RootPolicy >(m, "RootPolicy")
-      .value("Include", RootPolicy::Include)
-      .value("EncodeOnly", RootPolicy::EncodeOnly)
-      .value("Exclude", RootPolicy::Exclude);
+      .value("include", RootPolicy::include)
+      .value("encode_only", RootPolicy::encode_only)
+      .value("exclude", RootPolicy::exclude);
    nb::enum_< HorizonHGraphEncoderEngine::Mode >(m, "HorizonEncoderMode")
-      .value("Full", HorizonHGraphEncoderEngine::Mode::Full)
-      .value("Delta", HorizonHGraphEncoderEngine::Mode::Delta)
-      .value("Action", HorizonHGraphEncoderEngine::Mode::Action);
+      .value("full", HorizonHGraphEncoderEngine::Mode::full)
+      .value("delta", HorizonHGraphEncoderEngine::Mode::delta)
+      .value("action", HorizonHGraphEncoderEngine::Mode::action);
    nb::enum_< FlatHorizonEncoderEngine::Mode >(m, "FlatHorizonEncoderMode")
-      .value("Full", FlatHorizonEncoderEngine::Mode::Full)
-      .value("Delta", FlatHorizonEncoderEngine::Mode::Delta)
-      .value("Action", FlatHorizonEncoderEngine::Mode::Action);
+      .value("full", FlatHorizonEncoderEngine::Mode::full)
+      .value("delta", FlatHorizonEncoderEngine::Mode::delta)
+      .value("action", FlatHorizonEncoderEngine::Mode::action);
 
    nb::class_< HorizonHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
       m, "HorizonEncoderConfig"

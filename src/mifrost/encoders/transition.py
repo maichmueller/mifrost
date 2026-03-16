@@ -334,7 +334,7 @@ class TransitionHGraphEncoder(_TransitionEncoderBase):
     ) -> None:
         super().__init__(
             domain,
-            successor_mode=SuccessorEncoderMode.Full,
+            successor_mode=SuccessorEncoderMode.full,
             successor_suffix=successor_suffix,
             **kwargs,
         )
@@ -355,7 +355,7 @@ class TransitionEffectsHGraphEncoder(_TransitionEncoderBase):
     ) -> None:
         super().__init__(
             domain,
-            successor_mode=SuccessorEncoderMode.Delta,
+            successor_mode=SuccessorEncoderMode.delta,
             successor_suffix=successor_suffix,
             **kwargs,
         )

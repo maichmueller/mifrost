@@ -35,11 +35,11 @@ void apply_hgraph_config_kwargs(HGraphEncoderEngine::Config& config, const nb::k
 void init_hgraph_encoder(nb::module_& m)
 {
    nb::enum_< TargetSource >(m, "TargetSource")
-      .value("Actions", TargetSource::Actions)
-      .value("Goals", TargetSource::Goals)
-      .value("Subgoals", TargetSource::Subgoals)
-      .value("States", TargetSource::States)
-      .value("History", TargetSource::History);
+      .value("actions", TargetSource::actions)
+      .value("goals", TargetSource::goals)
+      .value("subgoals", TargetSource::subgoals)
+      .value("states", TargetSource::states)
+      .value("history", TargetSource::History);
 
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())

@@ -876,10 +876,10 @@ void HGraphEncoderEngine::encode_literals(
                                                  : std::nullopt;
       const bool is_subgoal = goal_level.has_value() and (*goal_level > 0);
       std::optional< TargetSource > target_source = std::nullopt;
-      if(is_subgoal and has_anchor_symbol_source(TargetSource::Subgoals)) {
-         target_source = TargetSource::Subgoals;
-      } else if((not is_subgoal) and has_anchor_symbol_source(TargetSource::Goals)) {
-         target_source = TargetSource::Goals;
+      if(is_subgoal and has_anchor_symbol_source(TargetSource::subgoals)) {
+         target_source = TargetSource::subgoals;
+      } else if((not is_subgoal) and has_anchor_symbol_source(TargetSource::goals)) {
+         target_source = TargetSource::goals;
       }
 
       std::string node_type;

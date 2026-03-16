@@ -53,8 +53,8 @@ def main() -> None:
     goals = list(problem.get_goal_condition().get_literals())
 
     variants = [
-        ("full", mifrost.HorizonEncoderMode.Full),
-        ("delta", mifrost.HorizonEncoderMode.Delta),
+        ("full", mifrost.HorizonEncoderMode.full),
+        ("delta", mifrost.HorizonEncoderMode.delta),
     ]
     relation_flags = [
         (False, False, False),

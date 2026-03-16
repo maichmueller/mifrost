@@ -32,7 +32,7 @@ HorizonHGraphEncoderEngine::Config normalize_horizon_config(
    HorizonHGraphEncoderEngine::Config config
 )
 {
-   if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::Delta
+   if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta
       and not config.support_literals) {
       config.support_literals = true;
    }
@@ -209,10 +209,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
    auto& relation_to_symbols = workspace.relation_to_symbols;
    auto& symbol_to_relations = workspace.symbol_to_relations;
 
-   if(horizon_config_.transition_mode == Mode::Delta and not config_.support_literals) {
+   if(horizon_config_.transition_mode == Mode::delta and not config_.support_literals) {
       throw std::invalid_argument("Delta horizon encoding requires support_literals=true.");
    }
-   if(horizon_config_.transition_mode == Mode::Action and config_.ignore_actions) {
+   if(horizon_config_.transition_mode == Mode::action and config_.ignore_actions) {
       throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
    }
 
@@ -805,7 +805,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
    }
 
    const bool encode_actions = (not config_.ignore_actions)
-                               or (horizon_config_.transition_mode == Mode::Action);
+                               or (horizon_config_.transition_mode == Mode::action);
 
    // Precompute root atoms (no statics) for delta mode.
    hash_set< int > root_fluent_indices;
@@ -851,7 +851,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
       return true;
    };
-   if(horizon_config_.transition_mode == Mode::Delta) {
+   if(horizon_config_.transition_mode == Mode::delta) {
       const auto& repos = root.get_problem().get_repositories();
       const auto root_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          root.get_atoms< mimir::formalism::FluentTag >()
@@ -875,7 +875,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       const std::string prefix = make_prefix(target_keys[node.index]);
       const std::array< std::string, 1 > succ_extra{target_keys[node.index]};
 
-      if(horizon_config_.transition_mode == Mode::Full) {
+      if(horizon_config_.transition_mode == Mode::full) {
          const auto succ_fact_keys = encode_state_facts_with_prefix(
             node.state, node.index, prefix, succ_extra, false
          );
@@ -916,7 +916,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   succ_extra
                );
          }
-      } else if(horizon_config_.transition_mode == Mode::Delta) {
+      } else if(horizon_config_.transition_mode == Mode::delta) {
          hash_set< int > added_fluents;
          hash_set< int > removed_fluents;
          hash_set< int > added_derived;
@@ -1039,7 +1039,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
                removed_derived
             );
          }
-      } else if(horizon_config_.transition_mode == Mode::Action) {
+      } else if(horizon_config_.transition_mode == Mode::action) {
          if(encode_actions and node.action.has_value()) {
             encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
@@ -1218,12 +1218,12 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    TargetColumns target_columns;
    std::vector< mimir::search::State > target_name_states;
-   const bool export_state_targets = has_target_source(TargetSource::States);
+   const bool export_state_targets = has_target_source(TargetSource::states);
    if(not nodes.empty()) {
       const std::optional< int64_t > state_target_group_id = export_state_targets
                                                                 ? std::optional< int64_t >(
                                                                      get_or_assign_target_group_id(
-                                                                        TargetSource::States
+                                                                        TargetSource::states
                                                                      )
                                                                   )
                                                                 : std::nullopt;

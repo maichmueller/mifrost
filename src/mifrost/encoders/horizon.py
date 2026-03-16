@@ -20,6 +20,7 @@ from .._core import (
     HorizonStreamEncoder as _HorizonStreamEncoder,
     TransitionDAG,
     BatchEncoding,
+    HorizonEncoderMode,
 )
 from .base import (
     ActionBatchInput,

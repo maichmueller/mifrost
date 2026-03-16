@@ -241,8 +241,8 @@ def test_flat_relation_pyg_output_exposes_encoder_config_attrs(small_blocks):
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.Goals, mifrost.TargetSource.History],
-        target_sources=[mifrost.TargetSource.Actions, mifrost.TargetSource.Goals],
+        lgan_anchor_sources=[mifrost.TargetSource.goals, mifrost.TargetSource.history],
+        target_sources=[mifrost.TargetSource.actions, mifrost.TargetSource.goals],
         target_symbol_prefix="tg:",
     )
 
@@ -440,7 +440,7 @@ def test_flat_relation_action_target_metadata_enabled_for_action_source(
 
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state], actions=[[action]])
     data = encoding.as_pyg(as_batch=True)
@@ -472,7 +472,7 @@ def test_flat_relation_native_target_names_materialize_on_access(small_blocks):
 
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state], actions=[[action]])
 
@@ -509,7 +509,7 @@ def test_flat_relation_action_target_metadata_preserves_duplicates_and_empty_gra
 
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     actual = encoder.encode_batch(
         [state, state],
@@ -544,7 +544,7 @@ def test_flat_relation_goal_target_source_adjusts_root_goal_arities_and_metadata
     goal_encoder = FlatRelationEncoder(
         domain,
         max_goal_level=1,
-        target_sources=[mifrost.TargetSource.Goals],
+        target_sources=[mifrost.TargetSource.goals],
     )
 
     assert goal_encoder.engine.relation_names == base_encoder.engine.relation_names
@@ -599,7 +599,7 @@ def test_flat_relation_subgoal_target_source_adjusts_only_layered_goal_arities(
     subgoal_encoder = FlatRelationEncoder(
         domain,
         max_goal_level=1,
-        target_sources=[mifrost.TargetSource.Subgoals],
+        target_sources=[mifrost.TargetSource.subgoals],
     )
 
     assert subgoal_encoder.engine.relation_names == base_encoder.engine.relation_names
@@ -662,9 +662,9 @@ def test_flat_relation_mixed_target_sources_preserve_order_and_grouping(small_bl
         domain,
         max_goal_level=1,
         target_sources=[
-            mifrost.TargetSource.Goals,
-            mifrost.TargetSource.Subgoals,
-            mifrost.TargetSource.Actions,
+            mifrost.TargetSource.goals,
+            mifrost.TargetSource.subgoals,
+            mifrost.TargetSource.actions,
         ],
     )
     data = encoder.encode_pyg(
@@ -709,7 +709,7 @@ def test_flat_relation_goal_targets_preserve_duplicate_candidates_and_empty_grap
 
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.Goals],
+        target_sources=[mifrost.TargetSource.goals],
     )
     actual = encoder.encode_batch(
         [state, state],
@@ -783,7 +783,7 @@ def test_flat_relation_history_target_metadata(small_blocks):
     _space, domain, problem = small_blocks
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.History],
+        target_sources=[mifrost.TargetSource.history],
     )
     goals, history_subgoals = _history_inputs(problem)
     filtered_history = _filtered_history_inputs(history_subgoals)
@@ -819,7 +819,7 @@ def test_flat_relation_history_target_metadata_disambiguates_same_literal_across
     goal = goals[0]
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.History],
+        target_sources=[mifrost.TargetSource.history],
     )
     data = encoder.encode_pyg(
         problem.get_initial_state(),
@@ -839,7 +839,7 @@ def test_flat_relation_history_visualization_marks_history_entities(small_blocks
     _space, domain, problem = small_blocks
     encoder = FlatRelationEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.History],
+        target_sources=[mifrost.TargetSource.history],
     )
     goals, history_subgoals = _history_inputs(problem)
     data = encoder.encode_pyg(
@@ -876,7 +876,7 @@ def test_flat_relation_encoder_rejects_reserved_state_target_source(
         ValueError,
         match="reserved for the upcoming flat successor/horizon encoders",
     ):
-        FlatRelationEncoder(domain, target_sources=[mifrost.TargetSource.States])
+        FlatRelationEncoder(domain, target_sources=[mifrost.TargetSource.states])
 
 
 def test_flat_relation_lgan_actions_use_action_target_entities_without_target_metadata(
@@ -922,7 +922,7 @@ def test_flat_relation_lgan_goal_anchor_sources_work_without_target_metadata(
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+        lgan_anchor_sources=[mifrost.TargetSource.goals],
     )
 
     data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)
@@ -943,8 +943,8 @@ def test_flat_relation_lgan_goal_target_entities_are_used_as_anchors(small_block
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.Goals],
-        target_sources=[mifrost.TargetSource.Goals],
+        lgan_anchor_sources=[mifrost.TargetSource.goals],
+        target_sources=[mifrost.TargetSource.goals],
     )
 
     data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)
@@ -966,7 +966,7 @@ def test_flat_relation_lgan_history_anchor_sources_work_without_target_metadata(
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.History],
+        lgan_anchor_sources=[mifrost.TargetSource.history],
     )
 
     data = encoder.encode_pyg(
@@ -992,7 +992,7 @@ def test_flat_relation_lgan_anchor_sources_are_ignored_when_lgan_is_disabled(
     encoder = FlatRelationEncoder(
         domain,
         include_lgan_edges=False,
-        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+        lgan_anchor_sources=[mifrost.TargetSource.goals],
     )
 
     data = encoder.encode_pyg(problem.get_initial_state(), goals=goals)

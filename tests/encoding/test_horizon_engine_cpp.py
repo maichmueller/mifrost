@@ -47,7 +47,7 @@ def test_horizon_encoder_parent_relations(horizon_cases):
     dag = _build_dag(space, root)
 
     config = mifrost.HorizonEncoderConfig()
-    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.transition_mode = mifrost.HorizonEncoderMode.full
     config.enable_parent_relation = True
     encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
 
@@ -93,7 +93,7 @@ def test_horizon_encoder_root_policy_controls_targets(horizon_cases):
     goals = goal_inputs_from_problem(problem)
 
     excluded = mifrost.HorizonEncoderConfig()
-    excluded.root_policy = mifrost.RootPolicy.Exclude
+    excluded.root_policy = mifrost.RootPolicy.exclude
     encoder_excluded = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), excluded)
     data_excluded = encoding_dict_to_pyg(
         encoder_excluded.encode(_adv(root), dag, goals)
@@ -103,7 +103,7 @@ def test_horizon_encoder_root_policy_controls_targets(horizon_cases):
     assert len(indices_excluded) == len(dag.nodes()) - 1
 
     encode_only = mifrost.HorizonEncoderConfig()
-    encode_only.root_policy = mifrost.RootPolicy.EncodeOnly
+    encode_only.root_policy = mifrost.RootPolicy.encode_only
     encoder_encode_only = mifrost.HorizonHGraphEncoderEngine(
         _adv_domain(domain), encode_only
     )
@@ -115,7 +115,7 @@ def test_horizon_encoder_root_policy_controls_targets(horizon_cases):
     assert len(indices_encode_only) == len(dag.nodes()) - 1
 
     included = mifrost.HorizonEncoderConfig()
-    included.root_policy = mifrost.RootPolicy.Include
+    included.root_policy = mifrost.RootPolicy.include
     encoder_included = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), included)
     data_included = encoding_dict_to_pyg(
         encoder_included.encode(_adv(root), dag, goals)
@@ -158,15 +158,15 @@ def test_horizon_encoder_root_policy_changes_root_fact_attachment(horizon_cases)
             root_srcs.update(data[(src_type, pos, dst_type)].edge_index[0].tolist())
         return root_symbol_idx, root_srcs
 
-    excluded_root_idx, excluded_srcs = root_src_indices_for(mifrost.RootPolicy.Exclude)
+    excluded_root_idx, excluded_srcs = root_src_indices_for(mifrost.RootPolicy.exclude)
     assert excluded_root_idx not in excluded_srcs
 
     encode_only_root_idx, encode_only_srcs = root_src_indices_for(
-        mifrost.RootPolicy.EncodeOnly
+        mifrost.RootPolicy.encode_only
     )
     assert encode_only_root_idx in encode_only_srcs
 
-    included_root_idx, included_srcs = root_src_indices_for(mifrost.RootPolicy.Include)
+    included_root_idx, included_srcs = root_src_indices_for(mifrost.RootPolicy.include)
     assert included_root_idx in included_srcs
 
 
@@ -219,7 +219,7 @@ def test_horizon_relation_dict_arities_match_emitted_positions(horizon_cases):
     dag.register_transition(_adv(root), _adv(target), _adv_action(action))
 
     config = mifrost.HorizonEncoderConfig()
-    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.transition_mode = mifrost.HorizonEncoderMode.full
     config.ignore_actions = False
     encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
 
@@ -260,7 +260,7 @@ def test_horizon_lgan_targets_and_rr_directions(horizon_cases):
     dag = _build_dag(space, root, max_depth=2, branch_factor=2)
 
     config = mifrost.HorizonEncoderConfig()
-    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.transition_mode = mifrost.HorizonEncoderMode.full
     config.include_lgan_edges = True
     config.ignore_actions = False
     config.enable_parent_relation = True

@@ -21,22 +21,22 @@ struct HorizonBatchInputs;
 class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
-      Full,  ///< Each transition encodes full successor state.
-      Delta,  ///< Each transition encodes only changed literals vs root.
-      Action  ///< Only encodes actions, no state atoms for transitions.
+      full,  ///< Each transition encodes full successor state.
+      delta,  ///< Each transition encodes only changed literals vs root.
+      action  ///< Only encodes actions, no state atoms for transitions.
    };
 
    /// Runtime config for horizon lookahead encoding.
    struct Config: HGraphEncoderEngine::Config {
-      Config() { target_sources = {TargetSource::States}; }
-      Mode transition_mode = Mode::Full;
+      Config() { target_sources = {TargetSource::states}; }
+      Mode transition_mode = Mode::full;
       std::string parent_relation = defaults::parent_relation;
       std::string sibling_relation = defaults::sibling_relation;
       std::string cousin_relation = defaults::cousin_relation;
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
-      RootPolicy root_policy = RootPolicy::Exclude;
+      RootPolicy root_policy = RootPolicy::exclude;
    };
 
    HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);

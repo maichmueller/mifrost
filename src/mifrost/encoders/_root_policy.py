@@ -25,11 +25,11 @@ def normalize_root_policy(policy: RootPolicy | str | None) -> RootPolicy | None:
     if isinstance(policy, str):
         key = policy.strip().lower()
         if key == "include":
-            return RootPolicy.Include
+            return RootPolicy.include
         if key in {"encode_only", "encode-only", "encoded_only", "encoded-only"}:
-            return RootPolicy.EncodeOnly
+            return RootPolicy.encode_only
         if key == "exclude":
-            return RootPolicy.Exclude
+            return RootPolicy.exclude
         raise ValueError(
             f"Unknown root_policy '{policy}'. "
             "Expected one of: include, encode_only, exclude."

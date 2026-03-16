@@ -14,7 +14,7 @@ SuccessorHGraphEncoderEngine::Config normalize_successor_config(
    SuccessorHGraphEncoderEngine::Config config
 )
 {
-   if(config.successor_mode == SuccessorHGraphEncoderEngine::Mode::Delta
+   if(config.successor_mode == SuccessorHGraphEncoderEngine::Mode::delta
       and not config.support_literals) {
       config.support_literals = true;
    }
@@ -168,7 +168,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       }
    };
 
-   if(successor_config_.successor_mode == Mode::Full) {
+   if(successor_config_.successor_mode == Mode::full) {
       const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          successor.get_atoms< mimir::formalism::FluentTag >()
       );
@@ -226,7 +226,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    // 4. Encode goals for current (always)
    encode_goal_inputs(goals, builder, workspace);
 
-   if(successor_config_.successor_mode == Mode::Full) {
+   if(successor_config_.successor_mode == Mode::full) {
       // 5. Encode goal satisfaction for current
       encode_goal_satisfaction_inputs(goals, cur_fact_keys, builder, workspace);
 

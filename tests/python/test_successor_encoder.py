@@ -60,7 +60,7 @@ def test_successor_encoder(domain_name: str, problem_name: str):
 
     # 5. Full Mode Test
     config_full = mifrost.SuccessorEncoderConfig()
-    config_full.successor_mode = mifrost.SuccessorEncoderMode.Full
+    config_full.successor_mode = mifrost.SuccessorEncoderMode.full
     config_full.successor_suffix = "[suc]"
 
     encoder_full = mifrost.SuccessorHGraphEncoderEngine(
@@ -79,7 +79,7 @@ def test_successor_encoder(domain_name: str, problem_name: str):
 
     # 6. Delta Mode Test
     config_delta = mifrost.SuccessorEncoderConfig()
-    config_delta.successor_mode = mifrost.SuccessorEncoderMode.Delta
+    config_delta.successor_mode = mifrost.SuccessorEncoderMode.delta
     config_delta.successor_suffix = "[suc]"
 
     encoder_delta = mifrost.SuccessorHGraphEncoderEngine(

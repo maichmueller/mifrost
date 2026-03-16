@@ -68,7 +68,7 @@ void HGraphEncoderEngine::initialize_from_domain()
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
    const int predicate_arity_offset = 0;
-   const int action_arity_offset = (has_target_source(TargetSource::Actions)
+   const int action_arity_offset = (has_target_source(TargetSource::actions)
                                     or config_.include_lgan_edges)
                                       ? 1
                                       : 0;
@@ -364,9 +364,9 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
       }
    }
 
-   const bool emit_target_metadata_fields = has_target_source(TargetSource::Actions)
-                                            or has_target_source(TargetSource::Goals)
-                                            or has_target_source(TargetSource::Subgoals)
+   const bool emit_target_metadata_fields = has_target_source(TargetSource::actions)
+                                            or has_target_source(TargetSource::goals)
+                                            or has_target_source(TargetSource::subgoals)
                                             or has_target_source(TargetSource::History);
    if(emit_target_metadata_fields) {
       const TargetMetadataEmitConfig emit_config{
@@ -611,7 +611,7 @@ void HGraphEncoderEngine::encode_actions(
    std::span< const std::string > extra_objects
 )
 {
-   const bool target_actions = has_target_source(TargetSource::Actions);
+   const bool target_actions = has_target_source(TargetSource::actions);
    const bool needs_action_target_symbol = target_actions or config_.include_lgan_edges;
    if(target_actions) {
       workspace_.targets.reserve(actions.size(), /*include_depth=*/false, /*include_group=*/true);
@@ -652,7 +652,7 @@ void HGraphEncoderEngine::encode_actions(
             workspace_.lgan_target_symbol_ids.insert(symbol_id);
          }
          if(target_actions) {
-            append_target_candidate(action_symbol_idx, TargetSource::Actions, action_name);
+            append_target_candidate(action_symbol_idx, TargetSource::actions, action_name);
          }
       }
 

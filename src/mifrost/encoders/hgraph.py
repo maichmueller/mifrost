@@ -315,9 +315,11 @@ def _draw_hgraph_graph(
                 [0],
                 color=edge_pos_to_color[pos_value],
                 linestyle="dashed" if pos_value in lgan_edge_positions else "solid",
-                label=f"LGAN ({pos_value})"
-                if pos_value in lgan_edge_positions
-                else f"pos: {pos_value}",
+                label=(
+                    f"LGAN ({pos_value})"
+                    if pos_value in lgan_edge_positions
+                    else f"pos: {pos_value}"
+                ),
             )
             for pos_value in unique_positions
         ]
@@ -609,7 +611,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
         if (
             normalized_lgan_anchor_sources is not None
-            and TargetSource.States in normalized_lgan_anchor_sources
+            and TargetSource.states in normalized_lgan_anchor_sources
         ):
             raise ValueError(
                 "HGraphEncoder currently supports lgan_anchor_sources="
@@ -1127,12 +1129,14 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                     [0],
                     [0],
                     color=edge_pos_to_color[p_val],
-                    linestyle="dashed"
-                    if p_val in self._lgan_edge_positions
-                    else "solid",
-                    label=f"LGAN ({p_val})"
-                    if p_val in self._lgan_edge_positions
-                    else f"pos: {p_val}",
+                    linestyle=(
+                        "dashed" if p_val in self._lgan_edge_positions else "solid"
+                    ),
+                    label=(
+                        f"LGAN ({p_val})"
+                        if p_val in self._lgan_edge_positions
+                        else f"pos: {p_val}"
+                    ),
                 )
                 for p_val in unique_positions
             ]

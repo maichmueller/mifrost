@@ -64,7 +64,7 @@ def test_horizon_encoder_target_mapping_and_order(small_blocks):
         )
 
     config = mifrost.HorizonEncoderConfig()
-    config.transition_mode = mifrost.HorizonEncoderMode.Full
+    config.transition_mode = mifrost.HorizonEncoderMode.full
     config.ignore_actions = False
     encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
     goals = goal_inputs_from_problem(problem)
@@ -386,7 +386,7 @@ def test_horizon_delta_literals_match_state_diff_fallback(small_blocks):
 
     encoder = mifrost.HorizonEncoder(
         domain,
-        transition_mode=mifrost.HorizonEncoderMode.Delta,
+        transition_mode=mifrost.HorizonEncoderMode.delta,
         ignore_actions=False,
     )
     actual = encoder.encode(root, dag=annotated_dag).as_pyg(as_batch=True)

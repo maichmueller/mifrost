@@ -32,9 +32,9 @@ struct HorizonBatchInputs;
 class FlatHorizonEncoderEngine {
   public:
    enum class Mode {
-      Full,
-      Delta,
-      Action,
+      full,
+      delta,
+      action,
    };
 
    struct Config {
@@ -45,7 +45,7 @@ class FlatHorizonEncoderEngine {
       bool ignore_zero_arity_relations = true;
       bool ignore_actions = true;
       bool include_lgan_edges = false;
-      Mode transition_mode = Mode::Full;
+      Mode transition_mode = Mode::full;
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
       std::string parent_relation = defaults::parent_relation;
       std::string sibling_relation = defaults::sibling_relation;
@@ -56,7 +56,7 @@ class FlatHorizonEncoderEngine {
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
-      RootPolicy root_policy = RootPolicy::Exclude;
+      RootPolicy root_policy = RootPolicy::exclude;
       std::set< GoalDerivation > goal_derivations = {
          GoalDerivation::plain,
          GoalDerivation::satisfied,

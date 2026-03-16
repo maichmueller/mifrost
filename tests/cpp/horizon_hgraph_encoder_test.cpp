@@ -29,14 +29,14 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
    dag.register_transition(ctx.root, succ_state, succ_action);
 
    const std::array< HorizonHGraphEncoderEngine::Mode, 2 > modes = {
-      HorizonHGraphEncoderEngine::Mode::Full,
-      HorizonHGraphEncoderEngine::Mode::Delta,
+      HorizonHGraphEncoderEngine::Mode::full,
+      HorizonHGraphEncoderEngine::Mode::delta,
    };
 
    for(const auto mode : modes) {
       HorizonHGraphEncoderEngine::Config config;
       config.transition_mode = mode;
-      if(mode == HorizonHGraphEncoderEngine::Mode::Delta) {
+      if(mode == HorizonHGraphEncoderEngine::Mode::delta) {
          config.support_literals = true;
       }
 
@@ -192,15 +192,15 @@ TEST_P(HorizonHGraphEncoderTest, ExcludedRootDropsFactEdgesFromRootSymbol)
       return std::pair{root_symbol_idx, src_indices};
    };
 
-   const auto [excluded_root_idx, excluded_srcs] = root_src_indices_for(RootPolicy::Exclude);
+   const auto [excluded_root_idx, excluded_srcs] = root_src_indices_for(RootPolicy::exclude);
    EXPECT_FALSE(excluded_srcs.contains(excluded_root_idx));
 
    const auto [encode_only_root_idx, encode_only_srcs] = root_src_indices_for(
-      RootPolicy::EncodeOnly
+      RootPolicy::encode_only
    );
    EXPECT_TRUE(encode_only_srcs.contains(encode_only_root_idx));
 
-   const auto [included_root_idx, included_srcs] = root_src_indices_for(RootPolicy::Include);
+   const auto [included_root_idx, included_srcs] = root_src_indices_for(RootPolicy::include);
    EXPECT_TRUE(included_srcs.contains(included_root_idx));
 }
 
@@ -332,7 +332,7 @@ TEST_P(HorizonHGraphEncoderTest, DeltaModeEncodesOnlyChangedLiteralsForSuccessor
    dag.register_transition(ctx.root, succ_state, succ_action);
 
    HorizonHGraphEncoderEngine::Config config;
-   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Delta;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::delta;
    config.support_literals = true;
    config.ignore_actions = true;
    config.include_lgan_edges = false;
@@ -442,7 +442,7 @@ TEST_P(HorizonHGraphEncoderTest, ObjectSymbolsParticipateInSymbolToRelationEdges
    dag.register_transition(ctx.root, succ_state, succ_action);
 
    HorizonHGraphEncoderEngine::Config config;
-   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
    config.ignore_actions = false;
    config.include_lgan_edges = false;
 
@@ -800,7 +800,7 @@ TEST_P(HorizonHGraphEncoderTest, ParentRelationEdgesMatchDagTransitions)
 
    HorizonHGraphEncoderEngine::Config config;
    config.enable_parent_relation = true;
-   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;
@@ -936,7 +936,7 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDag)
    HorizonHGraphEncoderEngine::Config config;
    config.enable_sibling_relation = true;
    config.enable_cousin_relation = true;
-   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;
@@ -1087,7 +1087,7 @@ TEST_P(HorizonHGraphEncoderTest, LganTargetsAreCandidateSymbolsAndRrIsRelationOn
    dag.register_transition(ctx.root, succ_state, succ_action);
 
    HorizonHGraphEncoderEngine::Config config;
-   config.transition_mode = HorizonHGraphEncoderEngine::Mode::Full;
+   config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
    config.ignore_actions = false;
    config.include_lgan_edges = true;
    config.enable_parent_relation = true;

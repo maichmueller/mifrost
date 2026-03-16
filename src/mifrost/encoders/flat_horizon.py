@@ -66,9 +66,9 @@ def _normalize_flat_horizon_mode(
     if isinstance(mode, str):
         normalized = mode.strip().lower()
         mapping = {
-            "full": FlatHorizonEncoderMode.Full,
-            "delta": FlatHorizonEncoderMode.Delta,
-            "action": FlatHorizonEncoderMode.Action,
+            "full": FlatHorizonEncoderMode.full,
+            "delta": FlatHorizonEncoderMode.delta,
+            "action": FlatHorizonEncoderMode.action,
         }
         if normalized not in mapping:
             raise ValueError(f"Unsupported flat horizon transition_mode: {mode!r}")
@@ -180,10 +180,9 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         self,
         domain: DomainInput,
         *,
-        transition_mode: FlatHorizonEncoderMode
-        | HorizonEncoderMode
-        | str
-        | None = None,
+        transition_mode: (
+            FlatHorizonEncoderMode | HorizonEncoderMode | str | None
+        ) = None,
         target_symbol_prefix: str = "target:",
         parent_relation: str = DEFAULT_PARENT_RELATION,
         sibling_relation: str = "_sibling_",

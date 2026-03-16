@@ -35,7 +35,7 @@ TEST_P(SuccessorHGraphEncoderTest, FullModeEncodesSuccessorNodesWithSuffix)
    auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
 
    SuccessorHGraphEncoderEngine::Config config;
-   config.successor_mode = SuccessorHGraphEncoderEngine::Mode::Full;
+   config.successor_mode = SuccessorHGraphEncoderEngine::Mode::full;
    SuccessorHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;
@@ -131,7 +131,7 @@ TEST_P(SuccessorHGraphEncoderTest, DeltaModeEncodesOnlyAddedRemovedAtoms)
    auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
 
    SuccessorHGraphEncoderEngine::Config config;
-   config.successor_mode = SuccessorHGraphEncoderEngine::Mode::Delta;
+   config.successor_mode = SuccessorHGraphEncoderEngine::Mode::delta;
    SuccessorHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;

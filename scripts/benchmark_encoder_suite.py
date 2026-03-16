@@ -478,9 +478,9 @@ def _run_hgraph_suite(
                             encoder.encode_pyg(
                                 state,
                                 goals=goals_arg,
-                                actions=actions_by_state[idx]
-                                if include_actions
-                                else None,
+                                actions=(
+                                    actions_by_state[idx] if include_actions else None
+                                ),
                                 subgoal_layers=subgoals_arg,
                             )
 
@@ -498,9 +498,9 @@ def _run_hgraph_suite(
                             stream.append(
                                 state,
                                 goals=goals_arg,
-                                actions=actions_by_state[idx]
-                                if include_actions
-                                else None,
+                                actions=(
+                                    actions_by_state[idx] if include_actions else None
+                                ),
                                 subgoal_layers=subgoals_arg,
                             )
                         stream.flush_pyg(as_batch=True)
@@ -758,10 +758,10 @@ def _run_horizon_suite(
         return results
 
     scenario_defs = [
-        ("full_goals_actions", mifrost.HorizonEncoderMode.Full, True, True),
-        ("full_goals_only", mifrost.HorizonEncoderMode.Full, True, False),
-        ("delta_goals_only", mifrost.HorizonEncoderMode.Delta, True, False),
-        ("action_goals_actions", mifrost.HorizonEncoderMode.Action, True, True),
+        ("full_goals_actions", mifrost.HorizonEncoderMode.full, True, True),
+        ("full_goals_only", mifrost.HorizonEncoderMode.full, True, False),
+        ("delta_goals_only", mifrost.HorizonEncoderMode.delta, True, False),
+        ("action_goals_actions", mifrost.HorizonEncoderMode.action, True, True),
     ]
 
     for include_lgan in include_lgan_values:
@@ -822,12 +822,12 @@ def _run_horizon_suite(
                     context = {
                         "n_roots": n_roots,
                         "requested_dag_size": dag_size,
-                        "avg_dag_nodes": statistics.fmean(dag_nodes)
-                        if dag_nodes
-                        else 0.0,
-                        "avg_dag_edges": statistics.fmean(dag_edges)
-                        if dag_edges
-                        else 0.0,
+                        "avg_dag_nodes": (
+                            statistics.fmean(dag_nodes) if dag_nodes else 0.0
+                        ),
+                        "avg_dag_edges": (
+                            statistics.fmean(dag_edges) if dag_edges else 0.0
+                        ),
                         "include_lgan": include_lgan,
                         "mode": str(mode),
                         "include_goals": include_goals,

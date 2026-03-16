@@ -20,15 +20,15 @@ TargetSource = getattr(_core, "TargetSource", None)
 
 _TARGET_SOURCE_ALIASES = (
     {
-        "action": TargetSource.Actions,
-        "actions": TargetSource.Actions,
-        "goal": TargetSource.Goals,
-        "goals": TargetSource.Goals,
-        "subgoal": TargetSource.Subgoals,
-        "subgoals": TargetSource.Subgoals,
-        "state": TargetSource.States,
-        "states": TargetSource.States,
-        "history": TargetSource.History,
+        "action": TargetSource.actions,
+        "actions": TargetSource.actions,
+        "goal": TargetSource.goals,
+        "goals": TargetSource.goals,
+        "subgoal": TargetSource.subgoals,
+        "subgoals": TargetSource.subgoals,
+        "state": TargetSource.states,
+        "states": TargetSource.states,
+        "history": TargetSource.history,
     }
     if TargetSource is not None
     else {}

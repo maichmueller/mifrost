@@ -48,10 +48,19 @@ def _build_dag(
 
 
 def _encode_graph(
-    domain, root, dag, *, mode, config_override=None, goals=None, drop_lgan=False
+    domain,
+    root,
+    dag,
+    *,
+    mode,
+    config_override=None,
+    goals=None,
+    drop_lgan=False,
+    root_policy=mifrost.RootPolicy.include,
 ):
     config = mifrost.HorizonEncoderConfig()
     config.transition_mode = mode
+    config.root_policy = root_policy
     if config_override:
         for key, value in config_override.items():
             setattr(config, key, value)
@@ -85,7 +94,7 @@ def test_transition_tree_encoder_full_semantics(horizon_cases):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Full,
+        mode=mifrost.HorizonEncoderMode.full,
         config_override={"enable_parent_relation": True},
         goals=goals,
     )
@@ -123,7 +132,7 @@ def test_transition_tree_encoder_delta_changes(horizon_cases):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Delta,
+        mode=mifrost.HorizonEncoderMode.delta,
         goals=goals,
     )
     target_nodes = _target_nodes(graph, config)
@@ -148,7 +157,7 @@ def test_transition_tree_encoder_custom_prefix(horizon_cases):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Full,
+        mode=mifrost.HorizonEncoderMode.full,
         config_override={
             "target_symbol_prefix": "S@",
             "enable_parent_relation": True,
@@ -189,7 +198,7 @@ def test_transition_tree_encoder_roundtrip(horizon_cases):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Delta,
+        mode=mifrost.HorizonEncoderMode.delta,
         goals=goals,
     )
     reconstructed = graph
@@ -222,7 +231,7 @@ def test_horizon_encoder_connects_actions_from_transitions_to_target_node(small_
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Full,
+        mode=mifrost.HorizonEncoderMode.full,
         goals=goals,
         config_override={"ignore_actions": False},
     )
@@ -264,7 +273,7 @@ def test_horizon_encoder_encodes_sibling_relations(medium_blocks):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Full,
+        mode=mifrost.HorizonEncoderMode.full,
         config_override={
             "enable_parent_relation": True,
             "enable_sibling_relation": True,
@@ -317,7 +326,7 @@ def test_horizon_encoder_encodes_cousin_relations(medium_blocks):
         domain,
         root,
         dag,
-        mode=mifrost.HorizonEncoderMode.Full,
+        mode=mifrost.HorizonEncoderMode.full,
         config_override={
             "enable_parent_relation": True,
             "enable_cousin_relation": True,

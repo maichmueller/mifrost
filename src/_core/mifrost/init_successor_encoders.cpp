@@ -50,8 +50,8 @@ void apply_successor_config_kwargs(
 void init_successor_encoders(nb::module_& m)
 {
    nb::enum_< SuccessorHGraphEncoderEngine::Mode >(m, "SuccessorEncoderMode")
-      .value("Full", SuccessorHGraphEncoderEngine::Mode::Full)
-      .value("Delta", SuccessorHGraphEncoderEngine::Mode::Delta);
+      .value("full", SuccessorHGraphEncoderEngine::Mode::full)
+      .value("delta", SuccessorHGraphEncoderEngine::Mode::delta);
 
    nb::class_< SuccessorHGraphEncoderEngine::Config, HGraphEncoderEngine::Config >(
       m, "SuccessorEncoderConfig"

@@ -21,14 +21,14 @@ namespace nb = nanobind;
 template < typename T >
 class BatchParam {
   public:
-   enum class Kind { None, Shared, PerState };
+   enum class Kind { none, shared, per_state };
 
    static BatchParam none() { return BatchParam(); }
 
    static BatchParam shared(T value)
    {
       BatchParam out;
-      out.kind_ = Kind::Shared;
+      out.kind_ = Kind::shared;
       out.shared_ = std::move(value);
       return out;
    }
@@ -36,18 +36,18 @@ class BatchParam {
    static BatchParam per_state(std::vector< std::optional< T > > values)
    {
       BatchParam out;
-      out.kind_ = Kind::PerState;
+      out.kind_ = Kind::per_state;
       out.per_state_ = std::move(values);
       return out;
    }
 
    [[nodiscard]] Kind kind() const { return kind_; }
 
-   [[nodiscard]] bool is_none() const { return kind_ == Kind::None; }
+   [[nodiscard]] bool is_none() const { return kind_ == Kind::none; }
 
-   [[nodiscard]] bool is_shared() const { return kind_ == Kind::Shared; }
+   [[nodiscard]] bool is_shared() const { return kind_ == Kind::shared; }
 
-   [[nodiscard]] bool is_per_state() const { return kind_ == Kind::PerState; }
+   [[nodiscard]] bool is_per_state() const { return kind_ == Kind::per_state; }
 
    [[nodiscard]] const std::optional< T >& shared() const { return shared_; }
 
@@ -57,15 +57,15 @@ class BatchParam {
    {
       static const std::optional< T > kNone = std::nullopt;
       switch(kind_) {
-         case Kind::Shared: return shared_;
-         case Kind::PerState: return per_state_.at(idx);
-         case Kind::None:
+         case Kind::shared: return shared_;
+         case Kind::per_state: return per_state_.at(idx);
+         case Kind::none:
          default: return kNone;
       }
    }
 
   private:
-   Kind kind_ = Kind::None;
+   Kind kind_ = Kind::none;
    std::optional< T > shared_;
    std::vector< std::optional< T > > per_state_;
 };

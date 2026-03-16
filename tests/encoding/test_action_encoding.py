@@ -54,7 +54,7 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     data = encoder.encode_pyg(state, actions=actions)
 
@@ -109,7 +109,7 @@ def test_hgraph_action_target_metadata_enabled_for_action_source(small_blocks):
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state], actions=[[action0]])
     data = encoding.as_pyg(as_batch=True)
@@ -134,7 +134,7 @@ def test_hgraph_native_target_names_materialize_on_access(small_blocks):
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state], actions=[[action0]])
 
@@ -169,7 +169,7 @@ def test_hgraph_lgan_goal_anchor_sources_work_without_target_metadata(small_bloc
         domain,
         ignore_actions=True,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.Goals],
+        lgan_anchor_sources=[mifrost.TargetSource.goals],
     )
     data = encoder.encode_pyg(state, goals=[goal])
 
@@ -195,7 +195,7 @@ def test_hgraph_action_target_metadata_uses_action_input_positions(small_blocks)
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state], actions=[[action0, action1]])
     data = encoding.as_pyg(as_batch=True)
@@ -233,7 +233,7 @@ def test_hgraph_action_target_metadata_preserves_duplicates_and_empty_graphs(
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions],
+        target_sources=[mifrost.TargetSource.actions],
     )
     encoding = encoder.encode_batch([state, state], actions=[[action0, action0], []])
     data = encoding.as_pyg(as_batch=True)
@@ -263,9 +263,9 @@ def test_hgraph_target_groups_follow_canonical_source_order(small_blocks):
         domain,
         ignore_actions=False,
         target_sources=[
-            mifrost.TargetSource.Actions,
-            mifrost.TargetSource.Goals,
-            mifrost.TargetSource.Subgoals,
+            mifrost.TargetSource.actions,
+            mifrost.TargetSource.goals,
+            mifrost.TargetSource.subgoals,
         ],
     )
     data = encoder.encode(
@@ -289,7 +289,7 @@ def test_hgraph_target_groups_include_enabled_sources_even_when_empty(small_bloc
     encoder = HGraphEncoder(
         domain,
         ignore_actions=False,
-        target_sources=[mifrost.TargetSource.Actions, mifrost.TargetSource.Goals],
+        target_sources=[mifrost.TargetSource.actions, mifrost.TargetSource.goals],
     )
     data = encoder.encode(state, goals=[goal], actions=[]).as_pyg(as_batch=True)
 
@@ -308,9 +308,9 @@ def test_hgraph_target_groups_order_goal_action_history(small_blocks):
         domain,
         ignore_actions=False,
         target_sources=[
-            mifrost.TargetSource.Actions,
-            mifrost.TargetSource.Goals,
-            mifrost.TargetSource.History,
+            mifrost.TargetSource.actions,
+            mifrost.TargetSource.goals,
+            mifrost.TargetSource.history,
         ],
     )
     data = encoder.encode(

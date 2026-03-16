@@ -351,7 +351,7 @@ TEST_P(FlatRelationEncoderTest, LGANGoalAnchorSourcesEmitAnchorRowsWithoutTarget
 
    mifrost::FlatRelationEncoderEngine::Config config;
    config.include_lgan_edges = true;
-   config.lgan_anchor_sources = {mifrost::TargetSource::Goals};
+   config.lgan_anchor_sources = {mifrost::TargetSource::goals};
    mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
    mifrost::FlatRelationEncoderEngine base_engine(ctx.problem->get_domain());
 
@@ -629,7 +629,7 @@ TEST_P(FlatRelationEncoderTest, ActionTargetsEmitSharedTargetMetadata)
    const auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
 
    mifrost::FlatRelationEncoderEngine::Config config;
-   config.target_sources = {mifrost::TargetSource::Actions};
+   config.target_sources = {mifrost::TargetSource::actions};
    mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
 
    const std::array< mimir::formalism::GroundAction, 2 > actions = {succ_action, succ_action};
@@ -708,7 +708,7 @@ TEST_P(FlatRelationEncoderTest, GoalTargetsAdjustRootGoalArityAndEmitMetadata)
    mifrost::FlatRelationEncoderEngine base_engine(ctx.problem->get_domain());
    mifrost::FlatRelationEncoderEngine::Config config;
    config.max_goal_level = 1;
-   config.target_sources = {mifrost::TargetSource::Goals};
+   config.target_sources = {mifrost::TargetSource::goals};
    mifrost::FlatRelationEncoderEngine goal_engine(ctx.problem->get_domain(), config);
 
    const auto base = encode_single(
@@ -815,9 +815,9 @@ TEST_P(FlatRelationEncoderTest, MixedTargetSourcesUseStableGroupOrder)
    mifrost::FlatRelationEncoderEngine::Config config;
    config.max_goal_level = 1;
    config.target_sources = {
-      mifrost::TargetSource::Goals,
-      mifrost::TargetSource::Subgoals,
-      mifrost::TargetSource::Actions,
+      mifrost::TargetSource::goals,
+      mifrost::TargetSource::subgoals,
+      mifrost::TargetSource::actions,
    };
    mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
    const std::array< mimir::formalism::GroundAction, 1 > actions = {succ_action};
@@ -986,7 +986,7 @@ TEST_P(FlatRelationEncoderTest, ReservedTargetSourcesAreRejected)
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
 
    mifrost::FlatRelationEncoderEngine::Config config;
-   config.target_sources = {mifrost::TargetSource::States};
+   config.target_sources = {mifrost::TargetSource::states};
    EXPECT_THROW(
       {
          auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);
@@ -1002,7 +1002,7 @@ TEST_P(FlatRelationEncoderTest, ReservedLGANAnchorSourcesAreRejected)
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
 
    mifrost::FlatRelationEncoderEngine::Config config;
-   config.lgan_anchor_sources = {mifrost::TargetSource::States};
+   config.lgan_anchor_sources = {mifrost::TargetSource::states};
    EXPECT_THROW(
       {
          auto engine = mifrost::FlatRelationEncoderEngine(ctx.problem->get_domain(), config);

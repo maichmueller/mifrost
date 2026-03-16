@@ -61,7 +61,7 @@ class FlatRelationEncoderEngine {
    };
 
    struct TargetEntityKey {
-      TargetSource source = TargetSource::Actions;
+      TargetSource source = TargetSource::actions;
       int64_t discriminator = 0;
       int64_t primary = 0;
       int64_t secondary = 0;

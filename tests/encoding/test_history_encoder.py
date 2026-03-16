@@ -180,7 +180,7 @@ def test_history_target_metadata(domain_name, problem_name):
     _, domain, problem = problem_setup(domain_name, problem_name)
     encoder = HGraphEncoder(
         domain,
-        target_sources=[mifrost.TargetSource.History],
+        target_sources=[mifrost.TargetSource.history],
     )
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)
@@ -228,7 +228,7 @@ def test_history_lgan_anchor_sources_work_without_target_metadata(
     encoder = HGraphEncoder(
         domain,
         include_lgan_edges=True,
-        lgan_anchor_sources=[mifrost.TargetSource.History],
+        lgan_anchor_sources=[mifrost.TargetSource.history],
     )
     state = problem.get_initial_state()
     goals, history_subgoals = _history_inputs(problem)
@@ -260,7 +260,7 @@ def test_history_target_metadata_disambiguates_same_literal_across_timesteps():
         pytest.skip("Problem has no goal literals for history encoding.")
 
     goal = goals[0]
-    encoder = HGraphEncoder(domain, target_sources=[mifrost.TargetSource.History])
+    encoder = HGraphEncoder(domain, target_sources=[mifrost.TargetSource.history])
     data = encoder.encode_pyg(
         problem.get_initial_state(),
         goals=goals,

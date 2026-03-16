@@ -126,13 +126,13 @@ std::optional< TargetSource > anchor_source_for_goal_level(
 )
 {
    if(goal_level.has_value() and *goal_level > 0) {
-      if(has_anchor_entity_source(config, TargetSource::Subgoals)) {
-         return TargetSource::Subgoals;
+      if(has_anchor_entity_source(config, TargetSource::subgoals)) {
+         return TargetSource::subgoals;
       }
       return std::nullopt;
    }
-   if(has_anchor_entity_source(config, TargetSource::Goals)) {
-      return TargetSource::Goals;
+   if(has_anchor_entity_source(config, TargetSource::goals)) {
+      return TargetSource::goals;
    }
    return std::nullopt;
 }
@@ -171,7 +171,7 @@ FlatRelationEncoderEngine::TargetEntityKey action_target_entity_key(
 )
 {
    return FlatRelationEncoderEngine::TargetEntityKey{
-      .source = TargetSource::Actions,
+      .source = TargetSource::actions,
       .discriminator = 0,
       .primary = static_cast< int64_t >(action->get_index()),
       .secondary = 0,
@@ -844,8 +844,8 @@ void FlatRelationEncoderEngine::validate_config() const
    auto validate_sources = [](std::span< const TargetSource > sources,
                               std::string_view field_name) {
       for(const auto source : sources) {
-         if(source == TargetSource::Actions or source == TargetSource::Goals
-            or source == TargetSource::Subgoals or source == TargetSource::History) {
+         if(source == TargetSource::actions or source == TargetSource::goals
+            or source == TargetSource::subgoals or source == TargetSource::History) {
             continue;
          }
          throw std::invalid_argument(
@@ -932,8 +932,8 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    };
 
    for(const auto source : kCanonicalTargetSourceOrder) {
-      if(source == TargetSource::Actions or has_anchor_entity_source(source)) {
-         if(source == TargetSource::States) {
+      if(source == TargetSource::actions or has_anchor_entity_source(source)) {
+         if(source == TargetSource::states) {
             continue;
          }
          append_group(target_entity_group_names_, target_entity_group_ids_, source);
@@ -1366,8 +1366,8 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
             }
             const auto goal_level = goal_level_for(goal_levels, literal);
             const bool is_subgoal = goal_level.has_value() and *goal_level > 0;
-            if((source == TargetSource::Goals and is_subgoal)
-               or (source == TargetSource::Subgoals and not is_subgoal)) {
+            if((source == TargetSource::goals and is_subgoal)
+               or (source == TargetSource::subgoals and not is_subgoal)) {
                continue;
             }
             const auto display_name = goal_target_display_name(literal, goal_level);
@@ -1380,37 +1380,37 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
          }
       };
 
-   if(has_anchor_entity_source(TargetSource::Goals)) {
+   if(has_anchor_entity_source(TargetSource::goals)) {
       collect_goal_targets(
-         std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::Goals
+         std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::goals
       );
       collect_goal_targets(
-         std::span{goals.fluent_goals}, goals.fluent_goal_levels, TargetSource::Goals
+         std::span{goals.fluent_goals}, goals.fluent_goal_levels, TargetSource::goals
       );
       collect_goal_targets(
-         std::span{goals.derived_goals}, goals.derived_goal_levels, TargetSource::Goals
+         std::span{goals.derived_goals}, goals.derived_goal_levels, TargetSource::goals
       );
    }
 
-   if(has_anchor_entity_source(TargetSource::Subgoals)) {
+   if(has_anchor_entity_source(TargetSource::subgoals)) {
       collect_goal_targets(
-         std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::Subgoals
+         std::span{goals.static_goals}, goals.static_goal_levels, TargetSource::subgoals
       );
       collect_goal_targets(
-         std::span{goals.fluent_goals}, goals.fluent_goal_levels, TargetSource::Subgoals
+         std::span{goals.fluent_goals}, goals.fluent_goal_levels, TargetSource::subgoals
       );
       collect_goal_targets(
-         std::span{goals.derived_goals}, goals.derived_goal_levels, TargetSource::Subgoals
+         std::span{goals.derived_goals}, goals.derived_goal_levels, TargetSource::subgoals
       );
    }
 
    for(const auto& action : actions) {
       const auto action_name = RelationFormatter::format_action(action);
       const auto local_index = ensure_target_entity(
-         action_target_entity_key(action), TargetSource::Actions, action_name, action
+         action_target_entity_key(action), TargetSource::actions, action_name, action
       );
-      if(has_target_source(TargetSource::Actions)) {
-         append_target_row(TargetSource::Actions, local_index, action_name);
+      if(has_target_source(TargetSource::actions)) {
+         append_target_row(TargetSource::actions, local_index, action_name);
       }
    }
 

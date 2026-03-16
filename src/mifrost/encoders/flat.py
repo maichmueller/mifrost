@@ -279,7 +279,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         ) -> None:
             if sources is None:
                 return
-            unsupported_sources = sources.intersection({TargetSource.States})
+            unsupported_sources = sources.intersection({TargetSource.states})
             if unsupported_sources:
                 raise ValueError(
                     "FlatRelationEncoder currently supports "

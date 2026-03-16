@@ -83,7 +83,7 @@ def test_successor_full_preserves_state_structure(small_blocks):
         state,
         successor_state,
         goals,
-        mifrost.SuccessorEncoderMode.Full,
+        mifrost.SuccessorEncoderMode.full,
         successor_suffix=successor_suffix,
     )
     base_graph = to_named_networkx(base_encoder.encode(state))
@@ -111,7 +111,7 @@ def test_successor_delta_marks_added_and_removed_atoms(small_blocks):
         state,
         successor_state,
         goals,
-        mifrost.SuccessorEncoderMode.Delta,
+        mifrost.SuccessorEncoderMode.delta,
         successor_suffix=successor_suffix,
     )
 
@@ -152,7 +152,7 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
     successor_suffix = "[suc]"
 
     config = mifrost.SuccessorEncoderConfig()
-    config.successor_mode = mifrost.SuccessorEncoderMode.Full
+    config.successor_mode = mifrost.SuccessorEncoderMode.full
     config.successor_suffix = successor_suffix
     config.include_successor_goal_satisfaction = True
     config.goal_derivations = {
