@@ -100,8 +100,7 @@ RelationDict build_horizon_relation_dict(
                }
             }
             for(const auto derivation : config.goal_derivations) {
-               const auto satisfaction = goal_satisfaction_from_derivation(derivation);
-               if(not satisfaction.has_value()) {
+               if(derivation == GoalDerivation::plain) {
                   continue;
                }
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
@@ -109,7 +108,7 @@ RelationDict build_horizon_relation_dict(
                   for(bool polarity : {true, false}) {
                      add_predicate_relation(
                         RelationFormatter::format_predicate(
-                           base_name, goal_level, *satisfaction, polarity
+                           base_name, goal_level, derivation, polarity
                         ),
                         base_arity
                      );
@@ -119,7 +118,7 @@ RelationDict build_horizon_relation_dict(
                   for(bool polarity : {true, false}) {
                      add_predicate_relation(
                         RelationFormatter::format_predicate(
-                           base_name, std::nullopt, *satisfaction, polarity
+                           base_name, std::nullopt, derivation, polarity
                         ),
                         base_arity
                      );
@@ -368,7 +367,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          int target_idx,
          const std::string& prefix,
          std::span< const std::string > extra_objects,
-         std::optional< GoalSatisfaction > satisfaction_override = std::nullopt
+         std::optional< GoalDerivation > satisfaction_override = std::nullopt
       ) {
          for(const auto& literal : literals) {
             const auto atom = literal->get_atom();
@@ -571,11 +570,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
                static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
             );
             const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
-            const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
-                                                   : GoalSatisfaction::unsatisfied;
-            if(not relation_dict_.goal_derivations.contains(
-                  goal_derivation_from_satisfaction(sat)
-               )) {
+            const GoalDerivation sat = satisfied ? GoalDerivation::satisfied
+                                                 : GoalDerivation::unsatisfied;
+            if(not relation_dict_.goal_derivations.contains(sat)) {
                continue;
             }
 
@@ -1000,18 +997,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
                      const auto idx = atom->get_index();
                      bool added_match = added_set.contains(idx);
                      bool removed_match = removed_set.contains(idx);
-                     std::optional< GoalSatisfaction > sat;
+                     std::optional< GoalDerivation > sat;
                      if(added_match == goal->get_polarity()) {
-                        sat = GoalSatisfaction::added_satisfied;
+                        sat = GoalDerivation::added_satisfied;
                      } else if(removed_match != goal->get_polarity()) {
-                        sat = GoalSatisfaction::added_unsatisfied;
+                        sat = GoalDerivation::added_unsatisfied;
                      }
-                     if(not sat.has_value()) {
-                        continue;
-                     }
-                     if(not relation_dict_.goal_derivations.contains(
-                           goal_derivation_from_satisfaction(*sat)
-                        )) {
+                     if(not sat.has_value() or not relation_dict_.goal_derivations.contains(*sat)) {
                         continue;
                      }
                      encode_literals_with_prefix.template operator()< GoalTag >(

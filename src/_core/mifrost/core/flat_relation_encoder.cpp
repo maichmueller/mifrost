@@ -188,7 +188,7 @@ FlatRelationEncoderEngine::TargetEntityKey history_target_entity_key(
 )
 {
    return FlatRelationEncoderEngine::TargetEntityKey{
-      .source = TargetSource::History,
+      .source = TargetSource::history,
       .discriminator = static_cast< int64_t >(state_fact_tag_id< HistoryTag >()),
       .primary = static_cast< int64_t >(dt),
       .secondary = static_cast< int64_t >(entry_idx),
@@ -276,7 +276,7 @@ int history_relation_arity(const FlatRelationEncoderEngine& engine, int base_ari
 {
    return base_arity + 1
           + static_cast< int >(
-             has_anchor_entity_source(engine.get_config(), TargetSource::History)
+             has_anchor_entity_source(engine.get_config(), TargetSource::history)
           );
 }
 
@@ -421,7 +421,7 @@ std::vector< int64_t > local_arg_rows_for_history_literal(
 {
    auto args = local_arg_rows_for_atom(context, literal->get_atom());
    args.insert(args.begin(), history_entity_index);
-   if(has_anchor_entity_source(engine.get_config(), TargetSource::History)) {
+   if(has_anchor_entity_source(engine.get_config(), TargetSource::history)) {
       args.insert(
          args.begin(), lookup_history_target_entity_index(context, dt, entry_idx, literal)
       );
@@ -602,7 +602,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
    }
 };
 
-class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
+class FlatRelationEncoderEngine::GoalDerivationComponent final:
     public FlatRelationEncoderEngine::RelationComponent {
   public:
    void declare_schema(
@@ -618,8 +618,7 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
             continue;
          }
          for(const auto derivation : engine.config_.goal_derivations) {
-            const auto satisfaction = goal_satisfaction_from_derivation(derivation);
-            if(not satisfaction.has_value()) {
+            if(derivation == GoalDerivation::plain) {
                continue;
             }
             for(size_t level = 0; level <= engine.config_.max_goal_level; ++level) {
@@ -627,10 +626,10 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
                for(bool polarity : {true, false}) {
                   registry.add(
                      RelationFormatter::format_predicate(
-                        spec.name, goal_level, *satisfaction, polarity
+                        spec.name, goal_level, derivation, polarity
                      ),
                      spec.arity,
-                     "goal_satisfaction"
+                     "goal_derivation"
                   );
                }
             }
@@ -638,10 +637,10 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
                for(bool polarity : {true, false}) {
                   registry.add(
                      RelationFormatter::format_predicate(
-                        spec.name, std::nullopt, *satisfaction, polarity
+                        spec.name, std::nullopt, derivation, polarity
                      ),
                      spec.arity,
-                     "goal_satisfaction"
+                     "goal_derivation"
                   );
                }
             }
@@ -692,11 +691,9 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
 
          const uint64_t fact_key = state_fact_key_for_atom(literal->get_atom());
          const bool satisfied = fact_keys.contains(fact_key) == literal->get_polarity();
-         const GoalSatisfaction satisfaction = satisfied ? GoalSatisfaction::satisfied
-                                                         : GoalSatisfaction::unsatisfied;
-         if(not engine.config_.goal_derivations.contains(
-               goal_derivation_from_satisfaction(satisfaction)
-            )) {
+         const GoalDerivation satisfaction = satisfied ? GoalDerivation::satisfied
+                                                       : GoalDerivation::unsatisfied;
+         if(not engine.config_.goal_derivations.contains(satisfaction)) {
             continue;
          }
 
@@ -845,7 +842,7 @@ void FlatRelationEncoderEngine::validate_config() const
                               std::string_view field_name) {
       for(const auto source : sources) {
          if(source == TargetSource::actions or source == TargetSource::goals
-            or source == TargetSource::subgoals or source == TargetSource::History) {
+            or source == TargetSource::subgoals or source == TargetSource::history) {
             continue;
          }
          throw std::invalid_argument(
@@ -946,7 +943,7 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    components_.clear();
    components_.push_back(std::make_unique< StateFactsComponent >());
    components_.push_back(std::make_unique< GoalFactsComponent >());
-   components_.push_back(std::make_unique< GoalSatisfactionComponent >());
+   components_.push_back(std::make_unique< GoalDerivationComponent >());
    components_.push_back(std::make_unique< GroundActionsComponent >());
    components_.push_back(std::make_unique< HistoryFactsComponent >());
 
@@ -1426,7 +1423,7 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       );
    }
 
-   if(has_anchor_entity_source(TargetSource::History)) {
+   if(has_anchor_entity_source(TargetSource::history)) {
       for(const auto& entry : context.history_entries) {
          for(const auto& literal_variant : entry.literals) {
             std::visit(
@@ -1443,11 +1440,11 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
                   );
                   const auto local_index = ensure_target_entity(
                      history_target_entity_key(entry.dt, entry.entry_idx, literal),
-                     TargetSource::History,
+                     TargetSource::history,
                      display_name
                   );
-                  if(has_target_source(TargetSource::History)) {
-                     append_target_row(TargetSource::History, local_index, display_name);
+                  if(has_target_source(TargetSource::history)) {
+                     append_target_row(TargetSource::history, local_index, display_name);
                   }
                },
                literal_variant

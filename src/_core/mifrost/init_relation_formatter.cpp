@@ -17,7 +17,7 @@ namespace {
 std::string format_predicate_optional(
    const std::string& name,
    const std::optional< int >& goal_level,
-   const std::optional< GoalSatisfaction >& satisfaction,
+   const std::optional< GoalDerivation >& satisfaction,
    const std::optional< bool >& polarity,
    const std::string& suffix
 )
@@ -64,7 +64,7 @@ template < typename Literal >
 std::string format_literal_optional(
    Literal literal,
    const std::optional< int >& goal_level,
-   const std::optional< GoalSatisfaction >& satisfaction,
+   const std::optional< GoalDerivation >& satisfaction,
    const std::optional< bool >& polarity,
    const std::string& suffix
 )
@@ -111,12 +111,6 @@ std::string format_literal_optional(
 
 void init_relation_formatter(nb::module_& m)
 {
-   nb::enum_< GoalSatisfaction >(m, "GoalSatisfaction")
-      .value("satisfied", GoalSatisfaction::satisfied)
-      .value("unsatisfied", GoalSatisfaction::unsatisfied)
-      .value("added_satisfied", GoalSatisfaction::added_satisfied)
-      .value("added_unsatisfied", GoalSatisfaction::added_unsatisfied);
-
    nb::enum_< GoalDerivation >(m, "GoalDerivation")
       .value("plain", GoalDerivation::plain)
       .value("satisfied", GoalDerivation::satisfied)
@@ -129,7 +123,7 @@ void init_relation_formatter(nb::module_& m)
          "format_predicate",
          [](const mimir::formalism::Predicate< mimir::formalism::StaticTag >& predicate,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix = "") {
             return format_predicate_optional(
@@ -146,7 +140,7 @@ void init_relation_formatter(nb::module_& m)
          "format_predicate",
          [](const mimir::formalism::Predicate< mimir::formalism::FluentTag >& predicate,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix = "") {
             return format_predicate_optional(
@@ -163,7 +157,7 @@ void init_relation_formatter(nb::module_& m)
          "format_predicate",
          [](const mimir::formalism::Predicate< mimir::formalism::DerivedTag >& predicate,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix = "") {
             return format_predicate_optional(
@@ -180,7 +174,7 @@ void init_relation_formatter(nb::module_& m)
          "format_predicate",
          [](const std::string& name,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix = "") {
             return format_predicate_optional(name, goal_level, satisfaction, polarity, suffix);
@@ -216,7 +210,7 @@ void init_relation_formatter(nb::module_& m)
          "format_literal",
          [](const mimir::formalism::GroundLiteral< mimir::formalism::FluentTag >& literal,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix) {
             return format_literal_optional(literal, goal_level, satisfaction, polarity, suffix);
@@ -231,7 +225,7 @@ void init_relation_formatter(nb::module_& m)
          "format_literal",
          [](const mimir::formalism::GroundLiteral< mimir::formalism::DerivedTag >& literal,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix) {
             return format_literal_optional(literal, goal_level, satisfaction, polarity, suffix);
@@ -246,7 +240,7 @@ void init_relation_formatter(nb::module_& m)
          "format_literal",
          [](const mimir::formalism::GroundLiteral< mimir::formalism::StaticTag >& literal,
             const std::optional< int >& goal_level,
-            const std::optional< GoalSatisfaction >& satisfaction,
+            const std::optional< GoalDerivation >& satisfaction,
             const std::optional< bool >& polarity,
             const std::string& suffix) {
             return format_literal_optional(literal, goal_level, satisfaction, polarity, suffix);

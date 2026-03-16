@@ -123,33 +123,23 @@ struct RelationDict {
       }
 
       for(const auto& derivation : goal_derivations) {
-         const auto satisfaction = goal_satisfaction_from_derivation(derivation);
+         if(derivation == GoalDerivation::plain) {
+            continue;
+         }
          for(const auto& [name, pred_arity] : regular_predicates) {
             for(int level = 0; level <= max_goal_level; ++level) {
                const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
-                  if(satisfaction.has_value()) {
-                     arity[RelationFormatter::format_predicate(
-                        name, goal_level, *satisfaction, polarity
-                     )] = pred_arity;
-                  } else {
-                     arity[RelationFormatter::format_predicate(
-                        name, goal_level, std::nullopt, polarity
-                     )] = pred_arity;
-                  }
+                  arity[RelationFormatter::format_predicate(
+                     name, goal_level, derivation, polarity
+                  )] = pred_arity;
                }
             }
             if(support_literals) {
                for(bool polarity : {true, false}) {
-                  if(satisfaction.has_value()) {
-                     arity[RelationFormatter::format_predicate(
-                        name, std::nullopt, *satisfaction, polarity
-                     )] = pred_arity;
-                  } else {
-                     arity[RelationFormatter::format_predicate(
-                        name, std::nullopt, std::nullopt, polarity
-                     )] = pred_arity;
-                  }
+                  arity[RelationFormatter::format_predicate(
+                     name, std::nullopt, derivation, polarity
+                  )] = pred_arity;
                }
             }
          }

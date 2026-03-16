@@ -176,9 +176,9 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
         atom_key = str(goal.get_atom())
         satisfied = (atom_key in successor_atom_keys) == goal.get_polarity()
         sat_enum = (
-            mifrost.GoalSatisfaction.satisfied
+            mifrost.GoalDerivation.satisfied
             if satisfied
-            else mifrost.GoalSatisfaction.unsatisfied
+            else mifrost.GoalDerivation.unsatisfied
         )
         level = goal_levels.get(goal, 0)
         node_type = formatter.format_predicate(

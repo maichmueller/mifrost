@@ -498,7 +498,7 @@ INSTANTIATE_TEST_SUITE_P(
    }
 );
 
-TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
+TEST_P(HGraphEncoderTest, GoalDerivationEdgesMatchFacts)
 {
    const auto param = GetParam();
    auto ctx = mifrost_test::make_context(param.domain, param.problem);
@@ -564,9 +564,9 @@ TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
       }
       const auto key = mifrost::RelationFormatter::format_atom(atom);
       const bool satisfied = fact_keys.contains(key) == literal->get_polarity();
-      const mifrost::GoalSatisfaction sat = satisfied ? mifrost::GoalSatisfaction::satisfied
-                                                      : mifrost::GoalSatisfaction::unsatisfied;
-      if(not config.goal_derivations.contains(mifrost::goal_derivation_from_satisfaction(sat))) {
+      const mifrost::GoalDerivation sat = satisfied ? mifrost::GoalDerivation::satisfied
+                                                    : mifrost::GoalDerivation::unsatisfied;
+      if(not config.goal_derivations.contains(sat)) {
          return;
       }
 

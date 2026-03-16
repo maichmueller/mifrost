@@ -20,7 +20,7 @@ enum class TargetSource {
    states,
    /// Time-indexed literals from `history_subgoals=...`.
    /// Use this when past literals should become separate targets.
-   History,
+   history,
 };
 
 /// Shared source order used for stable target-group ids and metadata layout.
@@ -28,7 +28,7 @@ inline constexpr std::array kCanonicalTargetSourceOrder = {
    TargetSource::goals,
    TargetSource::subgoals,
    TargetSource::actions,
-   TargetSource::History,
+   TargetSource::history,
    TargetSource::states,
 };
 
@@ -39,7 +39,7 @@ inline std::string_view target_source_group_name(TargetSource source)
       case TargetSource::goals: return "goal";
       case TargetSource::subgoals: return "subgoal";
       case TargetSource::states: return "state";
-      case TargetSource::History: return "history";
+      case TargetSource::history: return "history";
    }
    return "target";
 }

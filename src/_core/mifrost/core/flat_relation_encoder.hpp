@@ -160,7 +160,7 @@ class FlatRelationEncoderEngine {
    class RelationComponent;
    class StateFactsComponent;
    class GoalFactsComponent;
-   class GoalSatisfactionComponent;
+   class GoalDerivationComponent;
    class GroundActionsComponent;
    class HistoryFactsComponent;
 

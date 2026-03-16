@@ -155,7 +155,7 @@ TEST_P(HGraphHistoryTest, HistoryTargetsEmitSharedTargetMetadata)
 
    mifrost::GoalInputs inputs = mifrost_test::make_goal_inputs(ctx.problem);
    mifrost::HGraphEncoderEngine::Config config;
-   config.target_sources = {mifrost::TargetSource::History};
+   config.target_sources = {mifrost::TargetSource::history};
    mifrost::HGraphEncoderEngine engine(ctx.problem->get_domain(), config);
    mifrost::BatchBuilder builder;
    builder.set_graph_kind("hetero");

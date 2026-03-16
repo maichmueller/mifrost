@@ -12,10 +12,10 @@ _HISTORY_RELATION_SUFFIX = "[hist]"
 
 def _satisfactions_from_derivations(derivations) -> set:
     mapping = {
-        mifrost.GoalDerivation.satisfied: mifrost.GoalSatisfaction.satisfied,
-        mifrost.GoalDerivation.unsatisfied: mifrost.GoalSatisfaction.unsatisfied,
-        mifrost.GoalDerivation.added_satisfied: mifrost.GoalSatisfaction.added_satisfied,
-        mifrost.GoalDerivation.added_unsatisfied: mifrost.GoalSatisfaction.added_unsatisfied,
+        mifrost.GoalDerivation.satisfied: mifrost.GoalDerivation.satisfied,
+        mifrost.GoalDerivation.unsatisfied: mifrost.GoalDerivation.unsatisfied,
+        mifrost.GoalDerivation.added_satisfied: mifrost.GoalDerivation.added_satisfied,
+        mifrost.GoalDerivation.added_unsatisfied: mifrost.GoalDerivation.added_unsatisfied,
     }
     return {mapping[derivation] for derivation in derivations if derivation in mapping}
 

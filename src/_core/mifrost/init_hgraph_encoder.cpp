@@ -39,7 +39,7 @@ void init_hgraph_encoder(nb::module_& m)
       .value("goals", TargetSource::goals)
       .value("subgoals", TargetSource::subgoals)
       .value("states", TargetSource::states)
-      .value("history", TargetSource::History);
+      .value("history", TargetSource::history);
 
    nb::class_< HGraphEncoderEngine::Config >(m, "HGraphEncoderConfig")
       .def(nb::init<>())

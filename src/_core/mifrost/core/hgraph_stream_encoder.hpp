@@ -1030,9 +1030,9 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
             : (std::is_same_v< GoalTag, mimir::formalism::FluentTag > ? 2U : 3U)
       );
       const bool satisfied = fact_keys.contains(fact_key) == goal->get_polarity();
-      const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
-                                             : GoalSatisfaction::unsatisfied;
-      if(not relation_dict_.goal_derivations.contains(goal_derivation_from_satisfaction(sat))) {
+      const GoalDerivation sat = satisfied ? GoalDerivation::satisfied
+                                           : GoalDerivation::unsatisfied;
+      if(not relation_dict_.goal_derivations.contains(sat)) {
          continue;
       }
 

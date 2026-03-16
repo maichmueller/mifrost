@@ -103,7 +103,7 @@ inline std::optional< TargetSource > parse_target_source_alias(std::string_view 
       return TargetSource::states;
    }
    if(normalized == "history") {
-      return TargetSource::History;
+      return TargetSource::history;
    }
    return std::nullopt;
 }

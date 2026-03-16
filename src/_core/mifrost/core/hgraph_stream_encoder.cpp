@@ -367,7 +367,7 @@ void HGraphEncoderEngine::finalize_hetero_encoding(
    const bool emit_target_metadata_fields = has_target_source(TargetSource::actions)
                                             or has_target_source(TargetSource::goals)
                                             or has_target_source(TargetSource::subgoals)
-                                            or has_target_source(TargetSource::History);
+                                            or has_target_source(TargetSource::history);
    if(emit_target_metadata_fields) {
       const TargetMetadataEmitConfig emit_config{
          .position_node_type_id = config_.symbol_type_id,
@@ -713,8 +713,8 @@ void HGraphEncoderEngine::encode_history(
 )
 {
    builder.set_node_feature_dim("history", 1);
-   const bool target_history = has_target_source(TargetSource::History);
-   const bool anchor_history = has_anchor_symbol_source(TargetSource::History);
+   const bool target_history = has_target_source(TargetSource::history);
+   const bool anchor_history = has_anchor_symbol_source(TargetSource::history);
 
    struct HistoryEntry {
       int dt = 0;
@@ -815,7 +815,7 @@ void HGraphEncoderEngine::encode_history(
                   const std::string target_symbol_key = fmt::format(
                      "{}{}{}{}{}{}{}{}{}{}{}{}",
                      config_.target_symbol_prefix,
-                     target_group_name(TargetSource::History),
+                     target_group_name(TargetSource::history),
                      schema_key::kEdgeTypeSeparator,
                      entry.dt,
                      schema_key::kEdgeTypeSeparator,
@@ -843,7 +843,7 @@ void HGraphEncoderEngine::encode_history(
                      workspace_.lgan_target_symbol_ids.insert(target_symbol_id);
                   }
                   if(target_history) {
-                     append_target_candidate(target_symbol_idx, TargetSource::History, target_name);
+                     append_target_candidate(target_symbol_idx, TargetSource::history, target_name);
                   }
                   extra_symbol_ids.emplace_back(target_symbol_id);
                   const std::string pos_str = std::to_string(object_symbol_ids.size());

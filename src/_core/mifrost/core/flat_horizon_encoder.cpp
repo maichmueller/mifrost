@@ -384,17 +384,14 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
          }
       }
       for(const auto derivation : config_.goal_derivations) {
-         const auto satisfaction = goal_satisfaction_from_derivation(derivation);
-         if(not satisfaction.has_value()) {
+         if(derivation == GoalDerivation::plain) {
             continue;
          }
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
                add_predicate_relation(
-                  RelationFormatter::format_predicate(
-                     spec.name, goal_level, *satisfaction, polarity
-                  ),
+                  RelationFormatter::format_predicate(spec.name, goal_level, derivation, polarity),
                   spec.arity,
                   "goal_satisfaction"
                );
@@ -404,7 +401,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
             for(bool polarity : {true, false}) {
                add_predicate_relation(
                   RelationFormatter::format_predicate(
-                     spec.name, std::nullopt, *satisfaction, polarity
+                     spec.name, std::nullopt, derivation, polarity
                   ),
                   spec.arity,
                   "goal_satisfaction"
@@ -962,11 +959,9 @@ void FlatHorizonEncoderEngine::encode_impl(
                static_cast< uint32_t >(literal->get_atom()->get_index()), fact_tag_id< GoalTag >()
             );
             const bool satisfied = fact_keys.contains(fact_key) == literal->get_polarity();
-            const GoalSatisfaction satisfaction = satisfied ? GoalSatisfaction::satisfied
-                                                            : GoalSatisfaction::unsatisfied;
-            if(not config_.goal_derivations.contains(
-                  goal_derivation_from_satisfaction(satisfaction)
-               )) {
+            const GoalDerivation satisfaction = satisfied ? GoalDerivation::satisfied
+                                                          : GoalDerivation::unsatisfied;
+            if(not config_.goal_derivations.contains(satisfaction)) {
                continue;
             }
             const auto level = goal_level_for(goal_levels, literal);
@@ -1030,14 +1025,13 @@ void FlatHorizonEncoderEngine::encode_impl(
             const int idx = atom->get_index();
             const bool added_match = added_set.contains(idx);
             const bool removed_match = removed_set.contains(idx);
-            std::optional< GoalSatisfaction > sat = std::nullopt;
+            std::optional< GoalDerivation > sat = std::nullopt;
             if(added_match == goal->get_polarity()) {
-               sat = GoalSatisfaction::added_satisfied;
+               sat = GoalDerivation::added_satisfied;
             } else if(removed_match != goal->get_polarity()) {
-               sat = GoalSatisfaction::added_unsatisfied;
+               sat = GoalDerivation::added_unsatisfied;
             }
-            if(not sat.has_value()
-               or not config_.goal_derivations.contains(goal_derivation_from_satisfaction(*sat))) {
+            if(not sat.has_value() or not config_.goal_derivations.contains(*sat)) {
                continue;
             }
             const auto level = goal_level_for(goal_levels, goal);

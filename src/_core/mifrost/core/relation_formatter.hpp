@@ -24,16 +24,6 @@
 namespace mifrost {
 
 /**
- * @brief Goal-satisfaction suffix modes used in relation names.
- */
-enum class GoalSatisfaction {
-   satisfied,
-   unsatisfied,
-   added_satisfied,
-   added_unsatisfied,
-};
-
-/**
  * @brief Goal-derived relation variants exposed by encoder configs.
  */
 enum class GoalDerivation {
@@ -44,35 +34,10 @@ enum class GoalDerivation {
    added_unsatisfied,
 };
 
-inline std::optional< GoalSatisfaction > goal_satisfaction_from_derivation(
-   GoalDerivation derivation
-)
-{
-   switch(derivation) {
-      case GoalDerivation::plain: return std::nullopt;
-      case GoalDerivation::satisfied: return GoalSatisfaction::satisfied;
-      case GoalDerivation::unsatisfied: return GoalSatisfaction::unsatisfied;
-      case GoalDerivation::added_satisfied: return GoalSatisfaction::added_satisfied;
-      case GoalDerivation::added_unsatisfied: return GoalSatisfaction::added_unsatisfied;
-   }
-   return std::nullopt;
-}
-
-inline GoalDerivation goal_derivation_from_satisfaction(GoalSatisfaction satisfaction)
-{
-   switch(satisfaction) {
-      case GoalSatisfaction::satisfied: return GoalDerivation::satisfied;
-      case GoalSatisfaction::unsatisfied: return GoalDerivation::unsatisfied;
-      case GoalSatisfaction::added_satisfied: return GoalDerivation::added_satisfied;
-      case GoalSatisfaction::added_unsatisfied: return GoalDerivation::added_unsatisfied;
-   }
-   return GoalDerivation::plain;
-}
-
 template < typename Range >
 bool has_non_plain_goal_derivations(const Range& derivations)
 {
-   return std::any_of(derivations.begin(), derivations.end(), [](GoalDerivation derivation) {
+   return std::ranges::any_of(derivations, [](GoalDerivation derivation) {
       return derivation != GoalDerivation::plain;
    });
 }
@@ -125,16 +90,17 @@ struct RelationFormatter {
    }
 
    /// Return no satisfaction suffix.
-   static std::string_view goal_satisfaction_suffix(std::nullopt_t) { return ""; }
+   static std::string_view goal_derivation_suffix(std::nullopt_t) { return ""; }
 
    /// Return suffix for a concrete goal-satisfaction mode.
-   static std::string_view goal_satisfaction_suffix(GoalSatisfaction satisfaction)
+   static std::string_view goal_derivation_suffix(GoalDerivation satisfaction)
    {
       switch(satisfaction) {
-         case GoalSatisfaction::satisfied: return kGoalSatisfiedSuffix;
-         case GoalSatisfaction::unsatisfied: return kGoalUnsatisfiedSuffix;
-         case GoalSatisfaction::added_satisfied: return kGoalSatisfiedAddedSuffix;
-         case GoalSatisfaction::added_unsatisfied: return kGoalSatisfiedRemovedSuffix;
+         case GoalDerivation::plain: return kGoalSuffixes[0];
+         case GoalDerivation::satisfied: return kGoalSatisfiedSuffix;
+         case GoalDerivation::unsatisfied: return kGoalUnsatisfiedSuffix;
+         case GoalDerivation::added_satisfied: return kGoalSatisfiedAddedSuffix;
+         case GoalDerivation::added_unsatisfied: return kGoalSatisfiedRemovedSuffix;
       }
       return "";
    }
@@ -184,7 +150,7 @@ struct RelationFormatter {
       typename SatisfactionArg = std::nullopt_t,
       typename PolarityArg = std::nullopt_t >
       requires detail::is_any_v< GoalLevelArg, GoalLevel, std::nullopt_t >
-               and detail::is_any_v< SatisfactionArg, GoalSatisfaction, std::nullopt_t >
+               and detail::is_any_v< SatisfactionArg, GoalDerivation, std::nullopt_t >
                and detail::is_any_v< PolarityArg, bool, std::nullopt_t >
    static std::string format_predicate(
       const std::string_view name,
@@ -203,7 +169,7 @@ struct RelationFormatter {
          name,
          suffix,
          goal_level_suffix(goal_level),
-         goal_satisfaction_suffix(satisfaction)
+         goal_derivation_suffix(satisfaction)
       );
    }
 
@@ -237,7 +203,7 @@ struct RelationFormatter {
       typename SatisfactionArg = std::nullopt_t,
       typename PolarityArg = std::nullopt_t >
       requires detail::is_any_v< GoalLevelArg, GoalLevel, std::nullopt_t >
-               and detail::is_any_v< SatisfactionArg, GoalSatisfaction, std::nullopt_t >
+               and detail::is_any_v< SatisfactionArg, GoalDerivation, std::nullopt_t >
                and detail::is_any_v< PolarityArg, bool, std::nullopt_t >
    static std::string format_literal(
       mimir::formalism::GroundLiteral< P > literal,
@@ -260,10 +226,7 @@ struct RelationFormatter {
          "{}{}", polarity_prefix(literal_polarity), atom_str
       );
       return fmt::format(
-         "{}{}{}",
-         literal_str,
-         goal_level_suffix(goal_level),
-         goal_satisfaction_suffix(satisfaction)
+         "{}{}{}", literal_str, goal_level_suffix(goal_level), goal_derivation_suffix(satisfaction)
       );
    }
 

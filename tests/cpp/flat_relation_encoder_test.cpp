@@ -940,7 +940,7 @@ TEST_P(FlatRelationEncoderTest, HistoryTargetsEmitSharedTargetMetadata)
    }
 
    mifrost::FlatRelationEncoderEngine::Config config;
-   config.target_sources = {mifrost::TargetSource::History};
+   config.target_sources = {mifrost::TargetSource::history};
    mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
    const auto encoded = encode_single(
       engine,
