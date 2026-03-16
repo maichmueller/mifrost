@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstdint>
@@ -26,12 +27,55 @@ namespace mifrost {
  * @brief Goal-satisfaction suffix modes used in relation names.
  */
 enum class GoalSatisfaction {
-   none,
    satisfied,
    unsatisfied,
    added_satisfied,
    added_unsatisfied,
 };
+
+/**
+ * @brief Goal-derived relation variants exposed by encoder configs.
+ */
+enum class GoalDerivation {
+   plain,
+   satisfied,
+   unsatisfied,
+   added_satisfied,
+   added_unsatisfied,
+};
+
+inline std::optional< GoalSatisfaction > goal_satisfaction_from_derivation(
+   GoalDerivation derivation
+)
+{
+   switch(derivation) {
+      case GoalDerivation::plain: return std::nullopt;
+      case GoalDerivation::satisfied: return GoalSatisfaction::satisfied;
+      case GoalDerivation::unsatisfied: return GoalSatisfaction::unsatisfied;
+      case GoalDerivation::added_satisfied: return GoalSatisfaction::added_satisfied;
+      case GoalDerivation::added_unsatisfied: return GoalSatisfaction::added_unsatisfied;
+   }
+   return std::nullopt;
+}
+
+inline GoalDerivation goal_derivation_from_satisfaction(GoalSatisfaction satisfaction)
+{
+   switch(satisfaction) {
+      case GoalSatisfaction::satisfied: return GoalDerivation::satisfied;
+      case GoalSatisfaction::unsatisfied: return GoalDerivation::unsatisfied;
+      case GoalSatisfaction::added_satisfied: return GoalDerivation::added_satisfied;
+      case GoalSatisfaction::added_unsatisfied: return GoalDerivation::added_unsatisfied;
+   }
+   return GoalDerivation::plain;
+}
+
+template < typename Range >
+bool has_non_plain_goal_derivations(const Range& derivations)
+{
+   return std::any_of(derivations.begin(), derivations.end(), [](GoalDerivation derivation) {
+      return derivation != GoalDerivation::plain;
+   });
+}
 
 /**
  * @brief Literal polarity prefix mode.
@@ -87,7 +131,6 @@ struct RelationFormatter {
    static std::string_view goal_satisfaction_suffix(GoalSatisfaction satisfaction)
    {
       switch(satisfaction) {
-         case GoalSatisfaction::none: return "";
          case GoalSatisfaction::satisfied: return kGoalSatisfiedSuffix;
          case GoalSatisfaction::unsatisfied: return kGoalUnsatisfiedSuffix;
          case GoalSatisfaction::added_satisfied: return kGoalSatisfiedAddedSuffix;

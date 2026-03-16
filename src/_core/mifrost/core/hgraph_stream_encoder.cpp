@@ -60,7 +60,7 @@ void HGraphEncoderEngine::initialize_from_domain()
    RelationDictConfig rel_config;
    rel_config.max_goal_level = config_.max_goal_level;
    rel_config.support_literals = config_.support_literals;
-   rel_config.goal_satisfaction_derivations = config_.goal_satisfaction_derivations;
+   rel_config.goal_derivations = config_.goal_derivations;
    rel_config.top_type_predicates.insert(config_.symbol_type_id);
 
    std::vector< mimir::formalism::Action > actions;
@@ -443,7 +443,9 @@ void HGraphEncoderEngine::encode_impl_core(
       workspace.relation_to_symbols,
       workspace.symbol_to_relations
    );
-   encode_goal_inputs(goals, builder, workspace);
+   if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+      encode_goal_inputs(goals, builder, workspace);
+   }
    if(not config_.ignore_actions) {
       encode_actions(
          actions,
@@ -465,7 +467,9 @@ void HGraphEncoderEngine::encode_impl_core(
          workspace.symbol_to_relations
       );
    }
-   encode_goal_satisfaction_inputs(goals, fact_keys, builder, workspace);
+   if(has_non_plain_goal_derivations(config_.goal_derivations)) {
+      encode_goal_satisfaction_inputs(goals, fact_keys, builder, workspace);
+   }
    maybe_add_lgan_edges(builder, workspace);
    finalize_hetero_encoding(builder, workspace);
 }

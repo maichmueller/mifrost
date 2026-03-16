@@ -272,7 +272,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    RelationDictConfig rel_config;
    rel_config.max_goal_level = static_cast< int >(config_.max_goal_level);
    rel_config.support_literals = config_.support_literals;
-   rel_config.goal_satisfaction_derivations = config_.goal_satisfaction_derivations;
+   rel_config.goal_derivations = config_.goal_derivations;
 
    std::vector< mimir::formalism::Action > actions;
    actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
@@ -329,30 +329,40 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       relation_sources_by_name.emplace(spec.name, "state");
    }
    for(const auto& spec : regular_predicate_specs_) {
-      for(size_t level = 0; level <= config_.max_goal_level; ++level) {
-         const GoalLevel goal_level(level);
-         for(bool polarity : {true, false}) {
-            relation_sources_by_name.emplace(
-               RelationFormatter::format_predicate(spec.name, goal_level, std::nullopt, polarity),
-               "goal"
-            );
-         }
-      }
-      if(config_.support_literals) {
-         for(bool polarity : {true, false}) {
-            relation_sources_by_name.emplace(
-               RelationFormatter::format_predicate(spec.name, std::nullopt, std::nullopt, polarity),
-               "state"
-            );
-         }
-      }
-      for(const auto satisfaction : config_.goal_satisfaction_derivations) {
+      if(config_.goal_derivations.contains(GoalDerivation::plain)) {
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
                relation_sources_by_name.emplace(
                   RelationFormatter::format_predicate(
-                     spec.name, goal_level, satisfaction, polarity
+                     spec.name, goal_level, std::nullopt, polarity
+                  ),
+                  "goal"
+               );
+            }
+         }
+         if(config_.support_literals) {
+            for(bool polarity : {true, false}) {
+               relation_sources_by_name.emplace(
+                  RelationFormatter::format_predicate(
+                     spec.name, std::nullopt, std::nullopt, polarity
+                  ),
+                  "state"
+               );
+            }
+         }
+      }
+      for(const auto derivation : config_.goal_derivations) {
+         const auto satisfaction = goal_satisfaction_from_derivation(derivation);
+         if(not satisfaction.has_value()) {
+            continue;
+         }
+         for(size_t level = 0; level <= config_.max_goal_level; ++level) {
+            const GoalLevel goal_level(level);
+            for(bool polarity : {true, false}) {
+               relation_sources_by_name.emplace(
+                  RelationFormatter::format_predicate(
+                     spec.name, goal_level, *satisfaction, polarity
                   ),
                   "goal_satisfaction"
                );
@@ -362,7 +372,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
             for(bool polarity : {true, false}) {
                relation_sources_by_name.emplace(
                   RelationFormatter::format_predicate(
-                     spec.name, std::nullopt, satisfaction, polarity
+                     spec.name, std::nullopt, *satisfaction, polarity
                   ),
                   "goal_satisfaction"
                );
@@ -877,7 +887,9 @@ void FlatHorizonEncoderEngine::encode_impl(
             const bool satisfied = fact_keys.contains(fact_key) == literal->get_polarity();
             const GoalSatisfaction satisfaction = satisfied ? GoalSatisfaction::satisfied
                                                             : GoalSatisfaction::unsatisfied;
-            if(not config_.goal_satisfaction_derivations.contains(satisfaction)) {
+            if(not config_.goal_derivations.contains(
+                  goal_derivation_from_satisfaction(satisfaction)
+               )) {
                continue;
             }
             const auto level = goal_level_for(goal_levels, literal);
@@ -941,7 +953,8 @@ void FlatHorizonEncoderEngine::encode_impl(
             } else if(removed_match != goal->get_polarity()) {
                sat = GoalSatisfaction::added_unsatisfied;
             }
-            if(not sat.has_value() or not config_.goal_satisfaction_derivations.contains(*sat)) {
+            if(not sat.has_value()
+               or not config_.goal_derivations.contains(goal_derivation_from_satisfaction(*sat))) {
                continue;
             }
             const auto level = goal_level_for(goal_levels, goal);
@@ -975,24 +988,28 @@ void FlatHorizonEncoderEngine::encode_impl(
       const auto fact_keys = emit_state_for_candidate(
          root, dag.root_index(), config_.include_static
       );
-      emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
-         std::span{goals.static_goals}, goals.static_goal_levels, dag.root_index()
-      );
-      emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
-         std::span{goals.fluent_goals}, goals.fluent_goal_levels, dag.root_index()
-      );
-      emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
-         std::span{goals.derived_goals}, goals.derived_goal_levels, dag.root_index()
-      );
-      emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-         std::span{goals.static_goals}, goals.static_goal_levels, fact_keys, dag.root_index()
-      );
-      emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-         std::span{goals.fluent_goals}, goals.fluent_goal_levels, fact_keys, dag.root_index()
-      );
-      emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-         std::span{goals.derived_goals}, goals.derived_goal_levels, fact_keys, dag.root_index()
-      );
+      if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+         emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
+            std::span{goals.static_goals}, goals.static_goal_levels, dag.root_index()
+         );
+         emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
+            std::span{goals.fluent_goals}, goals.fluent_goal_levels, dag.root_index()
+         );
+         emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
+            std::span{goals.derived_goals}, goals.derived_goal_levels, dag.root_index()
+         );
+      }
+      if(has_non_plain_goal_derivations(config_.goal_derivations)) {
+         emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+            std::span{goals.static_goals}, goals.static_goal_levels, fact_keys, dag.root_index()
+         );
+         emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+            std::span{goals.fluent_goals}, goals.fluent_goal_levels, fact_keys, dag.root_index()
+         );
+         emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+            std::span{goals.derived_goals}, goals.derived_goal_levels, fact_keys, dag.root_index()
+         );
+      }
       return fact_keys;
    }();
 
@@ -1073,15 +1090,26 @@ void FlatHorizonEncoderEngine::encode_impl(
             if(encode_actions and node.action.has_value()) {
                emit_action(*node.action, node.index);
             }
-            emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-               std::span{goals.static_goals}, goals.static_goal_levels, succ_fact_keys, node.index
-            );
-            emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-               std::span{goals.fluent_goals}, goals.fluent_goal_levels, succ_fact_keys, node.index
-            );
-            emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-               std::span{goals.derived_goals}, goals.derived_goal_levels, succ_fact_keys, node.index
-            );
+            if(has_non_plain_goal_derivations(config_.goal_derivations)) {
+               emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+                  std::span{goals.static_goals},
+                  goals.static_goal_levels,
+                  succ_fact_keys,
+                  node.index
+               );
+               emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+                  std::span{goals.fluent_goals},
+                  goals.fluent_goal_levels,
+                  succ_fact_keys,
+                  node.index
+               );
+               emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+                  std::span{goals.derived_goals},
+                  goals.derived_goal_levels,
+                  succ_fact_keys,
+                  node.index
+               );
+            }
          } else if(config_.transition_mode == Mode::Delta) {
             hash_set< int > added_fluents;
             hash_set< int > removed_fluents;
@@ -1157,27 +1185,29 @@ void FlatHorizonEncoderEngine::encode_impl(
                emit_action(*node.action, node.index);
             }
 
-            emit_delta_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-               std::span{goals.static_goals},
-               goals.static_goal_levels,
-               hash_set< int >{},
-               hash_set< int >{},
-               node.index
-            );
-            emit_delta_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-               std::span{goals.fluent_goals},
-               goals.fluent_goal_levels,
-               added_fluents,
-               removed_fluents,
-               node.index
-            );
-            emit_delta_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-               std::span{goals.derived_goals},
-               goals.derived_goal_levels,
-               added_derived,
-               removed_derived,
-               node.index
-            );
+            if(has_non_plain_goal_derivations(config_.goal_derivations)) {
+               emit_delta_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+                  std::span{goals.static_goals},
+                  goals.static_goal_levels,
+                  hash_set< int >{},
+                  hash_set< int >{},
+                  node.index
+               );
+               emit_delta_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+                  std::span{goals.fluent_goals},
+                  goals.fluent_goal_levels,
+                  added_fluents,
+                  removed_fluents,
+                  node.index
+               );
+               emit_delta_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+                  std::span{goals.derived_goals},
+                  goals.derived_goal_levels,
+                  added_derived,
+                  removed_derived,
+                  node.index
+               );
+            }
          } else {
             if(encode_actions and node.action.has_value()) {
                emit_action(*node.action, node.index);

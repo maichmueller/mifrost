@@ -36,7 +36,7 @@ RelationDict build_horizon_relation_dict(
    RelationDictConfig rel_config;
    rel_config.max_goal_level = static_cast< int >(config.max_goal_level);
    rel_config.support_literals = config.support_literals;
-   rel_config.goal_satisfaction_derivations = config.goal_satisfaction_derivations;
+   rel_config.goal_derivations = config.goal_derivations;
    rel_config.top_type_predicates.insert(config.symbol_type_id);
 
    std::vector< mimir::formalism::Action > actions;
@@ -292,10 +292,6 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                                             )
                                                           : std::nullopt;
 
-            const GoalSatisfaction satisfaction = satisfaction_override.has_value()
-                                                     ? *satisfaction_override
-                                                     : GoalSatisfaction::none;
-
             std::string node_type;
             std::string literal_name;
             auto format_with = [&](auto level_arg, auto satisfaction_arg) {
@@ -313,13 +309,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
             if(goal_level.has_value()) {
                const GoalLevel level(*goal_level);
                if(satisfaction_override.has_value()) {
-                  format_with(level, satisfaction);
+                  format_with(level, *satisfaction_override);
                } else {
                   format_with(level, std::nullopt);
                }
             } else {
                if(satisfaction_override.has_value()) {
-                  format_with(std::nullopt, satisfaction);
+                  format_with(std::nullopt, *satisfaction_override);
                } else {
                   format_with(std::nullopt, std::nullopt);
                }
@@ -482,7 +478,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
             const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
             const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                                    : GoalSatisfaction::unsatisfied;
-            if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
+            if(not relation_dict_.goal_derivations.contains(
+                  goal_derivation_from_satisfaction(sat)
+               )) {
                continue;
             }
 
@@ -654,17 +652,19 @@ void HorizonHGraphEncoderEngine::encode_impl(
       root, 0, root_prefix, root_extra, config_.include_static
    );
 
-   encode_literals_with_prefix.template operator()< mimir::formalism::StaticTag >(
-      std::span{goals.static_goals}, goals.static_goal_levels, 0, root_prefix, root_extra
-   );
-   encode_literals_with_prefix.template operator()< mimir::formalism::FluentTag >(
-      std::span{goals.fluent_goals}, goals.fluent_goal_levels, 0, root_prefix, root_extra
-   );
-   encode_literals_with_prefix.template operator()< mimir::formalism::DerivedTag >(
-      std::span{goals.derived_goals}, goals.derived_goal_levels, 0, root_prefix, root_extra
-   );
+   if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+      encode_literals_with_prefix.template operator()< mimir::formalism::StaticTag >(
+         std::span{goals.static_goals}, goals.static_goal_levels, 0, root_prefix, root_extra
+      );
+      encode_literals_with_prefix.template operator()< mimir::formalism::FluentTag >(
+         std::span{goals.fluent_goals}, goals.fluent_goal_levels, 0, root_prefix, root_extra
+      );
+      encode_literals_with_prefix.template operator()< mimir::formalism::DerivedTag >(
+         std::span{goals.derived_goals}, goals.derived_goal_levels, 0, root_prefix, root_extra
+      );
+   }
 
-   if(not goals.static_goals.empty()) {
+   if(has_non_plain_goal_derivations(config_.goal_derivations) and not goals.static_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
          std::span{goals.static_goals},
          goals.static_goal_levels,
@@ -674,7 +674,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          root_extra
       );
    }
-   if(not goals.fluent_goals.empty()) {
+   if(has_non_plain_goal_derivations(config_.goal_derivations) and not goals.fluent_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
          std::span{goals.fluent_goals},
          goals.fluent_goal_levels,
@@ -684,7 +684,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
          root_extra
       );
    }
-   if(not goals.derived_goals.empty()) {
+   if(has_non_plain_goal_derivations(config_.goal_derivations)
+      and not goals.derived_goals.empty()) {
       encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::DerivedTag >(
          std::span{goals.derived_goals},
          goals.derived_goal_levels,
@@ -773,7 +774,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(encode_actions and node.action.has_value()) {
             encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
-         if(not goals.static_goals.empty()) {
+         if(has_non_plain_goal_derivations(config_.goal_derivations)
+            and not goals.static_goals.empty()) {
             encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
                std::span{goals.static_goals},
                goals.static_goal_levels,
@@ -783,7 +785,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
                succ_extra
             );
          }
-         if(not goals.fluent_goals.empty()) {
+         if(has_non_plain_goal_derivations(config_.goal_derivations)
+            and not goals.fluent_goals.empty()) {
             encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
                std::span{goals.fluent_goals},
                goals.fluent_goal_levels,
@@ -793,7 +796,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
                succ_extra
             );
          }
-         if(not goals.derived_goals.empty()) {
+         if(has_non_plain_goal_derivations(config_.goal_derivations)
+            and not goals.derived_goals.empty()) {
             encode_goal_satisfaction_with_prefix
                .template operator()< mimir::formalism::DerivedTag >(
                   std::span{goals.derived_goals},
@@ -875,7 +879,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
             encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
          }
 
-         if(relation_dict_.goal_satisfaction_derivations.size() > 0) {
+         if(has_non_plain_goal_derivations(relation_dict_.goal_derivations)) {
             auto encode_delta_satisfaction =
                [&]< typename GoalTag >(
                   std::span< const mimir::formalism::GroundLiteral< GoalTag > > goal_list,
@@ -897,7 +901,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
                      if(not sat.has_value()) {
                         continue;
                      }
-                     if(not relation_dict_.goal_satisfaction_derivations.contains(*sat)) {
+                     if(not relation_dict_.goal_derivations.contains(
+                           goal_derivation_from_satisfaction(*sat)
+                        )) {
                         continue;
                      }
                      encode_literals_with_prefix.template operator()< GoalTag >(

@@ -152,6 +152,34 @@ def test_flat_horizon_native_target_names_materialize_on_access(small_blocks):
     assert encoding.as_dict()["graph_attrs"]["target_names"] == target_names
 
 
+def test_flat_horizon_goal_derivations_can_exclude_plain_goal_literals(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    data = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        goal_derivations={
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
+        },
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    schema_names = set(data.schema.names)
+    assert any("[g][sat]" in name for name in schema_names)
+    assert any("[g][unsat]" in name for name in schema_names)
+    assert not any(
+        "[g]" in name and "[sat" not in name and "[unsat]" not in name
+        for name in schema_names
+    )
+
+
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

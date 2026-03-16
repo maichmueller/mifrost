@@ -56,8 +56,9 @@ class FlatHorizonEncoderEngine {
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
       bool exclude_root_candidate = true;
-      std::set< GoalSatisfaction > goal_satisfaction_derivations = {
-         GoalSatisfaction::satisfied,
+      std::set< GoalDerivation > goal_derivations = {
+         GoalDerivation::plain,
+         GoalDerivation::satisfied,
       };
    };
 
@@ -167,7 +168,7 @@ BOOST_DESCRIBE_STRUCT(
     enable_sibling_relation,
     enable_cousin_relation,
     exclude_root_candidate,
-    goal_satisfaction_derivations)
+    goal_derivations)
 )
 
 struct FlatHorizonStepInput {

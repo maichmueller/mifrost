@@ -151,7 +151,10 @@ class HGraphEncoderEngine {
       /// `Actions` = explicit grounded actions, `History` = history literals,
       /// `States` = horizon candidate states.
       std::set< TargetSource > target_sources = {};
-      std::set< GoalSatisfaction > goal_satisfaction_derivations = {GoalSatisfaction::satisfied};
+      std::set< GoalDerivation > goal_derivations = {
+         GoalDerivation::plain,
+         GoalDerivation::satisfied,
+      };
    };
 
    /// Construct from a borrowed domain implementation reference (caller must keep it alive).
@@ -612,7 +615,7 @@ BOOST_DESCRIBE_STRUCT(
     export_node_names,
     lgan_anchor_sources,
     target_sources,
-    goal_satisfaction_derivations)
+    goal_derivations)
 )
 
 /**
@@ -1029,7 +1032,7 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       const bool satisfied = fact_keys.contains(fact_key) == goal->get_polarity();
       const GoalSatisfaction sat = satisfied ? GoalSatisfaction::satisfied
                                              : GoalSatisfaction::unsatisfied;
-      if(not relation_dict_.goal_satisfaction_derivations.contains(sat)) {
+      if(not relation_dict_.goal_derivations.contains(goal_derivation_from_satisfaction(sat))) {
          continue;
       }
 

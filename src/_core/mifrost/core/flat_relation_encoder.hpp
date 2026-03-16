@@ -54,8 +54,9 @@ class FlatRelationEncoderEngine {
       std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
       std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
       std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
-      std::set< GoalSatisfaction > goal_satisfaction_derivations = {
-         GoalSatisfaction::satisfied,
+      std::set< GoalDerivation > goal_derivations = {
+         GoalDerivation::plain,
+         GoalDerivation::satisfied,
       };
    };
 
@@ -232,7 +233,7 @@ BOOST_DESCRIBE_STRUCT(
     lgan_tn_edge_pos,
     lgan_nn_edge_pos,
     lgan_rr_edge_pos,
-    goal_satisfaction_derivations)
+    goal_derivations)
 )
 
 struct FlatRelationStepInput {

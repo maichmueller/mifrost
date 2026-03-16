@@ -51,10 +51,7 @@ void init_flat_encoder(nb::module_& m)
       .def_rw("lgan_tn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_tn_edge_pos)
       .def_rw("lgan_nn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_nn_edge_pos)
       .def_rw("lgan_rr_edge_pos", &FlatRelationEncoderEngine::Config::lgan_rr_edge_pos)
-      .def_rw(
-         "goal_satisfaction_derivations",
-         &FlatRelationEncoderEngine::Config::goal_satisfaction_derivations
-      );
+      .def_rw("goal_derivations", &FlatRelationEncoderEngine::Config::goal_derivations);
 
    nb::class_< FlatRelationEncoderEngine >(m, "FlatRelationEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())

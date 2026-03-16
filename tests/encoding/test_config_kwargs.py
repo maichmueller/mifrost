@@ -32,14 +32,13 @@ def test_hgraph_config_accepts_kwargs() -> None:
     assert config.lgan_rr_edge_pos == "_rr_"
 
 
-def test_hgraph_config_goal_satisfaction_derivations_accepts_string_aliases() -> None:
-    config = mifrost.HGraphEncoderConfig(
-        goal_satisfaction_derivations=["true", "+", "-"]
-    )
-    assert set(config.goal_satisfaction_derivations) == {
-        mifrost.GoalSatisfaction.satisfied,
-        mifrost.GoalSatisfaction.added_satisfied,
-        mifrost.GoalSatisfaction.added_unsatisfied,
+def test_hgraph_config_goal_derivations_accepts_string_aliases() -> None:
+    config = mifrost.HGraphEncoderConfig(goal_derivations=["plain", "true", "+", "-"])
+    assert set(config.goal_derivations) == {
+        mifrost.GoalDerivation.plain,
+        mifrost.GoalDerivation.satisfied,
+        mifrost.GoalDerivation.added_satisfied,
+        mifrost.GoalDerivation.added_unsatisfied,
     }
 
 
@@ -198,9 +197,9 @@ def test_hgraph_encoder_exposes_relation_dict(small_blocks) -> None:
         domain,
         max_goal_level=1,
         support_literals=True,
-        goal_satisfaction_derivations={
-            mifrost.GoalSatisfaction.satisfied,
-            mifrost.GoalSatisfaction.unsatisfied,
+        goal_derivations={
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
         },
     )
     relation_dict = encoder.relation_dict
@@ -208,10 +207,10 @@ def test_hgraph_encoder_exposes_relation_dict(small_blocks) -> None:
     assert isinstance(relation_dict.arity, dict)
     assert relation_dict.max_goal_level == 1
     assert relation_dict.support_literals is True
-    satisfactions = set(relation_dict.goal_satisfaction_derivations)
-    assert mifrost.GoalSatisfaction.none in satisfactions
-    assert mifrost.GoalSatisfaction.satisfied in satisfactions
-    assert mifrost.GoalSatisfaction.unsatisfied in satisfactions
+    derivations = set(relation_dict.goal_derivations)
+    assert mifrost.GoalDerivation.plain not in derivations
+    assert mifrost.GoalDerivation.satisfied in derivations
+    assert mifrost.GoalDerivation.unsatisfied in derivations
 
 
 def test_derived_hgraph_encoders_expose_relation_dict(small_blocks) -> None:
@@ -256,8 +255,8 @@ def test_relation_dict_pickle_roundtrip() -> None:
         3,
         True,
         {
-            mifrost.GoalSatisfaction.satisfied,
-            mifrost.GoalSatisfaction.unsatisfied,
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
         },
     )
     restored = pickle.loads(pickle.dumps(relation_dict))
@@ -266,9 +265,9 @@ def test_relation_dict_pickle_roundtrip() -> None:
     assert restored["b"] == 1
     assert restored.max_goal_level == 3
     assert restored.support_literals is True
-    satisfactions = set(restored.goal_satisfaction_derivations)
-    assert mifrost.GoalSatisfaction.satisfied in satisfactions
-    assert mifrost.GoalSatisfaction.unsatisfied in satisfactions
+    derivations = set(restored.goal_derivations)
+    assert mifrost.GoalDerivation.satisfied in derivations
+    assert mifrost.GoalDerivation.unsatisfied in derivations
 
 
 def test_hgraph_encoder_update_relations_accepts_mapping_and_relation_dict(
@@ -286,8 +285,8 @@ def test_hgraph_encoder_update_relations_accepts_mapping_and_relation_dict(
         2,
         True,
         {
-            mifrost.GoalSatisfaction.satisfied,
-            mifrost.GoalSatisfaction.unsatisfied,
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
         },
     )
     encoder.update_relations(custom)

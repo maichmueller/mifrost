@@ -200,7 +200,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
-        goal_satisfaction_derivations: Any | None = None,
+        goal_derivations: Any | None = None,
     ) -> None:
         """Create a flat horizon encoder.
 
@@ -231,10 +231,8 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         normalized_mode = _normalize_flat_horizon_mode(transition_mode)
         if normalized_mode is not None:
             config_kwargs["transition_mode"] = normalized_mode
-        if goal_satisfaction_derivations is not None:
-            config_kwargs["goal_satisfaction_derivations"] = (
-                goal_satisfaction_derivations
-            )
+        if goal_derivations is not None:
+            config_kwargs["goal_derivations"] = goal_derivations
         config = FlatHorizonEncoderConfig(**config_kwargs)
         self._engine = FlatHorizonEncoderEngine(_advanced_domain(domain), config)
         self._config = config

@@ -247,7 +247,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
-        goal_satisfaction_derivations: Iterable[Any] | None = None,
+        goal_derivations: Iterable[Any] | None = None,
     ) -> None:
         """Build a flat encoder for state-style workloads.
 
@@ -306,10 +306,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             config_kwargs["lgan_anchor_sources"] = normalized_lgan_anchor_sources
         if normalized_target_sources is not None:
             config_kwargs["target_sources"] = normalized_target_sources
-        if goal_satisfaction_derivations is not None:
-            config_kwargs["goal_satisfaction_derivations"] = (
-                goal_satisfaction_derivations
-            )
+        if goal_derivations is not None:
+            config_kwargs["goal_derivations"] = goal_derivations
         config = FlatRelationEncoderConfig(**config_kwargs)
         self._engine = FlatRelationEncoderEngine(_advanced_domain(domain), config)
         self._config = config

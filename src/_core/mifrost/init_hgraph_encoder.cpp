@@ -55,10 +55,7 @@ void init_hgraph_encoder(nb::module_& m)
       .def_rw("nullary_object_name", &HGraphEncoderEngine::Config::nullary_object_name)
       .def_rw("max_goal_level", &HGraphEncoderEngine::Config::max_goal_level)
       .def_rw("support_literals", &HGraphEncoderEngine::Config::support_literals)
-      .def_rw(
-         "goal_satisfaction_derivations",
-         &HGraphEncoderEngine::Config::goal_satisfaction_derivations
-      )
+      .def_rw("goal_derivations", &HGraphEncoderEngine::Config::goal_derivations)
       .def_rw("add_nullary_predicates", &HGraphEncoderEngine::Config::add_nullary_predicates)
       .def_rw("ignore_actions", &HGraphEncoderEngine::Config::ignore_actions)
       .def_rw("include_static", &HGraphEncoderEngine::Config::include_static)
@@ -88,22 +85,22 @@ void init_hgraph_encoder(nb::module_& m)
             const std::map< std::string, int >& arity,
             int max_goal_level,
             bool support_literals,
-            const std::set< GoalSatisfaction >& goal_satisfaction_derivations) {
+            const std::set< GoalDerivation >& goal_derivations) {
             new(self) RelationDict();
             self->arity = arity;
             self->max_goal_level = max_goal_level;
             self->support_literals = support_literals;
-            self->goal_satisfaction_derivations = goal_satisfaction_derivations;
+            self->goal_derivations = goal_derivations;
          },
          "arity"_a,
          "max_goal_level"_a,
          "support_literals"_a,
-         "goal_satisfaction_derivations"_a
+         "goal_derivations"_a
       )
       .def_ro("arity", &RelationDict::arity)
       .def_ro("max_goal_level", &RelationDict::max_goal_level)
       .def_ro("support_literals", &RelationDict::support_literals)
-      .def_ro("goal_satisfaction_derivations", &RelationDict::goal_satisfaction_derivations)
+      .def_ro("goal_derivations", &RelationDict::goal_derivations)
       .def("__len__", [](const RelationDict& self) { return self.arity.size(); })
       .def("__bool__", [](const RelationDict& self) { return not self.arity.empty(); })
       .def(
@@ -179,10 +176,7 @@ void init_hgraph_encoder(nb::module_& m)
       )
       .def("__reduce__", [](const RelationDict& self) {
          nb::tuple args = nb::make_tuple(
-            self.arity,
-            self.max_goal_level,
-            self.support_literals,
-            self.goal_satisfaction_derivations
+            self.arity, self.max_goal_level, self.support_literals, self.goal_derivations
          );
          return nb::make_tuple(nb::type< RelationDict >(), args);
       });

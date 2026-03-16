@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any, Mapping
 
 from torch_geometric.data import HeteroData
@@ -80,6 +81,7 @@ class _TransitionEncoderBase(HGraphEncoder):
         export_node_names: bool = True,
         max_goal_level: int = 0,
         support_literals: bool = False,
+        goal_derivations: Iterable[Any] | None = None,
         nullary_object_name: str = "![nullary_symbol]!",
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
@@ -101,6 +103,7 @@ class _TransitionEncoderBase(HGraphEncoder):
             export_node_names=export_node_names,
             max_goal_level=max_goal_level,
             support_literals=support_literals,
+            goal_derivations=goal_derivations,
             nullary_object_name=nullary_object_name,
             lgan_tn_edge_pos=lgan_tn_edge_pos,
             lgan_nn_edge_pos=lgan_nn_edge_pos,

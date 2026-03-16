@@ -514,6 +514,9 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       RelationSchemaRegistry& registry
    ) const override
    {
+      if(not engine.config_.goal_derivations.contains(GoalDerivation::plain)) {
+         return;
+      }
       for(const auto& spec : engine.regular_predicate_specs_) {
          if(engine.config_.ignore_zero_arity_relations and spec.arity == 0) {
             continue;
@@ -553,6 +556,9 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       FlatRelationSink& sink
    ) const override
    {
+      if(not engine.config_.goal_derivations.contains(GoalDerivation::plain)) {
+         return;
+      }
       emit_literals(std::span{goals.static_goals}, goals.static_goal_levels, engine, context, sink);
       emit_literals(std::span{goals.fluent_goals}, goals.fluent_goal_levels, engine, context, sink);
       emit_literals(
@@ -604,17 +610,24 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
       RelationSchemaRegistry& registry
    ) const override
    {
+      if(not has_non_plain_goal_derivations(engine.config_.goal_derivations)) {
+         return;
+      }
       for(const auto& spec : engine.regular_predicate_specs_) {
          if(engine.config_.ignore_zero_arity_relations and spec.arity == 0) {
             continue;
          }
-         for(const auto satisfaction : engine.config_.goal_satisfaction_derivations) {
+         for(const auto derivation : engine.config_.goal_derivations) {
+            const auto satisfaction = goal_satisfaction_from_derivation(derivation);
+            if(not satisfaction.has_value()) {
+               continue;
+            }
             for(size_t level = 0; level <= engine.config_.max_goal_level; ++level) {
                const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
                   registry.add(
                      RelationFormatter::format_predicate(
-                        spec.name, goal_level, satisfaction, polarity
+                        spec.name, goal_level, *satisfaction, polarity
                      ),
                      spec.arity,
                      "goal_satisfaction"
@@ -625,7 +638,7 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
                for(bool polarity : {true, false}) {
                   registry.add(
                      RelationFormatter::format_predicate(
-                        spec.name, std::nullopt, satisfaction, polarity
+                        spec.name, std::nullopt, *satisfaction, polarity
                      ),
                      spec.arity,
                      "goal_satisfaction"
@@ -645,6 +658,9 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
       FlatRelationSink& sink
    ) const override
    {
+      if(not has_non_plain_goal_derivations(engine.config_.goal_derivations)) {
+         return;
+      }
       emit_literals(
          std::span{goals.static_goals}, goals.static_goal_levels, fact_keys, engine, context, sink
       );
@@ -678,7 +694,9 @@ class FlatRelationEncoderEngine::GoalSatisfactionComponent final:
          const bool satisfied = fact_keys.contains(fact_key) == literal->get_polarity();
          const GoalSatisfaction satisfaction = satisfied ? GoalSatisfaction::satisfied
                                                          : GoalSatisfaction::unsatisfied;
-         if(not engine.config_.goal_satisfaction_derivations.contains(satisfaction)) {
+         if(not engine.config_.goal_derivations.contains(
+               goal_derivation_from_satisfaction(satisfaction)
+            )) {
             continue;
          }
 
@@ -859,7 +877,7 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    RelationDictConfig rel_config;
    rel_config.max_goal_level = static_cast< int >(config_.max_goal_level);
    rel_config.support_literals = config_.support_literals;
-   rel_config.goal_satisfaction_derivations = config_.goal_satisfaction_derivations;
+   rel_config.goal_derivations = config_.goal_derivations;
 
    std::vector< mimir::formalism::Action > actions;
    actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
@@ -967,13 +985,11 @@ void FlatRelationEncoderEngine::rebuild_schema()
       );
    }
 
-   auto goal_satisfaction_derivations = config_.goal_satisfaction_derivations;
-   goal_satisfaction_derivations.insert(GoalSatisfaction::none);
    relation_dict_ = RelationDict(
       std::move(relation_dict_arity),
       static_cast< int >(config_.max_goal_level),
       config_.support_literals,
-      std::move(goal_satisfaction_derivations)
+      config_.goal_derivations
    );
 }
 

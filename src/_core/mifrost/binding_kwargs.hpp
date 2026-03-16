@@ -32,54 +32,55 @@ inline std::string ascii_lower(std::string_view value)
    return out;
 }
 
-inline std::optional< GoalSatisfaction > parse_goal_satisfaction_alias(std::string_view value)
+inline std::optional< GoalDerivation > parse_goal_derivation_alias(std::string_view value)
 {
    const auto normalized = ascii_lower(value);
-   if(normalized.empty() or normalized == "none") {
-      return GoalSatisfaction::none;
+   if(normalized.empty() or normalized == "plain" or normalized == "goal" or normalized == "base"
+      or normalized == "[g]") {
+      return GoalDerivation::plain;
    }
    if(normalized == "true" or normalized == "sat" or normalized == "satisfied"
       or normalized == "[sat]") {
-      return GoalSatisfaction::satisfied;
+      return GoalDerivation::satisfied;
    }
    if(normalized == "false" or normalized == "unsat" or normalized == "unsatisfied"
       or normalized == "[unsat]") {
-      return GoalSatisfaction::unsatisfied;
+      return GoalDerivation::unsatisfied;
    }
    if(normalized == "+" or normalized == "sat+" or normalized == "added_satisfied"
       or normalized == "[sat+]") {
-      return GoalSatisfaction::added_satisfied;
+      return GoalDerivation::added_satisfied;
    }
    if(normalized == "-" or normalized == "sat-" or normalized == "added_unsatisfied"
       or normalized == "[sat-]") {
-      return GoalSatisfaction::added_unsatisfied;
+      return GoalDerivation::added_unsatisfied;
    }
    return std::nullopt;
 }
 
-inline GoalSatisfaction cast_goal_satisfaction(std::string_view key, const nb::handle value)
+inline GoalDerivation cast_goal_derivation(std::string_view key, const nb::handle value)
 {
    if(nb::isinstance< nb::str >(value)) {
       const std::string token = nb::str(value).c_str();
-      if(const auto parsed = parse_goal_satisfaction_alias(token); parsed.has_value()) {
+      if(const auto parsed = parse_goal_derivation_alias(token); parsed.has_value()) {
          return *parsed;
       }
       throw std::invalid_argument(
          fmt::format(
-            "Invalid value '{}' for kwarg '{}'; expected GoalSatisfaction alias "
-            "('none', 'true', 'false', '+', '-') or GoalSatisfaction enum.",
+            "Invalid value '{}' for kwarg '{}'; expected GoalDerivation alias "
+            "('plain', 'true', 'false', '+', '-') or GoalDerivation enum.",
             token,
             key
          )
       );
    }
    try {
-      return nb::cast< GoalSatisfaction >(value);
+      return nb::cast< GoalDerivation >(value);
    } catch(const std::exception&) {
       throw std::invalid_argument(
          fmt::format(
-            "Invalid value for kwarg '{}'; expected GoalSatisfaction alias "
-            "('none', 'true', 'false', '+', '-') or GoalSatisfaction enum.",
+            "Invalid value for kwarg '{}'; expected GoalDerivation alias "
+            "('plain', 'true', 'false', '+', '-') or GoalDerivation enum.",
             key
          )
       );
@@ -139,16 +140,16 @@ inline TargetSource cast_target_source(std::string_view key, const nb::handle va
 template < typename T >
 T cast_config_value(std::string_view key, const nb::handle value)
 {
-   if constexpr(std::is_same_v< T, std::set< GoalSatisfaction > >) {
+   if constexpr(std::is_same_v< T, std::set< GoalDerivation > >) {
       if(nb::isinstance< nb::iterable >(value) and not nb::isinstance< nb::str >(value)
          and not nb::isinstance< nb::bytes >(value)) {
-         std::set< GoalSatisfaction > out;
+         std::set< GoalDerivation > out;
          for(nb::handle entry : nb::borrow< nb::object >(value)) {
-            out.insert(cast_goal_satisfaction(key, entry));
+            out.insert(cast_goal_derivation(key, entry));
          }
          return out;
       }
-      return {cast_goal_satisfaction(key, value)};
+      return {cast_goal_derivation(key, value)};
    } else if constexpr(std::is_same_v< T, std::set< TargetSource > >) {
       if(nb::isinstance< nb::iterable >(value) and not nb::isinstance< nb::str >(value)
          and not nb::isinstance< nb::bytes >(value)) {

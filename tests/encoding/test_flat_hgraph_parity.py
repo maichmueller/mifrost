@@ -10,6 +10,16 @@ from .test_utils import adv_domain
 _HISTORY_RELATION_SUFFIX = "[hist]"
 
 
+def _satisfactions_from_derivations(derivations) -> set:
+    mapping = {
+        mifrost.GoalDerivation.satisfied: mifrost.GoalSatisfaction.satisfied,
+        mifrost.GoalDerivation.unsatisfied: mifrost.GoalSatisfaction.unsatisfied,
+        mifrost.GoalDerivation.added_satisfied: mifrost.GoalSatisfaction.added_satisfied,
+        mifrost.GoalDerivation.added_unsatisfied: mifrost.GoalSatisfaction.added_unsatisfied,
+    }
+    return {mapping[derivation] for derivation in derivations if derivation in mapping}
+
+
 def _domain_predicates(domain):
     adv = adv_domain(domain)
     predicates = []
@@ -69,8 +79,8 @@ def _expected_hgraph_only_relation_names(
     formatter = mifrost.RelationFormatter
     expected = set()
     max_goal_level = int(hgraph_encoder.relation_dict.max_goal_level)
-    goal_satisfaction_derivations = set(
-        hgraph_encoder.relation_dict.goal_satisfaction_derivations
+    goal_satisfactions = _satisfactions_from_derivations(
+        hgraph_encoder.relation_dict.goal_derivations
     )
     for predicate in _domain_predicates(domain):
         if predicate.get_arity() != 0:
@@ -85,7 +95,7 @@ def _expected_hgraph_only_relation_names(
                         polarity=polarity,
                     )
                 )
-                for satisfaction in goal_satisfaction_derivations:
+                for satisfaction in goal_satisfactions:
                     expected.add(
                         formatter.format_predicate(
                             predicate,

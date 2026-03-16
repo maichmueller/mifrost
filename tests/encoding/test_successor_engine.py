@@ -155,9 +155,9 @@ def test_successor_goal_satisfaction_emitted_when_enabled(small_blocks):
     config.successor_mode = mifrost.SuccessorEncoderMode.Full
     config.successor_suffix = successor_suffix
     config.include_successor_goal_satisfaction = True
-    config.goal_satisfaction_derivations = {
-        mifrost.GoalSatisfaction.satisfied,
-        mifrost.GoalSatisfaction.unsatisfied,
+    config.goal_derivations = {
+        mifrost.GoalDerivation.satisfied,
+        mifrost.GoalDerivation.unsatisfied,
     }
 
     encoder = mifrost.SuccessorHGraphEncoderEngine(_adv_domain(domain), config)

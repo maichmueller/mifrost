@@ -506,9 +506,9 @@ TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
    mifrost::HGraphEncoderEngine::Config config;
    config.ignore_actions = true;
    config.max_goal_level = 1;
-   config.goal_satisfaction_derivations = {
-      mifrost::GoalSatisfaction::satisfied,
-      mifrost::GoalSatisfaction::unsatisfied,
+   config.goal_derivations = {
+      mifrost::GoalDerivation::satisfied,
+      mifrost::GoalDerivation::unsatisfied,
    };
 
    mifrost::HGraphEncoderEngine engine(ctx.problem->get_domain(), config);
@@ -566,7 +566,7 @@ TEST_P(HGraphEncoderTest, GoalSatisfactionEdgesMatchFacts)
       const bool satisfied = fact_keys.contains(key) == literal->get_polarity();
       const mifrost::GoalSatisfaction sat = satisfied ? mifrost::GoalSatisfaction::satisfied
                                                       : mifrost::GoalSatisfaction::unsatisfied;
-      if(not config.goal_satisfaction_derivations.contains(sat)) {
+      if(not config.goal_derivations.contains(mifrost::goal_derivation_from_satisfaction(sat))) {
          return;
       }
 

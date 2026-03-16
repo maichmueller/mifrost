@@ -221,10 +221,7 @@ void init_horizon_encoder(nb::module_& m)
       .def_rw("enable_sibling_relation", &FlatHorizonEncoderEngine::Config::enable_sibling_relation)
       .def_rw("enable_cousin_relation", &FlatHorizonEncoderEngine::Config::enable_cousin_relation)
       .def_rw("exclude_root_candidate", &FlatHorizonEncoderEngine::Config::exclude_root_candidate)
-      .def_rw(
-         "goal_satisfaction_derivations",
-         &FlatHorizonEncoderEngine::Config::goal_satisfaction_derivations
-      );
+      .def_rw("goal_derivations", &FlatHorizonEncoderEngine::Config::goal_derivations);
 
    nb::class_< FlatHorizonEncoderEngine >(m, "FlatHorizonEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
