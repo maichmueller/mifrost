@@ -15,6 +15,7 @@ from .._core import (
     FlatHorizonStreamEncoder as _FlatHorizonStreamEncoder,
     HorizonEncoderMode,
 )
+from ._batch_contract import parse_dags_batch_param, parse_states_batch
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
 from .base import (
     ActionBatchInput,
@@ -355,9 +356,19 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             convert_leaf=to_advanced_literal,
         )
         dags_for_core = _normalize_dag_batch_data(dags)
+        parsed_roots = parse_states_batch(roots_for_core)
+        if dags_for_core is None:
+            parsed_dags = [None] * len(parsed_roots)
+        else:
+            parsed_dags = parse_dags_batch_param(
+                dags_for_core, state_count=len(parsed_roots)
+            )
+        for adv_root, dag in zip(parsed_roots, parsed_dags, strict=True):
+            if dag is not None and dag.root().get_index() != adv_root.get_index():
+                raise ValueError("dag root must match root state")
         return self._engine.encode_batch(
-            roots_for_core,
-            dags=dags_for_core,
+            parsed_roots,
+            dags=parsed_dags,
             goals=goals_for_core,
             actions=None,
             subgoal_layers=subgoal_layers_for_core,
