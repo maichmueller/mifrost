@@ -1107,12 +1107,9 @@ void FlatHorizonEncoderEngine::encode_impl(
             const int idx = atom->get_index();
             const bool added_match = added_set.contains(idx);
             const bool removed_match = removed_set.contains(idx);
-            std::optional< GoalDerivation > sat = std::nullopt;
-            if(added_match == goal->get_polarity()) {
-               sat = GoalDerivation::added_satisfied;
-            } else if(removed_match != goal->get_polarity()) {
-               sat = GoalDerivation::added_unsatisfied;
-            }
+            const auto sat = delta_goal_satisfaction_derivation(
+               goal->get_polarity(), added_match, removed_match
+            );
             if(not sat.has_value() or not config_.goal_derivations.contains(*sat)) {
                continue;
             }

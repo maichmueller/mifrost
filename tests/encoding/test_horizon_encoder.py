@@ -3,6 +3,7 @@ from __future__ import annotations
 import mifrost
 import pymimir as mimir
 import pytest
+from mifrost.encoders.common import _split_goals
 
 from .test_utils import (
     adv_action,
@@ -43,6 +44,17 @@ def _delta_literals(root, target, problem):
         for atom in (root_atoms - target_atoms)
     )
     return out
+
+
+def _positive_goals_for_removed_facts(root, target, problem):
+    goals = [
+        mimir.GroundLiteral.new(literal.get_atom(), True, problem)
+        for literal in _delta_literals(root, target, problem)
+        if not literal.get_polarity()
+    ]
+    if not goals:
+        pytest.skip("Fixture should yield at least one removed fluent literal")
+    return goals
 
 
 def test_horizon_encoder_target_mapping_and_order(small_blocks):
@@ -252,6 +264,46 @@ def test_horizon_delta_registers_state_literal_relations_without_plain_goals(
     relation_names = {str(name) for name in encoder.relation_dict.keys()}
     assert any(name.startswith("[+]") for name in relation_names)
     assert not any("[state]" in name for name in relation_names)
+
+
+def test_horizon_delta_emits_removed_goal_satisfaction_literals(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action, target) = _first_distinct_changed_transitions(space, root, count=1)[0]
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        delta_literals=_delta_literals(root, target, problem),
+    )
+
+    config = mifrost.HorizonEncoderConfig()
+    config.transition_mode = mifrost.HorizonEncoderMode.delta
+    config.root_policy = mifrost.RootPolicy.exclude
+    config.ignore_actions = True
+    config.goal_derivations = {mifrost.GoalDerivation.added_unsatisfied}
+    encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
+    goal_inputs = _split_goals(
+        _positive_goals_for_removed_facts(root, target, problem),
+        None,
+    )
+    data = encoding_dict_to_pyg(
+        encoder.encode(
+            adv_state(root),
+            dag,
+            goal_inputs,
+        )
+    )
+
+    emitted_node_types = {
+        node_type
+        for node_type in data.node_types
+        if hasattr(data[node_type], "num_nodes") and int(data[node_type].num_nodes) > 0
+    }
+    assert any("[sat-]" in node_type for node_type in emitted_node_types)
+    assert not any("[sat+]" in node_type for node_type in emitted_node_types)
 
 
 def test_horizon_excluded_root_skips_root_parent_edges(small_blocks):

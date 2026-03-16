@@ -1073,14 +1073,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   for(const auto& goal : goal_list) {
                      const auto atom = goal->get_atom();
                      const auto idx = atom->get_index();
-                     bool added_match = added_set.contains(idx);
-                     bool removed_match = removed_set.contains(idx);
-                     std::optional< GoalDerivation > sat;
-                     if(added_match == goal->get_polarity()) {
-                        sat = GoalDerivation::added_satisfied;
-                     } else if(removed_match != goal->get_polarity()) {
-                        sat = GoalDerivation::added_unsatisfied;
-                     }
+                     const auto sat = delta_goal_satisfaction_derivation(
+                        goal->get_polarity(), added_set.contains(idx), removed_set.contains(idx)
+                     );
                      if(not sat.has_value() or not relation_dict_.goal_derivations.contains(*sat)) {
                         continue;
                      }

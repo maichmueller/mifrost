@@ -61,6 +61,17 @@ def _delta_literals(root, target, problem):
     return out
 
 
+def _positive_goals_for_removed_facts(root, target, problem):
+    goals = [
+        mimir.GroundLiteral.new(literal.get_atom(), True, problem)
+        for literal in _delta_literals(root, target, problem)
+        if not literal.get_polarity()
+    ]
+    if not goals:
+        pytest.skip("Fixture should yield at least one removed fluent literal")
+    return goals
+
+
 def test_flat_horizon_encoder_emits_state_target_entities_and_metadata(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
@@ -213,6 +224,41 @@ def test_flat_horizon_delta_registers_state_literal_relations_without_plain_goal
 
     assert any(name.startswith("[+]") for name in data.schema.names)
     assert not any("[state]" in name for name in data.schema.names)
+
+
+def test_flat_horizon_delta_emits_removed_goal_satisfaction_literals(small_blocks):
+    _space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    (action, target) = _first_distinct_changed_transitions(_space, root, count=1)[0]
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        delta_literals=_delta_literals(root, target, problem),
+    )
+
+    removed_goals = _positive_goals_for_removed_facts(root, target, problem)
+    data = FlatHorizonEncoder(
+        domain,
+        transition_mode="delta",
+        root_policy="exclude",
+        ignore_actions=True,
+        goal_derivations={mifrost.GoalDerivation.added_unsatisfied},
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=removed_goals,
+    )
+
+    emitted = {
+        name: tensor
+        for name, tensor in data.flattened_relations.items()
+        if tensor.shape[0] > 0
+    }
+    assert any("[sat-]" in name for name in emitted)
+    assert not any("[sat+]" in name for name in emitted)
 
 
 def test_flat_horizon_rejects_partial_explicit_candidate_ids(small_blocks):

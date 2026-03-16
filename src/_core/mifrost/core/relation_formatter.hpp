@@ -57,6 +57,18 @@ auto goal_satisfaction_derivations(const Range& derivations)
           });
 }
 
+inline std::optional< GoalDerivation >
+delta_goal_satisfaction_derivation(bool goal_polarity, bool added_match, bool removed_match)
+{
+   if(goal_polarity ? added_match : removed_match) {
+      return GoalDerivation::added_satisfied;
+   }
+   if(goal_polarity ? removed_match : added_match) {
+      return GoalDerivation::added_unsatisfied;
+   }
+   return std::nullopt;
+}
+
 /**
  * @brief Literal polarity prefix mode.
  */
