@@ -2,6 +2,7 @@
 
 #include "default_relations.hpp"
 #include "hgraph_stream_encoder.hpp"
+#include "root_policy.hpp"
 #include "transition_dag.hpp"
 
 namespace mifrost {
@@ -35,7 +36,7 @@ class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
-      bool exclude_root_candidate = true;
+      RootPolicy root_policy = RootPolicy::Exclude;
    };
 
    HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain);
@@ -94,7 +95,7 @@ BOOST_DESCRIBE_STRUCT(
     enable_parent_relation,
     enable_sibling_relation,
     enable_cousin_relation,
-    exclude_root_candidate)
+    root_policy)
 )
 
 /**

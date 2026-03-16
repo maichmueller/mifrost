@@ -42,6 +42,7 @@ from ._lane_specs import (
     validate_batch_optional_payloads,
     validate_single_optional_payloads,
 )
+from ._root_policy import RootPolicy, normalize_root_policy
 from .flat import FlatRelationEncoder
 from .types import (
     DomainInput,
@@ -190,7 +191,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         enable_parent_relation: bool = False,
         enable_sibling_relation: bool = False,
         enable_cousin_relation: bool = False,
-        exclude_root_candidate: bool = True,
+        root_policy: RootPolicy | str = "exclude",
         max_goal_level: int = 0,
         support_literals: bool = False,
         include_static: bool = True,
@@ -206,9 +207,18 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         """Create a flat horizon encoder.
 
         This lane reads a root state plus a `TransitionDAG` and creates
-        candidate state rows. When `include_lgan_edges=True`, LGAN anchors are
-        those candidate rows. There is no `lgan_anchor_sources` switch here.
+        candidate state rows.
+
+        `root_policy` controls how the root is treated:
+
+        - `include`: root is encoded and is also a target
+        - `encode_only`: root is encoded, but not a target
+        - `exclude`: root is not a target, and root facts stay base relations
+
+        When `include_lgan_edges=True`, LGAN anchors follow the target rows.
+        There is no `lgan_anchor_sources` switch here.
         """
+        normalized_root_policy = normalize_root_policy(root_policy)
         config_kwargs: dict[str, Any] = {
             "max_goal_level": max_goal_level,
             "support_literals": support_literals,
@@ -227,7 +237,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             "enable_parent_relation": enable_parent_relation,
             "enable_sibling_relation": enable_sibling_relation,
             "enable_cousin_relation": enable_cousin_relation,
-            "exclude_root_candidate": exclude_root_candidate,
+            "root_policy": normalized_root_policy,
         }
         normalized_mode = _normalize_flat_horizon_mode(transition_mode)
         if normalized_mode is not None:

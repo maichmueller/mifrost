@@ -133,12 +133,12 @@ def test_flat_transition_encoder_emits_state_target_metadata(small_blocks):
 
     assert data.target_entity_groups == ["state"]
     assert data.target_groups == ["state"]
-    assert data.target_entity_sizes.tolist() == [2]
+    assert data.target_entity_sizes.tolist() == [1]
     assert data.target_sizes.tolist() == [1]
-    assert data.graph_target_entity_names(0) == ["target:0", "target:1"]
+    assert data.graph_target_entity_names(0) == ["target:1"]
     assert data.graph_target_indices(0).tolist() == [1]
     assert data.graph_target_positions(0).tolist() == [
-        data.graph_target_entity_indices(0)[1].item()
+        data.graph_target_entity_indices(0)[0].item()
     ]
 
 
@@ -196,10 +196,10 @@ def test_flat_transition_effects_encoder_emits_only_changed_successor_literals(
     }
     formatter = mifrost.RelationFormatter
     expected_successor_relations = {
-        formatter.format_predicate(predicate(atom), polarity=True)
+        f"{formatter.format_predicate(predicate(atom), polarity=True)}[state]"
         for atom in successor_atoms - current_atoms
     } | {
-        formatter.format_predicate(predicate(atom), polarity=False)
+        f"{formatter.format_predicate(predicate(atom), polarity=False)}[state]"
         for atom in current_atoms - successor_atoms
     }
 
@@ -244,7 +244,7 @@ def test_flat_transition_lgan_matches_one_step_flat_horizon(small_blocks):
         domain,
         transition_mode="full",
         include_lgan_edges=True,
-        exclude_root_candidate=True,
+        root_policy="exclude",
         ignore_actions=True,
     )
     dag = mifrost.TransitionDAG(adv_state(state))

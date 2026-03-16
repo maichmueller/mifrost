@@ -113,21 +113,22 @@ TEST_P(FlatHorizonEncoderTest, EmitsStateTargetMetadataAndCarrierRows)
    const auto target_depths = i64_field(encoding, "target_depths");
    const auto relation_instance_sizes = i64_field(encoding, "relation_instance_sizes");
 
-   ASSERT_EQ(target_entity_sizes, std::vector< int64_t >({2}));
-   ASSERT_EQ(target_entity_indices.size(), 2u);
-   EXPECT_EQ(target_entity_indices[0], static_cast< int64_t >(ctx.problem->get_objects().size()));
-   EXPECT_EQ(target_entity_indices[1], target_entity_indices[0] + 1);
-   EXPECT_EQ(target_entity_group_ids, std::vector< int64_t >({0, 0}));
+   ASSERT_EQ(target_entity_sizes, std::vector< int64_t >({1}));
+   ASSERT_EQ(target_entity_indices.size(), 1u);
+   EXPECT_EQ(
+      target_entity_indices[0], static_cast< int64_t >(ctx.problem->get_objects().size() + 1)
+   );
+   EXPECT_EQ(target_entity_group_ids, std::vector< int64_t >({0}));
    EXPECT_EQ(target_sizes, std::vector< int64_t >({1}));
-   EXPECT_EQ(target_positions, std::vector< int64_t >({target_entity_indices[1]}));
+   EXPECT_EQ(target_positions, std::vector< int64_t >({target_entity_indices[0]}));
    EXPECT_EQ(target_indices, std::vector< int64_t >({1}));
    EXPECT_EQ(target_candidate_ids, std::vector< int64_t >({101}));
    EXPECT_EQ(target_depths, std::vector< int64_t >({1}));
    ASSERT_EQ(relation_instance_sizes.size(), 1u);
    EXPECT_EQ(str_attr(encoding, "target_entity_groups"), std::vector< std::string >({"state"}));
    EXPECT_EQ(str_attr(encoding, "target_groups"), std::vector< std::string >({"state"}));
-   EXPECT_EQ(entity_names[target_entity_indices[0]], "target:0");
-   EXPECT_EQ(entity_names[target_entity_indices[1]], "target:1");
+   EXPECT_EQ(entity_names[ctx.problem->get_objects().size()], "_root_state_");
+   EXPECT_EQ(entity_names[target_entity_indices[0]], "target:1");
 }
 
 TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
@@ -156,6 +157,11 @@ TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
    std::unordered_set< int64_t > target_entities(
       target_entity_indices.begin(), target_entity_indices.end()
    );
+   std::unordered_set< int64_t > object_rows;
+   const auto object_indices = i64_field(encoding, "object_indices");
+   object_rows.insert(object_indices.begin(), object_indices.end());
+   bool saw_base_relation = false;
+   bool saw_state_relation = false;
 
    size_t cursor = 0;
    for(size_t relation_idx = 0; relation_idx < relation_names.size(); ++relation_idx) {
@@ -163,12 +169,24 @@ TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
       const auto instances = static_cast< size_t >(relation_counts[relation_idx]);
       for(size_t instance_idx = 0; instance_idx < instances; ++instance_idx) {
          ASSERT_LT(cursor, relation_args.size());
-         EXPECT_TRUE(target_entities.contains(relation_args[cursor]))
-            << "relation=" << relation_names[relation_idx];
+         const auto anchor_row = relation_args[cursor];
+         if(relation_names[relation_idx].find("[state]") != std::string::npos
+            || relation_names[relation_idx]
+                  == mifrost::RelationFormatter::format_action_schema(*succ_action->get_action())) {
+            saw_state_relation = true;
+            EXPECT_TRUE(target_entities.contains(anchor_row))
+               << "relation=" << relation_names[relation_idx];
+         } else {
+            saw_base_relation = true;
+            EXPECT_TRUE(object_rows.contains(anchor_row))
+               << "relation=" << relation_names[relation_idx];
+         }
          cursor += arity;
       }
    }
    EXPECT_EQ(cursor, relation_args.size());
+   EXPECT_TRUE(saw_base_relation);
+   EXPECT_TRUE(saw_state_relation);
 
    const auto action_relation_name = mifrost::RelationFormatter::format_action_schema(
       *succ_action->get_action()

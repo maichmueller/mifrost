@@ -933,7 +933,7 @@ void HGraphEncoderEngine::add_lgan_edges(
          "For HGraph/Successor, pass actions with ignore_actions=false or enable "
          "lgan_anchor_sources/target_sources such as 'goal', 'subgoal', or 'history'; "
          "for Horizon, ensure candidate target symbols exist "
-         "(exclude_root_candidate may remove all)."
+         "(root_policy may remove all)."
       );
    }
    if(symbol_indices.empty() or relation_to_symbols.empty()) {

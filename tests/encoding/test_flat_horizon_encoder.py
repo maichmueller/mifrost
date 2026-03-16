@@ -75,17 +75,15 @@ def test_flat_horizon_encoder_emits_state_target_entities_and_metadata(small_blo
 
     assert data.target_entity_groups == ["state"]
     assert data.target_groups == ["state"]
-    assert data.target_entity_sizes.tolist() == [len(list(dag.nodes()))]
-    assert data.target_entity_group_ids.tolist() == [0] * len(list(dag.nodes()))
-    assert data.graph_target_entity_names(0) == [
-        f"target:{node.index}" for node in dag.nodes()
-    ]
+    assert data.target_entity_sizes.tolist() == [1]
+    assert data.target_entity_group_ids.tolist() == [0]
+    assert data.graph_target_entity_names(0) == ["target:1"]
     assert data.target_sizes.tolist() == [1]
     assert data.graph_target_indices(0).tolist() == [1]
     assert data.graph_target_candidate_ids(0).tolist() == [101]
     assert data.graph_target_depths(0).tolist() == [1]
     assert data.graph_target_positions(0).tolist() == [
-        data.graph_target_entity_indices(0)[1].item()
+        data.graph_target_entity_indices(0)[0].item()
     ]
     assert len(data.graph_target_names(0)) == 1
 
@@ -226,7 +224,7 @@ def test_flat_horizon_rejects_duplicate_explicit_candidate_ids(small_blocks):
         )
 
 
-def test_flat_horizon_relations_anchor_on_state_target_entities(small_blocks):
+def test_flat_horizon_excluded_root_uses_private_carrier_row(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
     transitions = _first_distinct_changed_transitions(space, root, count=1)
@@ -240,16 +238,29 @@ def test_flat_horizon_relations_anchor_on_state_target_entities(small_blocks):
         goals=list(problem.get_goal_condition().get_literals()),
     )
 
-    state_entity_indices = set(data.graph_target_entity_indices(0).tolist())
-    assert state_entity_indices
+    target_entity_indices = set(data.graph_target_entity_indices(0).tolist())
+    object_indices = set(data.object_indices.tolist())
+    assert target_entity_indices
 
+    saw_base_relation = False
+    saw_state_relation = False
     for relation_name, instances in data.flattened_relations.items():
         if not instances.numel():
             continue
-        assert set(instances[:, 0].tolist()).issubset(state_entity_indices), (
-            relation_name,
-            instances.tolist(),
-        )
+        if relation_name == formatter.format_action_schema(
+            adv_ground_action.get_action()
+        ):
+            assert set(instances[:, 0].tolist()).issubset(target_entity_indices)
+            continue
+        if "[state]" in relation_name:
+            saw_state_relation = True
+            assert set(instances[:, 0].tolist()).issubset(target_entity_indices)
+        else:
+            saw_base_relation = True
+            assert set(instances[:, 0].tolist()).issubset(object_indices)
+
+    assert saw_base_relation
+    assert saw_state_relation
 
     action_schema = formatter.format_action_schema(adv_ground_action.get_action())
     action_relation = data.flattened_relations[action_schema]
@@ -297,7 +308,7 @@ def test_flat_horizon_to_networkx_exposes_state_target_metadata(small_blocks):
     graph = encoder.to_networkx(data)
 
     assert isinstance(graph, nx.MultiDiGraph)
-    target_node_name = data.graph_target_entity_names(0)[1]
+    target_node_name = data.graph_target_entity_names(0)[0]
     attrs = graph.nodes[target_node_name]
     assert attrs["target_group"] == "state"
     assert attrs["target_index"] == 1
@@ -376,14 +387,30 @@ def test_flat_horizon_lgan_respects_root_candidate_exclusion(small_blocks):
         domain,
         ignore_actions=False,
         include_lgan_edges=True,
-        exclude_root_candidate=True,
+        root_policy="exclude",
     )
 
     data = encoder.encode_pyg(root, dag=dag)
 
-    root_position = int(data.graph_target_entity_indices(0)[0].item())
+    assert data.graph_target_indices(0).tolist() == [1]
     tn_entity_indices = set(data.graph_lgan_tn_edges(0)[1].tolist())
-    assert root_position not in tn_entity_indices
+    assert tn_entity_indices.issubset(set(data.graph_target_positions(0).tolist()))
+
+
+def test_flat_horizon_encode_only_keeps_root_state_relations(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    data = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        root_policy="encode_only",
+    ).encode_pyg(root, dag=dag)
+
+    relation_names = set(data.flattened_relations.keys())
+    assert not any("[state]" in name for name in relation_names)
+    assert 0 not in data.graph_target_indices(0).tolist()
 
 
 def test_flat_horizon_lgan_rejects_missing_candidate_rows(small_blocks):

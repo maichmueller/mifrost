@@ -78,9 +78,9 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       ASSERT_EQ(positions.size(), depths.size());
       ASSERT_EQ(builder.lazy_target_name_states.size(), positions.size());
       ASSERT_EQ(positions.size(), names.size());
-      const size_t expected_candidates = config.exclude_root_candidate
-                                            ? (dag.nodes().empty() ? 0u : dag.nodes().size() - 1u)
-                                            : dag.nodes().size();
+      const size_t expected_candidates = root_in_target_metadata(config.root_policy)
+                                            ? dag.nodes().size()
+                                            : (dag.nodes().empty() ? 0u : dag.nodes().size() - 1u);
       ASSERT_EQ(positions.size(), expected_candidates);
       ASSERT_FALSE(positions.empty());
 
@@ -101,7 +101,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
 
       size_t candidate_pos = 0;
       for(const auto& node : dag.nodes()) {
-         if(config.exclude_root_candidate and node.index == dag.root_index()) {
+         if(not root_in_target_metadata(config.root_policy) and node.index == dag.root_index()) {
             continue;
          }
          const std::string key = config.target_symbol_prefix + std::to_string(node.index);
@@ -125,6 +125,83 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
          }
       }
    }
+}
+
+TEST_P(HorizonHGraphEncoderTest, ExcludedRootDropsFactEdgesFromRootSymbol)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, succ_state, succ_action);
+   const auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   auto root_src_indices_for = [&](RootPolicy root_policy) {
+      HorizonHGraphEncoderEngine::Config config;
+      config.root_policy = root_policy;
+      HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
+
+      BatchBuilder builder;
+      builder.set_graph_kind("hetero");
+      engine.encode(ctx.root, dag, goals, builder);
+      builder.next_graph();
+
+      const auto symbol_it = builder.node_names.find(config.symbol_type_id);
+      EXPECT_NE(symbol_it, builder.node_names.end());
+      if(symbol_it == builder.node_names.end()) {
+         return std::pair{int64_t{-1}, std::unordered_set< int64_t >{}};
+      }
+      const auto& symbol_names = symbol_it->second;
+      const auto root_it = std::find(
+         symbol_names.begin(), symbol_names.end(), config.target_symbol_prefix + "0"
+      );
+      EXPECT_NE(root_it, symbol_names.end());
+      if(root_it == symbol_names.end()) {
+         return std::pair{int64_t{-1}, std::unordered_set< int64_t >{}};
+      }
+      const int64_t root_symbol_idx = static_cast< int64_t >(
+         std::distance(symbol_names.begin(), root_it)
+      );
+
+      std::unordered_set< int64_t > src_indices;
+      const std::string prefix = config.symbol_type_id + "|0|";
+      for(const auto& [key, _] : builder.columns) {
+         static constexpr std::string_view kSuffix = "/edge_index_0";
+         if(key.size() < prefix.size() + kSuffix.size()
+            || key.compare(0, prefix.size(), prefix) != 0
+            || key.compare(key.size() - kSuffix.size(), kSuffix.size(), kSuffix) != 0) {
+            continue;
+         }
+         const auto edge_type = key.substr(0, key.size() - kSuffix.size());
+         const auto second_sep = edge_type.rfind('|');
+         EXPECT_NE(second_sep, std::string::npos);
+         if(second_sep == std::string::npos) {
+            continue;
+         }
+         const auto dst_type = edge_type.substr(second_sep + 1);
+         if(dst_type == config.parent_relation || dst_type == config.sibling_relation
+            || dst_type == config.cousin_relation) {
+            continue;
+         }
+         for(const auto& [src_idx, _dst_idx] : mifrost_test::edge_pairs_for(builder, edge_type)) {
+            src_indices.insert(src_idx);
+         }
+      }
+
+      return std::pair{root_symbol_idx, src_indices};
+   };
+
+   const auto [excluded_root_idx, excluded_srcs] = root_src_indices_for(RootPolicy::Exclude);
+   EXPECT_FALSE(excluded_srcs.contains(excluded_root_idx));
+
+   const auto [encode_only_root_idx, encode_only_srcs] = root_src_indices_for(
+      RootPolicy::EncodeOnly
+   );
+   EXPECT_TRUE(encode_only_srcs.contains(encode_only_root_idx));
+
+   const auto [included_root_idx, included_srcs] = root_src_indices_for(RootPolicy::Include);
+   EXPECT_TRUE(included_srcs.contains(included_root_idx));
 }
 
 TEST_P(HorizonHGraphEncoderTest, RejectsPartialExplicitCandidateIds)
@@ -295,9 +372,12 @@ TEST_P(HorizonHGraphEncoderTest, DeltaModeEncodesOnlyChangedLiteralsForSuccessor
       if(atom->get_predicate()->get_arity() == 0 && not config.add_nullary_predicates) {
          return;
       }
-      const std::string node_type = RelationFormatter::format_predicate(
+      std::string node_type = RelationFormatter::format_predicate(
          atom->get_predicate(), std::nullopt, std::nullopt, polarity
       );
+      if(root_uses_split_state_relations(config.root_policy)) {
+         node_type += "[state]";
+      }
       const std::string atom_str = RelationFormatter::format_atom(atom);
       const std::string literal_str = fmt::format(
          "{}{}", RelationFormatter::polarity_prefix(polarity), atom_str

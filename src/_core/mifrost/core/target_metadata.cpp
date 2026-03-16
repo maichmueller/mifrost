@@ -155,19 +155,20 @@ void append_target_candidate_row(
 std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    const TransitionDAG& dag,
    const hash_map< int64_t, int64_t >& positions_by_index,
-   bool exclude_root_candidate,
+   RootPolicy root_policy,
    std::optional< int64_t > group_id,
    bool include_names
 )
 {
    const auto& nodes = dag.nodes();
-   const size_t reserved = (exclude_root_candidate and not nodes.empty()) ? (nodes.size() - 1)
-                                                                          : nodes.size();
+   const size_t reserved = (not root_in_target_metadata(root_policy) and not nodes.empty())
+                              ? (nodes.size() - 1)
+                              : nodes.size();
    std::vector< TargetCandidateRow > rows;
    rows.reserve(reserved);
 
    for(const auto& node : nodes) {
-      if(exclude_root_candidate and node.index == dag.root_index()) {
+      if(not root_in_target_metadata(root_policy) and node.index == dag.root_index()) {
          continue;
       }
       const auto position_it = positions_by_index.find(node.index);

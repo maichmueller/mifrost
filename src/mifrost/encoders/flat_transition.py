@@ -253,13 +253,13 @@ class FlatTransitionEncoder(_FlatTransitionEncoderBase):
         LGAN, when enabled, uses successor-state candidate rows from the
         underlying flat horizon lane.
         """
+        kwargs.setdefault("root_policy", "exclude")
         super().__init__(
             domain,
             transition_mode="full",
             enable_parent_relation=False,
             enable_sibling_relation=False,
             enable_cousin_relation=False,
-            exclude_root_candidate=True,
             ignore_actions=True,
             **kwargs,
         )
@@ -274,13 +274,13 @@ class FlatTransitionEffectsEncoder(_FlatTransitionEncoderBase):
 
     def __init__(self, domain, **kwargs) -> None:
         """Create a delta/effects flat transition encoder."""
+        kwargs.setdefault("root_policy", "exclude")
         super().__init__(
             domain,
             transition_mode="delta",
             enable_parent_relation=False,
             enable_sibling_relation=False,
             enable_cousin_relation=False,
-            exclude_root_candidate=True,
             ignore_actions=True,
             **kwargs,
         )

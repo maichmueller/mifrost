@@ -50,6 +50,10 @@ void apply_horizon_config_kwargs(
 
 void init_horizon_encoder(nb::module_& m)
 {
+   nb::enum_< RootPolicy >(m, "RootPolicy")
+      .value("Include", RootPolicy::Include)
+      .value("EncodeOnly", RootPolicy::EncodeOnly)
+      .value("Exclude", RootPolicy::Exclude);
    nb::enum_< HorizonHGraphEncoderEngine::Mode >(m, "HorizonEncoderMode")
       .value("Full", HorizonHGraphEncoderEngine::Mode::Full)
       .value("Delta", HorizonHGraphEncoderEngine::Mode::Delta)
@@ -79,9 +83,7 @@ void init_horizon_encoder(nb::module_& m)
          "enable_sibling_relation", &HorizonHGraphEncoderEngine::Config::enable_sibling_relation
       )
       .def_rw("enable_cousin_relation", &HorizonHGraphEncoderEngine::Config::enable_cousin_relation)
-      .def_rw(
-         "exclude_root_candidate", &HorizonHGraphEncoderEngine::Config::exclude_root_candidate
-      );
+      .def_rw("root_policy", &HorizonHGraphEncoderEngine::Config::root_policy);
 
    nb::class_< HorizonHGraphEncoderEngine, HGraphEncoderEngine >(m, "HorizonHGraphEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
@@ -220,7 +222,7 @@ void init_horizon_encoder(nb::module_& m)
       .def_rw("enable_parent_relation", &FlatHorizonEncoderEngine::Config::enable_parent_relation)
       .def_rw("enable_sibling_relation", &FlatHorizonEncoderEngine::Config::enable_sibling_relation)
       .def_rw("enable_cousin_relation", &FlatHorizonEncoderEngine::Config::enable_cousin_relation)
-      .def_rw("exclude_root_candidate", &FlatHorizonEncoderEngine::Config::exclude_root_candidate)
+      .def_rw("root_policy", &FlatHorizonEncoderEngine::Config::root_policy)
       .def_rw("goal_derivations", &FlatHorizonEncoderEngine::Config::goal_derivations);
 
    nb::class_< FlatHorizonEncoderEngine >(m, "FlatHorizonEncoderEngine")

@@ -15,6 +15,7 @@
 #include "default_relations.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
+#include "root_policy.hpp"
 #include "stream_encoder_base.hpp"
 #include "target_metadata.hpp"
 #include "target_source.hpp"
@@ -55,7 +56,7 @@ class FlatHorizonEncoderEngine {
       bool enable_parent_relation = false;
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
-      bool exclude_root_candidate = true;
+      RootPolicy root_policy = RootPolicy::Exclude;
       std::set< GoalDerivation > goal_derivations = {
          GoalDerivation::plain,
          GoalDerivation::satisfied,
@@ -167,7 +168,7 @@ BOOST_DESCRIBE_STRUCT(
     enable_parent_relation,
     enable_sibling_relation,
     enable_cousin_relation,
-    exclude_root_candidate,
+    root_policy,
     goal_derivations)
 )
 

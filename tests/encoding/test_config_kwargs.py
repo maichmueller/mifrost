@@ -111,12 +111,12 @@ def test_horizon_encoder_exposes_unified_config(small_blocks) -> None:
     encoder = mifrost.HorizonEncoder(
         domain,
         transition_mode=mifrost.HorizonEncoderMode.Delta,
-        exclude_root_candidate=False,
+        root_policy="include",
         include_static=False,
         symbol_type_id="_sym_",
     )
     assert encoder.config.transition_mode == mifrost.HorizonEncoderMode.Delta
-    assert encoder.config.exclude_root_candidate is False
+    assert encoder.config.root_policy == mifrost.RootPolicy.Include
     assert encoder.config.include_static is False
     assert encoder.config.symbol_type_id == "_sym_"
 

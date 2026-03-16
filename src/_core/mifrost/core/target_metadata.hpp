@@ -9,6 +9,7 @@
 
 #include "batch_builder.hpp"
 #include "common_types.hpp"
+#include "root_policy.hpp"
 
 namespace mifrost {
 
@@ -89,7 +90,7 @@ void append_target_candidate_row(
 std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    const TransitionDAG& dag,
    const hash_map< int64_t, int64_t >& positions_by_index,
-   bool exclude_root_candidate,
+   RootPolicy root_policy,
    std::optional< int64_t > group_id,
    bool include_names = true
 );

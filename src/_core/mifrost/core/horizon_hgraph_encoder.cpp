@@ -17,6 +17,17 @@ namespace mifrost {
 
 namespace {
 
+constexpr std::string_view kHiddenRootPrefix = "_root|";
+constexpr std::string_view kCandidateRelationSuffix = "[state]";
+
+template < typename... Args >
+std::string state_anchored_relation_name(const std::string_view name, Args&&... args)
+{
+   return RelationFormatter::format_predicate(
+      name, std::forward< Args >(args)..., kCandidateRelationSuffix
+   );
+}
+
 HorizonHGraphEncoderEngine::Config normalize_horizon_config(
    HorizonHGraphEncoderEngine::Config config
 )
@@ -30,7 +41,7 @@ HorizonHGraphEncoderEngine::Config normalize_horizon_config(
 
 RelationDict build_horizon_relation_dict(
    const mimir::formalism::DomainImpl& domain,
-   const HGraphEncoderEngine::Config& config
+   const HorizonHGraphEncoderEngine::Config& config
 )
 {
    RelationDictConfig rel_config;
@@ -44,13 +55,85 @@ RelationDict build_horizon_relation_dict(
       actions.assign(domain.get_actions().begin(), domain.get_actions().end());
    }
 
-   return RelationDict(
+   auto relation_dict = RelationDict(
       domain,
       actions,
       rel_config,
-      /*predicate_arity_offset=*/1,
+      /*predicate_arity_offset=*/root_in_state_relations(config.root_policy) ? 1 : 0,
       /*action_arity_offset=*/1
    );
+
+   if(root_uses_split_state_relations(config.root_policy)) {
+      const auto top_type_predicates = rel_config.top_type_predicates;
+      auto add_predicate_relation = [&](const std::string& base_name, int base_arity) {
+         relation_dict.arity[state_anchored_relation_name(base_name)] = base_arity + 1;
+      };
+      auto collect_predicates = [&]< typename Tag >(Tag) {
+         for(const auto predicate : domain.get_predicates< Tag >()) {
+            const std::string base_name = RelationFormatter::format_predicate(predicate);
+            const int base_arity = static_cast< int >(predicate->get_arity());
+            add_predicate_relation(base_name, base_arity);
+            if(top_type_predicates.contains(predicate->get_name())) {
+               continue;
+            }
+            if(config.goal_derivations.contains(GoalDerivation::plain)) {
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
+                  for(bool polarity : {true, false}) {
+                     add_predicate_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, goal_level, std::nullopt, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+               if(config.support_literals) {
+                  for(bool polarity : {true, false}) {
+                     add_predicate_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, std::nullopt, std::nullopt, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+            }
+            for(const auto derivation : config.goal_derivations) {
+               const auto satisfaction = goal_satisfaction_from_derivation(derivation);
+               if(not satisfaction.has_value()) {
+                  continue;
+               }
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
+                  for(bool polarity : {true, false}) {
+                     add_predicate_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, goal_level, *satisfaction, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+               if(config.support_literals) {
+                  for(bool polarity : {true, false}) {
+                     add_predicate_relation(
+                        RelationFormatter::format_predicate(
+                           base_name, std::nullopt, *satisfaction, polarity
+                        ),
+                        base_arity
+                     );
+                  }
+               }
+            }
+         }
+      };
+      collect_predicates(mimir::formalism::StaticTag{});
+      collect_predicates(mimir::formalism::FluentTag{});
+      collect_predicates(mimir::formalism::DerivedTag{});
+   }
+
+   return relation_dict;
 }
 
 }  // namespace
@@ -59,7 +142,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::D
     : HGraphEncoderEngine(domain, normalize_horizon_config(Config{})),
       horizon_config_(normalize_horizon_config(Config{}))
 {
-   relation_dict_ = build_horizon_relation_dict(domain_, config_);
+   relation_dict_ = build_horizon_relation_dict(domain_, horizon_config_);
    configure_relations();
 }
 
@@ -70,7 +153,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
       horizon_config_(normalize_horizon_config(std::move(config)))
 {
-   relation_dict_ = build_horizon_relation_dict(domain_, config_);
+   relation_dict_ = build_horizon_relation_dict(domain_, horizon_config_);
    configure_relations();
 }
 
@@ -78,7 +161,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(mimir::formalism::Domain 
     : HGraphEncoderEngine(std::move(domain), normalize_horizon_config(Config{})),
       horizon_config_(normalize_horizon_config(Config{}))
 {
-   relation_dict_ = build_horizon_relation_dict(domain_, config_);
+   relation_dict_ = build_horizon_relation_dict(domain_, horizon_config_);
    configure_relations();
 }
 
@@ -89,7 +172,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
     : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
       horizon_config_(normalize_horizon_config(std::move(config)))
 {
-   relation_dict_ = build_horizon_relation_dict(domain_, config_);
+   relation_dict_ = build_horizon_relation_dict(domain_, horizon_config_);
    configure_relations();
 }
 
@@ -152,7 +235,11 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
             continue;
          }
-         const std::string node_type = RelationFormatter::format_predicate(predicate);
+         std::string node_type = RelationFormatter::format_predicate(predicate);
+         if(root_uses_split_state_relations(horizon_config_.root_policy)
+            and not extra_objects.empty()) {
+            node_type = state_anchored_relation_name(node_type);
+         }
          const uint64_t node_key = pack_u32_u32(
             static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
          );
@@ -320,6 +407,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
                   format_with(std::nullopt, std::nullopt);
                }
             }
+            if(root_uses_split_state_relations(horizon_config_.root_policy)
+               and not extra_objects.empty()) {
+               node_type = state_anchored_relation_name(node_type);
+            }
 
             const uint64_t relation_key = pack_u32_u32(
                static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
@@ -399,9 +490,13 @@ void HorizonHGraphEncoderEngine::encode_impl(
          return;
       }
 
-      const std::string node_type = RelationFormatter::format_predicate(
+      std::string node_type = RelationFormatter::format_predicate(
          predicate, std::nullopt, std::nullopt, polarity
       );
+      if(root_uses_split_state_relations(horizon_config_.root_policy)
+         and not extra_objects.empty()) {
+         node_type = state_anchored_relation_name(node_type);
+      }
       const std::string atom_str = RelationFormatter::format_atom(atom);
       const std::string literal_str = fmt::format(
          "{}{}", RelationFormatter::polarity_prefix(polarity), atom_str
@@ -509,6 +604,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
                                  goal, std::nullopt, sat
                               );
                }
+            }
+            if(root_uses_split_state_relations(horizon_config_.root_policy)
+               and not extra_objects.empty()) {
+               node_type = state_anchored_relation_name(node_type);
             }
 
             const uint64_t relation_key = pack_u32_u32(
@@ -635,7 +734,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
       target_keys[node.index] = key;
       get_or_add_symbol_special_node(key, key, builder, node_names);
       if(config_.include_lgan_edges
-         and not(horizon_config_.exclude_root_candidate and node.index == root_index)) {
+         and not(
+            not root_in_target_metadata(horizon_config_.root_policy) and node.index == root_index
+         )) {
          const auto symbol_id_it = workspace.symbol_key_to_id.find(key);
          if(symbol_id_it != workspace.symbol_key_to_id.end()) {
             workspace.lgan_target_symbol_ids.insert(symbol_id_it->second);
@@ -645,8 +746,15 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    // 2. Encode root state (objects then facts/goals)
    encode_objects(root, builder, node_indices, node_names);
-   const std::string root_prefix = make_prefix(target_keys[0]);
-   const std::array< std::string, 1 > root_extra{target_keys[0]};
+   const bool attach_root_facts_to_root_symbol = root_in_state_relations(
+      horizon_config_.root_policy
+   );
+   const std::string root_prefix = attach_root_facts_to_root_symbol
+                                      ? make_prefix(target_keys[root_index])
+                                      : std::string(kHiddenRootPrefix);
+   const std::span< const std::string >
+      root_extra = attach_root_facts_to_root_symbol ? std::span{&target_keys[root_index], size_t{1}}
+                                                    : std::span< const std::string >{};
 
    const auto root_fact_keys = encode_state_facts_with_prefix(
       root, 0, root_prefix, root_extra, config_.include_static
@@ -1123,7 +1231,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       target_positions_by_index.reserve(nodes.size());
 
       for(const auto& node : nodes) {
-         if(horizon_config_.exclude_root_candidate and node.index == root_index) {
+         if(not root_in_target_metadata(horizon_config_.root_policy) and node.index == root_index) {
             continue;
          }
          const auto key = target_keys[node.index];
@@ -1142,7 +1250,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          const auto candidate_rows = collect_transition_dag_target_candidate_rows(
             dag,
             target_positions_by_index,
-            horizon_config_.exclude_root_candidate,
+            horizon_config_.root_policy,
             state_target_group_id,
             /*include_names=*/false
          );
@@ -1159,7 +1267,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
          if(config_.export_node_names) {
             target_name_states.reserve(candidate_rows.size());
             for(const auto& node : nodes) {
-               if(horizon_config_.exclude_root_candidate and node.index == root_index) {
+               if(not root_in_target_metadata(horizon_config_.root_policy)
+                  and node.index == root_index) {
                   continue;
                }
                if(not target_positions_by_index.contains(node.index)) {

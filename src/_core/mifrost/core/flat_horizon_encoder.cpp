@@ -49,6 +49,16 @@ constexpr std::string_view kLGANRRDstRelationIndicesField = "lgan_rr_dst_relatio
 constexpr std::string_view kLGANTNEdgePosAttr = "lgan_tn_edge_pos";
 constexpr std::string_view kLGANNNEdgePosAttr = "lgan_nn_edge_pos";
 constexpr std::string_view kLGANRREdgePosAttr = "lgan_rr_edge_pos";
+constexpr std::string_view kHiddenRootCarrierName = "_root_state_";
+constexpr std::string_view kCandidateRelationSuffix = "[state]";
+
+template < typename... Args >
+std::string state_anchored_relation_name(const std::string_view name, Args&&... args)
+{
+   return RelationFormatter::format_predicate(
+      name, std::forward< Args >(args)..., kCandidateRelationSuffix
+   );
+}
 
 template < typename LiteralTag >
 uint32_t fact_tag_id()
@@ -183,12 +193,14 @@ template < typename AtomTag >
 std::vector< int64_t > local_arg_rows_for_atom(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
-   int64_t state_entity_index
+   std::optional< int64_t > state_entity_index
 )
 {
    std::vector< int64_t > args;
-   args.reserve(atom->get_objects().size() + 1);
-   args.push_back(state_entity_index);
+   args.reserve(atom->get_objects().size() + (state_entity_index.has_value() ? 1U : 0U));
+   if(state_entity_index.has_value()) {
+      args.push_back(*state_entity_index);
+   }
    for(const auto& obj : atom->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(
          static_cast< int64_t >(obj->get_index())
@@ -207,12 +219,14 @@ std::vector< int64_t > local_arg_rows_for_atom(
 std::vector< int64_t > local_arg_rows_for_action(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAction& action,
-   int64_t state_entity_index
+   std::optional< int64_t > state_entity_index
 )
 {
    std::vector< int64_t > args;
-   args.reserve(action->get_objects().size() + 1);
-   args.push_back(state_entity_index);
+   args.reserve(action->get_objects().size() + (state_entity_index.has_value() ? 1U : 0U));
+   if(state_entity_index.has_value()) {
+      args.push_back(*state_entity_index);
+   }
    for(const auto& obj : action->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(
          static_cast< int64_t >(obj->get_index())
@@ -282,7 +296,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       for(const auto predicate : domain_.get_predicates< Tag >()) {
          PredicateSpec spec{
             .name = RelationFormatter::format_predicate(predicate),
-            .arity = static_cast< int >(predicate->get_arity()) + 1,
+            .arity = static_cast< int >(predicate->get_arity()),
          };
          predicate_specs_.push_back(spec);
          if(not top_type_predicates.contains(predicate->get_name())) {
@@ -310,7 +324,9 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    }
    std::ranges::sort(action_specs_, predicate_order);
 
-   relation_dict_ = RelationDict(domain_, actions, rel_config, 1, 1);
+   relation_dict_ = RelationDict(
+      domain_, actions, rel_config, root_in_state_relations(config_.root_policy) ? 1 : 0, 1
+   );
    if(config_.enable_parent_relation) {
       relation_dict_.arity[config_.parent_relation] = 2;
    }
@@ -325,28 +341,43 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    target_metadata_group_names_ = target_entity_group_names_;
 
    std::map< std::string, std::string > relation_sources_by_name;
+   auto add_predicate_relation =
+      [&](const std::string& base_name, int base_arity, std::string source) {
+         relation_dict_.arity[base_name] = root_in_state_relations(config_.root_policy)
+                                              ? base_arity + 1
+                                              : base_arity;
+         relation_sources_by_name[base_name] = source;
+         if(root_uses_split_state_relations(config_.root_policy)) {
+            const auto candidate_name = state_anchored_relation_name(base_name);
+            relation_dict_.arity[candidate_name] = base_arity + 1;
+            relation_sources_by_name[candidate_name] = source;
+         }
+      };
+
    for(const auto& spec : predicate_specs_) {
-      relation_sources_by_name.emplace(spec.name, "state");
+      add_predicate_relation(spec.name, spec.arity, "state");
    }
    for(const auto& spec : regular_predicate_specs_) {
       if(config_.goal_derivations.contains(GoalDerivation::plain)) {
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
-               relation_sources_by_name.emplace(
+               add_predicate_relation(
                   RelationFormatter::format_predicate(
                      spec.name, goal_level, std::nullopt, polarity
                   ),
+                  spec.arity,
                   "goal"
                );
             }
          }
          if(config_.support_literals) {
             for(bool polarity : {true, false}) {
-               relation_sources_by_name.emplace(
+               add_predicate_relation(
                   RelationFormatter::format_predicate(
                      spec.name, std::nullopt, std::nullopt, polarity
                   ),
+                  spec.arity,
                   "state"
                );
             }
@@ -360,20 +391,22 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
-               relation_sources_by_name.emplace(
+               add_predicate_relation(
                   RelationFormatter::format_predicate(
                      spec.name, goal_level, *satisfaction, polarity
                   ),
+                  spec.arity,
                   "goal_satisfaction"
                );
             }
          }
          if(config_.support_literals) {
             for(bool polarity : {true, false}) {
-               relation_sources_by_name.emplace(
+               add_predicate_relation(
                   RelationFormatter::format_predicate(
                      spec.name, std::nullopt, *satisfaction, polarity
                   ),
+                  spec.arity,
                   "goal_satisfaction"
                );
             }
@@ -652,11 +685,15 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    context.object_indices.reserve(ordered.size());
    context.entity_index_by_object_id.reserve(ordered.size());
    context.state_entity_index_by_node_index.reserve(nodes.size());
-   context.target_entity_indices.reserve(nodes.size());
-   context.target_entity_group_ids.reserve(nodes.size());
+   context.target_entity_indices.reserve(
+      (not root_in_target_metadata(config_.root_policy) and not nodes.empty()) ? nodes.size() - 1
+                                                                               : nodes.size()
+   );
+   context.target_entity_group_ids.reserve(context.target_entity_indices.capacity());
    context.target_name_states.reserve(nodes.size());
    context.target_columns.reserve(
-      (config_.exclude_root_candidate and not nodes.empty()) ? nodes.size() - 1 : nodes.size(),
+      (not root_in_target_metadata(config_.root_policy) and not nodes.empty()) ? nodes.size() - 1
+                                                                               : nodes.size(),
       /*include_depth=*/true,
       /*include_group=*/true
    );
@@ -677,18 +714,26 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    target_positions_by_index.reserve(nodes.size());
    for(const auto& node : nodes) {
       const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
-      const std::string node_name = target_node_name(node.index);
+      const bool include_in_target_metadata = not(
+         not root_in_target_metadata(config_.root_policy) and node.index == dag.root_index()
+      );
+      const bool include_in_public_carrier = root_in_public_carrier(config_.root_policy)
+                                             || node.index != dag.root_index();
+      const std::string node_name = include_in_public_carrier ? target_node_name(node.index)
+                                                              : std::string(kHiddenRootCarrierName);
       context.entity_names.push_back(node_name);
-      context.target_entity_indices.push_back(local_index);
-      context.target_entity_group_ids.push_back(0);
       context.state_entity_index_by_node_index.emplace(node.index, local_index);
-      target_positions_by_index.emplace(node.index, local_index);
+      if(include_in_target_metadata) {
+         context.target_entity_indices.push_back(local_index);
+         context.target_entity_group_ids.push_back(0);
+         target_positions_by_index.emplace(node.index, local_index);
+      }
    }
 
    const auto rows = collect_transition_dag_target_candidate_rows(
       dag,
       target_positions_by_index,
-      config_.exclude_root_candidate,
+      config_.root_policy,
       int64_t{0},
       /*include_names=*/false
    );
@@ -704,7 +749,7 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    );
    if(config_.export_node_names) {
       for(const auto& node : nodes) {
-         if(config_.exclude_root_candidate and node.index == dag.root_index()) {
+         if(not root_in_target_metadata(config_.root_policy) and node.index == dag.root_index()) {
             continue;
          }
          if(not target_positions_by_index.contains(node.index)) {
@@ -776,32 +821,46 @@ void FlatHorizonEncoderEngine::encode_impl(
    }();
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
-   auto emit_state_facts =
-      [&]< typename Tag >(
-         const auto& atoms, int64_t state_entity_index, hash_set< uint64_t >& fact_keys
-      ) {
-         for(const auto& atom : atoms) {
-            const int raw_arity = static_cast< int >(atom->get_predicate()->get_arity());
-            if(config_.ignore_zero_arity_relations and raw_arity == 0) {
-               continue;
-            }
-            const auto relation_id = relation_id_for(
-               RelationFormatter::format_predicate(atom->get_predicate())
-            );
-            const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
-            sink.emit(relation_id, args);
-            fact_keys.insert(
-               pack_u32_u32(static_cast< uint32_t >(atom->get_index()), fact_tag_id< Tag >())
-            );
+   auto emit_state_facts = [&]< typename Tag >(
+                              const auto& atoms,
+                              std::optional< int64_t > state_entity_index,
+                              hash_set< uint64_t >& fact_keys
+                           ) {
+      for(const auto& atom : atoms) {
+         const int raw_arity = static_cast< int >(atom->get_predicate()->get_arity());
+         if(config_.ignore_zero_arity_relations and raw_arity == 0) {
+            continue;
          }
-      };
+         const std::string base_relation_name = RelationFormatter::format_predicate(
+            atom->get_predicate()
+         );
+         const auto relation_id = relation_id_for(
+            state_entity_index.has_value() && root_uses_split_state_relations(config_.root_policy)
+               ? state_anchored_relation_name(base_relation_name)
+               : base_relation_name
+         );
+         const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
+         sink.emit(relation_id, args);
+         fact_keys.insert(
+            pack_u32_u32(static_cast< uint32_t >(atom->get_index()), fact_tag_id< Tag >())
+         );
+      }
+   };
 
-   auto emit_state_for_candidate =
-      [&](
-         const mimir::search::State& state, int node_index, bool include_static
-      ) -> hash_set< uint64_t > {
+   auto emit_state_for_candidate = [&](
+                                      const mimir::search::State& state,
+                                      int node_index,
+                                      bool include_static,
+                                      bool include_state_anchor
+                                   ) -> hash_set< uint64_t > {
       hash_set< uint64_t > fact_keys;
-      const int64_t state_entity_index = state_entity_index_for(context, node_index);
+      const std::optional< int64_t > state_entity_index = include_state_anchor
+                                                             ? std::optional< int64_t >(
+                                                                  state_entity_index_for(
+                                                                     context, node_index
+                                                                  )
+                                                               )
+                                                             : std::nullopt;
       const auto& problem = state.get_problem();
       const auto& repos = problem.get_repositories();
 
@@ -839,9 +898,16 @@ void FlatHorizonEncoderEngine::encode_impl(
       [&]< typename GoalTag >(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
          const auto& goal_levels,
-         int node_index
+         int node_index,
+         bool include_state_anchor
       ) {
-         const int64_t state_entity_index = state_entity_index_for(context, node_index);
+         const std::optional< int64_t > state_entity_index = include_state_anchor
+                                                                ? std::optional< int64_t >(
+                                                                     state_entity_index_for(
+                                                                        context, node_index
+                                                                     )
+                                                                  )
+                                                                : std::nullopt;
          for(const auto& literal : literals) {
             const auto predicate = literal->get_atom()->get_predicate();
             const int raw_arity = static_cast< int >(predicate->get_arity());
@@ -859,6 +925,10 @@ void FlatHorizonEncoderEngine::encode_impl(
                   predicate, std::nullopt, std::nullopt, literal->get_polarity()
                );
             }
+            if(state_entity_index.has_value()
+               && root_uses_split_state_relations(config_.root_policy)) {
+               relation_name = state_anchored_relation_name(relation_name);
+            }
             const auto relation_id = relation_id_for(relation_name);
             const auto args = local_arg_rows_for_atom(
                context, literal->get_atom(), state_entity_index
@@ -872,9 +942,16 @@ void FlatHorizonEncoderEngine::encode_impl(
          std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
          const auto& goal_levels,
          const hash_set< uint64_t >& fact_keys,
-         int node_index
+         int node_index,
+         bool include_state_anchor
       ) {
-         const int64_t state_entity_index = state_entity_index_for(context, node_index);
+         const std::optional< int64_t > state_entity_index = include_state_anchor
+                                                                ? std::optional< int64_t >(
+                                                                     state_entity_index_for(
+                                                                        context, node_index
+                                                                     )
+                                                                  )
+                                                                : std::nullopt;
          for(const auto& literal : literals) {
             const auto predicate = literal->get_atom()->get_predicate();
             const int raw_arity = static_cast< int >(predicate->get_arity());
@@ -903,6 +980,10 @@ void FlatHorizonEncoderEngine::encode_impl(
                   predicate, std::nullopt, satisfaction, literal->get_polarity()
                );
             }
+            if(state_entity_index.has_value()
+               && root_uses_split_state_relations(config_.root_policy)) {
+               relation_name = state_anchored_relation_name(relation_name);
+            }
             const auto relation_id = relation_id_for(relation_name);
             const auto args = local_arg_rows_for_atom(
                context, literal->get_atom(), state_entity_index
@@ -919,12 +1000,14 @@ void FlatHorizonEncoderEngine::encode_impl(
          if(config_.ignore_zero_arity_relations and raw_arity == 0) {
             return;
          }
-         const int64_t state_entity_index = state_entity_index_for(context, node_index);
-         const auto relation_id = relation_id_for(
-            RelationFormatter::format_predicate(
-               atom->get_predicate(), std::nullopt, std::nullopt, polarity
-            )
+         const auto state_entity_index = state_entity_index_for(context, node_index);
+         std::string relation_name = RelationFormatter::format_predicate(
+            atom->get_predicate(), std::nullopt, std::nullopt, polarity
          );
+         if(root_uses_split_state_relations(config_.root_policy)) {
+            relation_name = state_anchored_relation_name(relation_name);
+         }
+         const auto relation_id = relation_id_for(relation_name);
          const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
          sink.emit(relation_id, args);
       };
@@ -968,6 +1051,9 @@ void FlatHorizonEncoderEngine::encode_impl(
                   atom->get_predicate(), std::nullopt, *sat, goal->get_polarity()
                );
             }
+            if(root_uses_split_state_relations(config_.root_policy)) {
+               relation_name = state_anchored_relation_name(relation_name);
+            }
             const auto relation_id = relation_id_for(relation_name);
             const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
             sink.emit(relation_id, args);
@@ -986,28 +1072,52 @@ void FlatHorizonEncoderEngine::encode_impl(
    const auto root_fact_keys = [&]() {
       ScopedProfileTimer timer(profile != nullptr ? &profile->root_emit_s : nullptr);
       const auto fact_keys = emit_state_for_candidate(
-         root, dag.root_index(), config_.include_static
+         root,
+         dag.root_index(),
+         config_.include_static,
+         /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
       );
       if(config_.goal_derivations.contains(GoalDerivation::plain)) {
          emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
-            std::span{goals.static_goals}, goals.static_goal_levels, dag.root_index()
+            std::span{goals.static_goals},
+            goals.static_goal_levels,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
          emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
-            std::span{goals.fluent_goals}, goals.fluent_goal_levels, dag.root_index()
+            std::span{goals.fluent_goals},
+            goals.fluent_goal_levels,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
          emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
-            std::span{goals.derived_goals}, goals.derived_goal_levels, dag.root_index()
+            std::span{goals.derived_goals},
+            goals.derived_goal_levels,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
       }
       if(has_non_plain_goal_derivations(config_.goal_derivations)) {
          emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
-            std::span{goals.static_goals}, goals.static_goal_levels, fact_keys, dag.root_index()
+            std::span{goals.static_goals},
+            goals.static_goal_levels,
+            fact_keys,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
          emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
-            std::span{goals.fluent_goals}, goals.fluent_goal_levels, fact_keys, dag.root_index()
+            std::span{goals.fluent_goals},
+            goals.fluent_goal_levels,
+            fact_keys,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
          emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-            std::span{goals.derived_goals}, goals.derived_goal_levels, fact_keys, dag.root_index()
+            std::span{goals.derived_goals},
+            goals.derived_goal_levels,
+            fact_keys,
+            dag.root_index(),
+            /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
       }
       return fact_keys;
@@ -1086,7 +1196,9 @@ void FlatHorizonEncoderEngine::encode_impl(
          }
 
          if(config_.transition_mode == Mode::Full) {
-            const auto succ_fact_keys = emit_state_for_candidate(node.state, node.index, false);
+            const auto succ_fact_keys = emit_state_for_candidate(
+               node.state, node.index, false, /*include_state_anchor=*/true
+            );
             if(encode_actions and node.action.has_value()) {
                emit_action(*node.action, node.index);
             }
@@ -1095,19 +1207,22 @@ void FlatHorizonEncoderEngine::encode_impl(
                   std::span{goals.static_goals},
                   goals.static_goal_levels,
                   succ_fact_keys,
-                  node.index
+                  node.index,
+                  /*include_state_anchor=*/true
                );
                emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
                   std::span{goals.fluent_goals},
                   goals.fluent_goal_levels,
                   succ_fact_keys,
-                  node.index
+                  node.index,
+                  /*include_state_anchor=*/true
                );
                emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
                   std::span{goals.derived_goals},
                   goals.derived_goal_levels,
                   succ_fact_keys,
-                  node.index
+                  node.index,
+                  /*include_state_anchor=*/true
                );
             }
          } else if(config_.transition_mode == Mode::Delta) {

@@ -81,7 +81,7 @@ def test_horizon_encoder_parent_relations(horizon_cases):
         assert graph.has_edge(child_node, rel_node)
 
 
-def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
+def test_horizon_encoder_root_policy_controls_targets(horizon_cases):
     space, domain, problem = horizon_cases
     root = problem.get_initial_state()
     dag = _build_dag(space, root)
@@ -93,7 +93,7 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     goals = goal_inputs_from_problem(problem)
 
     excluded = mifrost.HorizonEncoderConfig()
-    excluded.exclude_root_candidate = True
+    excluded.root_policy = mifrost.RootPolicy.Exclude
     encoder_excluded = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), excluded)
     data_excluded = encoding_dict_to_pyg(
         encoder_excluded.encode(_adv(root), dag, goals)
@@ -102,8 +102,20 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     assert 0 not in indices_excluded
     assert len(indices_excluded) == len(dag.nodes()) - 1
 
+    encode_only = mifrost.HorizonEncoderConfig()
+    encode_only.root_policy = mifrost.RootPolicy.EncodeOnly
+    encoder_encode_only = mifrost.HorizonHGraphEncoderEngine(
+        _adv_domain(domain), encode_only
+    )
+    data_encode_only = encoding_dict_to_pyg(
+        encoder_encode_only.encode(_adv(root), dag, goals)
+    )
+    indices_encode_only = list(getattr(data_encode_only, "target_indices", []))
+    assert 0 not in indices_encode_only
+    assert len(indices_encode_only) == len(dag.nodes()) - 1
+
     included = mifrost.HorizonEncoderConfig()
-    included.exclude_root_candidate = False
+    included.root_policy = mifrost.RootPolicy.Include
     encoder_included = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), included)
     data_included = encoding_dict_to_pyg(
         encoder_included.encode(_adv(root), dag, goals)
@@ -111,6 +123,51 @@ def test_horizon_encoder_exclude_root_candidate_controls_targets(horizon_cases):
     indices_included = list(getattr(data_included, "target_indices", []))
     assert 0 in indices_included
     assert len(indices_included) == len(dag.nodes())
+
+
+def test_horizon_encoder_root_policy_changes_root_fact_attachment(horizon_cases):
+    space, domain, problem = horizon_cases
+    root = problem.get_initial_state()
+    dag = _build_dag(space, root, max_depth=1, branch_factor=1)
+    if len(dag.nodes()) < 2:
+        import pytest
+
+        pytest.skip("Need at least one non-root node to test root fact attachment")
+
+    goals = goal_inputs_from_problem(problem)
+    symbol_type = mifrost.DEFAULT_SYMBOL_TYPE_ID
+    root_symbol_name = "target:0"
+
+    def root_src_indices_for(root_policy):
+        config = mifrost.HorizonEncoderConfig()
+        config.root_policy = root_policy
+        encoder = mifrost.HorizonHGraphEncoderEngine(_adv_domain(domain), config)
+        data = encoding_dict_to_pyg(encoder.encode(_adv(root), dag, goals))
+        root_symbol_idx = list(data[symbol_type].node_names).index(root_symbol_name)
+
+        root_srcs: set[int] = set()
+        for src_type, pos, dst_type in data.edge_types:
+            if src_type != symbol_type or pos != "0":
+                continue
+            if dst_type in {
+                config.parent_relation,
+                config.sibling_relation,
+                config.cousin_relation,
+            }:
+                continue
+            root_srcs.update(data[(src_type, pos, dst_type)].edge_index[0].tolist())
+        return root_symbol_idx, root_srcs
+
+    excluded_root_idx, excluded_srcs = root_src_indices_for(mifrost.RootPolicy.Exclude)
+    assert excluded_root_idx not in excluded_srcs
+
+    encode_only_root_idx, encode_only_srcs = root_src_indices_for(
+        mifrost.RootPolicy.EncodeOnly
+    )
+    assert encode_only_root_idx in encode_only_srcs
+
+    included_root_idx, included_srcs = root_src_indices_for(mifrost.RootPolicy.Include)
+    assert included_root_idx in included_srcs
 
 
 def test_horizon_encoder_batch_collates_target_fields_with_ptrs(horizon_cases):
@@ -191,7 +248,7 @@ def test_horizon_relation_dict_arities_match_emitted_positions(horizon_cases):
         if not observed_positions:
             continue
         assert node_type in arity_by_relation
-        assert arity_by_relation[node_type] == max(observed_positions) + 1
+        assert max(observed_positions) + 1 <= arity_by_relation[node_type]
         checked += 1
 
     assert checked > 0

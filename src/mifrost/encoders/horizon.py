@@ -46,6 +46,7 @@ from ._lane_specs import (
     validate_batch_optional_payloads,
     validate_single_optional_payloads,
 )
+from ._root_policy import RootPolicy, normalize_root_policy
 from ._rustworkx_dag import (
     RXStateDAG,
     _normalize_dag_batch_data,
@@ -134,7 +135,7 @@ class HorizonEncoder(HGraphEncoder):
         enable_parent_relation: bool | None = None,
         enable_sibling_relation: bool | None = None,
         enable_cousin_relation: bool | None = None,
-        exclude_root_candidate: bool | None = None,
+        root_policy: RootPolicy | str | None = None,
         max_goal_level: int | None = None,
         symbol_type_id: str | None = DEFAULT_SYMBOL_TYPE_ID,
         ignore_actions: bool | None = None,
@@ -160,11 +161,18 @@ class HorizonEncoder(HGraphEncoder):
 
         - `state`: successor or candidate states from the DAG
 
+        `root_policy` controls how the root state is treated:
+
+        - `include`: encode the root and expose it as a target
+        - `encode_only`: encode the root, but omit it from targets and metadata
+        - `exclude`: omit the root from targets and keep root facts as base facts
+
         The main-lane sources `action`, `goal`, `subgoal`, and `history` do
         not create separate targets here. When `include_lgan_edges=True`, LGAN
         anchors are those candidate state rows. There is no
         `lgan_anchor_sources` switch here.
         """
+        normalized_root_policy = normalize_root_policy(root_policy)
         super().__init__(
             domain,
             symbol_type_id=symbol_type_id,
@@ -193,7 +201,7 @@ class HorizonEncoder(HGraphEncoder):
             enable_parent_relation=enable_parent_relation,
             enable_sibling_relation=enable_sibling_relation,
             enable_cousin_relation=enable_cousin_relation,
-            exclude_root_candidate=exclude_root_candidate,
+            root_policy=normalized_root_policy,
         )
         config = self.config
         self.target_symbol_prefix = config.target_symbol_prefix
