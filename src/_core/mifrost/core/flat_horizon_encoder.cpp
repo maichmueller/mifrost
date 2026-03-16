@@ -295,7 +295,9 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    rel_config.goal_derivations = config_.goal_derivations;
 
    std::vector< mimir::formalism::Action > actions;
-   actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
+   if(not config_.ignore_actions) {
+      actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
+   }
 
    const auto top_type_predicates = rel_config.top_type_predicates;
    auto collect_predicates = [&]< typename Tag >(Tag) {
