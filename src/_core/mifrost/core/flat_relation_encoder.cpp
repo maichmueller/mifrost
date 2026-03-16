@@ -514,7 +514,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       RelationSchemaRegistry& registry
    ) const override
    {
-      if(not engine.config_.goal_derivations.contains(GoalDerivation::plain)) {
+      if(not includes_plain_goal_derivation(engine.config_.goal_derivations)) {
          return;
       }
       for(const auto& spec : engine.regular_predicate_specs_) {
@@ -556,7 +556,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       FlatRelationSink& sink
    ) const override
    {
-      if(not engine.config_.goal_derivations.contains(GoalDerivation::plain)) {
+      if(not includes_plain_goal_derivation(engine.config_.goal_derivations)) {
          return;
       }
       emit_literals(std::span{goals.static_goals}, goals.static_goal_levels, engine, context, sink);
@@ -617,10 +617,8 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
          if(engine.config_.ignore_zero_arity_relations and spec.arity == 0) {
             continue;
          }
-         for(const auto derivation : engine.config_.goal_derivations) {
-            if(derivation == GoalDerivation::plain) {
-               continue;
-            }
+         for(const auto derivation :
+             goal_satisfaction_derivations(engine.config_.goal_derivations)) {
             for(size_t level = 0; level <= engine.config_.max_goal_level; ++level) {
                const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {

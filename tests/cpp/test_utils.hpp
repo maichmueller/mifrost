@@ -204,6 +204,13 @@ inline std::vector< std::string > target_names_for(const EncodingLike& encoding)
       }
       out = *names;
    }
+   if(not encoding.lazy_target_name_strings.empty()) {
+      out.insert(
+         out.end(),
+         encoding.lazy_target_name_strings.begin(),
+         encoding.lazy_target_name_strings.end()
+      );
+   }
    if(not encoding.lazy_target_name_states.empty()) {
       auto lazy_names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
       out.insert(

@@ -76,7 +76,7 @@ RelationDict build_horizon_relation_dict(
             if(top_type_predicates.contains(predicate->get_name())) {
                continue;
             }
-            if(config.goal_derivations.contains(GoalDerivation::plain)) {
+            if(includes_plain_goal_derivation(config.goal_derivations)) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
                   const GoalLevel goal_level(level);
                   for(bool polarity : {true, false}) {
@@ -99,10 +99,7 @@ RelationDict build_horizon_relation_dict(
                   }
                }
             }
-            for(const auto derivation : config.goal_derivations) {
-               if(derivation == GoalDerivation::plain) {
-                  continue;
-               }
+            for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
                   const GoalLevel goal_level(level);
                   for(bool polarity : {true, false}) {
@@ -757,7 +754,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       root, 0, root_prefix, root_extra, config_.include_static
    );
 
-   if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+   if(includes_plain_goal_derivation(config_.goal_derivations)) {
       encode_literals_with_prefix.template operator()< mimir::formalism::StaticTag >(
          std::span{goals.static_goals}, goals.static_goal_levels, 0, root_prefix, root_extra
       );

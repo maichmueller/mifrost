@@ -358,7 +358,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       add_predicate_relation(spec.name, spec.arity, "state");
    }
    for(const auto& spec : regular_predicate_specs_) {
-      if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+      if(includes_plain_goal_derivation(config_.goal_derivations)) {
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
@@ -383,10 +383,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
             }
          }
       }
-      for(const auto derivation : config_.goal_derivations) {
-         if(derivation == GoalDerivation::plain) {
-            continue;
-         }
+      for(const auto derivation : goal_satisfaction_derivations(config_.goal_derivations)) {
          for(size_t level = 0; level <= config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
@@ -1071,7 +1068,7 @@ void FlatHorizonEncoderEngine::encode_impl(
          config_.include_static,
          /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
       );
-      if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+      if(includes_plain_goal_derivation(config_.goal_derivations)) {
          emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
             std::span{goals.static_goals},
             goals.static_goal_levels,

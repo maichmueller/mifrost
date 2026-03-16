@@ -13,6 +13,7 @@
 #include <mimir/formalism/object.hpp>
 #include <mimir/formalism/predicate.hpp>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <strong_type/strong_type.hpp>
@@ -40,6 +41,20 @@ bool has_non_plain_goal_derivations(const Range& derivations)
    return std::ranges::any_of(derivations, [](GoalDerivation derivation) {
       return derivation != GoalDerivation::plain;
    });
+}
+
+template < typename Range >
+bool includes_plain_goal_derivation(const Range& derivations)
+{
+   return std::ranges::find(derivations, GoalDerivation::plain) != std::ranges::end(derivations);
+}
+
+template < typename Range >
+auto goal_satisfaction_derivations(const Range& derivations)
+{
+   return derivations | std::views::filter([](GoalDerivation derivation) {
+             return derivation != GoalDerivation::plain;
+          });
 }
 
 /**

@@ -641,7 +641,7 @@ TEST_P(FlatRelationEncoderTest, ActionTargetsEmitSharedTargetMetadata)
    const auto target_candidate_ids = i64_field(single, "target_candidate_ids");
    const auto target_group_ids = i64_field(single, "target_group_ids");
    const auto target_entity_indices = i64_field(single, "target_entity_indices");
-   const auto& target_names = str_vec_attr(single, "target_names");
+   const auto target_names = mifrost_test::target_names_for(single);
    const auto& target_groups = str_vec_attr(single, "target_groups");
 
    ASSERT_EQ(target_sizes, (std::vector< int64_t >{2}));
@@ -731,7 +731,7 @@ TEST_P(FlatRelationEncoderTest, GoalTargetsAdjustRootGoalArityAndEmitMetadata)
    const auto target_sizes = i64_field(encoded, "target_sizes");
    const auto target_positions = i64_field(encoded, "target_positions");
    const auto target_group_ids = i64_field(encoded, "target_group_ids");
-   const auto& target_names = str_vec_attr(encoded, "target_names");
+   const auto target_names = mifrost_test::target_names_for(encoded);
    const auto& target_groups = str_vec_attr(encoded, "target_groups");
    const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
 
@@ -837,7 +837,7 @@ TEST_P(FlatRelationEncoderTest, MixedTargetSourcesUseStableGroupOrder)
    const auto target_positions = i64_field(encoded, "target_positions");
    const auto target_group_ids = i64_field(encoded, "target_group_ids");
    const auto target_candidate_ids = i64_field(encoded, "target_candidate_ids");
-   const auto& target_names = str_vec_attr(encoded, "target_names");
+   const auto target_names = mifrost_test::target_names_for(encoded);
    const auto& target_groups = str_vec_attr(encoded, "target_groups");
    const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
 
@@ -958,7 +958,7 @@ TEST_P(FlatRelationEncoderTest, HistoryTargetsEmitSharedTargetMetadata)
    const auto target_entity_group_ids = i64_field(encoded, "target_entity_group_ids");
    const auto& target_groups = str_vec_attr(encoded, "target_groups");
    const auto& target_entity_groups = str_vec_attr(encoded, "target_entity_groups");
-   const auto& target_names = str_vec_attr(encoded, "target_names");
+   const auto target_names = mifrost_test::target_names_for(encoded);
 
    int64_t expected_target_count = 0;
    for(const auto& [_dt, literals] : history) {

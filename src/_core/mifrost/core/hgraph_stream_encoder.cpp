@@ -443,7 +443,7 @@ void HGraphEncoderEngine::encode_impl_core(
       workspace.relation_to_symbols,
       workspace.symbol_to_relations
    );
-   if(config_.goal_derivations.contains(GoalDerivation::plain)) {
+   if(includes_plain_goal_derivation(config_.goal_derivations)) {
       encode_goal_inputs(goals, builder, workspace);
    }
    if(not config_.ignore_actions) {

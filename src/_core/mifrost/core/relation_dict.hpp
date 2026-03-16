@@ -102,7 +102,7 @@ struct RelationDict {
       collect_predicates(mimir::formalism::FluentTag{});
       collect_predicates(mimir::formalism::DerivedTag{});
 
-      if(goal_derivations.contains(GoalDerivation::plain)) {
+      if(includes_plain_goal_derivation(goal_derivations)) {
          for(const auto& [name, pred_arity] : regular_predicates) {
             for(int level = 0; level <= max_goal_level; ++level) {
                const GoalLevel goal_level(level);
@@ -122,10 +122,7 @@ struct RelationDict {
          }
       }
 
-      for(const auto& derivation : goal_derivations) {
-         if(derivation == GoalDerivation::plain) {
-            continue;
-         }
+      for(const auto derivation : goal_satisfaction_derivations(goal_derivations)) {
          for(const auto& [name, pred_arity] : regular_predicates) {
             for(int level = 0; level <= max_goal_level; ++level) {
                const GoalLevel goal_level(level);
