@@ -254,6 +254,41 @@ def test_horizon_delta_registers_state_literal_relations_without_plain_goals(
     assert not any("[state]" in name for name in relation_names)
 
 
+def test_horizon_excluded_root_skips_root_parent_edges(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    action, target = transitions[0]
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    dag.register_transition(
+        adv_state(root),
+        adv_state(target),
+        adv_action(action),
+        candidate_id=101,
+    )
+
+    config = mifrost.HorizonEncoderConfig()
+    config.transition_mode = mifrost.HorizonEncoderMode.delta
+    config.root_policy = mifrost.RootPolicy.exclude
+    config.enable_parent_relation = True
+    config.enable_sibling_relation = False
+    config.enable_cousin_relation = False
+    config.ignore_actions = True
+    encoder = mifrost.HorizonHGraphEncoderEngine(adv_domain(domain), config)
+    data = encoding_dict_to_pyg(
+        encoder.encode(
+            adv_state(root),
+            dag,
+            goal_inputs_from_problem(problem),
+        )
+    )
+
+    parent_edge_type = ("_symbol_", "0", "_parent_")
+    assert parent_edge_type in data.edge_types
+    assert data[parent_edge_type].edge_index.numel() == 0
+
+
 def test_horizon_rejects_partial_explicit_candidate_ids(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

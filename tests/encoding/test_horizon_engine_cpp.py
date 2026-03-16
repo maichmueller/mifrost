@@ -68,12 +68,19 @@ def test_horizon_encoder_parent_relations(horizon_cases):
     parent_nodes = {
         n for n, data in graph.nodes(data=True) if data.get("type") == parent_relation
     }
+    root_index = dag.root_index()
     expected_parents = {
-        f"{parent_relation}({parent}->{child})" for parent, child in dag.transitions()
+        f"{parent_relation}({parent}->{child})"
+        for parent, child in dag.transitions()
+        if not (
+            config.root_policy == mifrost.RootPolicy.exclude and parent == root_index
+        )
     }
     assert parent_nodes == expected_parents
 
     for parent, child in dag.transitions():
+        if config.root_policy == mifrost.RootPolicy.exclude and parent == root_index:
+            continue
         rel_node = f"{parent_relation}({parent}->{child})"
         parent_node = f"{prefix}{parent}"
         child_node = f"{prefix}{child}"

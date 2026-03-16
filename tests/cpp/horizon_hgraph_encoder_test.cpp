@@ -527,6 +527,7 @@ TEST_P(HorizonHGraphEncoderTest, ParentRelationsMatchDagTransitions)
    config.enable_parent_relation = true;
    config.enable_sibling_relation = false;
    config.enable_cousin_relation = false;
+   config.root_policy = RootPolicy::include;
 
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
    BatchBuilder builder;
@@ -647,6 +648,7 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDagStructure)
    config.enable_parent_relation = false;
    config.enable_sibling_relation = true;
    config.enable_cousin_relation = true;
+   config.root_policy = RootPolicy::include;
 
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
    BatchBuilder builder;
@@ -802,6 +804,7 @@ TEST_P(HorizonHGraphEncoderTest, ParentRelationEdgesMatchDagTransitions)
    HorizonHGraphEncoderEngine::Config config;
    config.enable_parent_relation = true;
    config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
+   config.root_policy = RootPolicy::include;
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;
@@ -938,6 +941,7 @@ TEST_P(HorizonHGraphEncoderTest, SiblingAndCousinRelationsMatchDag)
    config.enable_sibling_relation = true;
    config.enable_cousin_relation = true;
    config.transition_mode = HorizonHGraphEncoderEngine::Mode::full;
+   config.root_policy = RootPolicy::include;
    HorizonHGraphEncoderEngine engine(ctx.problem->get_domain(), config);
 
    BatchBuilder builder;

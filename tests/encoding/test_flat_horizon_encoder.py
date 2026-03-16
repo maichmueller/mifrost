@@ -305,6 +305,31 @@ def test_flat_horizon_excluded_root_uses_private_carrier_row(small_blocks):
     assert action_relation[0, 0].item() == data.graph_target_positions(0)[0].item()
 
 
+def test_flat_horizon_excluded_root_skips_root_parent_edges(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    data = FlatHorizonEncoder(
+        domain,
+        transition_mode="delta",
+        root_policy="exclude",
+        enable_parent_relation=True,
+        enable_sibling_relation=False,
+        enable_cousin_relation=False,
+        ignore_actions=True,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    parent_instances = data.flattened_relations.get("_parent_")
+    assert parent_instances is not None
+    assert parent_instances.numel() == 0
+
+
 def test_flat_horizon_batch_matches_from_data_list(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

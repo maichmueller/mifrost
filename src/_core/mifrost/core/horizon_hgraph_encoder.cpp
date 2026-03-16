@@ -1116,11 +1116,16 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
    }
 
+   const bool exclude_root_topology = horizon_config_.root_policy == RootPolicy::exclude;
+
    // 4. Parent relations
    if(horizon_config_.enable_parent_relation) {
       for(const auto& pair : dag.transitions()) {
          const int parent_idx = pair.first;
          const int child_idx = pair.second;
+         if(exclude_root_topology && parent_idx == root_index) {
+            continue;
+         }
          const uint64_t rel_key = pack_u32_u32(
             static_cast< uint32_t >(parent_idx), static_cast< uint32_t >(child_idx)
          );
@@ -1180,6 +1185,9 @@ void HorizonHGraphEncoderEngine::encode_impl(
    if(horizon_config_.enable_sibling_relation or horizon_config_.enable_cousin_relation) {
       hash_map< int, std::vector< int > > parent_to_children;
       for(const auto& pair : dag.transitions()) {
+         if(exclude_root_topology && pair.first == root_index) {
+            continue;
+         }
          parent_to_children[pair.first].push_back(pair.second);
       }
 

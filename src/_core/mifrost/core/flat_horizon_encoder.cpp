@@ -1409,9 +1409,14 @@ void FlatHorizonEncoderEngine::encode_impl(
 
    {
       ScopedProfileTimer timer(profile != nullptr ? &profile->topology_relations_s : nullptr);
+      const int root_index = dag.root_index();
+      const bool exclude_root_topology = config_.root_policy == RootPolicy::exclude;
       if(config_.enable_parent_relation) {
          const int relation_id = relation_id_for(config_.parent_relation);
          for(const auto& [parent_idx, child_idx] : dag.transitions()) {
+            if(exclude_root_topology && parent_idx == root_index) {
+               continue;
+            }
             const std::array< int64_t, 2 > args = {
                state_entity_index_for(context, parent_idx),
                state_entity_index_for(context, child_idx),
@@ -1423,6 +1428,9 @@ void FlatHorizonEncoderEngine::encode_impl(
       if(config_.enable_sibling_relation or config_.enable_cousin_relation) {
          hash_map< int, std::vector< int > > parent_to_children;
          for(const auto& [parent_idx, child_idx] : dag.transitions()) {
+            if(exclude_root_topology && parent_idx == root_index) {
+               continue;
+            }
             parent_to_children[parent_idx].push_back(child_idx);
          }
 
