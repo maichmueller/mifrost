@@ -889,19 +889,19 @@ void FlatHorizonEncoderEngine::encode_impl(
          /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
       );
       if(includes_plain_goal_derivation(config_.goal_derivations)) {
-         emit_goal_literals.template operator()< mimir::formalism::StaticTag >(
+         emit_goal_literals(
             std::span{goals.static_goals},
             goals.static_goal_levels,
             dag.root_index(),
             /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
-         emit_goal_literals.template operator()< mimir::formalism::FluentTag >(
+         emit_goal_literals(
             std::span{goals.fluent_goals},
             goals.fluent_goal_levels,
             dag.root_index(),
             /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
-         emit_goal_literals.template operator()< mimir::formalism::DerivedTag >(
+         emit_goal_literals(
             std::span{goals.derived_goals},
             goals.derived_goal_levels,
             dag.root_index(),
@@ -909,21 +909,21 @@ void FlatHorizonEncoderEngine::encode_impl(
          );
       }
       if(has_non_plain_goal_derivations(config_.goal_derivations)) {
-         emit_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+         emit_goal_satisfaction(
             std::span{goals.static_goals},
             goals.static_goal_levels,
             fact_keys,
             dag.root_index(),
             /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
-         emit_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+         emit_goal_satisfaction(
             std::span{goals.fluent_goals},
             goals.fluent_goal_levels,
             fact_keys,
             dag.root_index(),
             /*include_state_anchor=*/root_in_state_relations(config_.root_policy)
          );
-         emit_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+         emit_goal_satisfaction(
             std::span{goals.derived_goals},
             goals.derived_goal_levels,
             fact_keys,
@@ -1112,21 +1112,21 @@ void FlatHorizonEncoderEngine::encode_impl(
             }
 
             if(has_non_plain_goal_derivations(config_.goal_derivations)) {
-               emit_delta_goal_satisfaction.template operator()< mimir::formalism::StaticTag >(
+               emit_delta_goal_satisfaction(
                   std::span{goals.static_goals},
                   goals.static_goal_levels,
                   hash_set< int >{},
                   hash_set< int >{},
                   node.index
                );
-               emit_delta_goal_satisfaction.template operator()< mimir::formalism::FluentTag >(
+               emit_delta_goal_satisfaction(
                   std::span{goals.fluent_goals},
                   goals.fluent_goal_levels,
                   added_fluents,
                   removed_fluents,
                   node.index
                );
-               emit_delta_goal_satisfaction.template operator()< mimir::formalism::DerivedTag >(
+               emit_delta_goal_satisfaction(
                   std::span{goals.derived_goals},
                   goals.derived_goal_levels,
                   added_derived,
@@ -1181,7 +1181,7 @@ void FlatHorizonEncoderEngine::encode_impl(
 
          std::set< std::pair< int, int > > siblings_seen;
          if(config_.enable_sibling_relation) {
-            for(auto& [_, children] : parent_to_children) {
+            for(auto& children : parent_to_children | std::views::values) {
                std::ranges::sort(children);
                for(size_t i = 0; i < children.size(); ++i) {
                   for(size_t j = i + 1; j < children.size(); ++j) {
@@ -1201,7 +1201,7 @@ void FlatHorizonEncoderEngine::encode_impl(
 
          if(config_.enable_cousin_relation) {
             std::set< std::pair< int, int > > cousins_seen;
-            for(const auto& [_, parents] : parent_to_children) {
+            for(const auto& parents : parent_to_children | std::views::values) {
                std::vector< int > par = parents;
                std::ranges::sort(par);
                for(size_t i = 0; i < par.size(); ++i) {

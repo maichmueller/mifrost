@@ -33,15 +33,14 @@ FlatHorizonEncoderEngine::EncodingContext build_flat_horizon_encoding_context(
 )
 {
    FlatHorizonEncoderEngine::EncodingContext context;
-   const auto& objects = root.get_problem().get_problem_and_domain_objects();
-   std::vector< mimir::formalism::Object > ordered(objects.begin(), objects.end());
-   std::ranges::sort(ordered, [](const auto& lhs, const auto& rhs) {
+   auto objects = root.get_problem().get_problem_and_domain_objects();
+   std::ranges::sort(objects, [](const auto& lhs, const auto& rhs) {
       return lhs->get_index() < rhs->get_index();
    });
 
    const auto& nodes = dag.nodes();
    reserve_common_entity_context(
-      context, ordered.size(), nodes.size(), config.predicate_symbol_capacity
+      context, objects.size(), nodes.size(), config.predicate_symbol_capacity
    );
    context.state_entity_index_by_node_index.reserve(nodes.size());
    context.target_entity_indices.reserve(
@@ -57,7 +56,7 @@ FlatHorizonEncoderEngine::EncodingContext build_flat_horizon_encoding_context(
       /*include_group=*/true
    );
 
-   append_object_entities(context, ordered);
+   append_object_entities(context, objects);
 
    hash_map< int64_t, int64_t > target_positions_by_index;
    target_positions_by_index.reserve(nodes.size());
