@@ -13,7 +13,8 @@
 #include "batch_builder.hpp"
 #include "common_types.hpp"
 #include "default_relations.hpp"
-#include "flat_tuple_layout.hpp"
+#include "flat_entity_context.hpp"
+#include "flat_relation_schema.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "root_policy.hpp"
@@ -119,15 +120,16 @@ class FlatHorizonEncoderEngine {
       return slot_role_names_;
    }
 
-   struct PredicateSpec {
-      std::string name;
-      int arity = 0;
-   };
-
+   /**
+    * @brief Per-graph flat entity state for horizon encoding.
+    *
+    * State carriers and predicate virtual nodes are appended after objects and
+    * distinguished through `entity_role_ids`.
+    */
    struct EncodingContext {
       hash_map< int64_t, int64_t > entity_index_by_object_id;
       hash_map< int64_t, int64_t > state_entity_index_by_node_index;
-      hash_map< std::string, int64_t > predicate_entity_index_by_name;
+      hash_map< PredicateSymbolKey, int64_t, PredicateSymbolKeyHash > predicate_entity_index_by_key;
       std::vector< std::string > entity_names;
       std::vector< int64_t > entity_role_ids;
       std::vector< std::string > object_names;
@@ -139,6 +141,11 @@ class FlatHorizonEncoderEngine {
    };
 
   private:
+   struct PredicateSpec {
+      std::string name;
+      int arity = 0;
+   };
+
    void initialize_from_domain();
    void prepare_builder(BatchBuilder& builder) const;
    void encode_impl(
@@ -154,7 +161,6 @@ class FlatHorizonEncoderEngine {
    [[nodiscard]] int relation_id_for(const std::string& name) const;
    [[nodiscard]] int64_t
    state_entity_index_for(const EncodingContext& context, int64_t node_index) const;
-   [[nodiscard]] std::string target_node_name(int idx) const;
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;

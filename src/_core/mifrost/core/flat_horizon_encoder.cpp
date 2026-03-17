@@ -13,42 +13,17 @@
 #include <stdexcept>
 #include <string_view>
 
+#include "flat_encoder_common.hpp"
+#include "flat_goal_helpers.hpp"
+#include "flat_horizon_context.hpp"
 #include "flat_lgan.hpp"
+#include "flat_tuple_args.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
 
 namespace {
 
-constexpr std::string_view kEntityNodeType = "entity";
-constexpr std::string_view kFlatEntityTypeAttr = "entity_node_type";
-constexpr std::string_view kIncludeLGANEdgesAttr = "include_lgan_edges";
-constexpr std::string_view kRelationNamesAttr = "relation_names";
-constexpr std::string_view kRelationAritiesAttr = "relation_arities";
-constexpr std::string_view kRelationSourcesAttr = "relation_sources";
-constexpr std::string_view kNodeSizesField = "node_sizes";
-constexpr std::string_view kObjectSizesField = "object_sizes";
-constexpr std::string_view kObjectIndicesField = "object_indices";
-constexpr std::string_view kTargetEntitySizesField = "target_entity_sizes";
-constexpr std::string_view kTargetEntityIndicesField = "target_entity_indices";
-constexpr std::string_view kTargetEntityGroupIdsField = "target_entity_group_ids";
-constexpr std::string_view kTargetEntityGroupsAttr = "target_entity_groups";
-constexpr std::string_view kTargetSizesField = "target_sizes";
-constexpr std::string_view kRelationInstanceSizesField = "relation_instance_sizes";
-constexpr std::string_view kRelationCountsField = "relation_counts";
-constexpr std::string_view kRelationArgsField = "relation_args";
-constexpr std::string_view kLGANTNSizesField = "lgan_tn_sizes";
-constexpr std::string_view kLGANTNRelationIndicesField = "lgan_tn_relation_indices";
-constexpr std::string_view kLGANTNEntityIndicesField = "lgan_tn_entity_indices";
-constexpr std::string_view kLGANNNSizesField = "lgan_nn_sizes";
-constexpr std::string_view kLGANNNRelationIndicesField = "lgan_nn_relation_indices";
-constexpr std::string_view kLGANNNEntityIndicesField = "lgan_nn_entity_indices";
-constexpr std::string_view kLGANRRSizesField = "lgan_rr_sizes";
-constexpr std::string_view kLGANRRSrcRelationIndicesField = "lgan_rr_src_relation_indices";
-constexpr std::string_view kLGANRRDstRelationIndicesField = "lgan_rr_dst_relation_indices";
-constexpr std::string_view kLGANTNEdgePosAttr = "lgan_tn_edge_pos";
-constexpr std::string_view kLGANNNEdgePosAttr = "lgan_nn_edge_pos";
-constexpr std::string_view kLGANRREdgePosAttr = "lgan_rr_edge_pos";
 constexpr std::string_view kHiddenRootCarrierName = "_root_state_";
 constexpr std::string_view kCandidateRelationSuffix = "[state]";
 
@@ -183,18 +158,6 @@ FlatHorizonEncoderEngine::Config normalize_config(FlatHorizonEncoderEngine::Conf
    return config;
 }
 
-template < typename GoalLevelsMap, typename LiteralTag >
-std::optional< size_t > goal_level_for(
-   const GoalLevelsMap& goal_levels,
-   const mimir::formalism::GroundLiteral< LiteralTag >& literal
-)
-{
-   if(const auto it = goal_levels.find(literal); it != goal_levels.end()) {
-      return it->second;
-   }
-   return std::nullopt;
-}
-
 template < typename AtomTag >
 std::vector< int64_t > logical_arg_rows_for_atom(
    const FlatHorizonEncoderEngine::EncodingContext& context,
@@ -202,38 +165,9 @@ std::vector< int64_t > logical_arg_rows_for_atom(
    std::optional< int64_t >
 )
 {
-   std::vector< int64_t > args;
-   args.reserve(atom->get_objects().size());
-   for(const auto& obj : atom->get_objects()) {
-      const auto it = context.entity_index_by_object_id.find(
-         static_cast< int64_t >(obj->get_index())
-      );
-      if(it == context.entity_index_by_object_id.end()) {
-         throw std::invalid_argument(
-            "Flat horizon encoder encountered object not present in entity table: "
-            + RelationFormatter::format_object(*obj)
-         );
-      }
-      args.push_back(it->second);
-   }
-   return args;
-}
-
-int64_t ensure_predicate_virtual_entity(
-   FlatHorizonEncoderEngine::EncodingContext& context,
-   std::string_view predicate_name
-)
-{
-   const std::string key(predicate_name);
-   if(const auto it = context.predicate_entity_index_by_name.find(key);
-      it != context.predicate_entity_index_by_name.end()) {
-      return it->second;
-   }
-   const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
-   context.predicate_entity_index_by_name.emplace(key, local_index);
-   context.entity_names.push_back(fmt::format("predicate:{}", predicate_name));
-   context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::predicate_virtual));
-   return local_index;
+   return flat_logical_arg_rows_for_atom(
+      context, atom, "Flat horizon encoder encountered object not present in entity table: "
+   );
 }
 
 template < typename AtomTag >
@@ -244,19 +178,16 @@ std::vector< int64_t > local_arg_rows_for_atom(
    std::optional< int64_t > state_entity_index
 )
 {
-   const auto logical_args = logical_arg_rows_for_atom(context, atom, state_entity_index);
    std::vector< int64_t > auxiliary_args;
    if(state_entity_index.has_value()) {
       auxiliary_args.push_back(*state_entity_index);
    }
-   std::optional< int64_t > predicate_virtual_index = std::nullopt;
-   if(engine.get_config().use_predicate_virtual_nodes) {
-      predicate_virtual_index = ensure_predicate_virtual_entity(
-         context, RelationFormatter::format_predicate(atom->get_predicate())
-      );
-   }
-   return build_flat_tuple_args(
-      std::span{logical_args}, std::span{auxiliary_args}, predicate_virtual_index
+   return build_flat_atom_tuple_args(
+      context,
+      atom,
+      std::span{auxiliary_args},
+      engine.get_config().use_predicate_virtual_nodes,
+      "Flat horizon encoder encountered object not present in entity table: "
    );
 }
 
@@ -266,25 +197,16 @@ std::vector< int64_t > local_arg_rows_for_action(
    std::optional< int64_t > state_entity_index
 )
 {
-   std::vector< int64_t > logical_args;
-   logical_args.reserve(action->get_objects().size());
-   for(const auto& obj : action->get_objects()) {
-      const auto it = context.entity_index_by_object_id.find(
-         static_cast< int64_t >(obj->get_index())
-      );
-      if(it == context.entity_index_by_object_id.end()) {
-         throw std::invalid_argument(
-            "Flat horizon encoder encountered action object not present in entity table: "
-            + RelationFormatter::format_object(*obj)
-         );
-      }
-      logical_args.push_back(it->second);
-   }
    std::vector< int64_t > auxiliary_args;
    if(state_entity_index.has_value()) {
       auxiliary_args.push_back(*state_entity_index);
    }
-   return build_flat_tuple_args(std::span{logical_args}, std::span{auxiliary_args}, std::nullopt);
+   return build_flat_action_tuple_args(
+      context,
+      action,
+      std::span{auxiliary_args},
+      "Flat horizon encoder encountered action object not present in entity table: "
+   );
 }
 
 }  // namespace
@@ -377,32 +299,12 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    target_entity_group_names_ = {std::string(target_source_group_name(TargetSource::states))};
    target_metadata_group_names_ = target_entity_group_names_;
 
-   relation_dict_ = RelationDict{};
-   relation_dict_.max_goal_level = rel_config.max_goal_level;
-   relation_dict_.support_literals = rel_config.support_literals;
-   relation_dict_.goal_derivations = rel_config.goal_derivations;
-
-   std::map< std::string, std::string > relation_sources_by_name;
-   std::map< std::string, FlatTupleLayout > relation_layouts_by_name;
+   FlatRelationSchemaRegistry schema_registry;
    const bool root_relations_use_state_slot = root_in_state_relations(config_.root_policy);
    const bool split_candidate_relations = split_full_state_relations(config_);
    auto register_relation =
       [&](const std::string& name, const FlatTupleLayout& layout, const std::string& source) {
-         if(const auto it = relation_layouts_by_name.find(name);
-            it != relation_layouts_by_name.end()) {
-            if(it->second.logical_arity != layout.logical_arity
-               || it->second.include_predicate_virtual_node != layout.include_predicate_virtual_node
-               || it->second.auxiliary_slot_roles != layout.auxiliary_slot_roles
-               || relation_sources_by_name.at(name) != source) {
-               throw std::invalid_argument(
-                  "Flat horizon schema collision for relation '" + name + "'"
-               );
-            }
-            return;
-         }
-         relation_dict_.arity[name] = layout.encoded_arity();
-         relation_sources_by_name[name] = source;
-         relation_layouts_by_name.emplace(name, layout);
+         schema_registry.add_or_validate(name, layout, source);
       };
    auto predicate_layout = [&](int logical_arity, bool include_state_slot) {
       return include_state_slot
@@ -581,135 +483,55 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       );
    }
 
-   relation_names_.clear();
-   relation_arities_.clear();
-   relation_sources_.clear();
-   relation_logical_arities_.clear();
-   relation_encoded_arities_.clear();
-   relation_slot_roles_.clear();
-   relation_slot_role_offsets_.clear();
-   relation_name_to_id_.clear();
-   slot_role_names_ = flat_slot_role_names();
-   relation_names_.reserve(relation_dict_.arity.size());
-   relation_arities_.reserve(relation_dict_.arity.size());
-   relation_sources_.reserve(relation_dict_.arity.size());
-   relation_logical_arities_.reserve(relation_dict_.arity.size());
-   relation_encoded_arities_.reserve(relation_dict_.arity.size());
-   relation_name_to_id_.reserve(relation_dict_.arity.size());
-   relation_slot_role_offsets_.reserve(relation_dict_.arity.size() + 1);
-   relation_slot_role_offsets_.push_back(0);
-   for(const auto& [name, arity] : relation_dict_.arity) {
-      relation_name_to_id_.emplace(name, static_cast< int >(relation_names_.size()));
-      relation_names_.push_back(name);
-      relation_arities_.push_back(arity);
-      const auto source_it = relation_sources_by_name.find(name);
-      relation_sources_.push_back(
-         source_it != relation_sources_by_name.end() ? source_it->second : "state"
-      );
-      const auto layout_it = relation_layouts_by_name.find(name);
-      if(layout_it == relation_layouts_by_name.end()) {
-         throw std::invalid_argument(
-            "Missing flat horizon tuple layout for relation '" + name + "'"
-         );
-      }
-      relation_logical_arities_.push_back(layout_it->second.logical_arity);
-      relation_encoded_arities_.push_back(layout_it->second.encoded_arity());
-      const auto slot_roles = layout_it->second.slot_role_ids();
-      relation_slot_roles_.insert(relation_slot_roles_.end(), slot_roles.begin(), slot_roles.end());
-      relation_slot_role_offsets_.push_back(static_cast< int64_t >(relation_slot_roles_.size()));
-   }
+   const auto metadata = build_flat_relation_schema_metadata(
+      schema_registry,
+      static_cast< int >(config_.max_goal_level),
+      config_.support_literals,
+      config_.goal_derivations,
+      "FlatHorizonEncoderEngine did not derive any relation types for this domain/config"
+   );
+   relation_dict_ = metadata.relation_dict;
+   relation_names_ = metadata.relation_names;
+   relation_arities_ = metadata.relation_arities;
+   relation_sources_ = metadata.relation_sources;
+   relation_logical_arities_ = metadata.relation_logical_arities;
+   relation_encoded_arities_ = metadata.relation_encoded_arities;
+   relation_slot_roles_ = metadata.relation_slot_roles;
+   relation_slot_role_offsets_ = metadata.relation_slot_role_offsets;
+   slot_role_names_ = metadata.slot_role_names;
+   relation_name_to_id_ = metadata.relation_name_to_id;
 }
 
 void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
 {
-   builder.set_graph_kind("flat");
-   builder.set_schema_flag("flat_relations", true);
-   builder.set_graph_attr(std::string(kFlatEntityTypeAttr), std::string(kEntityNodeType));
-   builder.set_graph_attr(
-      std::string(kIncludeLGANEdgesAttr), static_cast< int64_t >(config_.include_lgan_edges)
-   );
-   builder.set_graph_attr(std::string(kEntityRoleNamesAttr), flat_entity_role_names());
-   builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
-   builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
-   builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);
-   builder.set_graph_attr(std::string(kRelationLogicalAritiesAttr), relation_logical_arities_);
-   builder.set_graph_attr(std::string(kRelationEncodedAritiesAttr), relation_encoded_arities_);
-   builder.set_graph_attr(std::string(kRelationSlotRolesAttr), relation_slot_roles_);
-   builder.set_graph_attr(std::string(kRelationSlotRoleOffsetsAttr), relation_slot_role_offsets_);
-   builder.set_graph_attr(std::string(kSlotRoleNamesAttr), slot_role_names_);
-   builder.set_graph_attr(std::string(kTargetEntityGroupsAttr), target_entity_group_names_);
-   builder.set_graph_attr(std::string(kLGANTNEdgePosAttr), config_.lgan_tn_edge_pos);
-   builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config_.lgan_nn_edge_pos);
-   builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config_.lgan_rr_edge_pos);
-   builder.set_graph_attr(
-      std::string(kUsePredicateVirtualNodesAttr),
-      static_cast< int64_t >(config_.use_predicate_virtual_nodes)
+   const FlatRelationSchemaMetadata metadata{
+      .relation_dict = relation_dict_,
+      .relation_names = relation_names_,
+      .relation_arities = relation_arities_,
+      .relation_sources = relation_sources_,
+      .relation_logical_arities = relation_logical_arities_,
+      .relation_encoded_arities = relation_encoded_arities_,
+      .relation_slot_roles = relation_slot_roles_,
+      .relation_slot_role_offsets = relation_slot_role_offsets_,
+      .slot_role_names = slot_role_names_,
+      .relation_name_to_id = relation_name_to_id_,
+   };
+   set_flat_graph_attrs(
+      builder,
+      metadata,
+      FlatBuilderGraphConfig{
+         .include_lgan_edges = config_.include_lgan_edges,
+         .use_predicate_virtual_nodes = config_.use_predicate_virtual_nodes,
+         .target_symbol_prefix = config_.target_symbol_prefix,
+         .target_entity_group_names = target_entity_group_names_,
+         .lgan_tn_edge_pos = config_.lgan_tn_edge_pos,
+         .lgan_nn_edge_pos = config_.lgan_nn_edge_pos,
+         .lgan_rr_edge_pos = config_.lgan_rr_edge_pos,
+      }
    );
 
-   builder.register_field(
-      std::string(kNodeSizesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::STACK,
-         .dim = 1,
-      }
-   );
-   builder.register_field(
-      std::string(kObjectSizesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::STACK,
-         .dim = 1,
-      }
-   );
-   builder.register_field(
-      std::string(kObjectIndicesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::CAT,
-         .dim = 1,
-         .inc = GraphFieldInc{
-            .kind = GraphFieldInc::Kind::NODE_OFFSET,
-            .node_type = std::string(kEntityNodeType),
-         },
-      }
-   );
-   builder.register_field(
-      std::string(kEntityRoleIdsField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::CAT,
-         .dim = 1,
-      }
-   );
-   builder.register_field(
-      std::string(kTargetEntitySizesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::STACK,
-         .dim = 1,
-      }
-   );
-   builder.register_field(
-      std::string(kTargetEntityIndicesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::CAT,
-         .dim = 1,
-         .inc = GraphFieldInc{
-            .kind = GraphFieldInc::Kind::NODE_OFFSET,
-            .node_type = std::string(kEntityNodeType),
-         },
-      }
-   );
-   builder.register_field(
-      std::string(kTargetEntityGroupIdsField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::CAT,
-         .dim = 1,
-      }
-   );
+   register_flat_entity_fields(builder);
+   register_flat_target_entity_fields(builder);
    builder.register_field(
       std::string(kTargetSizesField),
       GraphFieldSpec{
@@ -719,7 +541,7 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
       }
    );
    const TargetMetadataEmitConfig target_emit_config{
-      .position_node_type_id = std::string(kEntityNodeType),
+      .position_node_type_id = std::string(kFlatEntityNodeType),
       .symbol_prefix = config_.target_symbol_prefix,
       .include_depth = true,
       .include_group = true,
@@ -732,131 +554,9 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    builder.set_graph_attr(std::string(kParentRelationAttr), config_.parent_relation);
 
-   builder.register_field(
-      std::string(kRelationCountsField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::STACK,
-         .dim = static_cast< int >(relation_names_.size()),
-      }
-   );
-   builder.register_field(
-      std::string(kRelationInstanceSizesField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::STACK,
-         .dim = 1,
-      }
-   );
-   builder.register_field(
-      std::string(kRelationArgsField),
-      GraphFieldSpec{
-         .dtype = GraphFieldDType::I64,
-         .mode = GraphFieldMode::CAT,
-         .dim = 1,
-         .inc = GraphFieldInc{
-            .kind = GraphFieldInc::Kind::NODE_OFFSET,
-            .node_type = std::string(kEntityNodeType),
-         },
-      }
-   );
+   register_flat_relation_instance_fields(builder, static_cast< int >(relation_names_.size()));
    if(config_.include_lgan_edges) {
-      builder.register_field(
-         std::string(kLGANTNSizesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::STACK,
-            .dim = 1,
-         }
-      );
-      builder.register_field(
-         std::string(kLGANTNRelationIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
-               .field_key = std::string(kRelationInstanceSizesField),
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kLGANTNEntityIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::NODE_OFFSET,
-               .node_type = std::string(kEntityNodeType),
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kLGANNNSizesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::STACK,
-            .dim = 1,
-         }
-      );
-      builder.register_field(
-         std::string(kLGANNNRelationIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
-               .field_key = std::string(kRelationInstanceSizesField),
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kLGANNNEntityIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::NODE_OFFSET,
-               .node_type = std::string(kEntityNodeType),
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kLGANRRSizesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::STACK,
-            .dim = 1,
-         }
-      );
-      builder.register_field(
-         std::string(kLGANRRSrcRelationIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
-               .field_key = std::string(kRelationInstanceSizesField),
-            },
-         }
-      );
-      builder.register_field(
-         std::string(kLGANRRDstRelationIndicesField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-            .inc = GraphFieldInc{
-               .kind = GraphFieldInc::Kind::FIELD_OFFSET,
-               .field_key = std::string(kRelationInstanceSizesField),
-            },
-         }
-      );
+      register_flat_lgan_fields(builder);
    }
 }
 
@@ -865,98 +565,17 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    const TransitionDAG& dag
 ) const
 {
-   EncodingContext context;
-   const auto& objects = root.get_problem().get_problem_and_domain_objects();
-   std::vector< mimir::formalism::Object > ordered(objects.begin(), objects.end());
-   std::ranges::sort(ordered, [](const auto& lhs, const auto& rhs) {
-      return lhs->get_index() < rhs->get_index();
-   });
-
-   const auto& nodes = dag.nodes();
-   context.entity_names.reserve(ordered.size() + nodes.size() + predicate_specs_.size());
-   context.entity_role_ids.reserve(context.entity_names.capacity());
-   context.object_names.reserve(ordered.size());
-   context.object_indices.reserve(ordered.size());
-   context.entity_index_by_object_id.reserve(ordered.size());
-   context.state_entity_index_by_node_index.reserve(nodes.size());
-   context.predicate_entity_index_by_name.reserve(predicate_specs_.size());
-   context.target_entity_indices.reserve(
-      (not root_in_target_metadata(config_.root_policy) and not nodes.empty()) ? nodes.size() - 1
-                                                                               : nodes.size()
-   );
-   context.target_entity_group_ids.reserve(context.target_entity_indices.capacity());
-   context.target_name_states.reserve(nodes.size());
-   context.target_columns.reserve(
-      (not root_in_target_metadata(config_.root_policy) and not nodes.empty()) ? nodes.size() - 1
-                                                                               : nodes.size(),
-      /*include_depth=*/true,
-      /*include_group=*/true
-   );
-
-   for(size_t idx = 0; idx < ordered.size(); ++idx) {
-      const auto& obj = ordered[idx];
-      const int64_t local_index = static_cast< int64_t >(idx);
-      context.entity_index_by_object_id.emplace(
-         static_cast< int64_t >(obj->get_index()), local_index
-      );
-      const std::string object_name = RelationFormatter::format_object(*obj);
-      context.entity_names.push_back(object_name);
-      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::object));
-      context.object_names.push_back(object_name);
-      context.object_indices.push_back(local_index);
-   }
-
-   hash_map< int64_t, int64_t > target_positions_by_index;
-   target_positions_by_index.reserve(nodes.size());
-   for(const auto& node : nodes) {
-      const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
-      const bool include_in_target_metadata = not(
-         not root_in_target_metadata(config_.root_policy) and node.index == dag.root_index()
-      );
-      const bool include_in_public_carrier = root_in_public_carrier(config_.root_policy)
-                                             || node.index != dag.root_index();
-      const std::string node_name = include_in_public_carrier ? target_node_name(node.index)
-                                                              : std::string(kHiddenRootCarrierName);
-      context.entity_names.push_back(node_name);
-      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::state));
-      context.state_entity_index_by_node_index.emplace(node.index, local_index);
-      if(include_in_target_metadata) {
-         context.target_entity_indices.push_back(local_index);
-         context.target_entity_group_ids.push_back(0);
-         target_positions_by_index.emplace(node.index, local_index);
-      }
-   }
-
-   const auto rows = collect_transition_dag_target_candidate_rows(
+   return build_flat_horizon_encoding_context(
+      root,
       dag,
-      target_positions_by_index,
-      config_.root_policy,
-      int64_t{0},
-      /*include_names=*/false
-   );
-   append_target_candidate_rows(
-      context.target_columns,
-      rows,
-      TargetCandidateAppendConfig{
-         .include_depth = true,
-         .include_group = true,
-         .missing_candidate_id_prefix = "missing candidate_id for target node index ",
-         .duplicate_candidate_id_prefix = "duplicate candidate_id ",
+      FlatHorizonContextBuildConfig{
+         .root_policy = config_.root_policy,
+         .export_node_names = config_.export_node_names,
+         .predicate_symbol_capacity = predicate_specs_.size(),
+         .target_symbol_prefix = config_.target_symbol_prefix,
+         .hidden_root_carrier_name = std::string(kHiddenRootCarrierName),
       }
    );
-   if(config_.export_node_names) {
-      for(const auto& node : nodes) {
-         if(not root_in_target_metadata(config_.root_policy) and node.index == dag.root_index()) {
-            continue;
-         }
-         if(not target_positions_by_index.contains(node.index)) {
-            continue;
-         }
-         context.target_name_states.push_back(node.state);
-      }
-   }
-
-   return context;
 }
 
 int FlatHorizonEncoderEngine::relation_id_for(const std::string& name) const
@@ -981,11 +600,6 @@ int64_t FlatHorizonEncoderEngine::state_entity_index_for(
       );
    }
    return it->second;
-}
-
-std::string FlatHorizonEncoderEngine::target_node_name(int idx) const
-{
-   return fmt::format("{}{}", config_.target_symbol_prefix, idx);
 }
 
 void FlatHorizonEncoderEngine::encode(
@@ -1620,10 +1234,13 @@ void FlatHorizonEncoderEngine::encode_impl(
       ScopedProfileTimer timer(profile != nullptr ? &profile->finalize_builder_s : nullptr);
       std::vector< float > zeros(context.entity_names.size(), 0.0f);
       builder.add_node_features(
-         std::string(kEntityNodeType), "x", std::span< const float >(zeros.data(), zeros.size()), 1
+         std::string(kFlatEntityNodeType),
+         "x",
+         std::span< const float >(zeros.data(), zeros.size()),
+         1
       );
       if(config_.export_node_names) {
-         builder.set_node_names(std::string(kEntityNodeType), context.entity_names);
+         builder.set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
          builder.set_object_names(context.object_names);
       }
 
@@ -1665,7 +1282,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       );
 
       const TargetMetadataEmitConfig target_emit_config{
-         .position_node_type_id = std::string(kEntityNodeType),
+         .position_node_type_id = std::string(kFlatEntityNodeType),
          .symbol_prefix = config_.target_symbol_prefix,
          .include_depth = true,
          .include_group = true,

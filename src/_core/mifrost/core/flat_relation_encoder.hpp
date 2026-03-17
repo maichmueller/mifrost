@@ -18,7 +18,9 @@
 #include "batch_builder.hpp"
 #include "common_types.hpp"
 #include "default_relations.hpp"
-#include "flat_tuple_layout.hpp"
+#include "flat_entity_context.hpp"
+#include "flat_goal_helpers.hpp"
+#include "flat_relation_schema.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "stream_encoder_base.hpp"
@@ -60,48 +62,6 @@ class FlatRelationEncoderEngine {
          GoalDerivation::plain,
          GoalDerivation::satisfied,
       };
-   };
-
-   struct TargetEntityKey {
-      TargetSource source = TargetSource::actions;
-      int64_t discriminator = 0;
-      int64_t primary = 0;
-      int64_t secondary = 0;
-      int64_t tertiary = 0;
-      int64_t quaternary = 0;
-
-      auto operator==(const TargetEntityKey& other) const -> bool = default;
-   };
-
-   struct TargetEntityKeyHash {
-      using is_avalanching = void;
-
-      [[nodiscard]] auto operator()(const TargetEntityKey& key) const noexcept -> uint64_t;
-   };
-
-   struct EncodingContext {
-      struct HistoryEntry {
-         int dt = 0;
-         size_t entry_idx = 0;
-         int64_t entity_index = -1;
-         std::vector< LiteralVariant > literals;
-      };
-
-      hash_map< int64_t, int64_t > entity_index_by_object_id;
-      hash_map< std::string, int64_t > predicate_entity_index_by_name;
-      hash_map< TargetEntityKey, int64_t, TargetEntityKeyHash, std::equal_to< TargetEntityKey > >
-         target_entity_index_by_key;
-      std::vector< std::string > entity_names;
-      std::vector< int64_t > entity_role_ids;
-      std::vector< std::string > object_names;
-      std::vector< int64_t > object_indices;
-      std::vector< int64_t > history_entity_indices;
-      std::vector< int64_t > history_entity_dt;
-      std::vector< int64_t > target_entity_indices;
-      std::vector< int64_t > target_entity_group_ids;
-      std::vector< HistoryEntry > history_entries;
-      std::vector< mimir::formalism::GroundAction > unique_actions;
-      TargetColumns target_columns;
    };
 
    explicit FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain);
@@ -174,6 +134,36 @@ class FlatRelationEncoderEngine {
    {
       return slot_role_names_;
    }
+
+   /**
+    * @brief Shared per-graph state assembled before relation emission.
+    *
+    * Objects, target entities, history carriers, and predicate virtual nodes all
+    * live in the same flat entity table, distinguished by `entity_role_ids`.
+    */
+   struct EncodingContext {
+      struct HistoryEntry {
+         int dt = 0;
+         size_t entry_idx = 0;
+         int64_t entity_index = -1;
+         std::vector< LiteralVariant > literals;
+      };
+
+      hash_map< int64_t, int64_t > entity_index_by_object_id;
+      hash_map< PredicateSymbolKey, int64_t, PredicateSymbolKeyHash > predicate_entity_index_by_key;
+      hash_map< FlatTargetEntityKey, int64_t, FlatTargetEntityKeyHash > target_entity_index_by_key;
+      std::vector< std::string > entity_names;
+      std::vector< int64_t > entity_role_ids;
+      std::vector< std::string > object_names;
+      std::vector< int64_t > object_indices;
+      std::vector< int64_t > history_entity_indices;
+      std::vector< int64_t > history_entity_dt;
+      std::vector< int64_t > target_entity_indices;
+      std::vector< int64_t > target_entity_group_ids;
+      std::vector< HistoryEntry > history_entries;
+      std::vector< mimir::formalism::GroundAction > unique_actions;
+      TargetColumns target_columns;
+   };
 
   private:
    struct PredicateSpec {
