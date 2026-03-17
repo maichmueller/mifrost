@@ -87,13 +87,15 @@ std::vector< std::string > source_names_for(const std::set< TargetSource >& sour
 class RelationSchemaRegistry {
   public:
    struct Entry {
-      int arity = 0;
+      FlatTupleLayout layout;
       std::string source;
    };
 
-   void add(std::string name, int arity, std::string source)
+   void add(std::string name, FlatTupleLayout layout, std::string source)
    {
-      auto [it, inserted] = entries_.try_emplace(std::move(name), Entry{arity, std::move(source)});
+      auto [it, inserted] = entries_.try_emplace(
+         std::move(name), Entry{std::move(layout), std::move(source)}
+      );
       if(not inserted) {
          throw std::invalid_argument(
             "Flat relation schema collision for relation '" + it->first + "'"
@@ -137,16 +139,22 @@ std::optional< TargetSource > anchor_source_for_goal_level(
    return std::nullopt;
 }
 
-int goal_relation_arity(
+FlatTupleLayout goal_relation_layout(
    const FlatRelationEncoderEngine& engine,
-   int base_arity,
+   int logical_arity,
    const std::optional< size_t >& goal_level
 )
 {
-   return base_arity
-          + static_cast< int >(
-             anchor_source_for_goal_level(engine.get_config(), goal_level).has_value()
-          );
+   std::vector< FlatSlotRole > auxiliary_slot_roles;
+   if(const auto source = anchor_source_for_goal_level(engine.get_config(), goal_level);
+      source.has_value()) {
+      auxiliary_slot_roles.push_back(slot_role_for_target_source(*source));
+   }
+   return make_predicate_tuple_layout(
+      logical_arity,
+      std::span{auxiliary_slot_roles},
+      engine.get_config().use_predicate_virtual_nodes
+   );
 }
 
 template < typename GoalTag >
@@ -272,12 +280,18 @@ history_relation_name(const mimir::formalism::Predicate< HistoryTag >& predicate
    );
 }
 
-int history_relation_arity(const FlatRelationEncoderEngine& engine, int base_arity)
+FlatTupleLayout history_relation_layout(const FlatRelationEncoderEngine& engine, int logical_arity)
 {
-   return base_arity + 1
-          + static_cast< int >(
-             has_anchor_entity_source(engine.get_config(), TargetSource::history)
-          );
+   std::vector< FlatSlotRole > auxiliary_slot_roles;
+   if(has_anchor_entity_source(engine.get_config(), TargetSource::history)) {
+      auxiliary_slot_roles.push_back(FlatSlotRole::history_target_slot);
+   }
+   auxiliary_slot_roles.push_back(FlatSlotRole::history_slot);
+   return make_predicate_tuple_layout(
+      logical_arity,
+      std::span{auxiliary_slot_roles},
+      engine.get_config().use_predicate_virtual_nodes
+   );
 }
 
 template < typename GoalLevelsMap, typename LiteralTag >
@@ -293,7 +307,7 @@ std::optional< size_t > goal_level_for(
 }
 
 template < typename AtomTag >
-std::vector< int64_t > local_arg_rows_for_atom(
+std::vector< int64_t > logical_arg_rows_for_atom(
    const FlatRelationEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom
 )
@@ -315,15 +329,51 @@ std::vector< int64_t > local_arg_rows_for_atom(
    return args;
 }
 
+int64_t ensure_predicate_virtual_entity(
+   FlatRelationEncoderEngine::EncodingContext& context,
+   std::string predicate_name
+)
+{
+   if(const auto it = context.predicate_entity_index_by_name.find(predicate_name);
+      it != context.predicate_entity_index_by_name.end()) {
+      return it->second;
+   }
+   const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
+   context.entity_names.push_back(fmt::format("predicate:{}", predicate_name));
+   context.predicate_entity_index_by_name.emplace(std::move(predicate_name), local_index);
+   context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::predicate_virtual));
+   return local_index;
+}
+
+template < typename AtomTag >
+std::vector< int64_t > local_arg_rows_for_atom(
+   const FlatRelationEncoderEngine& engine,
+   FlatRelationEncoderEngine::EncodingContext& context,
+   const mimir::formalism::GroundAtom< AtomTag >& atom,
+   std::span< const int64_t > auxiliary_args = {}
+)
+{
+   const auto logical_args = logical_arg_rows_for_atom(context, atom);
+   std::optional< int64_t > predicate_virtual_index = std::nullopt;
+   if(engine.get_config().use_predicate_virtual_nodes) {
+      predicate_virtual_index = ensure_predicate_virtual_entity(
+         context, RelationFormatter::format_predicate(atom->get_predicate())
+      );
+   }
+   return build_flat_tuple_args(std::span{logical_args}, auxiliary_args, predicate_virtual_index);
+}
+
+template < typename ErrorMsgCallable >
+   requires std::is_invocable_r_v< std::string, ErrorMsgCallable >
 int64_t lookup_target_entity_index(
    const FlatRelationEncoderEngine::EncodingContext& context,
    const FlatRelationEncoderEngine::TargetEntityKey& key,
-   const std::string& missing_message
+   const ErrorMsgCallable& missing_message
 )
 {
    const auto it = context.target_entity_index_by_key.find(key);
    if(it == context.target_entity_index_by_key.end()) {
-      throw std::invalid_argument(missing_message);
+      throw std::invalid_argument(missing_message());
    }
    return it->second;
 }
@@ -337,10 +387,12 @@ int64_t lookup_goal_target_entity_index(
 )
 {
    return lookup_target_entity_index(
-      context,
-      goal_target_entity_key(source, literal, goal_level),
-      "Flat relation encoder encountered goal literal without a target entity row: "
-         + goal_target_display_name(literal, goal_level)
+      context, goal_target_entity_key(source, literal, goal_level), [&] {
+         return std::string{
+            "Flat relation encoder encountered goal literal without a target entity row: "
+            + goal_target_display_name(literal, goal_level)
+         };
+      }
    );
 }
 
@@ -353,10 +405,12 @@ int64_t lookup_history_target_entity_index(
 )
 {
    return lookup_target_entity_index(
-      context,
-      history_target_entity_key(dt, entry_idx, literal),
-      "Flat relation encoder encountered history literal without a target entity row: "
-         + history_target_display_name(dt, entry_idx, literal)
+      context, history_target_entity_key(dt, entry_idx, literal), [&] {
+         return std::string{
+            "Flat relation encoder encountered history literal without a target entity row: "
+            + history_target_display_name(dt, entry_idx, literal)
+         };
+      }
    );
 }
 
@@ -365,15 +419,16 @@ std::vector< int64_t > local_arg_rows_for_action(
    const mimir::formalism::GroundAction& action
 )
 {
-   std::vector< int64_t > args;
-   args.reserve(action->get_objects().size() + 1);
-
-   args.push_back(lookup_target_entity_index(
-      context,
-      action_target_entity_key(action),
-      "Flat relation encoder encountered grounded action without a target entity row: "
-         + RelationFormatter::format_action(action)
-   ));
+   std::vector< int64_t > logical_args;
+   logical_args.reserve(action->get_objects().size());
+   const int64_t action_entity_index = lookup_target_entity_index(
+      context, action_target_entity_key(action), [&] {
+         return std::string{
+            "Flat relation encoder encountered grounded action without a target entity row: "
+            + RelationFormatter::format_action(action)
+         };
+      }
+   );
 
    for(const auto& obj : action->get_objects()) {
       const auto object_it = context.entity_index_by_object_id.find(
@@ -385,48 +440,53 @@ std::vector< int64_t > local_arg_rows_for_action(
             + RelationFormatter::format_object(*obj)
          );
       }
-      args.push_back(object_it->second);
+      logical_args.push_back(object_it->second);
    }
 
-   return args;
+   const std::array auxiliary_args{action_entity_index};
+   return build_flat_tuple_args(std::span{logical_args}, std::span{auxiliary_args}, std::nullopt);
 }
 
 template < typename GoalTag >
 std::vector< int64_t > local_arg_rows_for_goal_literal(
    const FlatRelationEncoderEngine& engine,
-   const FlatRelationEncoderEngine::EncodingContext& context,
+   FlatRelationEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundLiteral< GoalTag >& literal,
    const std::optional< size_t >& goal_level
 )
 {
-   auto args = local_arg_rows_for_atom(context, literal->get_atom());
    if(const auto target_source = anchor_source_for_goal_level(engine.get_config(), goal_level);
       target_source.has_value()) {
-      args.insert(
-         args.begin(), lookup_goal_target_entity_index(context, *target_source, literal, goal_level)
+      const std::array auxiliary_args{
+         lookup_goal_target_entity_index(context, *target_source, literal, goal_level)
+      };
+      return local_arg_rows_for_atom(
+         engine, context, literal->get_atom(), std::span{auxiliary_args}
       );
    }
-   return args;
+   return local_arg_rows_for_atom(engine, context, literal->get_atom());
 }
 
 template < typename HistoryTag >
 std::vector< int64_t > local_arg_rows_for_history_literal(
    const FlatRelationEncoderEngine& engine,
-   const FlatRelationEncoderEngine::EncodingContext& context,
+   FlatRelationEncoderEngine::EncodingContext& context,
    int64_t history_entity_index,
    int dt,
    size_t entry_idx,
    const mimir::formalism::GroundLiteral< HistoryTag >& literal
 )
 {
-   auto args = local_arg_rows_for_atom(context, literal->get_atom());
-   args.insert(args.begin(), history_entity_index);
    if(has_anchor_entity_source(engine.get_config(), TargetSource::history)) {
-      args.insert(
-         args.begin(), lookup_history_target_entity_index(context, dt, entry_idx, literal)
+      const std::array auxiliary_args{
+         lookup_history_target_entity_index(context, dt, entry_idx, literal), history_entity_index
+      };
+      return local_arg_rows_for_atom(
+         engine, context, literal->get_atom(), std::span{auxiliary_args}
       );
    }
-   return args;
+   const std::array auxiliary_args{history_entity_index};
+   return local_arg_rows_for_atom(engine, context, literal->get_atom(), std::span{auxiliary_args});
 }
 
 }  // namespace
@@ -461,7 +521,7 @@ class FlatRelationEncoderEngine::RelationComponent {
       const mimir::search::State& state,
       const GoalInputs& goals,
       const hash_set< uint64_t >& fact_keys,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const = 0;
 };
@@ -478,7 +538,11 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
          if(engine.config_.ignore_zero_arity_relations and spec.arity == 0) {
             continue;
          }
-         registry.add(spec.name, spec.arity, "state");
+         registry.add(
+            spec.name,
+            make_predicate_tuple_layout(spec.arity, {}, engine.config_.use_predicate_virtual_nodes),
+            "state"
+         );
       }
    }
 
@@ -487,7 +551,7 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
       const mimir::search::State& state,
       const GoalInputs&,
       const hash_set< uint64_t >&,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const override
    {
@@ -499,7 +563,7 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
          const auto relation_id = engine.relation_id_for(
             RelationFormatter::format_predicate(atom->get_predicate())
          );
-         const auto args = local_arg_rows_for_atom(context, atom);
+         const auto args = local_arg_rows_for_atom(engine, context, atom);
          sink.emit(relation_id, args);
       };
       for_each_state_fact_atom(state, engine.config_.include_static, emit_atom);
@@ -528,7 +592,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
                   RelationFormatter::format_predicate(
                      spec.name, goal_level, std::nullopt, polarity
                   ),
-                  goal_relation_arity(engine, spec.arity, level),
+                  goal_relation_layout(engine, spec.arity, level),
                   "goal"
                );
             }
@@ -539,7 +603,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
                   RelationFormatter::format_predicate(
                      spec.name, std::nullopt, std::nullopt, polarity
                   ),
-                  goal_relation_arity(engine, spec.arity, std::nullopt),
+                  goal_relation_layout(engine, spec.arity, std::nullopt),
                   "goal"
                );
             }
@@ -552,7 +616,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       const mimir::search::State&,
       const GoalInputs& goals,
       const hash_set< uint64_t >&,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const override
    {
@@ -572,7 +636,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
       std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
       const auto& goal_levels,
       const FlatRelationEncoderEngine& engine,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    )
    {
@@ -626,7 +690,9 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
                      RelationFormatter::format_predicate(
                         spec.name, goal_level, derivation, polarity
                      ),
-                     spec.arity,
+                     make_predicate_tuple_layout(
+                        spec.arity, {}, engine.config_.use_predicate_virtual_nodes
+                     ),
                      "goal_derivation"
                   );
                }
@@ -637,7 +703,9 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
                      RelationFormatter::format_predicate(
                         spec.name, std::nullopt, derivation, polarity
                      ),
-                     spec.arity,
+                     make_predicate_tuple_layout(
+                        spec.arity, {}, engine.config_.use_predicate_virtual_nodes
+                     ),
                      "goal_derivation"
                   );
                }
@@ -651,7 +719,7 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
       const mimir::search::State&,
       const GoalInputs& goals,
       const hash_set< uint64_t >& fact_keys,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const override
    {
@@ -676,7 +744,7 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
       const auto& goal_levels,
       const hash_set< uint64_t >& fact_keys,
       const FlatRelationEncoderEngine& engine,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    )
    {
@@ -708,7 +776,7 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
          }
 
          const auto relation_id = engine.relation_id_for(relation_name);
-         const auto args = local_arg_rows_for_atom(context, literal->get_atom());
+         const auto args = local_arg_rows_for_atom(engine, context, literal->get_atom());
          sink.emit(relation_id, args);
       }
    }
@@ -723,7 +791,11 @@ class FlatRelationEncoderEngine::GroundActionsComponent final:
    ) const override
    {
       for(const auto& spec : engine.action_specs_) {
-         registry.add(spec.name, spec.arity, "action");
+         registry.add(
+            spec.name,
+            make_nonpredicate_tuple_layout(spec.arity - 1, {FlatSlotRole::action_slot}),
+            "action"
+         );
       }
    }
 
@@ -732,7 +804,7 @@ class FlatRelationEncoderEngine::GroundActionsComponent final:
       const mimir::search::State&,
       const GoalInputs&,
       const hash_set< uint64_t >&,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const override
    {
@@ -763,7 +835,7 @@ class FlatRelationEncoderEngine::HistoryFactsComponent final:
                RelationFormatter::format_predicate(
                   spec.name, std::nullopt, std::nullopt, polarity, kHistoryRelationSuffix
                ),
-               history_relation_arity(engine, spec.arity),
+               history_relation_layout(engine, spec.arity),
                "history"
             );
          }
@@ -775,7 +847,7 @@ class FlatRelationEncoderEngine::HistoryFactsComponent final:
       const mimir::search::State&,
       const GoalInputs&,
       const hash_set< uint64_t >&,
-      const EncodingContext& context,
+      EncodingContext& context,
       FlatRelationSink& sink
    ) const override
    {
@@ -836,9 +908,8 @@ FlatRelationEncoderEngine::~FlatRelationEncoderEngine() = default;
 
 void FlatRelationEncoderEngine::validate_config() const
 {
-   auto validate_sources = [](std::span< const TargetSource > sources,
-                              std::string_view field_name) {
-      for(const auto source : sources) {
+   auto validate_sources = [](const std::ranges::range auto& sources, std::string_view field_name) {
+      for(const TargetSource source : sources) {
          if(source == TargetSource::actions or source == TargetSource::goals
             or source == TargetSource::subgoals or source == TargetSource::history) {
             continue;
@@ -853,14 +924,8 @@ void FlatRelationEncoderEngine::validate_config() const
          );
       }
    };
-   std::vector< TargetSource > target_sources(
-      config_.target_sources.begin(), config_.target_sources.end()
-   );
-   validate_sources(std::span{target_sources}, "target_sources");
-   std::vector< TargetSource > lgan_anchor_sources(
-      config_.lgan_anchor_sources.begin(), config_.lgan_anchor_sources.end()
-   );
-   validate_sources(std::span{lgan_anchor_sources}, "lgan_anchor_sources");
+   validate_sources(config_.target_sources, "target_sources");
+   validate_sources(config_.lgan_anchor_sources, "lgan_anchor_sources");
 }
 
 void FlatRelationEncoderEngine::initialize_from_domain()
@@ -901,10 +966,13 @@ void FlatRelationEncoderEngine::initialize_from_domain()
    std::ranges::sort(regular_predicate_specs_, predicate_order);
 
    for(const auto& action : actions) {
+      const auto layout = make_nonpredicate_tuple_layout(
+         action->get_arity(), {FlatSlotRole::action_slot}
+      );
       action_specs_.push_back(
          PredicateSpec{
             .name = RelationFormatter::format_action_schema(*action),
-            .arity = static_cast< int >(action->get_arity()) + 1,
+            .arity = layout.encoded_arity(),
          }
       );
    }
@@ -958,20 +1026,34 @@ void FlatRelationEncoderEngine::rebuild_schema()
    relation_names_.clear();
    relation_arities_.clear();
    relation_sources_.clear();
+   relation_logical_arities_.clear();
+   relation_encoded_arities_.clear();
+   relation_slot_roles_.clear();
+   relation_slot_role_offsets_.clear();
    relation_name_to_id_.clear();
+   slot_role_names_ = flat_slot_role_names();
 
    relation_names_.reserve(registry.size());
    relation_arities_.reserve(registry.size());
    relation_sources_.reserve(registry.size());
+   relation_logical_arities_.reserve(registry.size());
+   relation_encoded_arities_.reserve(registry.size());
    relation_name_to_id_.reserve(registry.size());
+   relation_slot_role_offsets_.reserve(registry.size() + 1);
+   relation_slot_role_offsets_.push_back(0);
 
    std::map< std::string, int > relation_dict_arity;
    for(const auto& [name, entry] : registry.entries()) {
       relation_name_to_id_.emplace(name, static_cast< int >(relation_names_.size()));
       relation_names_.push_back(name);
-      relation_arities_.push_back(entry.arity);
+      relation_arities_.push_back(entry.layout.encoded_arity());
       relation_sources_.push_back(entry.source);
-      relation_dict_arity.emplace(name, entry.arity);
+      relation_logical_arities_.push_back(entry.layout.logical_arity);
+      relation_encoded_arities_.push_back(entry.layout.encoded_arity());
+      const auto slot_roles = entry.layout.slot_role_ids();
+      relation_slot_roles_.insert(relation_slot_roles_.end(), slot_roles.begin(), slot_roles.end());
+      relation_slot_role_offsets_.push_back(static_cast< int64_t >(relation_slot_roles_.size()));
+      relation_dict_arity.emplace(name, entry.layout.encoded_arity());
    }
 
    if(relation_names_.empty()) {
@@ -1002,14 +1084,24 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_attr(
       std::string(kLGANAnchorSourcesAttr), source_names_for(config_.lgan_anchor_sources)
    );
+   builder.set_graph_attr(std::string(kEntityRoleNamesAttr), flat_entity_role_names());
    builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
    builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
    builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);
+   builder.set_graph_attr(std::string(kRelationLogicalAritiesAttr), relation_logical_arities_);
+   builder.set_graph_attr(std::string(kRelationEncodedAritiesAttr), relation_encoded_arities_);
+   builder.set_graph_attr(std::string(kRelationSlotRolesAttr), relation_slot_roles_);
+   builder.set_graph_attr(std::string(kRelationSlotRoleOffsetsAttr), relation_slot_role_offsets_);
+   builder.set_graph_attr(std::string(kSlotRoleNamesAttr), slot_role_names_);
    builder.set_graph_attr(std::string(kTargetEntityGroupsAttr), target_entity_group_names_);
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    builder.set_graph_attr(std::string(kLGANTNEdgePosAttr), config_.lgan_tn_edge_pos);
    builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config_.lgan_nn_edge_pos);
    builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config_.lgan_rr_edge_pos);
+   builder.set_graph_attr(
+      std::string(kUsePredicateVirtualNodesAttr),
+      static_cast< int64_t >(config_.use_predicate_virtual_nodes)
+   );
 
    builder.register_field(
       std::string(kNodeSizesField),
@@ -1037,6 +1129,14 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
             .kind = GraphFieldInc::Kind::NODE_OFFSET,
             .node_type = std::string(kEntityNodeType),
          },
+      }
+   );
+   builder.register_field(
+      std::string(kEntityRoleIdsField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
       }
    );
    builder.register_field(
@@ -1261,10 +1361,14 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
    });
    const auto prepared_history = prepare_history_entries(history_subgoals, history_max_steps);
 
-   context.entity_names.reserve(ordered.size() + actions.size() + prepared_history.size());
+   context.entity_names.reserve(
+      ordered.size() + actions.size() + prepared_history.size() + predicate_specs_.size()
+   );
+   context.entity_role_ids.reserve(context.entity_names.capacity());
    context.object_names.reserve(ordered.size());
    context.object_indices.reserve(ordered.size());
    context.entity_index_by_object_id.reserve(ordered.size());
+   context.predicate_entity_index_by_name.reserve(predicate_specs_.size());
    context.history_entity_indices.reserve(prepared_history.size());
    context.history_entity_dt.reserve(prepared_history.size());
    context.target_entity_indices.reserve(ordered.size() + actions.size() + prepared_history.size());
@@ -1294,6 +1398,7 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
       );
       const std::string object_name = RelationFormatter::format_object(*obj);
       context.entity_names.push_back(object_name);
+      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::object));
       context.object_names.push_back(object_name);
       context.object_indices.push_back(local_index);
    }
@@ -1312,6 +1417,9 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
          const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
          context.target_entity_index_by_key.emplace(key, local_index);
          context.entity_names.push_back(name);
+         context.entity_role_ids.push_back(
+            static_cast< int64_t >(entity_role_for_target_source(source))
+         );
          context.target_entity_indices.push_back(local_index);
          context.target_entity_group_ids.push_back(target_entity_group_id(source));
          if(action.has_value()) {
@@ -1323,6 +1431,7 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
    auto append_history_entity = [&](int dt, size_t entry_idx) {
       const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
       context.entity_names.push_back(fmt::format("history:{}#{}", dt, entry_idx));
+      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::history));
       context.history_entity_indices.push_back(local_index);
       context.history_entity_dt.push_back(static_cast< int64_t >(dt));
       return local_index;
@@ -1584,7 +1693,7 @@ void FlatRelationEncoderEngine::encode_impl(
    if(prepare_builder_once) {
       prepare_builder(builder);
    }
-   const auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
+   auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
    hash_set< uint64_t > fact_keys;
@@ -1615,6 +1724,10 @@ void FlatRelationEncoderEngine::encode_impl(
    builder.set_field(
       std::string(kObjectIndicesField),
       std::span< const int64_t >(context.object_indices.data(), context.object_indices.size())
+   );
+   builder.set_field(
+      std::string(kEntityRoleIdsField),
+      std::span< const int64_t >(context.entity_role_ids.data(), context.entity_role_ids.size())
    );
    builder.set_field(
       std::string(kHistoryEntitySizesField), std::span< const int64_t >(&history_entity_size, 1)

@@ -25,6 +25,12 @@ def _assert_flat_batch_equal(
     assert torch.equal(actual.node_sizes, expected.node_sizes)
     assert torch.equal(actual.object_sizes, expected.object_sizes)
     assert torch.equal(actual.object_indices, expected.object_indices)
+    actual_entity_role_ids = getattr(actual, "entity_role_ids", None)
+    expected_entity_role_ids = getattr(expected, "entity_role_ids", None)
+    if actual_entity_role_ids is None or expected_entity_role_ids is None:
+        assert actual_entity_role_ids is expected_entity_role_ids
+    else:
+        assert torch.equal(actual_entity_role_ids, expected_entity_role_ids)
     actual_history_entity_sizes = getattr(actual, "history_entity_sizes", None)
     expected_history_entity_sizes = getattr(expected, "history_entity_sizes", None)
     if actual_history_entity_sizes is None or expected_history_entity_sizes is None:
@@ -146,6 +152,9 @@ def _assert_flat_batch_equal(
     assert getattr(actual, "target_entity_groups", None) == getattr(
         expected, "target_entity_groups", None
     )
+    assert getattr(actual, "entity_role_names", None) == getattr(
+        expected, "entity_role_names", None
+    )
     assert getattr(actual, "target_sources", None) == getattr(
         expected, "target_sources", None
     )
@@ -154,6 +163,9 @@ def _assert_flat_batch_equal(
     )
     assert getattr(actual, "include_lgan_edges", None) == getattr(
         expected, "include_lgan_edges", None
+    )
+    assert getattr(actual, "use_predicate_virtual_nodes", None) == getattr(
+        expected, "use_predicate_virtual_nodes", None
     )
     assert getattr(actual, "target_symbol_prefix", None) == getattr(
         expected, "target_symbol_prefix", None
@@ -216,6 +228,27 @@ def _filtered_history_inputs(history_subgoals, history_max_steps: int | None = N
     return sorted(out, key=lambda item: item[0])
 
 
+def _relation_slot_roles(data: FlatRelationData, relation_name: str) -> tuple[str, ...]:
+    return data.schema.slot_roles[data.schema.name_to_id[relation_name]]
+
+
+def _nonempty_relation_names(
+    data: FlatRelationData,
+    *,
+    source: str | None = None,
+    name_contains: str | None = None,
+) -> list[str]:
+    out: list[str] = []
+    for relation_idx, relation_name in enumerate(data.schema.names):
+        if source is not None and data.schema.sources[relation_idx] != source:
+            continue
+        if name_contains is not None and name_contains not in relation_name:
+            continue
+        if data.flattened_relations[relation_name].shape[0] > 0:
+            out.append(relation_name)
+    return out
+
+
 def test_flat_relation_encoder_returns_flat_relation_data(small_blocks):
     _space, domain, problem = small_blocks
     encoder = FlatRelationEncoder(domain)
@@ -231,6 +264,189 @@ def test_flat_relation_encoder_returns_flat_relation_data(small_blocks):
         data.object_indices,
         torch.arange(data.object_sizes[0].item(), dtype=torch.long),
     )
+
+
+def test_flat_relation_predicate_virtual_nodes_default_to_disabled(small_blocks):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+
+    actual = FlatRelationEncoder(domain).encode_pyg(state)
+    expected = FlatRelationEncoder(
+        domain,
+        use_predicate_virtual_nodes=False,
+    ).encode_pyg(state)
+
+    assert actual.use_predicate_virtual_nodes is False
+    assert expected.use_predicate_virtual_nodes is False
+    _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_relation_predicate_virtual_nodes_augment_predicate_slots_and_preserve_arguments(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+
+    base = FlatRelationEncoder(
+        domain,
+        ignore_zero_arity_relations=False,
+    ).encode_pyg(state)
+    data = FlatRelationEncoder(
+        domain,
+        ignore_zero_arity_relations=False,
+        use_predicate_virtual_nodes=True,
+    ).encode_pyg(state)
+
+    predicate_role_id = list(data.entity_role_names).index("predicate_virtual")
+    object_count = int(data.object_sizes[0].item())
+    assert data.graph_entity_roles(0)[:object_count] == ["object"] * object_count
+    assert data.schema.encoded_arities == tuple(data.schema.arities)
+    assert data.schema.logical_arities == tuple(
+        sum(role == "argument_slot" for role in roles)
+        for roles in data.schema.slot_roles
+    )
+
+    checked_relations = 0
+    for relation_name in _nonempty_relation_names(data):
+        if "predicate_slot" not in _relation_slot_roles(data, relation_name):
+            continue
+        actual = data.flattened_relations[relation_name]
+        expected = base.flattened_relations[relation_name]
+        predicate_slot_index = _relation_slot_roles(data, relation_name).index(
+            "predicate_slot"
+        )
+        assert actual.shape[1] == expected.shape[1] + 1
+        assert torch.equal(
+            torch.cat(
+                (
+                    actual[:, :predicate_slot_index],
+                    actual[:, predicate_slot_index + 1 :],
+                ),
+                dim=1,
+            ),
+            expected,
+        )
+        predicate_rows = actual[:, predicate_slot_index].long()
+        if predicate_rows.numel() > 0:
+            assert torch.equal(
+                data.graph_entity_role_ids(0)[predicate_rows],
+                torch.full_like(predicate_rows, predicate_role_id),
+            )
+        checked_relations += 1
+
+    assert checked_relations > 0
+
+
+def test_flat_relation_predicate_virtual_nodes_keep_action_slots_distinct(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action = _first_action(space, state)
+
+    base = FlatRelationEncoder(domain).encode_pyg(state, actions=[action])
+    data = FlatRelationEncoder(
+        domain,
+        use_predicate_virtual_nodes=True,
+    ).encode_pyg(state, actions=[action])
+
+    relation_name = _nonempty_relation_names(data, source="action")[0]
+    assert _relation_slot_roles(data, relation_name)[0] == "action_slot"
+    assert "predicate_slot" not in _relation_slot_roles(data, relation_name)
+    assert torch.equal(
+        data.flattened_relations[relation_name],
+        base.flattened_relations[relation_name],
+    )
+
+
+def test_flat_relation_predicate_virtual_nodes_compose_with_goal_and_history_auxiliary_slots(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _problem_goals(problem)[0]
+    goals, history_subgoals = _history_inputs(problem)
+
+    goal_base = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[mifrost.TargetSource.goals],
+    ).encode_pyg(state, goals=[goal])
+    goal_data = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[mifrost.TargetSource.goals],
+        use_predicate_virtual_nodes=True,
+    ).encode_pyg(state, goals=[goal])
+
+    goal_relation_name = _nonempty_relation_names(goal_data, source="goal")[0]
+    assert _relation_slot_roles(goal_data, goal_relation_name)[:2] == (
+        "goal_target_slot",
+        "predicate_slot",
+    )
+    assert torch.equal(
+        goal_data.flattened_relations[goal_relation_name][:, 0],
+        goal_base.flattened_relations[goal_relation_name][:, 0],
+    )
+    assert torch.equal(
+        goal_data.flattened_relations[goal_relation_name][:, 2:],
+        goal_base.flattened_relations[goal_relation_name][:, 1:],
+    )
+
+    history_base = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.history],
+    ).encode_pyg(state, goals=goals, history_subgoals=history_subgoals)
+    history_data = FlatRelationEncoder(
+        domain,
+        target_sources=[mifrost.TargetSource.history],
+        use_predicate_virtual_nodes=True,
+    ).encode_pyg(state, goals=goals, history_subgoals=history_subgoals)
+
+    history_relation_name = _nonempty_relation_names(history_data, source="history")[0]
+    assert _relation_slot_roles(history_data, history_relation_name)[:3] == (
+        "history_target_slot",
+        "history_slot",
+        "predicate_slot",
+    )
+    assert torch.equal(
+        history_data.flattened_relations[history_relation_name][:, :2],
+        history_base.flattened_relations[history_relation_name][:, :2],
+    )
+    assert torch.equal(
+        history_data.flattened_relations[history_relation_name][:, 3:],
+        history_base.flattened_relations[history_relation_name][:, 2:],
+    )
+
+
+def test_flat_relation_predicate_virtual_nodes_batching_matches_single_graph_slices(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = _problem_goals(problem)[0]
+    action = _first_action(space, state)
+
+    encoder = FlatRelationEncoder(
+        domain,
+        use_predicate_virtual_nodes=True,
+        target_sources=[mifrost.TargetSource.goals],
+    )
+    actual = encoder.encode_batch(
+        [state, state],
+        goals=[[goal], [goal]],
+        actions=[[action], [action]],
+    ).as_pyg(as_batch=True)
+    expected = flat_relation_data_from_pyg(
+        Batch.from_data_list(
+            [
+                encoder.encode_pyg(state, goals=[goal], actions=[action]),
+                encoder.encode_pyg(state, goals=[goal], actions=[action]),
+            ]
+        )
+    )
+
+    _assert_flat_batch_equal(actual, expected)
 
 
 def test_flat_relation_pyg_output_exposes_encoder_config_attrs(small_blocks):

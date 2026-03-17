@@ -197,6 +197,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
         ignore_actions: bool = True,
+        use_predicate_virtual_nodes: bool = False,
         include_lgan_edges: bool = False,
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
@@ -225,6 +226,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             "export_node_names": export_node_names,
             "ignore_zero_arity_relations": ignore_zero_arity_relations,
             "ignore_actions": ignore_actions,
+            "use_predicate_virtual_nodes": use_predicate_virtual_nodes,
             "include_lgan_edges": include_lgan_edges,
             "target_symbol_prefix": target_symbol_prefix,
             "parent_relation": parent_relation,
@@ -247,6 +249,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         self._engine = FlatHorizonEncoderEngine(_advanced_domain(domain), config)
         self._config = config
         self.entity_node_type = "entity"
+        self.use_predicate_virtual_nodes = bool(config.use_predicate_virtual_nodes)
         self.target_symbol_prefix = config.target_symbol_prefix
         self.parent_relation = config.parent_relation
         self.sibling_relation = config.sibling_relation

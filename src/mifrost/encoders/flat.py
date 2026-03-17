@@ -240,6 +240,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         include_static: bool = True,
         export_node_names: bool = True,
         ignore_zero_arity_relations: bool = True,
+        use_predicate_virtual_nodes: bool = False,
         include_lgan_edges: bool = False,
         lgan_anchor_sources: Iterable[TargetSource | str] | None = None,
         target_sources: Iterable[TargetSource | str] | None = None,
@@ -296,6 +297,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             "include_static": include_static,
             "export_node_names": export_node_names,
             "ignore_zero_arity_relations": ignore_zero_arity_relations,
+            "use_predicate_virtual_nodes": use_predicate_virtual_nodes,
             "include_lgan_edges": include_lgan_edges,
             "target_symbol_prefix": target_symbol_prefix,
             "lgan_tn_edge_pos": lgan_tn_edge_pos,
@@ -312,6 +314,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         self._engine = FlatRelationEncoderEngine(_advanced_domain(domain), config)
         self._config = config
         self.entity_node_type = "entity"
+        self.use_predicate_virtual_nodes = bool(config.use_predicate_virtual_nodes)
         self.include_lgan_edges = bool(config.include_lgan_edges)
         self.target_sources = set(config.target_sources)
         self.lgan_anchor_sources = set(config.lgan_anchor_sources)
@@ -354,6 +357,31 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
     def relation_sources(self) -> tuple[str, ...]:
         """Expose the ordered flat relation source labels declared by the native engine."""
         return tuple(str(source) for source in self._engine.relation_sources)
+
+    @property
+    def relation_logical_arities(self) -> tuple[int, ...]:
+        """Expose the logical flat relation arities declared by the native engine."""
+        return tuple(int(arity) for arity in self._engine.relation_logical_arities)
+
+    @property
+    def relation_encoded_arities(self) -> tuple[int, ...]:
+        """Expose the encoded flat relation arities declared by the native engine."""
+        return tuple(int(arity) for arity in self._engine.relation_encoded_arities)
+
+    @property
+    def relation_slot_roles(self) -> tuple[int, ...]:
+        """Expose flattened per-relation slot-role ids."""
+        return tuple(int(role_id) for role_id in self._engine.relation_slot_roles)
+
+    @property
+    def relation_slot_role_offsets(self) -> tuple[int, ...]:
+        """Expose offsets into `relation_slot_roles` for each relation."""
+        return tuple(int(offset) for offset in self._engine.relation_slot_role_offsets)
+
+    @property
+    def slot_role_names(self) -> tuple[str, ...]:
+        """Expose the ordered slot-role labels used by flat schema metadata."""
+        return tuple(str(name) for name in self._engine.slot_role_names)
 
     def _encode_one_into_builder(
         self,
@@ -624,6 +652,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                     ),
                 }
             )
+        entity_roles = data.graph_entity_roles(graph_index)
+        entity_role_by_index = {
+            start + idx: entity_roles[idx]
+            for idx in range(min(len(entity_roles), end - start))
+        }
 
         for global_idx in range(start, end):
             label = name_by_global.get(global_idx, f"entity:{global_idx}")
@@ -638,11 +671,13 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 entity_kind = "history_entity"
             else:
                 entity_kind = "object"
+            entity_role = entity_role_by_index.get(global_idx)
             graph.add_node(
                 label,
                 type="entity",
                 kind="entity",
                 entity_kind=entity_kind,
+                entity_role=entity_role,
                 history_dt=history_dt,
                 target_group_id=target_group_id,
                 target_group=target_group_name,
@@ -666,6 +701,11 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             )
             for instance_idx, args in enumerate(instances.tolist()):
                 relation_node = f"{relation_name}#{instance_idx}"
+                slot_roles = (
+                    schema.slot_roles[relation_idx]
+                    if relation_idx < len(schema.slot_roles)
+                    else ()
+                )
                 graph.add_node(
                     relation_node,
                     type=relation_name,
@@ -679,11 +719,13 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 relation_node_by_global[relation_cursor] = relation_node
                 for slot, global_idx in enumerate(args):
                     entity_node = name_by_global.get(global_idx, f"entity:{global_idx}")
+                    slot_role = slot_roles[slot] if slot < len(slot_roles) else None
                     graph.add_edge(
                         relation_node,
                         entity_node,
                         position=str(slot),
                         slot=slot,
+                        slot_role=slot_role,
                     )
                 relation_cursor += 1
 

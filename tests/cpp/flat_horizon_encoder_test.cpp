@@ -201,6 +201,108 @@ TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
    EXPECT_EQ(relation_args[action_slot], target_positions.front());
 }
 
+TEST_P(FlatHorizonEncoderTest, PredicateVirtualNodesFollowStateSlotMetadata)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+
+   TransitionDAG dag(ctx.root);
+   dag.register_transition(ctx.root, succ_state, succ_action, int64_t{42});
+
+   FlatHorizonEncoderEngine::Config config;
+   config.ignore_actions = false;
+   config.use_predicate_virtual_nodes = true;
+   FlatHorizonEncoderEngine engine(ctx.problem->get_domain(), config);
+   FlatHorizonEncoderEngine base_engine(
+      ctx.problem->get_domain(),
+      FlatHorizonEncoderEngine::Config{
+         .ignore_actions = false,
+      }
+   );
+
+   const auto encoding = encode_single(
+      engine, ctx.root, dag, mifrost_test::make_goal_inputs(ctx.problem)
+   );
+   const auto base = encode_single(
+      base_engine, ctx.root, dag, mifrost_test::make_goal_inputs(ctx.problem)
+   );
+
+   const auto relation_names = str_attr(encoding, "relation_names");
+   const auto relation_arities = i64_attr(encoding, "relation_arities");
+   const auto relation_logical_arities = i64_attr(encoding, "relation_logical_arities");
+   const auto relation_encoded_arities = i64_attr(encoding, "relation_encoded_arities");
+   const auto relation_slot_roles = i64_attr(encoding, "relation_slot_roles");
+   const auto relation_slot_role_offsets = i64_attr(encoding, "relation_slot_role_offsets");
+   const auto slot_role_names = str_attr(encoding, "slot_role_names");
+   const auto entity_role_names = str_attr(encoding, "entity_role_names");
+   const auto entity_role_ids = i64_field(encoding, "entity_role_ids");
+   const auto relation_counts = i64_field(encoding, "relation_counts");
+   const auto relation_args = i64_field(encoding, "relation_args");
+   const auto base_relation_arities = i64_attr(base, "relation_arities");
+   const auto base_relation_counts = i64_field(base, "relation_counts");
+   const auto base_relation_args = i64_field(base, "relation_args");
+
+   ASSERT_EQ(slot_role_names[1], "predicate_slot");
+   ASSERT_EQ(entity_role_names[1], "predicate_virtual");
+
+   size_t checked_state_predicate_relations = 0;
+   for(size_t relation_idx = 0; relation_idx < relation_names.size(); ++relation_idx) {
+      const auto roles_begin = relation_slot_roles.begin()
+                               + static_cast< ptrdiff_t >(relation_slot_role_offsets[relation_idx]);
+      const auto roles_end = relation_slot_roles.begin()
+                             + static_cast< ptrdiff_t >(
+                                relation_slot_role_offsets[relation_idx + 1]
+                             );
+      const std::vector< int64_t > roles(roles_begin, roles_end);
+
+      EXPECT_EQ(relation_arities[relation_idx], relation_encoded_arities[relation_idx]);
+      EXPECT_EQ(
+         relation_logical_arities[relation_idx],
+         static_cast< int64_t >(std::count(roles.begin(), roles.end(), int64_t{0}))
+      );
+
+      const auto state_it = std::find(roles.begin(), roles.end(), int64_t{2});
+      const auto predicate_it = std::find(roles.begin(), roles.end(), int64_t{1});
+      if(state_it == roles.end() || predicate_it == roles.end()) {
+         continue;
+      }
+      EXPECT_EQ(roles.front(), int64_t{2});
+      EXPECT_EQ(std::distance(roles.begin(), predicate_it), 1);
+
+      if(relation_counts[relation_idx] <= 0 || base_relation_counts[relation_idx] <= 0) {
+         continue;
+      }
+
+      const size_t predicate_slot = static_cast< size_t >(
+         std::distance(roles.begin(), predicate_it)
+      );
+      const size_t slot = relation_slot_offset(
+         std::span{relation_counts}, std::span{relation_arities}, relation_idx
+      );
+      const size_t base_slot = relation_slot_offset(
+         std::span{base_relation_counts}, std::span{base_relation_arities}, relation_idx
+      );
+      const size_t width = static_cast< size_t >(relation_arities[relation_idx]);
+      const size_t base_width = static_cast< size_t >(base_relation_arities[relation_idx]);
+
+      ASSERT_EQ(width, base_width + 1);
+      ASSERT_LT(slot + width - 1, relation_args.size());
+      ASSERT_LT(base_slot + base_width - 1, base_relation_args.size());
+      EXPECT_EQ(entity_role_ids[relation_args[slot + predicate_slot]], 1);
+
+      for(size_t col = 0; col < predicate_slot; ++col) {
+         EXPECT_EQ(relation_args[slot + col], base_relation_args[base_slot + col]);
+      }
+      for(size_t col = predicate_slot + 1; col < width; ++col) {
+         EXPECT_EQ(relation_args[slot + col], base_relation_args[base_slot + (col - 1)]);
+      }
+      ++checked_state_predicate_relations;
+   }
+
+   EXPECT_GT(checked_state_predicate_relations, 0);
+}
+
 TEST_P(FlatHorizonEncoderTest, LGANCandidateRowsEmitPackedFields)
 {
    const auto param = GetParam();

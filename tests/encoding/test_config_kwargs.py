@@ -56,12 +56,14 @@ def test_horizon_config_accepts_kwargs() -> None:
 def test_flat_relation_config_accepts_lgan_kwargs() -> None:
     config = mifrost.FlatRelationEncoderConfig(
         include_lgan_edges=True,
+        use_predicate_virtual_nodes=True,
         lgan_anchor_sources={mifrost.TargetSource.goals},
         lgan_tn_edge_pos="_flat_tn_",
         lgan_nn_edge_pos="_flat_nn_",
         lgan_rr_edge_pos="_flat_rr_",
     )
     assert config.include_lgan_edges is True
+    assert config.use_predicate_virtual_nodes is True
     assert set(config.lgan_anchor_sources) == {mifrost.TargetSource.goals}
     assert config.lgan_tn_edge_pos == "_flat_tn_"
     assert config.lgan_nn_edge_pos == "_flat_nn_"
@@ -71,11 +73,13 @@ def test_flat_relation_config_accepts_lgan_kwargs() -> None:
 def test_flat_horizon_config_accepts_lgan_kwargs() -> None:
     config = mifrost.FlatHorizonEncoderConfig(
         include_lgan_edges=True,
+        use_predicate_virtual_nodes=True,
         lgan_tn_edge_pos="_flat_tn_",
         lgan_nn_edge_pos="_flat_nn_",
         lgan_rr_edge_pos="_flat_rr_",
     )
     assert config.include_lgan_edges is True
+    assert config.use_predicate_virtual_nodes is True
     assert config.lgan_tn_edge_pos == "_flat_tn_"
     assert config.lgan_nn_edge_pos == "_flat_nn_"
     assert config.lgan_rr_edge_pos == "_flat_rr_"
@@ -157,11 +161,13 @@ def test_flat_relation_encoder_exposes_unified_lgan_config(small_blocks) -> None
     encoder = mifrost.FlatRelationEncoder(
         domain,
         include_lgan_edges=True,
+        use_predicate_virtual_nodes=True,
         lgan_anchor_sources=["goal"],
         lgan_tn_edge_pos="_flat_tn_custom_",
         lgan_rr_edge_pos="_flat_rr_custom_",
     )
     assert encoder.config.include_lgan_edges is True
+    assert encoder.config.use_predicate_virtual_nodes is True
     assert set(encoder.config.lgan_anchor_sources) == {mifrost.TargetSource.goals}
     assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
@@ -172,10 +178,12 @@ def test_flat_horizon_encoder_exposes_unified_lgan_config(small_blocks) -> None:
     encoder = mifrost.FlatHorizonEncoder(
         domain,
         include_lgan_edges=True,
+        use_predicate_virtual_nodes=True,
         lgan_tn_edge_pos="_flat_tn_custom_",
         lgan_rr_edge_pos="_flat_rr_custom_",
     )
     assert encoder.config.include_lgan_edges is True
+    assert encoder.config.use_predicate_virtual_nodes is True
     assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
 

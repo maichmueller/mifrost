@@ -44,6 +44,10 @@ void init_flat_encoder(nb::module_& m)
          "ignore_zero_arity_relations",
          &FlatRelationEncoderEngine::Config::ignore_zero_arity_relations
       )
+      .def_rw(
+         "use_predicate_virtual_nodes",
+         &FlatRelationEncoderEngine::Config::use_predicate_virtual_nodes
+      )
       .def_rw("include_lgan_edges", &FlatRelationEncoderEngine::Config::include_lgan_edges)
       .def_rw("lgan_anchor_sources", &FlatRelationEncoderEngine::Config::lgan_anchor_sources)
       .def_rw("target_sources", &FlatRelationEncoderEngine::Config::target_sources)
@@ -69,6 +73,17 @@ void init_flat_encoder(nb::module_& m)
       .def_prop_ro("relation_names", &FlatRelationEncoderEngine::get_relation_names)
       .def_prop_ro("relation_arities", &FlatRelationEncoderEngine::get_relation_arities)
       .def_prop_ro("relation_sources", &FlatRelationEncoderEngine::get_relation_sources)
+      .def_prop_ro(
+         "relation_logical_arities", &FlatRelationEncoderEngine::get_relation_logical_arities
+      )
+      .def_prop_ro(
+         "relation_encoded_arities", &FlatRelationEncoderEngine::get_relation_encoded_arities
+      )
+      .def_prop_ro("relation_slot_roles", &FlatRelationEncoderEngine::get_relation_slot_roles)
+      .def_prop_ro(
+         "relation_slot_role_offsets", &FlatRelationEncoderEngine::get_relation_slot_role_offsets
+      )
+      .def_prop_ro("slot_role_names", &FlatRelationEncoderEngine::get_slot_role_names)
       .def(
          "encode",
          [](FlatRelationEncoderEngine& encoder, const mimir::search::State& state) {

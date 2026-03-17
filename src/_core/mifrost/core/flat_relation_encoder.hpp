@@ -18,6 +18,7 @@
 #include "batch_builder.hpp"
 #include "common_types.hpp"
 #include "default_relations.hpp"
+#include "flat_tuple_layout.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "stream_encoder_base.hpp"
@@ -42,6 +43,7 @@ class FlatRelationEncoderEngine {
       bool include_static = true;
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
+      bool use_predicate_virtual_nodes = false;
       bool include_lgan_edges = false;
       /// Extra rows that may anchor LGAN edges without becoming prediction targets.
       std::set< TargetSource > lgan_anchor_sources = {};
@@ -86,9 +88,11 @@ class FlatRelationEncoderEngine {
       };
 
       hash_map< int64_t, int64_t > entity_index_by_object_id;
+      hash_map< std::string, int64_t > predicate_entity_index_by_name;
       hash_map< TargetEntityKey, int64_t, TargetEntityKeyHash, std::equal_to< TargetEntityKey > >
          target_entity_index_by_key;
       std::vector< std::string > entity_names;
+      std::vector< int64_t > entity_role_ids;
       std::vector< std::string > object_names;
       std::vector< int64_t > object_indices;
       std::vector< int64_t > history_entity_indices;
@@ -149,6 +153,26 @@ class FlatRelationEncoderEngine {
    [[nodiscard]] const std::vector< std::string >& get_relation_sources() const
    {
       return relation_sources_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
+   {
+      return relation_logical_arities_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
+   {
+      return relation_encoded_arities_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
+   {
+      return relation_slot_roles_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
+   {
+      return relation_slot_role_offsets_;
+   }
+   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
+   {
+      return slot_role_names_;
    }
 
   private:
@@ -211,6 +235,11 @@ class FlatRelationEncoderEngine {
    std::vector< std::string > relation_names_;
    std::vector< int64_t > relation_arities_;
    std::vector< std::string > relation_sources_;
+   std::vector< int64_t > relation_logical_arities_;
+   std::vector< int64_t > relation_encoded_arities_;
+   std::vector< int64_t > relation_slot_roles_;
+   std::vector< int64_t > relation_slot_role_offsets_;
+   std::vector< std::string > slot_role_names_;
    hash_map< std::string, int > relation_name_to_id_;
    std::vector< std::string > target_entity_group_names_;
    std::map< TargetSource, int64_t > target_entity_group_ids_;
@@ -226,6 +255,7 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     export_node_names,
     ignore_zero_arity_relations,
+    use_predicate_virtual_nodes,
     include_lgan_edges,
     lgan_anchor_sources,
     target_sources,

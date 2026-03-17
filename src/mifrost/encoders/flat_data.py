@@ -185,11 +185,17 @@ def normalize_flat_relation_batch_metadata(
     data.target_entity_groups = _normalize_shared_str_list(
         getattr(data, "target_entity_groups", None)
     )
+    data.entity_role_names = _normalize_shared_str_list(
+        getattr(data, "entity_role_names", None)
+    )
     data.lgan_anchor_sources = _normalize_shared_str_list(
         getattr(data, "lgan_anchor_sources", None)
     )
     data.include_lgan_edges = _normalize_shared_bool(
         getattr(data, "include_lgan_edges", None)
+    )
+    data.use_predicate_virtual_nodes = _normalize_shared_bool(
+        getattr(data, "use_predicate_virtual_nodes", None)
     )
     data.entity_node_type = _normalize_shared_scalar(
         getattr(data, "entity_node_type", None)
@@ -224,13 +230,37 @@ class FlatRelationSchema:
 
     names: tuple[str, ...]
     arities: tuple[int, ...]
+    logical_arities: tuple[int, ...] = ()
+    encoded_arities: tuple[int, ...] = ()
     sources: tuple[str, ...] = ()
+    slot_role_names: tuple[str, ...] = ()
+    slot_role_ids: tuple[int, ...] = ()
+    slot_role_offsets: tuple[int, ...] = ()
     fingerprint: int | None = None
 
     @cached_property
     def name_to_id(self) -> dict[str, int]:
         """Map each relation name to its fixed schema index."""
         return {name: idx for idx, name in enumerate(self.names)}
+
+    @cached_property
+    def slot_roles(self) -> tuple[tuple[str, ...], ...]:
+        """Decode per-relation slot-role labels from flattened schema metadata."""
+        if not self.slot_role_ids or not self.slot_role_offsets:
+            return tuple(tuple() for _ in self.names)
+        decoded: list[tuple[str, ...]] = []
+        for relation_idx in range(len(self.names)):
+            start = self.slot_role_offsets[relation_idx]
+            end = self.slot_role_offsets[relation_idx + 1]
+            decoded.append(
+                tuple(
+                    self.slot_role_names[role_id]
+                    if 0 <= role_id < len(self.slot_role_names)
+                    else str(role_id)
+                    for role_id in self.slot_role_ids[start:end]
+                )
+            )
+        return tuple(decoded)
 
 
 class FlatRelationData(Data):
@@ -262,7 +292,24 @@ class FlatRelationData(Data):
         return FlatRelationSchema(
             names=_normalize_str_tuple(getattr(self, "relation_names", ()) or ()),
             arities=_normalize_int_tuple(getattr(self, "relation_arities", ()) or ()),
+            logical_arities=_normalize_int_tuple(
+                getattr(self, "relation_logical_arities", None)
+                or getattr(self, "relation_arities", ())
+            ),
+            encoded_arities=_normalize_int_tuple(
+                getattr(self, "relation_encoded_arities", None)
+                or getattr(self, "relation_arities", ())
+            ),
             sources=_normalize_str_tuple(getattr(self, "relation_sources", ()) or ()),
+            slot_role_names=_normalize_str_tuple(
+                getattr(self, "slot_role_names", ()) or ()
+            ),
+            slot_role_ids=_normalize_int_tuple(
+                getattr(self, "relation_slot_roles", ()) or ()
+            ),
+            slot_role_offsets=_normalize_int_tuple(
+                getattr(self, "relation_slot_role_offsets", ()) or ()
+            ),
             fingerprint=_normalize_optional_int(
                 getattr(self, "schema_fingerprint", None)
             ),
@@ -577,6 +624,27 @@ class FlatRelationData(Data):
         end = start + int(node_sizes[graph_index].item())
         return start, end
 
+    def graph_entity_role_ids(self, graph_index: int = 0) -> torch.Tensor:
+        """Return per-entity role ids for one graph."""
+        start, end = self.graph_node_range(graph_index)
+        entity_role_ids = getattr(self, "entity_role_ids", None)
+        if entity_role_ids is None:
+            return torch.empty((0,), dtype=torch.long)
+        return entity_role_ids.long().view(-1)[start:end]
+
+    def graph_entity_roles(self, graph_index: int = 0) -> list[str]:
+        """Return decoded per-entity role labels for one graph."""
+        role_names = [
+            str(value) for value in getattr(self, "entity_role_names", []) or []
+        ]
+        out: list[str] = []
+        for role_id in self.graph_entity_role_ids(graph_index).tolist():
+            if 0 <= role_id < len(role_names):
+                out.append(role_names[role_id])
+            else:
+                out.append(str(role_id))
+        return out
+
     @property
     def num_graphs(self) -> int:
         """Return how many graphs are stored in this flat carrier."""
@@ -730,6 +798,23 @@ def flat_relation_data_from_pyg(
     relation_arities = getattr(out, "relation_arities", None)
     if relation_arities is not None:
         out.relation_arities = _normalize_int_tuple(relation_arities)
+    relation_logical_arities = getattr(out, "relation_logical_arities", None)
+    if relation_logical_arities is not None:
+        out.relation_logical_arities = _normalize_int_tuple(relation_logical_arities)
+    relation_encoded_arities = getattr(out, "relation_encoded_arities", None)
+    if relation_encoded_arities is not None:
+        out.relation_encoded_arities = _normalize_int_tuple(relation_encoded_arities)
+    relation_slot_roles = getattr(out, "relation_slot_roles", None)
+    if relation_slot_roles is not None:
+        out.relation_slot_roles = _normalize_int_tuple(relation_slot_roles)
+    relation_slot_role_offsets = getattr(out, "relation_slot_role_offsets", None)
+    if relation_slot_role_offsets is not None:
+        out.relation_slot_role_offsets = _normalize_int_tuple(
+            relation_slot_role_offsets
+        )
+    slot_role_names = getattr(out, "slot_role_names", None)
+    if slot_role_names is not None:
+        out.slot_role_names = _normalize_str_tuple(slot_role_names)
     if schema_fingerprint is not None:
         out.schema_fingerprint = str(int(schema_fingerprint))
     return normalize_flat_relation_batch_metadata(out)

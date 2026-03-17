@@ -3,6 +3,7 @@ from __future__ import annotations
 import networkx as nx
 import pymimir as mimir
 import pytest
+import torch
 from torch_geometric.data import Batch
 
 import mifrost
@@ -97,6 +98,85 @@ def test_flat_horizon_encoder_emits_state_target_entities_and_metadata(small_blo
         data.graph_target_entity_indices(0)[0].item()
     ]
     assert len(data.graph_target_names(0)) == 1
+
+
+def test_flat_horizon_predicate_virtual_nodes_default_to_disabled(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    actual = FlatHorizonEncoder(domain, ignore_actions=False).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+    expected = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        use_predicate_virtual_nodes=False,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    assert actual.use_predicate_virtual_nodes is False
+    assert expected.use_predicate_virtual_nodes is False
+    _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_horizon_predicate_virtual_nodes_follow_state_slot_and_preserve_arguments(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+
+    base = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+    data = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        use_predicate_virtual_nodes=True,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    relation_name = next(
+        name
+        for idx, name in enumerate(data.schema.names)
+        if data.schema.sources[idx] == "state"
+        and "[state]" in name
+        and data.flattened_relations[name].shape[0] > 0
+    )
+    assert data.schema.slot_roles[data.schema.name_to_id[relation_name]][:2] == (
+        "state_slot",
+        "predicate_slot",
+    )
+    assert torch.equal(
+        data.flattened_relations[relation_name][:, 0],
+        base.flattened_relations[relation_name][:, 0],
+    )
+    assert torch.equal(
+        data.flattened_relations[relation_name][:, 2:],
+        base.flattened_relations[relation_name][:, 1:],
+    )
+    predicate_role_id = list(data.entity_role_names).index("predicate_virtual")
+    predicate_rows = data.flattened_relations[relation_name][:, 1].long()
+    assert torch.equal(
+        data.graph_entity_role_ids(0)[predicate_rows],
+        torch.full_like(predicate_rows, predicate_role_id),
+    )
 
 
 def test_flat_horizon_explicit_candidate_ids_are_preserved(small_blocks):

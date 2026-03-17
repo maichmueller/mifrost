@@ -196,17 +196,14 @@ std::optional< size_t > goal_level_for(
 }
 
 template < typename AtomTag >
-std::vector< int64_t > local_arg_rows_for_atom(
+std::vector< int64_t > logical_arg_rows_for_atom(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
-   std::optional< int64_t > state_entity_index
+   std::optional< int64_t >
 )
 {
    std::vector< int64_t > args;
-   args.reserve(atom->get_objects().size() + (state_entity_index.has_value() ? 1U : 0U));
-   if(state_entity_index.has_value()) {
-      args.push_back(*state_entity_index);
-   }
+   args.reserve(atom->get_objects().size());
    for(const auto& obj : atom->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(
          static_cast< int64_t >(obj->get_index())
@@ -222,17 +219,55 @@ std::vector< int64_t > local_arg_rows_for_atom(
    return args;
 }
 
+int64_t ensure_predicate_virtual_entity(
+   FlatHorizonEncoderEngine::EncodingContext& context,
+   std::string_view predicate_name
+)
+{
+   const std::string key(predicate_name);
+   if(const auto it = context.predicate_entity_index_by_name.find(key);
+      it != context.predicate_entity_index_by_name.end()) {
+      return it->second;
+   }
+   const int64_t local_index = static_cast< int64_t >(context.entity_names.size());
+   context.predicate_entity_index_by_name.emplace(key, local_index);
+   context.entity_names.push_back(fmt::format("predicate:{}", predicate_name));
+   context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::predicate_virtual));
+   return local_index;
+}
+
+template < typename AtomTag >
+std::vector< int64_t > local_arg_rows_for_atom(
+   const FlatHorizonEncoderEngine& engine,
+   FlatHorizonEncoderEngine::EncodingContext& context,
+   const mimir::formalism::GroundAtom< AtomTag >& atom,
+   std::optional< int64_t > state_entity_index
+)
+{
+   const auto logical_args = logical_arg_rows_for_atom(context, atom, state_entity_index);
+   std::vector< int64_t > auxiliary_args;
+   if(state_entity_index.has_value()) {
+      auxiliary_args.push_back(*state_entity_index);
+   }
+   std::optional< int64_t > predicate_virtual_index = std::nullopt;
+   if(engine.get_config().use_predicate_virtual_nodes) {
+      predicate_virtual_index = ensure_predicate_virtual_entity(
+         context, RelationFormatter::format_predicate(atom->get_predicate())
+      );
+   }
+   return build_flat_tuple_args(
+      std::span{logical_args}, std::span{auxiliary_args}, predicate_virtual_index
+   );
+}
+
 std::vector< int64_t > local_arg_rows_for_action(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAction& action,
    std::optional< int64_t > state_entity_index
 )
 {
-   std::vector< int64_t > args;
-   args.reserve(action->get_objects().size() + (state_entity_index.has_value() ? 1U : 0U));
-   if(state_entity_index.has_value()) {
-      args.push_back(*state_entity_index);
-   }
+   std::vector< int64_t > logical_args;
+   logical_args.reserve(action->get_objects().size());
    for(const auto& obj : action->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(
          static_cast< int64_t >(obj->get_index())
@@ -243,9 +278,13 @@ std::vector< int64_t > local_arg_rows_for_action(
             + RelationFormatter::format_object(*obj)
          );
       }
-      args.push_back(it->second);
+      logical_args.push_back(it->second);
    }
-   return args;
+   std::vector< int64_t > auxiliary_args;
+   if(state_entity_index.has_value()) {
+      auxiliary_args.push_back(*state_entity_index);
+   }
+   return build_flat_tuple_args(std::span{logical_args}, std::span{auxiliary_args}, std::nullopt);
 }
 
 }  // namespace
@@ -323,55 +362,75 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    std::ranges::sort(regular_predicate_specs_, predicate_order);
 
    for(const auto& action : actions) {
+      const auto layout = make_nonpredicate_tuple_layout(
+         action->get_arity(), {FlatSlotRole::state_slot}
+      );
       action_specs_.push_back(
          PredicateSpec{
             .name = RelationFormatter::format_action_schema(*action),
-            .arity = static_cast< int >(action->get_arity()) + 1,
+            .arity = layout.encoded_arity(),
          }
       );
    }
    std::ranges::sort(action_specs_, predicate_order);
 
+   target_entity_group_names_ = {std::string(target_source_group_name(TargetSource::states))};
+   target_metadata_group_names_ = target_entity_group_names_;
+
    relation_dict_ = RelationDict{};
    relation_dict_.max_goal_level = rel_config.max_goal_level;
    relation_dict_.support_literals = rel_config.support_literals;
    relation_dict_.goal_derivations = rel_config.goal_derivations;
-   if(config_.enable_parent_relation) {
-      relation_dict_.arity[config_.parent_relation] = 2;
-   }
-   if(config_.enable_sibling_relation) {
-      relation_dict_.arity[config_.sibling_relation] = 2;
-   }
-   if(config_.enable_cousin_relation) {
-      relation_dict_.arity[config_.cousin_relation] = 2;
-   }
-
-   target_entity_group_names_ = {std::string(target_source_group_name(TargetSource::states))};
-   target_metadata_group_names_ = target_entity_group_names_;
 
    std::map< std::string, std::string > relation_sources_by_name;
+   std::map< std::string, FlatTupleLayout > relation_layouts_by_name;
    const bool root_relations_use_state_slot = root_in_state_relations(config_.root_policy);
    const bool split_candidate_relations = split_full_state_relations(config_);
-   auto register_relation = [&](const std::string& name, int arity, const std::string& source) {
-      relation_dict_.arity[name] = arity;
-      relation_sources_by_name[name] = source;
+   auto register_relation =
+      [&](const std::string& name, const FlatTupleLayout& layout, const std::string& source) {
+         if(const auto it = relation_layouts_by_name.find(name);
+            it != relation_layouts_by_name.end()) {
+            if(it->second.logical_arity != layout.logical_arity
+               || it->second.include_predicate_virtual_node != layout.include_predicate_virtual_node
+               || it->second.auxiliary_slot_roles != layout.auxiliary_slot_roles
+               || relation_sources_by_name.at(name) != source) {
+               throw std::invalid_argument(
+                  "Flat horizon schema collision for relation '" + name + "'"
+               );
+            }
+            return;
+         }
+         relation_dict_.arity[name] = layout.encoded_arity();
+         relation_sources_by_name[name] = source;
+         relation_layouts_by_name.emplace(name, layout);
+      };
+   auto predicate_layout = [&](int logical_arity, bool include_state_slot) {
+      return include_state_slot
+                ? make_predicate_tuple_layout(
+                     logical_arity, {FlatSlotRole::state_slot}, config_.use_predicate_virtual_nodes
+                  )
+                : make_predicate_tuple_layout(
+                     logical_arity, {}, config_.use_predicate_virtual_nodes
+                  );
    };
    auto add_root_only_relation =
       [&](const std::string& base_name, int base_arity, const std::string& source) {
          register_relation(
-            base_name, root_relations_use_state_slot ? base_arity + 1 : base_arity, source
+            base_name, predicate_layout(base_arity, root_relations_use_state_slot), source
          );
       };
    auto add_full_state_relation =
       [&](const std::string& base_name, int base_arity, const std::string& source) {
          add_root_only_relation(base_name, base_arity, source);
          if(split_candidate_relations) {
-            register_relation(state_anchored_relation_name(base_name), base_arity + 1, source);
+            register_relation(
+               state_anchored_relation_name(base_name), predicate_layout(base_arity, true), source
+            );
          }
       };
    auto add_delta_candidate_relation =
       [&](const std::string& base_name, int base_arity, const std::string& source) {
-         register_relation(base_name, base_arity + 1, source);
+         register_relation(base_name, predicate_layout(base_arity, true), source);
       };
 
    for(const auto& spec : predicate_specs_) {
@@ -447,7 +506,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
                            spec.name, goal_level, derivation, polarity
                         )
                      ),
-                     spec.arity + 1,
+                     predicate_layout(spec.arity, true),
                      "goal_satisfaction"
                   );
                }
@@ -460,7 +519,7 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
                            spec.name, std::nullopt, derivation, polarity
                         )
                      ),
-                     spec.arity + 1,
+                     predicate_layout(spec.arity, true),
                      "goal_satisfaction"
                   );
                }
@@ -494,27 +553,51 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       }
    }
    for(const auto& spec : action_specs_) {
-      relation_dict_.arity[spec.name] = spec.arity;
-      relation_sources_by_name.emplace(spec.name, "action");
+      register_relation(
+         spec.name,
+         make_nonpredicate_tuple_layout(spec.arity - 1, {FlatSlotRole::state_slot}),
+         "action"
+      );
    }
    if(config_.enable_parent_relation) {
-      relation_sources_by_name[config_.parent_relation] = "parent";
+      register_relation(
+         config_.parent_relation,
+         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         "parent"
+      );
    }
    if(config_.enable_sibling_relation) {
-      relation_sources_by_name[config_.sibling_relation] = "sibling";
+      register_relation(
+         config_.sibling_relation,
+         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         "sibling"
+      );
    }
    if(config_.enable_cousin_relation) {
-      relation_sources_by_name[config_.cousin_relation] = "cousin";
+      register_relation(
+         config_.cousin_relation,
+         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         "cousin"
+      );
    }
 
    relation_names_.clear();
    relation_arities_.clear();
    relation_sources_.clear();
+   relation_logical_arities_.clear();
+   relation_encoded_arities_.clear();
+   relation_slot_roles_.clear();
+   relation_slot_role_offsets_.clear();
    relation_name_to_id_.clear();
+   slot_role_names_ = flat_slot_role_names();
    relation_names_.reserve(relation_dict_.arity.size());
    relation_arities_.reserve(relation_dict_.arity.size());
    relation_sources_.reserve(relation_dict_.arity.size());
+   relation_logical_arities_.reserve(relation_dict_.arity.size());
+   relation_encoded_arities_.reserve(relation_dict_.arity.size());
    relation_name_to_id_.reserve(relation_dict_.arity.size());
+   relation_slot_role_offsets_.reserve(relation_dict_.arity.size() + 1);
+   relation_slot_role_offsets_.push_back(0);
    for(const auto& [name, arity] : relation_dict_.arity) {
       relation_name_to_id_.emplace(name, static_cast< int >(relation_names_.size()));
       relation_names_.push_back(name);
@@ -523,6 +606,17 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
       relation_sources_.push_back(
          source_it != relation_sources_by_name.end() ? source_it->second : "state"
       );
+      const auto layout_it = relation_layouts_by_name.find(name);
+      if(layout_it == relation_layouts_by_name.end()) {
+         throw std::invalid_argument(
+            "Missing flat horizon tuple layout for relation '" + name + "'"
+         );
+      }
+      relation_logical_arities_.push_back(layout_it->second.logical_arity);
+      relation_encoded_arities_.push_back(layout_it->second.encoded_arity());
+      const auto slot_roles = layout_it->second.slot_role_ids();
+      relation_slot_roles_.insert(relation_slot_roles_.end(), slot_roles.begin(), slot_roles.end());
+      relation_slot_role_offsets_.push_back(static_cast< int64_t >(relation_slot_roles_.size()));
    }
 }
 
@@ -534,13 +628,23 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
    builder.set_graph_attr(
       std::string(kIncludeLGANEdgesAttr), static_cast< int64_t >(config_.include_lgan_edges)
    );
+   builder.set_graph_attr(std::string(kEntityRoleNamesAttr), flat_entity_role_names());
    builder.set_graph_attr(std::string(kRelationNamesAttr), relation_names_);
    builder.set_graph_attr(std::string(kRelationAritiesAttr), relation_arities_);
    builder.set_graph_attr(std::string(kRelationSourcesAttr), relation_sources_);
+   builder.set_graph_attr(std::string(kRelationLogicalAritiesAttr), relation_logical_arities_);
+   builder.set_graph_attr(std::string(kRelationEncodedAritiesAttr), relation_encoded_arities_);
+   builder.set_graph_attr(std::string(kRelationSlotRolesAttr), relation_slot_roles_);
+   builder.set_graph_attr(std::string(kRelationSlotRoleOffsetsAttr), relation_slot_role_offsets_);
+   builder.set_graph_attr(std::string(kSlotRoleNamesAttr), slot_role_names_);
    builder.set_graph_attr(std::string(kTargetEntityGroupsAttr), target_entity_group_names_);
    builder.set_graph_attr(std::string(kLGANTNEdgePosAttr), config_.lgan_tn_edge_pos);
    builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config_.lgan_nn_edge_pos);
    builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config_.lgan_rr_edge_pos);
+   builder.set_graph_attr(
+      std::string(kUsePredicateVirtualNodesAttr),
+      static_cast< int64_t >(config_.use_predicate_virtual_nodes)
+   );
 
    builder.register_field(
       std::string(kNodeSizesField),
@@ -568,6 +672,14 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
             .kind = GraphFieldInc::Kind::NODE_OFFSET,
             .node_type = std::string(kEntityNodeType),
          },
+      }
+   );
+   builder.register_field(
+      std::string(kEntityRoleIdsField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
       }
    );
    builder.register_field(
@@ -761,11 +873,13 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
    });
 
    const auto& nodes = dag.nodes();
-   context.entity_names.reserve(ordered.size() + nodes.size());
+   context.entity_names.reserve(ordered.size() + nodes.size() + predicate_specs_.size());
+   context.entity_role_ids.reserve(context.entity_names.capacity());
    context.object_names.reserve(ordered.size());
    context.object_indices.reserve(ordered.size());
    context.entity_index_by_object_id.reserve(ordered.size());
    context.state_entity_index_by_node_index.reserve(nodes.size());
+   context.predicate_entity_index_by_name.reserve(predicate_specs_.size());
    context.target_entity_indices.reserve(
       (not root_in_target_metadata(config_.root_policy) and not nodes.empty()) ? nodes.size() - 1
                                                                                : nodes.size()
@@ -787,6 +901,7 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
       );
       const std::string object_name = RelationFormatter::format_object(*obj);
       context.entity_names.push_back(object_name);
+      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::object));
       context.object_names.push_back(object_name);
       context.object_indices.push_back(local_index);
    }
@@ -803,6 +918,7 @@ FlatHorizonEncoderEngine::EncodingContext FlatHorizonEncoderEngine::make_context
       const std::string node_name = include_in_public_carrier ? target_node_name(node.index)
                                                               : std::string(kHiddenRootCarrierName);
       context.entity_names.push_back(node_name);
+      context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::state));
       context.state_entity_index_by_node_index.emplace(node.index, local_index);
       if(include_in_target_metadata) {
          context.target_entity_indices.push_back(local_index);
@@ -896,7 +1012,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       ScopedProfileTimer timer(profile != nullptr ? &profile->prepare_builder_s : nullptr);
       prepare_builder(builder);
    }
-   const auto context = [&]() {
+   auto context = [&]() {
       ScopedProfileTimer timer(profile != nullptr ? &profile->make_context_s : nullptr);
       return make_context(root, dag);
    }();
@@ -920,7 +1036,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                ? state_anchored_relation_name(base_relation_name)
                : base_relation_name
          );
-         const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
+         const auto args = local_arg_rows_for_atom(*this, context, atom, state_entity_index);
          sink.emit(relation_id, args);
          fact_keys.insert(
             pack_u32_u32(static_cast< uint32_t >(atom->get_index()), fact_tag_id< Tag >())
@@ -1011,7 +1127,7 @@ void FlatHorizonEncoderEngine::encode_impl(
             }
             const auto relation_id = relation_id_for(relation_name);
             const auto args = local_arg_rows_for_atom(
-               context, literal->get_atom(), state_entity_index
+               *this, context, literal->get_atom(), state_entity_index
             );
             sink.emit(relation_id, args);
          }
@@ -1063,7 +1179,7 @@ void FlatHorizonEncoderEngine::encode_impl(
             }
             const auto relation_id = relation_id_for(relation_name);
             const auto args = local_arg_rows_for_atom(
-               context, literal->get_atom(), state_entity_index
+               *this, context, literal->get_atom(), state_entity_index
             );
             sink.emit(relation_id, args);
          }
@@ -1085,7 +1201,7 @@ void FlatHorizonEncoderEngine::encode_impl(
             relation_name = state_anchored_relation_name(relation_name);
          }
          const auto relation_id = relation_id_for(relation_name);
-         const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
+         const auto args = local_arg_rows_for_atom(*this, context, atom, state_entity_index);
          sink.emit(relation_id, args);
       };
 
@@ -1128,7 +1244,7 @@ void FlatHorizonEncoderEngine::encode_impl(
                relation_name = state_anchored_relation_name(relation_name);
             }
             const auto relation_id = relation_id_for(relation_name);
-            const auto args = local_arg_rows_for_atom(context, atom, state_entity_index);
+            const auto args = local_arg_rows_for_atom(*this, context, atom, state_entity_index);
             sink.emit(relation_id, args);
          }
       };
@@ -1524,6 +1640,10 @@ void FlatHorizonEncoderEngine::encode_impl(
       builder.set_field(
          std::string(kObjectIndicesField),
          std::span< const int64_t >(context.object_indices.data(), context.object_indices.size())
+      );
+      builder.set_field(
+         std::string(kEntityRoleIdsField),
+         std::span< const int64_t >(context.entity_role_ids.data(), context.entity_role_ids.size())
       );
       builder.set_field(
          std::string(kTargetEntitySizesField), std::span< const int64_t >(&target_entity_size, 1)

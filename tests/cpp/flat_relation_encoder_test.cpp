@@ -61,6 +61,19 @@ total_slots(std::span< const int64_t > relation_counts, std::span< const int64_t
    return total;
 }
 
+size_t relation_slot_offset(
+   std::span< const int64_t > relation_counts,
+   std::span< const int64_t > relation_arities,
+   size_t relation_idx
+)
+{
+   size_t total = 0;
+   for(size_t idx = 0; idx < relation_idx; ++idx) {
+      total += static_cast< size_t >(relation_counts[idx] * relation_arities[idx]);
+   }
+   return total;
+}
+
 BatchBuilder::BatchEncoding
 encode_single(mifrost::FlatRelationEncoderEngine& engine, const mimir::search::State& state)
 {
@@ -233,6 +246,98 @@ TEST_P(FlatRelationEncoderTest, SingleGraphFieldsAreConsistent)
       EXPECT_GE(arg, 0);
       EXPECT_LT(arg, node_sizes.front());
    }
+}
+
+TEST_P(FlatRelationEncoderTest, PredicateVirtualNodesExposeLogicalAndEncodedTupleMetadata)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.ignore_zero_arity_relations = false;
+   config.use_predicate_virtual_nodes = true;
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+   mifrost::FlatRelationEncoderEngine::Config base_config;
+   base_config.ignore_zero_arity_relations = false;
+   mifrost::FlatRelationEncoderEngine base_engine(ctx.problem->get_domain(), base_config);
+
+   const auto encoding = encode_single(engine, ctx.root);
+   const auto base = encode_single(base_engine, ctx.root);
+
+   const auto relation_names = str_attr(encoding, "relation_names");
+   const auto relation_arities = i64_attr(encoding, "relation_arities");
+   const auto relation_logical_arities = i64_attr(encoding, "relation_logical_arities");
+   const auto relation_encoded_arities = i64_attr(encoding, "relation_encoded_arities");
+   const auto relation_slot_roles = i64_attr(encoding, "relation_slot_roles");
+   const auto relation_slot_role_offsets = i64_attr(encoding, "relation_slot_role_offsets");
+   const auto slot_role_names = str_attr(encoding, "slot_role_names");
+   const auto entity_role_names = str_attr(encoding, "entity_role_names");
+   const auto entity_role_ids = i64_field(encoding, "entity_role_ids");
+   const auto relation_counts = i64_field(encoding, "relation_counts");
+   const auto relation_args = i64_field(encoding, "relation_args");
+   const auto base_relation_arities = i64_attr(base, "relation_arities");
+   const auto base_relation_counts = i64_field(base, "relation_counts");
+   const auto base_relation_args = i64_field(base, "relation_args");
+
+   ASSERT_EQ(relation_names.size(), relation_logical_arities.size());
+   ASSERT_EQ(relation_names.size(), relation_encoded_arities.size());
+   ASSERT_EQ(relation_slot_role_offsets.size(), relation_names.size() + 1);
+   ASSERT_EQ(entity_role_names[1], "predicate_virtual");
+   ASSERT_EQ(slot_role_names[1], "predicate_slot");
+
+   size_t checked_predicate_relations = 0;
+   for(size_t relation_idx = 0; relation_idx < relation_names.size(); ++relation_idx) {
+      const auto roles_begin = relation_slot_roles.begin()
+                               + static_cast< ptrdiff_t >(relation_slot_role_offsets[relation_idx]);
+      const auto roles_end = relation_slot_roles.begin()
+                             + static_cast< ptrdiff_t >(
+                                relation_slot_role_offsets[relation_idx + 1]
+                             );
+      const std::vector< int64_t > roles(roles_begin, roles_end);
+
+      EXPECT_EQ(relation_arities[relation_idx], relation_encoded_arities[relation_idx]);
+      EXPECT_EQ(
+         relation_logical_arities[relation_idx],
+         static_cast< int64_t >(std::count(roles.begin(), roles.end(), int64_t{0}))
+      );
+
+      const auto predicate_it = std::find(roles.begin(), roles.end(), int64_t{1});
+      if(predicate_it == roles.end()) {
+         continue;
+      }
+      EXPECT_EQ(std::count(roles.begin(), roles.end(), int64_t{1}), 1);
+
+      if(relation_counts[relation_idx] <= 0 || base_relation_counts[relation_idx] <= 0) {
+         continue;
+      }
+
+      const size_t predicate_slot = static_cast< size_t >(
+         std::distance(roles.begin(), predicate_it)
+      );
+      const size_t slot = relation_slot_offset(
+         std::span{relation_counts}, std::span{relation_arities}, relation_idx
+      );
+      const size_t base_slot = relation_slot_offset(
+         std::span{base_relation_counts}, std::span{base_relation_arities}, relation_idx
+      );
+      const size_t width = static_cast< size_t >(relation_arities[relation_idx]);
+      const size_t base_width = static_cast< size_t >(base_relation_arities[relation_idx]);
+
+      ASSERT_EQ(width, base_width + 1);
+      ASSERT_LT(slot + width - 1, relation_args.size());
+      ASSERT_LT(base_slot + base_width - 1, base_relation_args.size());
+      EXPECT_EQ(entity_role_ids[relation_args[slot + predicate_slot]], 1);
+
+      for(size_t col = 0; col < predicate_slot; ++col) {
+         EXPECT_EQ(relation_args[slot + col], base_relation_args[base_slot + col]);
+      }
+      for(size_t col = predicate_slot + 1; col < width; ++col) {
+         EXPECT_EQ(relation_args[slot + col], base_relation_args[base_slot + (col - 1)]);
+      }
+      ++checked_predicate_relations;
+   }
+
+   EXPECT_GT(checked_predicate_relations, 0);
 }
 
 TEST_P(FlatRelationEncoderTest, LGANActionAnchorsEmitPackedFields)
@@ -511,6 +616,75 @@ TEST_P(FlatRelationEncoderTest, BatchEncodingMatchesSingleGraphSlices)
          batch_object_indices.end()
       ),
       expected_succ_object_indices
+   );
+}
+
+TEST_P(FlatRelationEncoderTest, PredicateVirtualNodeBatchEncodingMatchesSingleGraphSlices)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto [succ_state, _succ_action] = mifrost_test::find_successor(ctx);
+
+   mifrost::FlatRelationEncoderEngine::Config config;
+   config.use_predicate_virtual_nodes = true;
+   mifrost::FlatRelationEncoderEngine engine(ctx.problem->get_domain(), config);
+
+   const auto single_root = encode_single(engine, ctx.root);
+   const auto single_succ = encode_single(engine, succ_state);
+
+   BatchBuilder builder;
+   engine.encode(ctx.root, builder);
+   builder.next_graph();
+   engine.encode(succ_state, builder);
+   builder.next_graph();
+   const auto batch = builder.build();
+
+   const auto relation_arities = i64_attr(batch, "relation_arities");
+   const auto batch_node_sizes = i64_field(batch, "node_sizes");
+   const auto batch_relation_counts = i64_field(batch, "relation_counts");
+   const auto batch_relation_args = i64_field(batch, "relation_args");
+   const auto batch_entity_role_ids = i64_field(batch, "entity_role_ids");
+
+   const auto root_counts = i64_field(single_root, "relation_counts");
+   const auto succ_counts = i64_field(single_succ, "relation_counts");
+   const auto root_args = i64_field(single_root, "relation_args");
+   const auto succ_args = i64_field(single_succ, "relation_args");
+   const auto root_roles = i64_field(single_root, "entity_role_ids");
+   const auto succ_roles = i64_field(single_succ, "entity_role_ids");
+
+   const size_t root_slots = total_slots(std::span{root_counts}, std::span{relation_arities});
+   const size_t succ_slots = total_slots(std::span{succ_counts}, std::span{relation_arities});
+   ASSERT_EQ(batch_relation_args.size(), root_slots + succ_slots);
+   EXPECT_EQ(
+      std::vector< int64_t >(batch_relation_args.begin(), batch_relation_args.begin() + root_slots),
+      root_args
+   );
+
+   std::vector< int64_t > expected_succ_args = succ_args;
+   for(auto& value : expected_succ_args) {
+      value += batch_node_sizes[0];
+   }
+   EXPECT_EQ(
+      std::vector< int64_t >(
+         batch_relation_args.begin() + static_cast< ptrdiff_t >(root_slots),
+         batch_relation_args.end()
+      ),
+      expected_succ_args
+   );
+   ASSERT_EQ(batch_entity_role_ids.size(), root_roles.size() + succ_roles.size());
+   EXPECT_EQ(
+      std::vector< int64_t >(
+         batch_entity_role_ids.begin(),
+         batch_entity_role_ids.begin() + static_cast< ptrdiff_t >(root_roles.size())
+      ),
+      root_roles
+   );
+   EXPECT_EQ(
+      std::vector< int64_t >(
+         batch_entity_role_ids.begin() + static_cast< ptrdiff_t >(root_roles.size()),
+         batch_entity_role_ids.end()
+      ),
+      succ_roles
    );
 }
 

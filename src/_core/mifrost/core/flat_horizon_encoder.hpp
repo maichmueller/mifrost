@@ -13,6 +13,7 @@
 #include "batch_builder.hpp"
 #include "common_types.hpp"
 #include "default_relations.hpp"
+#include "flat_tuple_layout.hpp"
 #include "goal_inputs.hpp"
 #include "relation_dict.hpp"
 #include "root_policy.hpp"
@@ -44,6 +45,7 @@ class FlatHorizonEncoderEngine {
       bool export_node_names = true;
       bool ignore_zero_arity_relations = true;
       bool ignore_actions = true;
+      bool use_predicate_virtual_nodes = false;
       bool include_lgan_edges = false;
       Mode transition_mode = Mode::full;
       std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
@@ -96,6 +98,26 @@ class FlatHorizonEncoderEngine {
    {
       return relation_sources_;
    }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
+   {
+      return relation_logical_arities_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
+   {
+      return relation_encoded_arities_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
+   {
+      return relation_slot_roles_;
+   }
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
+   {
+      return relation_slot_role_offsets_;
+   }
+   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
+   {
+      return slot_role_names_;
+   }
 
    struct PredicateSpec {
       std::string name;
@@ -105,7 +127,9 @@ class FlatHorizonEncoderEngine {
    struct EncodingContext {
       hash_map< int64_t, int64_t > entity_index_by_object_id;
       hash_map< int64_t, int64_t > state_entity_index_by_node_index;
+      hash_map< std::string, int64_t > predicate_entity_index_by_name;
       std::vector< std::string > entity_names;
+      std::vector< int64_t > entity_role_ids;
       std::vector< std::string > object_names;
       std::vector< int64_t > object_indices;
       std::vector< int64_t > target_entity_indices;
@@ -142,6 +166,11 @@ class FlatHorizonEncoderEngine {
    std::vector< std::string > relation_names_;
    std::vector< int64_t > relation_arities_;
    std::vector< std::string > relation_sources_;
+   std::vector< int64_t > relation_logical_arities_;
+   std::vector< int64_t > relation_encoded_arities_;
+   std::vector< int64_t > relation_slot_roles_;
+   std::vector< int64_t > relation_slot_role_offsets_;
+   std::vector< std::string > slot_role_names_;
    hash_map< std::string, int > relation_name_to_id_;
    std::vector< std::string > target_entity_group_names_;
    std::vector< std::string > target_metadata_group_names_;
@@ -156,6 +185,7 @@ BOOST_DESCRIBE_STRUCT(
     export_node_names,
     ignore_zero_arity_relations,
     ignore_actions,
+    use_predicate_virtual_nodes,
     include_lgan_edges,
     transition_mode,
     target_symbol_prefix,
