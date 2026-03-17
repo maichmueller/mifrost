@@ -161,6 +161,7 @@ class ColorStreamEncoder: public StreamEncoderBase< ColorStreamEncoder, ColorSte
       if(engine_ == nullptr or step.state == nullptr) {
          throw std::invalid_argument("ColorStreamEncoder requires a valid engine/state");
       }
+      // Dispatch to the plain or goal-aware overload based on whether this step carries goals.
       if(step.goals == nullptr) {
          engine_->encode(*step.state, builder);
       } else {

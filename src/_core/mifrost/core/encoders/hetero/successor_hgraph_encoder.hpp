@@ -133,6 +133,7 @@ class TransitionStreamEncoder:
          or step.goals == nullptr) {
          throw std::invalid_argument("TransitionStreamEncoder requires current/successor/goals");
       }
+      // Successor streaming always needs both states and normalized goals.
       engine_->encode(*step.current, *step.successor, *step.goals, builder);
    }
 

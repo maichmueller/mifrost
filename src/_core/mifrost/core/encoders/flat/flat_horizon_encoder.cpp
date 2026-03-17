@@ -630,6 +630,11 @@ void FlatHorizonEncoderEngine::encode_impl(
 )
 {
    auto* profile = g_flat_horizon_batch_profile;
+   // Summary:
+   // 1. Build the per-graph state, target, and relation context for the DAG.
+   // 2. Emit root facts, candidate-state facts, goal views, and topology relations.
+   // 3. Write node rows, target rows, tuple data, and optional LGAN edges.
+   // Phase 1: prepare shared schema state and build the per-graph horizon context.
    if(prepare_builder_once) {
       ScopedProfileTimer timer(profile != nullptr ? &profile->prepare_builder_s : nullptr);
       prepare_builder(builder);
@@ -640,6 +645,7 @@ void FlatHorizonEncoderEngine::encode_impl(
    }();
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
+   // Phase 2: define the local emit helpers used by the different horizon passes.
    auto emit_state_facts = [&]< typename Tag >(
                               const auto& atoms,
                               std::optional< int64_t > state_entity_index,
@@ -880,6 +886,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       sink.emit(relation_id, args);
    };
 
+   // Phase 3: encode the root state and any goal facts that live on the root.
    const auto root_fact_keys = [&]() {
       ScopedProfileTimer timer(profile != nullptr ? &profile->root_emit_s : nullptr);
       const auto fact_keys = emit_state_for_candidate(
@@ -937,6 +944,7 @@ void FlatHorizonEncoderEngine::encode_impl(
    const bool encode_actions = (not config_.ignore_actions)
                                or (config_.transition_mode == Mode::action);
 
+   // Phase 4: encode every non-root candidate state and its per-node relations.
    hash_set< int > root_fluent_indices;
    hash_set< int > root_derived_indices;
    const auto emit_provided_delta_literals = [&](
@@ -1142,6 +1150,7 @@ void FlatHorizonEncoderEngine::encode_impl(
       }
    }
 
+   // Phase 5: add graph topology relations such as parent, sibling, and cousin links.
    {
       ScopedProfileTimer timer(profile != nullptr ? &profile->topology_relations_s : nullptr);
       const int root_index = dag.root_index();
@@ -1240,6 +1249,7 @@ void FlatHorizonEncoderEngine::encode_impl(
 
    {
       ScopedProfileTimer timer(profile != nullptr ? &profile->finalize_builder_s : nullptr);
+      // Phase 6: export node rows, target rows, and emitted relation tuples.
       std::vector< float > zeros(context.entity_names.size(), 0.0f);
       builder.add_node_features(
          std::string(kFlatEntityNodeType),
@@ -1343,6 +1353,7 @@ void FlatHorizonEncoderEngine::encode_impl(
    }
    if(config_.include_lgan_edges) {
       ScopedProfileTimer timer(profile != nullptr ? &profile->lgan_s : nullptr);
+      // Phase 7: derive LGAN helper edges from the final tuple sink and target rows.
       if(context.target_columns.positions.empty()) {
          throw std::invalid_argument(
             "FlatHorizonEncoder include_lgan_edges=true requires surviving candidate state "
@@ -1396,6 +1407,10 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    const batch_input::parsed::HorizonBatchInputs& inputs
 )
 {
+   // Summary:
+   // 1. Read one batch item at a time and normalize goals and the optional DAG.
+   // 2. Encode each item into the shared builder as one flat graph.
+   // 3. Write batch-level target metadata after all graphs are appended.
    FlatHorizonBatchProfile profile;
    profile.enabled = flat_horizon_batch_profile_enabled();
    struct ProfileGuard {
@@ -1418,6 +1433,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    const size_t state_count = inputs.roots.states.size();
    std::vector< mimir::search::State > batch_target_name_states;
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect the root state, optional DAG, and optional goal payloads.
       const auto& root_entry = inputs.roots.states[idx];
       const auto& dag_entry = inputs.dags.at(idx);
       const auto& goals_entry = inputs.goals.at(idx);
@@ -1425,6 +1441,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
 
       GoalInputs goal_inputs;
       {
+         // Phase 2: normalize the batch goal inputs for this root state.
          ScopedProfileTimer timer(profile.enabled ? &profile.goal_inputs_s : nullptr);
          if(goals_entry.has_value()) {
             const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -1447,11 +1464,13 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       if(dag_entry.has_value()) {
          dag_ptr = &(*dag_entry);
       } else {
+         // Build a one-node DAG when the batch input does not supply a horizon graph.
          ScopedProfileTimer timer(profile.enabled ? &profile.default_dag_s : nullptr);
          default_dag.emplace(root_entry.state);
          dag_ptr = &(*default_dag);
       }
       {
+         // Phase 3: encode one horizon graph and move the builder to the next graph.
          ScopedProfileTimer timer(profile.enabled ? &profile.encode_impl_s : nullptr);
          encode_impl(
             root_entry.state,
@@ -1465,6 +1484,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       builder.next_graph();
    }
 
+   // Phase 4: write batch-level target metadata once all graphs are present.
    if(config_.export_node_names) {
       if(batch_target_name_states.empty()) {
          builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});

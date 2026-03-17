@@ -74,12 +74,16 @@ void SuccessorHGraphEncoderEngine::encode_impl(
    BatchBuilder& builder
 )
 {
+   // Summary:
+   // 1. Encode shared objects and the current-state facts.
+   // 2. Encode the successor view as full facts or delta literals.
+   // 3. Add goal views, helper edges, and finalize the hetero graph.
    auto& workspace = init_hetero_workspace(builder);
 
-   // 1. Encode objects
+   // Phase 1: add the shared object nodes once for the current/successor pair.
    encode_objects(current, builder, workspace.node_indices, workspace.node_names);
 
-   // 2. Encode current facts
+   // Phase 2: encode the current-state facts and keep them for goal-satisfaction checks.
    const auto cur_fact_keys = encode_facts(
       current,
       builder,
@@ -89,7 +93,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       workspace.symbol_to_relations
    );
 
-   // 3. Encode successor facts
+   // Phase 3: encode the successor view, either as a full state or as delta literals.
    hash_set< uint64_t > suc_fact_keys;
    const auto& problem = successor.get_problem();
    const auto& repos = problem.get_repositories();
@@ -227,11 +231,11 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       );
    }
 
-   // 4. Encode goals for current (always)
+   // Phase 4: goal literals are always attached to the current state.
    encode_goal_inputs(goals, builder, workspace);
 
    if(successor_config_.successor_mode == Mode::full) {
-      // 5. Encode goal satisfaction for current
+      // Phase 5: optionally add goal satisfaction for the current and successor states.
       encode_goal_satisfaction_inputs(goals, cur_fact_keys, builder, workspace);
 
       if(successor_config_.include_successor_goal_satisfaction) {
@@ -241,7 +245,7 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       }
    }
 
-   // 7. LGAN edges
+   // Phase 6: derive helper edges and finalize the graph-level metadata.
    maybe_add_lgan_edges(builder, workspace);
    finalize_hetero_encoding(builder, workspace);
 }
@@ -250,16 +254,22 @@ BatchBuilder::BatchEncoding SuccessorHGraphEncoderEngine::encode_batch(
    const batch_input::parsed::SuccessorBatchInputs& inputs
 )
 {
+   // Summary:
+   // 1. Read one current/successor pair at a time and normalize goals.
+   // 2. Encode the pair into the shared hetero batch builder.
+   // 3. Advance the builder to the next graph slot.
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
 
    const size_t state_count = inputs.states.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect the current state, successor state, and optional goal payloads.
       const auto& state_entry = inputs.states.states[idx];
       const auto& successor_entry = inputs.successors.at(idx);
       const auto& goals_entry = inputs.goals.at(idx);
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
 
+      // Phase 2: normalize goals into one GoalInputs object.
       GoalInputs goal_inputs;
       if(goals_entry.has_value()) {
          const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -276,6 +286,7 @@ BatchBuilder::BatchEncoding SuccessorHGraphEncoderEngine::encode_batch(
          }
       }
 
+      // Phase 3: encode one current/successor pair and move to the next graph.
       encode(state_entry.state, successor_entry->state, goal_inputs, builder);
       builder.next_graph();
    }

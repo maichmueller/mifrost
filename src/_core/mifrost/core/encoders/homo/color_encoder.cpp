@@ -90,6 +90,11 @@ void ColorEncoderEngine::encode_impl(
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
 
+   // Summary:
+   // 1. Build the local color map and the node and edge buffers.
+   // 2. Encode state facts first, then goal literals.
+   // 3. Flush the buffered nodes, edges, and features into the homo builder.
+   // Phase 1: start one homo graph and set the schema flags used by downstream code.
    builder.set_graph_kind("homo");
    builder.set_schema_flag("edge_features", config_.edge_features);
    builder.set_schema_flag("predicate_nodes", config_.enable_global_predicate_nodes);
@@ -138,6 +143,7 @@ void ColorEncoderEngine::encode_impl(
       add_edge(idx, idx, static_cast< float >(color_for(predicate_node)));
    };
 
+   // Phase 2: define the local builders for nodes, colors, and edge patterns.
    auto encode_atom = [&](const auto& atom, std::optional< int > goal_level) {
       const auto predicate = atom->get_predicate();
       const auto arity = predicate->get_arity();
@@ -273,6 +279,7 @@ void ColorEncoderEngine::encode_impl(
       }
    };
 
+   // Phase 3: add state facts first, then overlay the goal literals.
    const auto& problem = state.get_problem();
    if(problem.get_initial_literals< mimir::formalism::StaticTag >().size() > 0) {
       for(const auto& literal : problem.get_initial_literals< mimir::formalism::StaticTag >()) {
@@ -311,6 +318,7 @@ void ColorEncoderEngine::encode_impl(
       encode_literal(literal, level);
    }
 
+   // Phase 4: flush the buffered node and edge data into the builder.
    static const std::string node_type = "node";
    builder.add_nodes(node_type, static_cast< int64_t >(buffers.node_names.size()));
    builder.set_node_names(node_type, buffers.node_names);
@@ -349,21 +357,28 @@ BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(
    const batch_input::parsed::ColorBatchInputs& inputs
 )
 {
+   // Summary:
+   // 1. Read one batch item at a time and normalize optional goals.
+   // 2. Encode each item into the shared homo batch builder.
+   // 3. Advance the builder to the next graph slot.
    BatchBuilder builder;
    builder.set_graph_kind("homo");
 
    const size_t state_count = inputs.states.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect the state and any optional goal payloads for one batch item.
       const auto& state_entry = inputs.states.states[idx];
       const auto& goals_entry = inputs.goals.at(idx);
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
 
+      // Fast path for plain state encoding with no goal overlays.
       if(not goals_entry.has_value() and not subgoal_layers_entry.has_value()) {
          encode(state_entry.state, builder);
          builder.next_graph();
          continue;
       }
 
+      // Phase 2: normalize goals into one GoalInputs object.
       GoalInputs goal_inputs;
       if(goals_entry.has_value()) {
          const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -380,6 +395,7 @@ BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(
          }
       }
 
+      // Phase 3: encode one graph and move the builder to the next graph.
       encode(state_entry.state, goal_inputs, builder);
       builder.next_graph();
    }

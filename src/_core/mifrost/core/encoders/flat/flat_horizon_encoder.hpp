@@ -292,6 +292,7 @@ class FlatHorizonStreamEncoder:
          or step.goals == nullptr) {
          throw std::invalid_argument("FlatHorizonStreamEncoder requires root/dag/goals");
       }
+      // Streaming mode already stores a complete step payload, so this path is a thin dispatch.
       engine_->encode(*step.root, *step.dag, *step.goals, builder);
    }
 

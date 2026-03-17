@@ -291,6 +291,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
    std::vector< mimir::search::State >* batch_target_name_states
 )
 {
+   // Summary:
+   // 1. Create one target node per DAG node and encode each requested state view.
+   // 2. Add topology edges, target metadata, and optional LGAN edges.
+   // 3. Finalize the hetero graph while keeping plain objects separate from state targets.
    auto& workspace = init_hetero_workspace(builder);
    auto& node_indices = workspace.node_indices;
    auto& node_names = workspace.node_names;
@@ -304,6 +308,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
    }
 
+   // Phase 1: define the local helpers that emit one prefixed state view at a time.
    auto make_prefix = [](const std::string& target_key) {
       std::string prefix = target_key;
       prefix.push_back(schema_key::kEdgeTypeSeparator);
@@ -804,7 +809,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       );
    };
 
-   // 1. Create target nodes first to keep them contiguous in symbol list.
+   // Phase 2: create target nodes first, then encode the requested state views.
    const auto& nodes = dag.nodes();
    const int root_index = dag.root_index();
    std::vector< std::string > target_keys(nodes.size());
@@ -1120,7 +1125,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
 
    const bool exclude_root_topology = horizon_config_.root_policy == RootPolicy::exclude;
 
-   // 4. Parent relations
+   // Phase 3: add topology relations between the already-encoded state nodes.
    if(horizon_config_.enable_parent_relation) {
       for(const auto& pair : dag.transitions()) {
          const int parent_idx = pair.first;
@@ -1183,7 +1188,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
    }
 
-   // 5. Sibling/Cousin relations
+   // Extend the topology view with sibling and cousin edges when requested.
    if(horizon_config_.enable_sibling_relation or horizon_config_.enable_cousin_relation) {
       hash_map< int, std::vector< int > > parent_to_children;
       for(const auto& pair : dag.transitions()) {
@@ -1293,9 +1298,10 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
    }
 
-   // 6. LGAN edges
+   // Phase 4: derive LGAN helper edges before target metadata is written.
    maybe_add_lgan_edges(builder, workspace);
 
+   // Phase 5: collect state-target rows from the already-created symbol nodes.
    TargetColumns target_columns;
    std::vector< mimir::search::State > target_name_states;
    const bool export_state_targets = has_target_source(TargetSource::states);
@@ -1361,6 +1367,8 @@ void HorizonHGraphEncoderEngine::encode_impl(
    }
 
    if(export_state_targets) {
+      // The target positions point at state symbol rows. Readout should gather the
+      // target embeddings from these positions instead of assuming a fixed tuple slot.
       const TargetMetadataEmitConfig target_emit_config{
          .position_node_type_id = config_.symbol_type_id,
          .symbol_prefix = config_.target_symbol_prefix,
@@ -1388,6 +1396,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
    }
 
+   // Phase 6: finalize the graph and keep plain objects separate from state-target rows.
    std::vector< std::string > object_names_override;
    const std::vector< std::string >* object_names_override_ptr = nullptr;
    if(node_names.contains(config_.symbol_type_id)) {
@@ -1419,12 +1428,17 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
    const batch_input::parsed::HorizonBatchInputs& inputs
 )
 {
+   // Summary:
+   // 1. Read one batch item at a time and choose the given DAG or a default one-node DAG.
+   // 2. Normalize goals for the root state.
+   // 3. Encode each horizon graph into the shared hetero batch builder.
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    std::vector< mimir::search::State > batch_target_name_states;
 
    const size_t state_count = inputs.roots.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect one root state, one DAG, and the optional goal payloads.
       const auto& root_entry = inputs.roots.states[idx];
       const auto& dag_entry = inputs.dags.at(idx);
       const auto& goals_entry = inputs.goals.at(idx);
@@ -1433,6 +1447,7 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
       const TransitionDAG default_dag(root_entry.state);
       const TransitionDAG& dag_ref = dag_entry.has_value() ? *dag_entry : default_dag;
 
+      // Phase 2: normalize goals for this root state.
       GoalInputs goal_inputs;
       if(goals_entry.has_value()) {
          const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -1449,6 +1464,7 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
          }
       }
 
+      // Phase 3: encode one horizon graph and move to the next graph in the batch.
       encode_impl(root_entry.state, dag_ref, goal_inputs, builder, &batch_target_name_states);
       builder.next_graph();
    }

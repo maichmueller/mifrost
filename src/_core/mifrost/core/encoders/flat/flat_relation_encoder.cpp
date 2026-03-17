@@ -927,19 +927,27 @@ void FlatRelationEncoderEngine::encode_impl(
    bool prepare_builder_once
 )
 {
+   // Summary:
+   // 1. Build the per-graph entity and target tables.
+   // 2. Emit all relation tuples into a flat sink.
+   // 3. Write node rows, target rows, tuple data, and optional LGAN edges.
+   // Phase 1: prepare shared schema state once, then build the per-graph context.
    if(prepare_builder_once) {
       prepare_builder(builder);
    }
    auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
    FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
 
+   // Phase 2: collect state facts so later goal-derivation emission can test satisfaction.
    hash_set< uint64_t > fact_keys;
    collect_state_fact_keys(state, config_.include_static, fact_keys);
 
+   // Phase 3: let each configured component write its relation tuples into the sink.
    for(const auto& component : components_) {
       component->emit(*this, state, goals, fact_keys, context, sink);
    }
 
+   // Phase 4: export node rows and per-node metadata for this graph.
    std::vector< float > zeros(context.entity_names.size(), 0.0f);
    builder.add_node_features(
       std::string(kFlatEntityNodeType), "x", std::span< const float >(zeros.data(), zeros.size()), 1
@@ -995,6 +1003,8 @@ void FlatRelationEncoderEngine::encode_impl(
       )
    );
    if(supports_target_metadata()) {
+      // Target rows point back into the flat node table. Readout should gather the
+      // target embeddings from these positions instead of inferring them from tuple slots.
       const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
       builder.set_field(
          std::string(kTargetSizesField), std::span< const int64_t >(&target_size, 1)
@@ -1026,6 +1036,7 @@ void FlatRelationEncoderEngine::encode_impl(
          }
       }
    }
+   // Phase 5: export the relation tuples after all components have finished writing.
    builder.set_field(
       std::string(kRelationCountsField),
       std::span< const int64_t >(sink.relation_counts().data(), sink.relation_counts().size())
@@ -1040,6 +1051,7 @@ void FlatRelationEncoderEngine::encode_impl(
       std::span< const int64_t >(sink.relation_args().data(), sink.relation_args().size())
    );
    if(config_.include_lgan_edges) {
+      // Phase 6: derive LGAN helper edges from the emitted flat tuples and target rows.
       if(context.target_entity_indices.empty()) {
          throw std::invalid_argument(
             "FlatRelationEncoder include_lgan_edges=true requires LGAN anchor entity rows, "
@@ -1094,6 +1106,10 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
    std::optional< int > history_max_steps
 )
 {
+   // Summary:
+   // 1. Read one batch item at a time and normalize optional goals, actions, and history.
+   // 2. Encode each item into the shared builder as one flat graph.
+   // 3. Write batch-level target metadata after all graphs are appended.
    BatchBuilder builder;
    builder.set_graph_kind("flat");
    prepare_builder(builder);
@@ -1101,12 +1117,14 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
    const size_t state_count = inputs.states.states.size();
    std::vector< std::string > batch_target_names;
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect the per-state inputs from the parsed batch.
       const auto& state_entry = inputs.states.states[idx];
       const auto& goals_entry = inputs.goals.at(idx);
       const auto& actions_entry = inputs.actions.at(idx);
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
       const auto& history_entry = inputs.history_subgoals.at(idx);
 
+      // Phase 2: normalize optional goal payloads into one GoalInputs object.
       GoalInputs goal_inputs;
       if(goals_entry.has_value()) {
          const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -1131,6 +1149,7 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       const auto history_span = history_entry.has_value()
                                    ? std::span< const HistorySubgoal >(*history_entry)
                                    : std::span< const HistorySubgoal >{};
+      // Phase 3: encode one graph into the shared builder, then advance to the next slot.
       encode_impl(
          state_entry.state,
          goal_inputs,
@@ -1145,6 +1164,7 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
    }
 
    if(supports_target_metadata()) {
+      // Phase 4: write batch-level target metadata once all graphs have been appended.
       if(config_.export_node_names) {
          if(batch_target_names.empty()) {
             builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});

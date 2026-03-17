@@ -436,6 +436,7 @@ class FlatRelationMutableStreamEncoder:
          throw std::invalid_argument("FlatRelationMutableStreamEncoder requires state");
       }
 
+      // Normalize the optional payloads once, then dispatch to the matching engine overload.
       const std::span< const mimir::formalism::GroundAction >
          actions = (step.actions == nullptr)
                       ? std::span< const mimir::formalism::GroundAction >{}

@@ -734,6 +734,7 @@ class HGraphMutableStreamEncoder:
          throw std::invalid_argument("HGraphMutableStreamEncoder requires a valid engine/state");
       }
 
+      // Normalize the optional step payloads once, then call the matching engine overload.
       const auto& state = *step.state;
       if(step.goals == nullptr) {
          if(step.history != nullptr and not step.history->empty()) {

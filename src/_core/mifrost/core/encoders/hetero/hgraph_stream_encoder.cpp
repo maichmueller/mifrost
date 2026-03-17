@@ -439,9 +439,15 @@ void HGraphEncoderEngine::encode_impl_core(
    BatchBuilder& builder
 )
 {
+   // Summary:
+   // 1. Add symbol nodes for objects and any extra symbols.
+   // 2. Encode facts, goals, actions, and optional history.
+   // 3. Add helper edges and finalize the hetero graph fields.
    auto& workspace = init_hetero_workspace(builder);
 
+   // Phase 1: create symbol nodes for objects and any reserved extra symbols.
    encode_objects(state, builder, workspace.node_indices, workspace.node_names);
+   // Phase 2: encode state facts and keep the fact keys for goal-satisfaction checks.
    const auto fact_keys = encode_facts(
       state,
       builder,
@@ -451,9 +457,11 @@ void HGraphEncoderEngine::encode_impl_core(
       workspace.symbol_to_relations
    );
    if(includes_plain_goal_derivation(config_.goal_derivations)) {
+      // Phase 3: add plain goal literals when this mode requests them.
       encode_goal_inputs(goals, builder, workspace);
    }
    if(not config_.ignore_actions) {
+      // Phase 4: add explicit action relations if actions were supplied.
       encode_actions(
          actions,
          builder,
@@ -464,6 +472,7 @@ void HGraphEncoderEngine::encode_impl_core(
       );
    }
    if(not history_subgoals.empty()) {
+      // Phase 5: add history relations and any history target rows.
       encode_history(
          history_subgoals,
          history_max_steps,
@@ -475,8 +484,10 @@ void HGraphEncoderEngine::encode_impl_core(
       );
    }
    if(has_non_plain_goal_derivations(config_.goal_derivations)) {
+      // Phase 6: emit satisfied or unsatisfied goal views against the current fact set.
       encode_goal_satisfaction_inputs(goals, fact_keys, builder, workspace);
    }
+   // Phase 7: derive helper edges and freeze the graph fields for this graph.
    maybe_add_lgan_edges(builder, workspace);
    finalize_hetero_encoding(builder, workspace);
 }
@@ -1345,12 +1356,17 @@ BatchBuilder::BatchEncoding HGraphEncoderEngine::encode_batch(
    std::optional< int > history_max_steps
 )
 {
+   // Summary:
+   // 1. Read one batch item at a time and normalize optional goals, actions, and history.
+   // 2. Choose the right single-graph encode path for that item.
+   // 3. Append the result to the shared hetero batch builder.
    const batch_input::parsed::ActionPayload empty_actions{};
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
 
    const size_t state_count = inputs.states.states.size();
    for(size_t idx = 0; idx < state_count; ++idx) {
+      // Phase 1: collect the optional payloads for one batch item.
       const auto& state_entry = inputs.states.states[idx];
       const auto& goals_entry = inputs.goals.at(idx);
       const auto& actions_entry = inputs.actions.at(idx);
@@ -1363,12 +1379,14 @@ BatchBuilder::BatchEncoding HGraphEncoderEngine::encode_batch(
       const bool has_aux_payload = subgoal_layers_entry.has_value() or not actions_payload.empty()
                                    or history_entry.has_value();
 
+      // Fast path: plain state encoding without goals, actions, or history.
       if(not goals_entry.has_value() and not has_aux_payload) {
          encode(state_entry.state, builder);
          builder.next_graph();
          continue;
       }
 
+      // Phase 2: normalize the goal inputs for the current state.
       GoalInputs goal_inputs;
       if(goals_entry.has_value()) {
          const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
@@ -1385,6 +1403,7 @@ BatchBuilder::BatchEncoding HGraphEncoderEngine::encode_batch(
          }
       }
 
+      // Phase 3: pick the right overload, encode one graph, then advance the builder.
       if(history_entry.has_value()) {
          encode(
             state_entry.state,
