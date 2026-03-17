@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/goal_inputs.hpp"
+#include "mifrost/core/encoders/common/goal_inputs.hpp"
 
 namespace mifrost_test {
 

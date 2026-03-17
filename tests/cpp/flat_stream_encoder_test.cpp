@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "mifrost/core/flat_horizon_encoder.hpp"
-#include "mifrost/core/flat_relation_encoder.hpp"
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
+#include "mifrost/core/encoders/flat/flat_horizon_encoder.hpp"
+#include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
 #include "test_utils.hpp"
 
 using namespace mifrost;

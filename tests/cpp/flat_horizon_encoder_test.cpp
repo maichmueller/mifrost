@@ -1,4 +1,4 @@
-#include "mifrost/core/flat_horizon_encoder.hpp"
+#include "mifrost/core/encoders/flat/flat_horizon_encoder.hpp"
 
 #include <gtest/gtest.h>
 
@@ -12,8 +12,8 @@
 #include <variant>
 #include <vector>
 
-#include "mifrost/core/relation_formatter.hpp"
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
 #include "test_utils.hpp"
 
 namespace {

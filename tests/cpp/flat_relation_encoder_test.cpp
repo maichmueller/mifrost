@@ -1,4 +1,4 @@
-#include "mifrost/core/flat_relation_encoder.hpp"
+#include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
 
 #include <gtest/gtest.h>
 

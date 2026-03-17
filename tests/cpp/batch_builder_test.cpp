@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "mifrost/core/default_relations.hpp"
+#include "mifrost/core/encoders/common/default_relations.hpp"
 
 namespace mifrost {
 namespace {

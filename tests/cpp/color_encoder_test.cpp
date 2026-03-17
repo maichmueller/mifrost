@@ -1,4 +1,4 @@
-#include "mifrost/core/color_encoder.hpp"
+#include "mifrost/core/encoders/homo/color_encoder.hpp"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "mifrost/core/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/relation_formatter.hpp"
 #include "test_utils.hpp"
 
 using namespace mifrost;

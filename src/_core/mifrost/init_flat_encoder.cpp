@@ -8,7 +8,7 @@
 
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
-#include "mifrost/core/flat_relation_encoder.hpp"
+#include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;

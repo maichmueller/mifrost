@@ -11,8 +11,8 @@
 
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/common_types.hpp"
-#include "mifrost/core/goal_inputs.hpp"
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/goal_inputs.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
 
 namespace mifrost::batch_input {
 

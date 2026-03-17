@@ -20,10 +20,10 @@
 
 #include "mifrost/common.hpp"
 #include "mifrost/core/dlpack_utils.hpp"
+#include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
+#include "mifrost/core/utils/macro.hpp"
 #include "schema.hpp"
-#include "target_metadata.hpp"
-#include "utils/macro.hpp"
 
 namespace mifrost {
 

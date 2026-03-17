@@ -1,4 +1,4 @@
-#include "mifrost/core/successor_hgraph_encoder.hpp"
+#include "mifrost/core/encoders/hetero/successor_hgraph_encoder.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "mifrost/core/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/relation_formatter.hpp"
 #include "test_utils.hpp"
 
 using namespace mifrost;

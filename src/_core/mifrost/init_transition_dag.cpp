@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "mifrost/bindings.hpp"
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;

@@ -8,8 +8,8 @@
 
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/color_encoder.hpp"
-#include "mifrost/core/goal_inputs.hpp"
+#include "mifrost/core/encoders/common/goal_inputs.hpp"
+#include "mifrost/core/encoders/homo/color_encoder.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;

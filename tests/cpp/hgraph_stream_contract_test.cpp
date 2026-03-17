@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "mifrost/core/hgraph_stream_encoder.hpp"
+#include "mifrost/core/encoders/hetero/hgraph_stream_encoder.hpp"
 #include "test_utils.hpp"
 
 using namespace mifrost;

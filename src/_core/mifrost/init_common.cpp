@@ -8,9 +8,9 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/default_relations.hpp"
-#include "mifrost/core/goal_inputs.hpp"
-#include "mifrost/core/hgraph_stream_encoder.hpp"
+#include "mifrost/core/encoders/common/default_relations.hpp"
+#include "mifrost/core/encoders/common/goal_inputs.hpp"
+#include "mifrost/core/encoders/hetero/hgraph_stream_encoder.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 

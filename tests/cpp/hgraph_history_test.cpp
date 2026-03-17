@@ -6,9 +6,9 @@
 #include <variant>
 #include <vector>
 
-#include "mifrost/core/default_relations.hpp"
-#include "mifrost/core/hgraph_stream_encoder.hpp"
-#include "mifrost/core/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/default_relations.hpp"
+#include "mifrost/core/encoders/common/relation_formatter.hpp"
+#include "mifrost/core/encoders/hetero/hgraph_stream_encoder.hpp"
 #include "test_utils.hpp"
 
 namespace {

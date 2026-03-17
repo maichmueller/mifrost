@@ -1,4 +1,4 @@
-#include "mifrost/core/horizon_hgraph_encoder.hpp"
+#include "mifrost/core/encoders/hetero/horizon_hgraph_encoder.hpp"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
 #include "test_utils.hpp"
 
 using namespace mifrost;

@@ -6,7 +6,7 @@
 #include <string_view>
 
 #include "mifrost/bindings.hpp"
-#include "mifrost/core/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/relation_formatter.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;

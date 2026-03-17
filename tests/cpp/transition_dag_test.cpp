@@ -1,4 +1,4 @@
-#include "mifrost/core/transition_dag.hpp"
+#include "mifrost/core/encoders/common/transition_dag.hpp"
 
 #include <gtest/gtest.h>
 
