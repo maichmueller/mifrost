@@ -188,7 +188,15 @@ if (DEFINED mimir_DIR AND NOT mimir_DIR STREQUAL "")
 endif ()
 
 # Mimir Extended Linkage (Found via CMAKE_PREFIX_PATH or pymimir.get_cmake_dir()).
-find_package(mimir 0.13.60 REQUIRED)
+find_package(mimir REQUIRED)
+
+if (NOT DEFINED mimir_VERSION)
+    message(FATAL_ERROR "mimir was found, but did not report mimir_VERSION")
+endif()
+
+if (mimir_VERSION VERSION_LESS "0.13.60")
+    message(FATAL_ERROR "mimir >= 0.13.60 required, found ${mimir_VERSION}")
+endif()
 
 # --- RPATH mode (dev vs wheel) ---
 set(MIFROST_RPATH_MODE "dev" CACHE STRING "RPATH mode: dev or wheel")
