@@ -204,14 +204,14 @@ def _convert_batch_payload(
             for item in value
         ]
     if isinstance(value, IterableABC):
-        return (
+        return [
             _convert_batch_payload(
                 item,
                 is_leaf=is_leaf,
                 convert_leaf=convert_leaf,
             )
             for item in value
-        )
+        ]
     return value
 
 
