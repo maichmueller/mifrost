@@ -44,6 +44,10 @@ from ._lane_specs import (
 )
 from ._root_policy import RootPolicy, normalize_root_policy
 from .flat import FlatRelationEncoder
+from .flat import (
+    _validate_subgoal_layers_batch_payload,
+    _validate_subgoal_layers_state_payload,
+)
 from .types import (
     DomainInput,
     FlatEncoding,
@@ -108,8 +112,14 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
     ) -> int:
         """Append one root/DAG input and return its stream id."""
         adv_root = _advanced_state(root)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
         if dag is None:
             return self._coerce_stream_id(self._stream.append(adv_root, inputs))
         return self._coerce_stream_id(
@@ -140,8 +150,14 @@ class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
     ) -> int:
         """Append one root/DAG input and return its stream id."""
         adv_root = _advanced_state(root)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
         if dag is None:
             return self._coerce_stream_id(self._stream.append(adv_root, inputs))
         return self._coerce_stream_id(
@@ -162,8 +178,14 @@ class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
     ) -> None:
         """Replace one root/DAG input in place."""
         adv_root = _advanced_state(root)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
         if dag is None:
             self._stream.update(stream_id, adv_root, inputs)
             return
@@ -300,8 +322,14 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             history_max_steps=history_max_steps,
         )
         adv_root = _advanced_state(root)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._config.max_goal_level),
+        )
         dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
+        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
         return self._engine.encode(adv_root, dag, inputs)
 
     def encode(
@@ -369,6 +397,11 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         )
         dags_for_core = _normalize_dag_batch_data(dags)
         parsed_roots = parse_states_batch(roots_for_core)
+        _validate_subgoal_layers_batch_payload(
+            subgoal_layers_for_core,
+            state_count=len(parsed_roots),
+            max_goal_level=int(self._config.max_goal_level),
+        )
         if dags_for_core is None:
             parsed_dags = [None] * len(parsed_roots)
         else:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Sequence as SequenceABC
 from typing import Any, Iterable, Mapping
 
 import networkx as nx
@@ -16,6 +17,7 @@ from .._core import (
     FlatRelationMutableStreamEncoder as _FlatRelationMutableStreamEncoder,
     FlatRelationStreamEncoder as _FlatRelationStreamEncoder,
 )
+from ._batch_contract import parse_states_batch
 from ._action_contract import parse_flat_actions
 from ._target_sources import TargetSource, normalize_target_sources
 from .base import (
@@ -41,6 +43,7 @@ from .common import (
 )
 from .flat_data import FlatRelationData
 from .types import (
+    BatchParam,
     DomainInput,
     FlatEncoding,
     GoalLiteralInput,
@@ -54,6 +57,124 @@ from .types import (
     to_advanced_literal,
     to_advanced_state,
 )
+
+
+def _is_sequence_like(value: object) -> bool:
+    return isinstance(value, SequenceABC) and not isinstance(
+        value, (str, bytes, bytearray)
+    )
+
+
+def _subgoal_layers_looks_like_state_payload(value: object) -> bool:
+    if value is None or not _is_sequence_like(value):
+        return False
+    if len(value) == 0:
+        return False
+    return _is_sequence_like(value[0])
+
+
+def _validate_subgoal_layers_state_payload(
+    subgoal_layers: object,
+    *,
+    state_index: int,
+    max_goal_level: int,
+) -> None:
+    if subgoal_layers is None:
+        return
+    if not _is_sequence_like(subgoal_layers):
+        raise TypeError(
+            f"subgoal_layers entry at state index {state_index} must be an "
+            "iterable of goal-literal layers or None"
+        )
+
+    layers = list(subgoal_layers)
+    for layer_index, layer in enumerate(layers):
+        if not _is_sequence_like(layer):
+            raise TypeError(
+                f"subgoal_layers entry at state index {state_index} layer at "
+                f"position {layer_index} must be an iterable of goal literals"
+            )
+
+    if len(layers) > max_goal_level:
+        if layers and all(len(layer) == 1 for layer in layers):
+            positions = ", ".join(str(idx) for idx in range(len(layers)))
+            raise ValueError(
+                f"subgoal_layers entry at state index {state_index} looks like "
+                f"singleton layers at positions {positions}; this flat encoder "
+                f"supports at most {max_goal_level} subgoal layer(s). If you "
+                "intended one layer with multiple literals, use "
+                "[[lit1, lit2, ...]] instead of [[lit1], [lit2], ...]."
+            )
+        raise ValueError(
+            f"subgoal_layers entry at state index {state_index} has "
+            f"{len(layers)} layers, but this flat encoder supports at most "
+            f"{max_goal_level} subgoal layer(s). The first unsupported layer "
+            f"is at position {max_goal_level}."
+        )
+
+
+def _validate_subgoal_layers_batch_payload(
+    subgoal_layers: object,
+    *,
+    state_count: int,
+    max_goal_level: int,
+) -> None:
+    if subgoal_layers is None:
+        return
+
+    if isinstance(subgoal_layers, BatchParam):
+        if subgoal_layers.kind == "none":
+            return
+        if subgoal_layers.kind == "shared":
+            _validate_subgoal_layers_state_payload(
+                subgoal_layers.value,
+                state_index=0,
+                max_goal_level=max_goal_level,
+            )
+            return
+        if subgoal_layers.kind == "separate":
+            if not _is_sequence_like(subgoal_layers.value):
+                raise TypeError("BatchParam(separate) value must be a sequence")
+            if len(subgoal_layers.value) != state_count:
+                raise ValueError("subgoal_layers length must match states length")
+            for state_index, state_payload in enumerate(subgoal_layers.value):
+                _validate_subgoal_layers_state_payload(
+                    state_payload,
+                    state_index=state_index,
+                    max_goal_level=max_goal_level,
+                )
+            return
+        raise ValueError("BatchParam.kind must be 'shared', 'separate', or 'none'")
+
+    if not _is_sequence_like(subgoal_layers):
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers,
+            state_index=0,
+            max_goal_level=max_goal_level,
+        )
+        return
+
+    outer = list(subgoal_layers)
+    per_state_like = any(
+        entry is None or _subgoal_layers_looks_like_state_payload(entry)
+        for entry in outer
+    )
+    if per_state_like:
+        if len(outer) != state_count:
+            raise ValueError("subgoal_layers length must match states length")
+        for state_index, state_payload in enumerate(outer):
+            _validate_subgoal_layers_state_payload(
+                state_payload,
+                state_index=state_index,
+                max_goal_level=max_goal_level,
+            )
+        return
+
+    _validate_subgoal_layers_state_payload(
+        outer,
+        state_index=0,
+        max_goal_level=max_goal_level,
+    )
 
 
 @dataclass
@@ -91,6 +212,12 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         if goals is None and subgoal_layers is None and not history_list:
             if action_list:
                 return self._coerce_stream_id(
@@ -99,7 +226,7 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
             return self._coerce_stream_id(self._stream.append(adv_state))
 
         goals_input = goals if goals is not None else default_goals_from_state(state)
-        split_goals = _split_goals(goals_input, subgoal_layers)
+        split_goals = _split_goals(goals_input, subgoal_layers_list)
         if history_list:
             return self._coerce_stream_id(
                 self._stream.append(
@@ -150,6 +277,12 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         if goals is None and subgoal_layers is None and not history_list:
             if action_list:
                 return self._coerce_stream_id(
@@ -158,7 +291,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
             return self._coerce_stream_id(self._stream.append(adv_state))
 
         goals_input = goals if goals is not None else default_goals_from_state(state)
-        split_goals = _split_goals(goals_input, subgoal_layers)
+        split_goals = _split_goals(goals_input, subgoal_layers_list)
         if history_list:
             return self._coerce_stream_id(
                 self._stream.append(
@@ -195,6 +328,12 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._encoder.config.max_goal_level),
+        )
         if goals is None and subgoal_layers is None and not history_list:
             if action_list:
                 self._stream.update(stream_id, adv_state, action_list)
@@ -203,7 +342,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
             return
 
         goals_input = goals if goals is not None else default_goals_from_state(state)
-        split_goals = _split_goals(goals_input, subgoal_layers)
+        split_goals = _split_goals(goals_input, subgoal_layers_list)
         if history_list:
             self._stream.update(
                 stream_id,
@@ -399,6 +538,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         action_inputs = parse_flat_actions(actions)
         action_list = _prepare_actions(action_inputs)
         history_list = _prepare_history_subgoals(history_subgoals)
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._config.max_goal_level),
+        )
         if goals is None and subgoal_layers is None and not history_list:
             if action_list:
                 self._engine.encode(adv_state, action_list, builder)
@@ -407,7 +552,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             return
 
         goals_input = goals if goals is not None else default_goals_from_state(state)
-        split_goals = _split_goals(goals_input, subgoal_layers)
+        split_goals = _split_goals(goals_input, subgoal_layers_list)
         if history_list:
             self._engine.encode(
                 adv_state,
@@ -514,6 +659,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             history_subgoals,
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
+        )
+        state_count = len(parse_states_batch(states_for_core))
+        _validate_subgoal_layers_batch_payload(
+            subgoal_layers_for_core,
+            state_count=state_count,
+            max_goal_level=int(self._config.max_goal_level),
         )
         return self._engine.encode_batch(
             states_for_core,

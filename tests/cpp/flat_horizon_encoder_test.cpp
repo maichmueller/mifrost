@@ -25,25 +25,25 @@ using mifrost::TransitionDAG;
 const std::vector< int64_t >&
 i64_field(const BatchBuilder::BatchEncoding& encoding, std::string_view key)
 {
-   return std::get< std::vector< int64_t > >(encoding.graph_fields.at(std::string(key)).values);
+   return std::get< std::vector< int64_t > >(encoding.graph_fields.at(key).values);
 }
 
 const std::vector< int64_t >&
 i64_attr(const BatchBuilder::BatchEncoding& encoding, std::string_view key)
 {
-   return std::get< std::vector< int64_t > >(encoding.graph_attrs.at(std::string(key)));
+   return std::get< std::vector< int64_t > >(encoding.graph_attrs.at(key));
 }
 
 const std::vector< std::string >&
 str_attr(const BatchBuilder::BatchEncoding& encoding, std::string_view key)
 {
-   return std::get< std::vector< std::string > >(encoding.graph_attrs.at(std::string(key)));
+   return std::get< std::vector< std::string > >(encoding.graph_attrs.at(key));
 }
 
 std::optional< size_t >
 relation_index_for(const std::vector< std::string >& relation_names, std::string_view relation_name)
 {
-   const auto it = std::find(relation_names.begin(), relation_names.end(), relation_name);
+   const auto it = std::ranges::find(relation_names, relation_name);
    if(it == relation_names.end()) {
       return std::nullopt;
    }

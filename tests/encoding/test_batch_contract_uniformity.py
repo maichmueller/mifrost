@@ -7,6 +7,8 @@ import pytest
 
 from mifrost.encoders import (
     ColorEncoder,
+    FlatHorizonEncoder,
+    FlatRelationEncoder,
     HGraphEncoder,
     HorizonEncoder,
     ILGEncoder,
@@ -155,6 +157,40 @@ def test_color_batch_accepts_per_state_goals_and_subgoal_layers(small_blocks):
         subgoal_layers=[None, None],
     )
     assert encoding.num_graphs == 2
+
+
+@pytest.mark.parametrize(
+    ("encoder_cls", "encoder_kwargs"),
+    [
+        (FlatRelationEncoder, {"max_goal_level": 1}),
+        (FlatHorizonEncoder, {"max_goal_level": 1}),
+    ],
+)
+def test_flat_batch_rejects_singleton_subgoal_layers(
+    small_blocks,
+    encoder_cls,
+    encoder_kwargs,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if len(goals) < 2:
+        pytest.skip("Fixture does not provide enough goal literals.")
+
+    encoder = encoder_cls(domain, **encoder_kwargs)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"subgoal_layers entry at state index 0 looks like singleton layers "
+            r"at positions 0, 1"
+        ),
+    ):
+        encoder.encode_batch(
+            [state],
+            goals=[[goals[0]]],
+            subgoal_layers=[[[goals[0]], [goals[1]]]],
+        )
 
 
 def test_transition_batch_requires_successors(small_blocks):
