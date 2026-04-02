@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import colorsys
 from dataclasses import dataclass
 from collections.abc import Sequence as SequenceABC
+import hashlib
 from typing import Any, Iterable, Mapping
 
 import networkx as nx
@@ -174,6 +176,72 @@ def _validate_subgoal_layers_batch_payload(
         outer,
         state_index=0,
         max_goal_level=max_goal_level,
+    )
+
+
+def _default_flat_debug_layout(
+    graph: nx.Graph,
+) -> dict[Any, tuple[float, float]]:
+    """Lay out flat debug graphs in stable columns to avoid edge collapse."""
+    if graph.number_of_nodes() == 0:
+        return {}
+
+    def subset_for(attrs: Mapping[str, Any]) -> int:
+        if attrs.get("kind") == "relation":
+            return 1
+        if (
+            attrs.get("target_group") is not None
+            or attrs.get("entity_kind") == "target_entity"
+        ):
+            return 0
+        if attrs.get("entity_kind") == "history_entity":
+            return 3
+        return 2
+
+    def sort_key(node: Any) -> tuple[Any, ...]:
+        attrs = graph.nodes[node]
+        return (
+            subset_for(attrs),
+            str(
+                attrs.get("target_group")
+                or attrs.get("entity_kind")
+                or attrs.get("source")
+                or ""
+            ),
+            str(attrs.get("relation_name") or node),
+            int(attrs.get("instance_index", 0)),
+            str(node),
+        )
+
+    layout_graph = nx.DiGraph()
+    for node in sorted(graph.nodes, key=sort_key):
+        attrs = dict(graph.nodes[node])
+        attrs["_flat_subset"] = subset_for(attrs)
+        layout_graph.add_node(node, **attrs)
+
+    pos = nx.multipartite_layout(
+        layout_graph,
+        subset_key="_flat_subset",
+        align="vertical",
+        scale=2.0,
+    )
+    return {
+        node: (float(coords[0]) * 3.0, float(coords[1]) * 6.0)
+        for node, coords in pos.items()
+    }
+
+
+def _relation_name_color(relation_name: str) -> str:
+    """Return a stable color derived only from the relation name."""
+    digest = hashlib.blake2b(relation_name.encode("utf-8"), digest_size=4).digest()
+    hue = int.from_bytes(digest[:2], "big") / 65535.0
+    saturation = 0.45 + (digest[2] / 255.0) * 0.25
+    value = 0.70 + (digest[3] / 255.0) * 0.18
+    red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
+    return "#{:02x}{:02x}{:02x}".format(
+        int(red * 255),
+        int(green * 255),
+        int(blue * 255),
     )
 
 
@@ -949,7 +1017,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         if ax is None:
             _, ax = plt.subplots()
 
-        pos = layout or nx.spring_layout(graph, seed=0)
+        pos = layout or _default_flat_debug_layout(graph)
         entity_nodes = [
             node for node, attrs in graph.nodes(data=True) if attrs["kind"] == "entity"
         ]
@@ -957,9 +1025,6 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             node
             for node, attrs in graph.nodes(data=True)
             if attrs["kind"] == "relation"
-        ]
-        relation_sources = [
-            graph.nodes[node].get("source", "relation") for node in relation_nodes
         ]
 
         if entity_nodes:
@@ -991,23 +1056,15 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
                 ax=ax,
             )
         if relation_nodes:
-            source_palette = {
-                "state": "#355c7d",
-                "goal": "#c06c84",
-                "goal_satisfaction": "#6c9a8b",
-                "action": "#f08a24",
-                "history": "#7b5ea7",
-                "parent": "#4c6a92",
-                "sibling": "#6f8f72",
-                "cousin": "#8a6f9e",
-                "relation": "#666666",
-            }
             nx.draw_networkx_nodes(
                 graph,
                 pos,
                 nodelist=relation_nodes,
                 node_color=[
-                    source_palette.get(source, "#666666") for source in relation_sources
+                    _relation_name_color(
+                        str(graph.nodes[node].get("relation_name", node))
+                    )
+                    for node in relation_nodes
                 ],
                 node_shape="s",
                 edgecolors="#111111",
@@ -1059,11 +1116,18 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             nx.draw_networkx_labels(graph, pos, ax=ax, font_size=8)
 
         if edge_labels:
-            labels = {
-                tuple(edge_key): attrs.get("position")
-                for *edge_key, attrs in graph.edges(keys=False, data=True)
-                if attrs.get("position") is not None
-            }
+            if graph.is_multigraph():
+                labels = {
+                    (u, v, key): attrs.get("position")
+                    for u, v, key, attrs in graph.edges(keys=True, data=True)
+                    if attrs.get("position") is not None
+                }
+            else:
+                labels = {
+                    (u, v): attrs.get("position")
+                    for u, v, attrs in graph.edges(data=True)
+                    if attrs.get("position") is not None
+                }
             if labels:
                 nx.draw_networkx_edge_labels(
                     graph,

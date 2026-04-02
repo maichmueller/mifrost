@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,89 @@ def load_problem(
     domain_obj = pymimir.Domain(domain_path)
     problem_obj = pymimir.Problem(domain_obj, problem_path, mode="lifted")
     return domain_obj, problem_obj, problem_obj.get_initial_state()
+
+
+def _type_name_closure(type_obj) -> set[str]:
+    names: set[str] = set()
+    stack = [type_obj]
+    while stack:
+        current = stack.pop()
+        if current is None or not hasattr(current, "get_name"):
+            continue
+        name = current.get_name()
+        if name in names:
+            continue
+        names.add(name)
+        if hasattr(current, "get_bases"):
+            stack.extend(list(current.get_bases()))
+    return names
+
+
+def _matching_wrapper_objects(
+    problem: pymimir.Problem, parameter, advanced_objects
+) -> list[pymimir.Object]:
+    if not hasattr(parameter, "get_bases"):
+        return list(problem.get_objects())
+
+    allowed_type_names: set[str] = set()
+    for base in parameter.get_bases():
+        allowed_type_names.update(_type_name_closure(base))
+    if not allowed_type_names:
+        return list(problem.get_objects())
+
+    matching_names = [
+        obj.get_name()
+        for obj in advanced_objects
+        if any(
+            type_name in allowed_type_names
+            for base in obj.get_bases()
+            for type_name in _type_name_closure(base)
+        )
+    ]
+    return [problem.get_object(name) for name in matching_names]
+
+
+def false_problem_literals(
+    problem: pymimir.Problem,
+    state: pymimir.State,
+    *,
+    include_static: bool = True,
+    include_fluent: bool = True,
+    include_derived: bool = True,
+) -> list[pymimir.GroundLiteral]:
+    """Return all positive literals that are well-typed but false in ``state``."""
+    domain = problem.get_domain()
+    advanced_problem = getattr(problem, "_advanced_problem", None)
+    advanced_objects = (
+        list(advanced_problem.get_problem_and_domain_objects())
+        if advanced_problem is not None
+        else list(problem.get_objects())
+    )
+    false_literals: list[pymimir.GroundLiteral] = []
+
+    predicates = domain.get_predicates(
+        ignore_static=not include_static,
+        ignore_fluent=not include_fluent,
+        ignore_derived=not include_derived,
+    )
+    for predicate in predicates:
+        if hasattr(predicate, "get_typed_parameters"):
+            wrapper_object_pools = [
+                _matching_wrapper_objects(problem, parameter, advanced_objects)
+                for parameter in predicate.get_typed_parameters()
+            ]
+        else:
+            objects = list(problem.get_objects())
+            wrapper_object_pools = [objects] * predicate.get_arity()
+
+        assignments = product(*wrapper_object_pools) if wrapper_object_pools else [()]
+        for objects in assignments:
+            atom = problem.new_ground_atom(predicate, list(objects))
+            literal = problem.new_ground_literal(atom, True)
+            if not state.literal_holds(literal):
+                false_literals.append(literal)
+
+    return false_literals
 
 
 def load_space(

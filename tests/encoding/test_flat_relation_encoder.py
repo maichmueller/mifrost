@@ -11,6 +11,7 @@ from mifrost.encoders import (
     FlatRelationEncoder,
     _encoding_dict_to_pyg,
 )
+from mifrost.encoders.flat import _relation_name_color
 from mifrost.encoders.flat_data import flat_relation_data_from_pyg
 
 from .test_utils import adv_action
@@ -864,6 +865,62 @@ def test_flat_relation_subgoal_target_source_adjusts_only_layered_goal_arities(
     assert subgoal_data.target_entity_group_ids.tolist() == [0]
     assert list(subgoal_data.target_groups) == ["subgoal"]
     assert list(subgoal_data.target_entity_groups) == ["subgoal", "action"]
+
+
+def test_flat_relation_subgoal_target_visualization_preserves_argument_edges(
+    small_blocks,
+):
+    _space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goal = next(
+        (
+            candidate
+            for candidate in _problem_goals(problem)
+            if candidate.get_atom().get_predicate().get_arity() > 0
+        ),
+        None,
+    )
+    if goal is None:
+        pytest.skip("Fixture does not provide any positive-arity goal literals.")
+    encoder = FlatRelationEncoder(
+        domain,
+        max_goal_level=1,
+        target_sources=[mifrost.TargetSource.subgoals],
+    )
+
+    data = encoder.encode_pyg(state, goals=[], subgoal_layers=[[goal]])
+    graph = encoder.to_networkx(data)
+    target_name = mifrost.RelationFormatter.format_literal(_adv_goal_literal(goal), 1)
+    incoming_target_edges = [
+        (src, attrs)
+        for src, _dst, attrs in graph.in_edges(target_name, data=True)
+        if attrs.get("position") == "0"
+    ]
+    assert len(incoming_target_edges) == 1
+    relation_node = incoming_target_edges[0][0]
+
+    atom = goal.get_atom()
+    objects = (
+        list(atom.get_terms())
+        if hasattr(atom, "get_terms")
+        else list(atom.get_objects())
+    )
+
+    assert {
+        (dst, attrs["position"])
+        for _src, dst, attrs in graph.out_edges(relation_node, data=True)
+    } == {
+        (target_name, "0"),
+        *{
+            (obj.get_name(), str(arg_idx))
+            for arg_idx, obj in enumerate(objects, start=1)
+        },
+    }
+
+
+def test_flat_relation_debug_colors_depend_only_on_relation_name():
+    assert _relation_name_color("[+]on[sg]") == _relation_name_color("[+]on[sg]")
+    assert _relation_name_color("[+]on[sg]") != _relation_name_color("clear")
 
 
 def test_flat_relation_mixed_target_sources_preserve_order_and_grouping(small_blocks):
