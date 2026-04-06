@@ -472,21 +472,21 @@ void FlatHorizonEncoderEngine::initialize_from_domain()
    if(config_.enable_parent_relation) {
       register_relation(
          config_.parent_relation,
-         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         make_nonpredicate_tuple_layout(0, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
          "parent"
       );
    }
    if(config_.enable_sibling_relation) {
       register_relation(
          config_.sibling_relation,
-         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         make_nonpredicate_tuple_layout(0, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
          "sibling"
       );
    }
    if(config_.enable_cousin_relation) {
       register_relation(
          config_.cousin_relation,
-         make_nonpredicate_tuple_layout(2, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
+         make_nonpredicate_tuple_layout(0, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}),
          "cousin"
       );
    }

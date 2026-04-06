@@ -456,6 +456,41 @@ def test_flat_horizon_excluded_root_skips_root_parent_edges(small_blocks):
     assert parent_instances.numel() == 0
 
 
+def test_flat_horizon_topology_relation_schema_arities_match_packed_payloads(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=2)
+    if len(transitions) < 2:
+        pytest.skip("Fixture does not provide enough distinct transitions.")
+    dag = _single_step_dag(root, transitions[:2], candidate_ids=[101, 102])
+
+    data = FlatHorizonEncoder(
+        domain,
+        transition_mode="delta",
+        root_policy="exclude",
+        enable_parent_relation=True,
+        enable_sibling_relation=True,
+        enable_cousin_relation=True,
+        ignore_actions=True,
+    ).encode_pyg(
+        root,
+        dag=dag,
+        goals=list(problem.get_goal_condition().get_literals()),
+    )
+
+    for relation_name in ("_parent_", "_sibling_", "_cousin_"):
+        relation_id = data.schema.name_to_id[relation_name]
+        instances = data.flattened_relations[relation_name]
+        assert data.schema.arities[relation_id] == 2
+        assert data.schema.logical_arities[relation_id] == 0
+        assert data.schema.encoded_arities[relation_id] == 2
+        assert data.schema.slot_roles[relation_id] == ("state_slot", "state_slot")
+        if instances.numel() > 0:
+            assert instances.shape[1] == 2
+
+
 def test_flat_horizon_batch_matches_from_data_list(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
