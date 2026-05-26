@@ -2,10 +2,22 @@ cmake_minimum_required(VERSION 3.24)
 
 project(mifrost LANGUAGES CXX)
 
+include(CMakePackageConfigHelpers)
+
 # --- C++ Standard ---
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(MIFROST_PYTHON_PACKAGE_DIR "mifrost")
+set(MIFROST_SDK_INCLUDE_DIR "${MIFROST_PYTHON_PACKAGE_DIR}/include")
+set(MIFROST_SDK_LIBRARY_DIR "${MIFROST_PYTHON_PACKAGE_DIR}/lib")
+set(MIFROST_SDK_CMAKE_DIR "${MIFROST_SDK_LIBRARY_DIR}/cmake/mifrost")
+
+set(_mifrost_package_version "${SKBUILD_PROJECT_VERSION}")
+if (NOT _mifrost_package_version)
+    set(_mifrost_package_version "0.2.0")
+endif ()
 
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
 option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
@@ -232,8 +244,8 @@ endfunction()
 
 # --- Targets ---
 add_library(
-        mifrost_core
-        STATIC
+    mifrost_core
+    SHARED
         "_core/mifrost/common.cpp"
         "_core/mifrost/core/batch_builder.cpp"
         "_core/mifrost/core/schema.cpp"
@@ -259,11 +271,27 @@ add_library(
         "_core/mifrost/core/encoders/hetero/horizon_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/successor_hgraph_encoder.cpp"
 )
-set_target_properties(mifrost_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(
+    mifrost_core
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    EXPORT_NAME core
+)
+target_compile_definitions(
+    mifrost_core
+    PUBLIC
+    MIFROST_BUILD_SHARED
+    PRIVATE
+    MIFROST_EXPORTS
+)
+if (NOT TARGET mifrost::core)
+    add_library(mifrost::core ALIAS mifrost_core)
+endif ()
 
 
 target_include_directories(mifrost_core PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}/_core"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/_core>"
+    "$<INSTALL_INTERFACE:${MIFROST_SDK_INCLUDE_DIR}>"
 )
 
 target_link_libraries(
@@ -286,8 +314,8 @@ target_link_libraries(
         phmap
         # Use unordered_dense for our internal maps
         unordered_dense::unordered_dense
-        # Nanobind runtime for core symbols used by tests and module
-        nanobind
+        # Nanobind headers/CMake target for the public SDK surface
+        nanobind::nanobind
         # strong type definitions
         rollbear::strong_type
         # ranges fallback
@@ -295,9 +323,62 @@ target_link_libraries(
         # dlpack headers/types
         dlpack::dlpack
 )
+    if (TARGET nanobind)
+        target_link_libraries(mifrost_core PRIVATE nanobind)
+    endif ()
+    if (_python_embed_target)
+        target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
+    endif ()
 
 conan_add_package_include_fallback(mifrost_core abseil)
 conan_add_package_include_fallback(mifrost_core onetbb)
+
+set(_mifrost_core_rpaths "")
+if (APPLE)
+    list(APPEND _mifrost_core_rpaths "@loader_path")
+elseif (UNIX)
+    list(APPEND _mifrost_core_rpaths "$ORIGIN")
+endif ()
+if (MIFROST_RPATH_MODE STREQUAL "wheel")
+    if (APPLE)
+        list(APPEND _mifrost_core_rpaths "@loader_path/../../pymimir/lib")
+    elseif (UNIX)
+        list(APPEND _mifrost_core_rpaths "$ORIGIN/../../pymimir/lib")
+    endif ()
+endif ()
+if (MIFROST_RPATH_MODE STREQUAL "dev")
+    _mifrost_append_rpath_from_target(_mifrost_core_rpaths mimir::core)
+    _mifrost_append_rpath_from_target(_mifrost_core_rpaths nanobind)
+
+    set(_mifrost_conan_home "")
+    if (DEFINED ENV{CONAN_HOME} AND NOT "$ENV{CONAN_HOME}" STREQUAL "")
+        set(_mifrost_conan_home "$ENV{CONAN_HOME}")
+    elseif (DEFINED ENV{HOME} AND EXISTS "$ENV{HOME}/.conan2")
+        set(_mifrost_conan_home "$ENV{HOME}/.conan2")
+    endif ()
+    if (NOT _mifrost_conan_home STREQUAL "" AND IS_DIRECTORY "${_mifrost_conan_home}")
+        file(GLOB _mifrost_conan_lib_dirs LIST_DIRECTORIES true
+                "${_mifrost_conan_home}/p/*/p/lib"
+                "${_mifrost_conan_home}/p/b/*/p/lib"
+        )
+        foreach (_dir IN LISTS _mifrost_conan_lib_dirs)
+            if (IS_DIRECTORY "${_dir}")
+                list(APPEND _mifrost_core_rpaths "${_dir}")
+            endif ()
+        endforeach ()
+        unset(_mifrost_conan_lib_dirs)
+    endif ()
+    unset(_mifrost_conan_home)
+endif ()
+list(REMOVE_DUPLICATES _mifrost_core_rpaths)
+set_target_properties(
+        mifrost_core
+        PROPERTIES
+        BUILD_RPATH "${_mifrost_core_rpaths}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${_mifrost_core_rpaths}"
+        INSTALL_RPATH_USE_LINK_PATH FALSE
+)
 
 if(MIFROST_FREE_THREADED)
     set(_mifrost_freethreading "FREE_THREADED")  # automatically ignored if python is not built for free-threading
@@ -337,9 +418,9 @@ target_link_libraries(
 
 set(_mifrost_rpaths "")
 if (APPLE)
-    list(APPEND _mifrost_rpaths "@loader_path")
+    list(APPEND _mifrost_rpaths "@loader_path" "@loader_path/lib")
 elseif (UNIX)
-    list(APPEND _mifrost_rpaths "$ORIGIN")
+    list(APPEND _mifrost_rpaths "$ORIGIN" "$ORIGIN/lib")
 endif ()
 if (MIFROST_RPATH_MODE STREQUAL "wheel")
     if (APPLE)
@@ -388,20 +469,66 @@ set_target_properties(
         INSTALL_RPATH_USE_LINK_PATH FALSE
 )
 if (MIFROST_RPATH_MODE STREQUAL "dev")
+    set_target_properties(mifrost_core PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+    )
     set_target_properties(mifrost_core_module PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
     if (TARGET nanobind)
         set_target_properties(nanobind PROPERTIES
-                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
         )
     endif ()
 endif ()
 
-install(TARGETS mifrost_core_module LIBRARY DESTINATION "mifrost")
+configure_package_config_file(
+    "${CMAKE_CURRENT_LIST_DIR}/../cmake/mifrostConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/mifrostConfig.cmake"
+    INSTALL_DESTINATION "${MIFROST_SDK_CMAKE_DIR}"
+)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/mifrostConfigVersion.cmake"
+    VERSION "${_mifrost_package_version}"
+    COMPATIBILITY SameMajorVersion
+)
+
+install(TARGETS mifrost_core
+    EXPORT mifrostTargets
+    LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
+)
+install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
 if (TARGET nanobind)
-    install(TARGETS nanobind LIBRARY DESTINATION "mifrost")
+    install(TARGETS nanobind
+            EXPORT mifrostTargets
+        LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+        ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+        RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    )
 endif ()
+
+install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/"
+    DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost"
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*.hpp"
+    PATTERN "tests" EXCLUDE
+)
+install(EXPORT mifrostTargets
+    FILE mifrostTargets.cmake
+    NAMESPACE mifrost::
+    DESTINATION "${MIFROST_SDK_CMAKE_DIR}"
+)
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/mifrostConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/mifrostConfigVersion.cmake"
+    DESTINATION "${MIFROST_SDK_CMAKE_DIR}"
+)
 
 if (MIFROST_GENERATE_STUBS)
     set(_mifrost_stub_output "mifrost/_core.pyi")

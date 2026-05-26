@@ -1,7 +1,53 @@
 """Python bindings for the mifrost extension module."""
 
 import sys as _sys
+from pathlib import Path as _Path
 from typing import Any
+
+
+def _package_root() -> _Path:
+    return _Path(__file__).resolve().parent
+
+
+def _existing_library_dir() -> _Path | None:
+    pkg_root = _package_root()
+    for libdir in ("lib", "lib64"):
+        candidate = pkg_root / libdir
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def get_include_dir() -> str:
+    pkg_root = _package_root()
+    include_dir = pkg_root / "include"
+    if include_dir.is_dir():
+        return str(include_dir)
+
+    source_include_dir = pkg_root.parent / "_core"
+    if source_include_dir.is_dir():
+        return str(source_include_dir)
+
+    return str(include_dir)
+
+
+def get_include() -> str:
+    return get_include_dir()
+
+
+def get_library_dir() -> str:
+    library_dir = _existing_library_dir()
+    if library_dir is not None:
+        return str(library_dir)
+    return str(_package_root() / "lib")
+
+
+def get_cmake_dir() -> str:
+    library_dir = _existing_library_dir()
+    if library_dir is not None:
+        return str(library_dir / "cmake" / "mifrost")
+    return str(_package_root() / "lib" / "cmake" / "mifrost")
+
 
 _in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
 
@@ -192,6 +238,10 @@ else:
         "BATCH_ATTR",
         "make_type_attr_key",
         "make_edge_type_key",
+        "get_include",
+        "get_include_dir",
+        "get_library_dir",
+        "get_cmake_dir",
     ]
 
     if _encoders_import_error is None:

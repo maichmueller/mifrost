@@ -227,6 +227,28 @@ jobs:
                     raise SystemExit(f"{wheel_path.name}: missing mifrost/_core extension")
                 if "mifrost/_core.pyi" not in names:
                     raise SystemExit(f"{wheel_path.name}: missing mifrost/_core.pyi")
+                if "mifrost/include/mifrost/core/batch_builder.hpp" not in names:
+                  raise SystemExit(f"{wheel_path.name}: missing mifrost SDK headers")
+                if "mifrost/lib/cmake/mifrost/mifrostConfig.cmake" not in names:
+                  raise SystemExit(f"{wheel_path.name}: missing mifrost CMake package config")
+                if "mifrost/lib/cmake/mifrost/mifrostTargets.cmake" not in names:
+                  raise SystemExit(f"{wheel_path.name}: missing mifrost exported targets")
+
+                has_core_sdk_lib = any(
+                  name.startswith("mifrost/lib/")
+                  and pathlib.PurePosixPath(name).name.startswith("libmifrost_core")
+                  for name in names
+                )
+                if not has_core_sdk_lib:
+                  raise SystemExit(f"{wheel_path.name}: missing reusable mifrost core library")
+
+                has_nanobind_runtime = any(
+                  name.startswith("mifrost/lib/")
+                  and pathlib.PurePosixPath(name).name.startswith("libnanobind")
+                  for name in names
+                )
+                if not has_nanobind_runtime:
+                  raise SystemExit(f"{wheel_path.name}: missing nanobind runtime library")
 
                 metadata_name = next(
                     (n for n in names if n.endswith(".dist-info/METADATA")),

@@ -96,6 +96,19 @@ python -m pip install --no-build-isolation \
 
 This enables import-triggered rebuild behavior from scikit-build-core for local development.
 
+### Reusable C++ SDK from the installed package
+
+Installed wheels also ship the reusable native SDK alongside the Python module:
+
+```bash
+python -c 'import mifrost; print(mifrost.get_include_dir())'
+python -c 'import mifrost; print(mifrost.get_cmake_dir())'
+python -c 'import mifrost; print(mifrost.get_library_dir())'
+```
+
+Use `mifrost.get_cmake_dir()` in downstream CMake projects to extend `CMAKE_PREFIX_PATH`
+or pass `-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir())')"`.
+
 
 ## Quick start (native-first)
 

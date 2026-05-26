@@ -85,3 +85,16 @@ python -m pip install --no-build-isolation \
   -Cbuild-dir=build_editable \
   -e .
 ```
+
+## Reusable C++ SDK from an installed package
+
+Installed wheels expose the native SDK alongside the Python package:
+
+```bash
+python -c 'import mifrost; print(mifrost.get_include_dir())'
+python -c 'import mifrost; print(mifrost.get_cmake_dir())'
+python -c 'import mifrost; print(mifrost.get_library_dir())'
+```
+
+For downstream CMake projects, either prepend `mifrost.get_cmake_dir()` to
+`CMAKE_PREFIX_PATH` or pass `-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir())')"`.
