@@ -324,7 +324,8 @@ target_link_libraries(
         dlpack::dlpack
 )
     if (TARGET nanobind)
-        target_link_libraries(mifrost_core PRIVATE nanobind)
+        add_dependencies(mifrost_core nanobind)
+        target_link_libraries(mifrost_core PRIVATE "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind>>")
     endif ()
     if (_python_embed_target)
         target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
@@ -505,7 +506,6 @@ install(TARGETS mifrost_core
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
 if (TARGET nanobind)
     install(TARGETS nanobind
-            EXPORT mifrostTargets
         LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
         ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
         RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
