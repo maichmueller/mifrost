@@ -137,6 +137,9 @@ endif ()
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
 # Ensure nanobind's shared library target exists for cross-module interop.
 nanobind_build_library(nanobind)
+# Build the static nanobind runtime as well. Shared libraries that directly use
+# nanobind internals need those hidden symbols resolved within the same DSO.
+nanobind_build_library(nanobind-static)
 
 set(_python_embed_target "")
 if (TARGET Python::Python)
@@ -323,9 +326,29 @@ target_link_libraries(
         # dlpack headers/types
         dlpack::dlpack
 )
-    if (TARGET nanobind)
-        add_dependencies(mifrost_core nanobind)
-        target_link_libraries(mifrost_core PRIVATE "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind>>")
+    if (TARGET nanobind-static)
+        add_dependencies(mifrost_core nanobind-static)
+        if (APPLE)
+            target_link_libraries(
+                    mifrost_core
+                    PRIVATE
+                    "$<BUILD_INTERFACE:-Wl,-force_load,$<TARGET_FILE:nanobind-static>>"
+            )
+        elseif (UNIX)
+            target_link_libraries(
+                    mifrost_core
+                    PRIVATE
+                    "$<BUILD_INTERFACE:-Wl,--whole-archive>"
+                    "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind-static>>"
+                    "$<BUILD_INTERFACE:-Wl,--no-whole-archive>"
+            )
+        else ()
+            target_link_libraries(
+                    mifrost_core
+                    PRIVATE
+                    "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind-static>>"
+            )
+        endif ()
     endif ()
     if (_python_embed_target)
         target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
