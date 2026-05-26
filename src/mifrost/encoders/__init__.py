@@ -25,6 +25,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "FlatRelationMutableEncoderStream",
     ),
     "FlatHorizonEncoder": (".flat_horizon", "FlatHorizonEncoder"),
+    "FlatRootedHorizonEncoder": (
+        ".flat_rooted_horizon",
+        "FlatRootedHorizonEncoder",
+    ),
     "FlatHorizonEncoderStream": (".flat_horizon", "FlatHorizonEncoderStream"),
     "FlatHorizonMutableEncoderStream": (
         ".flat_horizon",
@@ -133,6 +137,7 @@ __all__ = [
     "FlatRelationEncoderStream",
     "FlatRelationMutableEncoderStream",
     "FlatHorizonEncoder",
+    "FlatRootedHorizonEncoder",
     "FlatHorizonEncoderStream",
     "FlatHorizonMutableEncoderStream",
     "FlatTransitionEncoder",
