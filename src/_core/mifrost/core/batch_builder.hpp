@@ -12,6 +12,7 @@
 #include <variant>
 #include <vector>
 
+#include "api.hpp"
 #include "common_types.hpp"
 #include "graph_fields.hpp"
 #include "schema.hpp"
@@ -35,7 +36,7 @@ namespace nb = nanobind;
  * - Supports zero-copy transfer to Python via DLPack
  * - Handles automatic offsetting of edge indices
  */
-class BatchBuilder {
+class MIFROST_API BatchBuilder {
   public:
    /// Floating-point tensor column storage.
    using FloatCol = std::vector< float >;
@@ -254,7 +255,9 @@ class BatchBuilder {
     * Destructive export: column and ptr vectors are moved into Python-owned
     * ndarray capsules for zero-copy transfer.
     */
+#if defined(MIFROST_ENABLE_PYTHON_API)
    nb::dict build_dict();
+#endif
    void commit_graph_fields();
 };
 

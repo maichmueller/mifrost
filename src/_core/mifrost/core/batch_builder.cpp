@@ -985,6 +985,7 @@ nb::object vector_to_2d_dlpack(std::vector< T >&& vec, size_t rows, size_t cols)
 
 // --- Build / Export ---
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
 nb::dict BatchBuilder::build_dict()
 {
    // Destructive export: tensor backing vectors are moved into Python-owned
@@ -1336,6 +1337,8 @@ nb::object BatchBuilder::build_pyg()
    reset();
    return batch;
 }
+
+#endif
 
 BatchBuilder::BatchEncoding BatchBuilder::build()
 {
