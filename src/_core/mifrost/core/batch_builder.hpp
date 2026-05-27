@@ -1,8 +1,6 @@
 #pragma once
 
 #include <absl/container/btree_map.h>
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
 
 #include <cstdint>
 #include <memory>

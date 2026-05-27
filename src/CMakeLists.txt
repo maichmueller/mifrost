@@ -282,8 +282,8 @@ target_compile_definitions(
     mifrost_core
     PUBLIC
     MIFROST_BUILD_SHARED
-    "$<BUILD_INTERFACE:MIFROST_ENABLE_PYTHON_API>"
     PRIVATE
+    MIFROST_ENABLE_PYTHON_API
     MIFROST_EXPORTS
 )
 if (NOT TARGET mifrost::core)
