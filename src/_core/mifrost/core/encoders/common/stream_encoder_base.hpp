@@ -8,8 +8,6 @@
  */
 #pragma once
 
-#include <nanobind/nanobind.h>
-
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -18,9 +16,12 @@
 
 #include "mifrost/core/batch_builder.hpp"
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
+   #include <nanobind/nanobind.h>
+#endif
+
 namespace mifrost {
 
-namespace nb = nanobind;
 using BatchEncoding = BatchBuilder::BatchEncoding;
 
 /**
@@ -71,8 +72,10 @@ class StreamEncoderBase {
    /// Build native batch encoding for the accumulated graphs.
    BatchEncoding flush() { return build_merged_builder().build(); }
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
    /// Build a PyG Batch for the accumulated graphs.
-   nb::object flush_pyg() { return build_merged_builder().build_pyg(); }
+   nanobind::object flush_pyg() { return build_merged_builder().build_pyg(); }
+#endif
 
    /// Reset the stream to an empty cache.
    void reset() { entries_.clear(); }

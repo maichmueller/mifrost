@@ -135,9 +135,7 @@ endif ()
 
 # Conan include fallbacks (some recipes omit include dirs).
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
-# Ensure nanobind's shared library target exists for cross-module interop.
-nanobind_build_library(nanobind)
-# Build the static nanobind runtime as well. Shared libraries that directly use
+# Build the static nanobind runtime. Shared libraries that directly use
 # nanobind internals need those hidden symbols resolved within the same DSO.
 nanobind_build_library(nanobind-static)
 
@@ -284,6 +282,7 @@ target_compile_definitions(
     mifrost_core
     PUBLIC
     MIFROST_BUILD_SHARED
+    "$<BUILD_INTERFACE:MIFROST_ENABLE_PYTHON_API>"
     PRIVATE
     MIFROST_EXPORTS
 )
@@ -300,30 +299,21 @@ target_include_directories(mifrost_core PUBLIC
 target_link_libraries(
         mifrost_core
         PUBLIC
-        # Public Mimir dependencies (needed if not transitively linked correctly)
+    # Public SDK dependencies surfaced by installed headers.
         Boost::iostreams
         fmt::fmt
-        ZLIB::ZLIB
-        loki::loki
-        nauty::nauty
-        # The Core Mimir Library
+    loki::parsers
         mimir::core
-        # Ensure absl headers are available to Loki/Mimir
-        absl::node_hash_set
-        # Ensure TBB headers are available to Valla/Mimir
-        # (do NOT link to TBB: it is a transitive build dependency, not a
-        # runtime dependency of this extension).
-        # Ensure parallel-hashmap headers are available for valla's gtl wrapper
+        absl::btree
         phmap
-        # Use unordered_dense for our internal maps
         unordered_dense::unordered_dense
-        # Nanobind headers/CMake target for the public SDK surface
-        nanobind::nanobind
-        # strong type definitions
         rollbear::strong_type
-        # ranges fallback
         range-v3::range-v3
-        # dlpack headers/types
+    PRIVATE
+    ZLIB::ZLIB
+    nauty::nauty
+    absl::node_hash_set
+    nanobind::nanobind
         dlpack::dlpack
 )
     if (TARGET nanobind-static)
@@ -354,8 +344,8 @@ target_link_libraries(
         target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
     endif ()
 
-conan_add_package_include_fallback(mifrost_core abseil)
-conan_add_package_include_fallback(mifrost_core onetbb)
+conan_add_package_include_fallback(mifrost_core abseil SCOPE PUBLIC)
+conan_add_package_include_fallback(mifrost_core onetbb SCOPE PRIVATE)
 
 set(_mifrost_core_rpaths "")
 if (APPLE)
@@ -372,7 +362,6 @@ if (MIFROST_RPATH_MODE STREQUAL "wheel")
 endif ()
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     _mifrost_append_rpath_from_target(_mifrost_core_rpaths mimir::core)
-    _mifrost_append_rpath_from_target(_mifrost_core_rpaths nanobind)
 
     set(_mifrost_conan_home "")
     if (DEFINED ENV{CONAN_HOME} AND NOT "$ENV{CONAN_HOME}" STREQUAL "")
@@ -437,8 +426,10 @@ set_target_properties(
 target_link_libraries(
         mifrost_core_module
         PRIVATE
+    dlpack::dlpack
         mifrost_core
 )
+target_compile_definitions(mifrost_core_module PRIVATE MIFROST_ENABLE_PYTHON_API)
 
 set(_mifrost_rpaths "")
 if (APPLE)
@@ -455,7 +446,6 @@ if (MIFROST_RPATH_MODE STREQUAL "wheel")
 endif ()
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     _mifrost_append_rpath_from_target(_mifrost_rpaths mimir::core)
-    _mifrost_append_rpath_from_target(_mifrost_rpaths nanobind)
 
     # Fallback: if Conan is used to provide runtime libraries, bake the Conan cache
     # lib dirs into the RPATH. This avoids relying on imported-target properties
@@ -500,12 +490,6 @@ if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_core_module PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
-    if (TARGET nanobind)
-        set_target_properties(nanobind PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-        )
-    endif ()
 endif ()
 
 configure_package_config_file(
@@ -527,20 +511,16 @@ install(TARGETS mifrost_core
     INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
 )
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
-if (TARGET nanobind)
-    install(TARGETS nanobind
-        LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
-        ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
-        RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
-    )
-endif ()
 
-install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/"
-    DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost"
+install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/core/"
+    DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost/core"
     FILES_MATCHING
     PATTERN "*.h"
     PATTERN "*.hpp"
-    PATTERN "tests" EXCLUDE
+    PATTERN "dlpack_utils.hpp" EXCLUDE
+    PATTERN "map_view.hpp" EXCLUDE
+    PATTERN "nanobind_unordered_dense.hpp" EXCLUDE
+    PATTERN "nb_instance.hpp" EXCLUDE
 )
 install(EXPORT mifrostTargets
     FILE mifrostTargets.cmake

@@ -18,9 +18,16 @@
 #include "graph_fields.hpp"
 #include "schema.hpp"
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
+   #include <nanobind/nanobind.h>
+   #include <nanobind/ndarray.h>
+#endif
+
 namespace mifrost {
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
 namespace nb = nanobind;
+#endif
 
 /**
  * @brief Container for columnar graph data that grows dynamically.
@@ -180,7 +187,9 @@ class BatchBuilder {
     * This call consumes internal tensor buffers (moved into Python-owned ndarrays/tensors).
     * The builder is reset after export.
     */
+#if defined(MIFROST_ENABLE_PYTHON_API)
    nb::object build_pyg();
+#endif
 
    /**
     * @brief Append one graph worth of batch encoding into the current batch.

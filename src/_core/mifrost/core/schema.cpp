@@ -1,16 +1,20 @@
 #include "schema.hpp"
 
 #include <absl/container/btree_map.h>
-#include <nanobind/stl/map.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
 
 #include <algorithm>
 #include <set>
 #include <stdexcept>
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
+   #include <nanobind/stl/map.h>
+   #include <nanobind/stl/string.h>
+   #include <nanobind/stl/vector.h>
+#endif
+
 namespace mifrost {
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
 namespace {
 
 std::string py_string(nb::handle value)
@@ -19,6 +23,7 @@ std::string py_string(nb::handle value)
 }
 
 }  // namespace
+#endif
 
 void Schema::validate_base() const
 {
@@ -162,6 +167,7 @@ void Schema::validate_history() const
    }
 }
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
 nb::dict Schema::to_dict() const
 {
    nb::dict out;
@@ -247,6 +253,7 @@ Schema Schema::from_dict(const nb::dict& schema)
 {
    Schema out;
    if(schema.contains("version")) {
+#endif
       try {
          out.version = nb::cast< int >(schema["version"]);
       } catch(const std::exception& ex) {

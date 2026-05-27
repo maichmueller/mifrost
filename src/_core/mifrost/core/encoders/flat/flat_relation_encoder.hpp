@@ -549,7 +549,9 @@ class FlatRelationStreamEncoder {
 
    BatchEncoding flush() { return builder_.build(); }
 
-   nb::object flush_pyg() { return builder_.build_pyg(); }
+#if defined(MIFROST_ENABLE_PYTHON_API)
+   nanobind::object flush_pyg() { return builder_.build_pyg(); }
+#endif
 
    void reset()
    {

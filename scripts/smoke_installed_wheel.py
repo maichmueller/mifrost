@@ -31,19 +31,46 @@ def main() -> None:
     if mifrost.get_include() != str(include_dir):
         raise SystemExit("mifrost.get_include() did not match get_include_dir()")
 
-    if not (include_dir / "mifrost" / "core" / "batch_builder.hpp").is_file():
+    batch_builder_header = include_dir / "mifrost" / "core" / "batch_builder.hpp"
+    if not batch_builder_header.is_file():
         raise SystemExit("installed wheel is missing exported SDK headers")
+
+    if "nanobind" in batch_builder_header.read_text():
+        raise SystemExit("installed SDK headers still expose nanobind")
+
+    if (include_dir / "mifrost" / "core" / "map_view.hpp").exists():
+        raise SystemExit("installed wheel still ships internal Python-only SDK headers")
 
     if not any(
         path.name.startswith("libmifrost_core") for path in library_dir.iterdir()
     ):
         raise SystemExit("installed wheel is missing the reusable mifrost core library")
 
-    if not (cmake_dir / "mifrostConfig.cmake").is_file():
+    config_path = cmake_dir / "mifrostConfig.cmake"
+    targets_path = cmake_dir / "mifrostTargets.cmake"
+
+    if not config_path.is_file():
         raise SystemExit("installed wheel is missing mifrostConfig.cmake")
 
-    if not (cmake_dir / "mifrostTargets.cmake").is_file():
+    if not targets_path.is_file():
         raise SystemExit("installed wheel is missing mifrostTargets.cmake")
+
+    config_text = config_path.read_text()
+    if "find_dependency(nanobind" in config_text:
+        raise SystemExit(
+            "installed wheel still requires nanobind in mifrostConfig.cmake"
+        )
+
+    targets_text = targets_path.read_text()
+    if "nanobind::nanobind" in targets_text:
+        raise SystemExit(
+            "installed wheel still exports nanobind as a public target dependency"
+        )
+
+    if ".conan" in targets_text:
+        raise SystemExit(
+            "installed wheel still leaks Conan build paths in mifrostTargets.cmake"
+        )
 
     print("installed wheel smoke test passed")
 
