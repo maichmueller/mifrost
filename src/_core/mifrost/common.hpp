@@ -21,6 +21,8 @@ std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr);
 
 namespace mifrost::py {
 
+namespace nb = nanobind;
+
 std::string to_std_string(nanobind::handle value);
 
 nanobind::handle builtins_module();

@@ -411,6 +411,7 @@ nanobind_add_module(mifrost_core_module
         "_core/mifrost/init_relation_formatter.cpp"
         "_core/mifrost/init_color_encoder.cpp"
         "_core/mifrost/init_schema.cpp"
+        "_core/mifrost/schema_bindings.cpp"
         "_core/mifrost/init_batch_encoding.cpp"
         "_core/mifrost/init_hgraph_encoder.cpp"
         "_core/mifrost/init_flat_encoder.cpp"
