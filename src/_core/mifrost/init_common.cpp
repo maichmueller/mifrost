@@ -76,13 +76,22 @@ void init_common(nb::module_& m)
 
    m.def(
       "_parse_states_batch",
-      [](nb::object states) { return batch_input::parse_states_batch_python(std::move(states)); },
+      [](nb::object states) {
+         if(PyList_Check(states.ptr()) != 0 && PyList_GET_SIZE(states.ptr()) == 0) {
+            return nb::list();
+         }
+         return batch_input::parse_states_batch_python(states);
+      },
       "states"_a
    );
    m.def(
       "_parse_goals_batch_param",
       [](nb::object goals, size_t state_count) {
-         return batch_input::parse_goals_batch_param_python(std::move(goals), state_count);
+         if(state_count == 0 && PyList_Check(goals.ptr()) != 0
+            && PyList_GET_SIZE(goals.ptr()) == 0) {
+            return nb::make_tuple(false, nb::list());
+         }
+         return batch_input::parse_goals_batch_param_python(goals, state_count);
       },
       "goals"_a,
       "state_count"_a
@@ -90,7 +99,11 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_actions_batch_param",
       [](nb::object actions, size_t state_count) {
-         return batch_input::parse_actions_batch_param_python(std::move(actions), state_count);
+         if(state_count == 0 && PyList_Check(actions.ptr()) != 0
+            && PyList_GET_SIZE(actions.ptr()) == 0) {
+            return nb::make_tuple(false, nb::list());
+         }
+         return batch_input::parse_actions_batch_param_python(actions, state_count);
       },
       "actions"_a,
       "state_count"_a
@@ -98,9 +111,11 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_subgoal_layers_batch_param",
       [](nb::object subgoal_layers, size_t state_count) {
-         return batch_input::parse_subgoal_layers_batch_param_python(
-            std::move(subgoal_layers), state_count
-         );
+         if(state_count == 0 && PyList_Check(subgoal_layers.ptr()) != 0
+            && PyList_GET_SIZE(subgoal_layers.ptr()) == 0) {
+            return nb::make_tuple(false, nb::list());
+         }
+         return batch_input::parse_subgoal_layers_batch_param_python(subgoal_layers, state_count);
       },
       "subgoal_layers"_a,
       "state_count"_a
@@ -108,8 +123,12 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_history_subgoals_batch_param",
       [](nb::object history_subgoals, size_t state_count) {
+         if(state_count == 0 && PyList_Check(history_subgoals.ptr()) != 0
+            && PyList_GET_SIZE(history_subgoals.ptr()) == 0) {
+            return nb::make_tuple(false, nb::list());
+         }
          return batch_input::parse_history_subgoals_batch_param_python(
-            std::move(history_subgoals), state_count
+            history_subgoals, state_count
          );
       },
       "history_subgoals"_a,
@@ -118,9 +137,11 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_successors_batch_param",
       [](nb::object successors, size_t state_count) {
-         return batch_input::parse_successors_batch_param_python(
-            std::move(successors), state_count
-         );
+         if(state_count == 0 && PyList_Check(successors.ptr()) != 0
+            && PyList_GET_SIZE(successors.ptr()) == 0) {
+            return nb::list();
+         }
+         return batch_input::parse_successors_batch_param_python(successors, state_count);
       },
       "successors"_a,
       "state_count"_a
@@ -128,7 +149,10 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_dags_batch_param",
       [](nb::object dags, size_t state_count) {
-         return batch_input::parse_dags_batch_param_python(std::move(dags), state_count);
+         if(state_count == 0 && PyList_Check(dags.ptr()) != 0 && PyList_GET_SIZE(dags.ptr()) == 0) {
+            return nb::list();
+         }
+         return batch_input::parse_dags_batch_param_python(dags, state_count);
       },
       "dags"_a,
       "state_count"_a
@@ -136,9 +160,10 @@ void init_common(nb::module_& m)
    m.def(
       "_parse_ilg_batch_inputs",
       [](nb::object states, nb::object goals, nb::object actions, nb::object subgoal_layers) {
-         return batch_input::parse_ilg_batch_inputs_python(
-            std::move(states), std::move(goals), std::move(actions), std::move(subgoal_layers)
-         );
+         if(PyList_Check(states.ptr()) != 0 && PyList_GET_SIZE(states.ptr()) == 0) {
+            return nb::make_tuple(nb::list(), nb::list(), nb::list(), nb::list());
+         }
+         return batch_input::parse_ilg_batch_inputs_python(states, goals, actions, subgoal_layers);
       },
       "states"_a,
       "goals"_a = nb::none(),

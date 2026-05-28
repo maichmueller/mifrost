@@ -981,6 +981,12 @@ GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_e
 
 nb::list parse_states_batch_python(nb::handle states)
 {
+   // Hard fast-path for the common empty-list case. This avoids any adapter or
+   // caster probing and guarantees `_parse_states_batch([])` returns `[]`.
+   if(PyList_Check(states.ptr()) != 0 && PyList_GET_SIZE(states.ptr()) == 0) {
+      return nb::list();
+   }
+
    const auto parsed = parse_states_batch_param(states, "states");
    nb::list out;
    for(const auto& state : parsed.states) {
