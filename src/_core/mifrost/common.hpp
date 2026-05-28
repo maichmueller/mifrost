@@ -9,13 +9,14 @@
 #include <utility>
 #include <vector>
 
+#include "core/api.hpp"
 #include "core/schema.hpp"
 #include "core/utils/macro.hpp"
 #include "core/utils/type_traits.hpp"
 
 namespace mifrost {
 
-std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr);
+MIFROST_API std::vector< int64_t > ptr_to_batch(const std::vector< int64_t >& ptr);
 
 }  // namespace mifrost
 
@@ -23,56 +24,57 @@ namespace mifrost::py {
 
 namespace nb = nanobind;
 
-std::string to_std_string(nanobind::handle value);
+MIFROST_API std::string to_std_string(nanobind::handle value);
 
-nanobind::handle builtins_module();
-nanobind::handle pickle_module();
-nanobind::handle types_module();
-nanobind::handle torch_module();
-nanobind::handle torch_geometric_data_module();
-nanobind::handle mifrost_module();
-nanobind::handle mifrost_core_module();
-nanobind::handle mifrost_flat_data_module();
-nanobind::handle operator_module();
-nanobind::handle numpy_module();
+MIFROST_API nanobind::handle builtins_module();
+MIFROST_API nanobind::handle pickle_module();
+MIFROST_API nanobind::handle types_module();
+MIFROST_API nanobind::handle torch_module();
+MIFROST_API nanobind::handle torch_geometric_data_module();
+MIFROST_API nanobind::handle mifrost_module();
+MIFROST_API nanobind::handle mifrost_core_module();
+MIFROST_API nanobind::handle mifrost_flat_data_module();
+MIFROST_API nanobind::handle operator_module();
+MIFROST_API nanobind::handle numpy_module();
 
-nanobind::handle builtins_object_setattr();
-nanobind::handle builtins_open();
-nanobind::handle builtins_tuple_ctor();
-nanobind::handle builtins_type_type();
-nanobind::handle builtins_str_type();
-nanobind::handle builtins_float_type();
-nanobind::handle builtins_int_type();
+MIFROST_API nanobind::handle builtins_object_setattr();
+MIFROST_API nanobind::handle builtins_open();
+MIFROST_API nanobind::handle builtins_tuple_ctor();
+MIFROST_API nanobind::handle builtins_type_type();
+MIFROST_API nanobind::handle builtins_str_type();
+MIFROST_API nanobind::handle builtins_float_type();
+MIFROST_API nanobind::handle builtins_int_type();
 
-nanobind::handle pickle_dumps();
-nanobind::handle pickle_loads();
-nanobind::handle mapping_proxy_type_ctor();
-nanobind::object mapping_proxy(const nanobind::dict& mapping);
-void set_python_attribute(nanobind::handle self, const std::string& key, nanobind::handle value);
-void set_python_attribute(nanobind::handle self, nb::str key, nanobind::handle value);
-nanobind::object flatten_single_graph_metadata_list(nanobind::handle value);
+MIFROST_API nanobind::handle pickle_dumps();
+MIFROST_API nanobind::handle pickle_loads();
+MIFROST_API nanobind::handle mapping_proxy_type_ctor();
+MIFROST_API nanobind::object mapping_proxy(const nanobind::dict& mapping);
+MIFROST_API void
+set_python_attribute(nanobind::handle self, const std::string& key, nanobind::handle value);
+MIFROST_API void set_python_attribute(nanobind::handle self, nb::str key, nanobind::handle value);
+MIFROST_API nanobind::object flatten_single_graph_metadata_list(nanobind::handle value);
 
-nanobind::handle torch_tensor_type();
-nanobind::handle torch_equal_fn();
-nanobind::handle torch_as_tensor_fn();
-nanobind::handle torch_from_dlpack_fn();
-nanobind::handle torch_utils_dlpack_from_dlpack_fn();
-nanobind::object to_torch_tensor(nanobind::handle value);
-nanobind::handle torch_device_ctor();
-nanobind::handle torch_stack_fn();
-nanobind::handle torch_zeros_fn();
-nanobind::handle torch_float32_dtype();
+MIFROST_API nanobind::handle torch_tensor_type();
+MIFROST_API nanobind::handle torch_equal_fn();
+MIFROST_API nanobind::handle torch_as_tensor_fn();
+MIFROST_API nanobind::handle torch_from_dlpack_fn();
+MIFROST_API nanobind::handle torch_utils_dlpack_from_dlpack_fn();
+MIFROST_API nanobind::object to_torch_tensor(nanobind::handle value);
+MIFROST_API nanobind::handle torch_device_ctor();
+MIFROST_API nanobind::handle torch_stack_fn();
+MIFROST_API nanobind::handle torch_zeros_fn();
+MIFROST_API nanobind::handle torch_float32_dtype();
 
-nanobind::handle torch_geometric_batch_ctor();
-nanobind::handle torch_geometric_heterodata_ctor();
-nanobind::handle torch_geometric_data_ctor();
+MIFROST_API nanobind::handle torch_geometric_batch_ctor();
+MIFROST_API nanobind::handle torch_geometric_heterodata_ctor();
+MIFROST_API nanobind::handle torch_geometric_data_ctor();
 
-nanobind::handle mifrost_core_batch_encoding_cls();
-nanobind::handle mifrost_batch_encoding_loader();
-nanobind::handle mifrost_flat_relation_data_from_pyg_fn();
-nanobind::handle operator_eq_fn();
-nanobind::handle numpy_array_type();
-nanobind::handle numpy_array_equal_fn();
+MIFROST_API nanobind::handle mifrost_core_batch_encoding_cls();
+MIFROST_API nanobind::handle mifrost_batch_encoding_loader();
+MIFROST_API nanobind::handle mifrost_flat_relation_data_from_pyg_fn();
+MIFROST_API nanobind::handle operator_eq_fn();
+MIFROST_API nanobind::handle numpy_array_type();
+MIFROST_API nanobind::handle numpy_array_equal_fn();
 
 template < typename T >
    requires requires(T t) {

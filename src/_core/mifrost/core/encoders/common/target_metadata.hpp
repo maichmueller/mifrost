@@ -15,6 +15,7 @@
 #include <string_view>
 #include <vector>
 
+#include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/root_policy.hpp"
@@ -99,19 +100,19 @@ struct TargetMetadataEmitConfig {
 };
 
 /// Append pre-normalized candidate rows while enforcing metadata invariants.
-void append_target_candidate_rows(
+MIFROST_API void append_target_candidate_rows(
    TargetColumns& columns,
    const std::vector< TargetCandidateRow >& rows,
    const TargetCandidateAppendConfig& config
 );
 /// Append one target row while enforcing candidate-id uniqueness rules.
-void append_target_candidate_row(
+MIFROST_API void append_target_candidate_row(
    TargetColumns& columns,
    TargetCandidateRow row,
    const TargetCandidateAppendConfig& config
 );
 /// Derive target rows for transition-DAG nodes under a specific root policy.
-std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
+MIFROST_API std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    const TransitionDAG& dag,
    const hash_map< int64_t, int64_t >& positions_by_index,
    RootPolicy root_policy,
@@ -119,21 +120,22 @@ std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
    bool include_names = true
 );
 /// Register the graph fields and attrs required by one target metadata schema.
-void register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config);
+MIFROST_API void
+register_target_fields(BatchBuilder& builder, const TargetMetadataEmitConfig& config);
 /// Write target columns into an already-registered builder schema.
-void set_target_fields(
+MIFROST_API void set_target_fields(
    BatchBuilder& builder,
    const TargetColumns& columns,
    const TargetMetadataEmitConfig& config
 );
 /// Write target names/group labels as graph attrs when enabled.
-void set_target_graph_attrs(
+MIFROST_API void set_target_graph_attrs(
    BatchBuilder& builder,
    const TargetColumns& columns,
    const TargetMetadataEmitConfig& config
 );
 /// Convenience wrapper that registers nothing and only emits populated metadata.
-void emit_target_metadata(
+MIFROST_API void emit_target_metadata(
    BatchBuilder& builder,
    const TargetColumns& columns,
    const TargetMetadataEmitConfig& config
