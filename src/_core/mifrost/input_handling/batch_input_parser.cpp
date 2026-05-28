@@ -141,11 +141,20 @@ nb::handle batch_param_value(nb::handle value)
 
 bool is_native_state_object(nb::handle value)
 {
+   // Sequences (list, tuple, …) are never native State objects.  Probing them
+   // via the mimir caster can SIGSEGV rather than raising a Python exception,
+   // so skip the cast entirely for any sequence type.
+   if(is_sequence_like_but_not_str_bytes(value)) {
+      return false;
+   }
    return can_cast_noerror< mimir::search::State >(value);
 }
 
 bool is_native_action_object(nb::handle value)
 {
+   if(is_sequence_like_but_not_str_bytes(value)) {
+      return false;
+   }
    return can_cast_noerror< mimir::formalism::GroundAction >(value);
 }
 
@@ -679,6 +688,11 @@ nb::object history_payload_to_python(const parsed::HistoryPayload& payload)
 parsed::StateBatch parse_states_batch_param(nb::handle states, std::string_view field_name)
 {
    parsed::StateBatch out;
+
+   // Fast path: empty sequence → empty batch, no type-probe needed.
+   if(is_sequence_like_but_not_str_bytes(states) and nb::len(states) == 0) {
+      return out;
+   }
 
    if(is_native_state_object(states)) {
       out.states.push_back(parse_state_entry(states, field_name, 0));
