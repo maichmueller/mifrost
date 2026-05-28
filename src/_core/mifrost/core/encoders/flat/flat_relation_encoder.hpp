@@ -62,7 +62,7 @@ struct FlatBatchInputs;
  *  - `relation_slot_roles_` / `relation_slot_role_offsets_` stay aligned with
  *    `relation_names_` and `relation_encoded_arities_`
  */
-class FlatRelationEncoderEngine {
+class MIFROST_API FlatRelationEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
 

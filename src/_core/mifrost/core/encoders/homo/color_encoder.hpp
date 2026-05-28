@@ -38,7 +38,7 @@ struct ColorBatchInputs;
  *  - encode one state, with optional goals/actions, into a homogeneous graph
  *  - keep the public homo-graph batching format stable
  */
-class ColorEncoderEngine {
+class MIFROST_API ColorEncoderEngine {
   public:
    /// Runtime config for color encoding behavior.
    struct Config {

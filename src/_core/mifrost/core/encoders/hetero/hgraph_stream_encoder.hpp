@@ -58,7 +58,7 @@ struct HGraphBatchInputs;
  *  - The caller owns `BatchBuilder` and may reuse it across steps.
  *  - Encoding mutates/extends the builder; it does not clear existing content.
  */
-class HGraphEncoderEngine {
+class MIFROST_API HGraphEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
    using RelationRef = uint64_t;

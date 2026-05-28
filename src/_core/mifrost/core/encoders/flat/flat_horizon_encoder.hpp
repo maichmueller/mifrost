@@ -44,7 +44,7 @@ struct HorizonBatchInputs;
  * Predicate facts still use logical predicate arity, but encoded tuples may
  * add a leading state slot and an optional predicate virtual node slot.
  */
-class FlatHorizonEncoderEngine {
+class MIFROST_API FlatHorizonEncoderEngine {
   public:
    /// How non-root transition nodes are represented.
    enum class Mode {

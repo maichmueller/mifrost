@@ -22,7 +22,7 @@ struct SuccessorBatchInputs;
  *
  * Logic mirrors plangolin.encoding.transition_hetero_encoder.TransitionHGraphEncoder.
  */
-class SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
+class MIFROST_API SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
       full,  ///< Successor encodes full state.

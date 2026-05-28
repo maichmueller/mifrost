@@ -25,7 +25,7 @@ struct HorizonBatchInputs;
  *
  * Logic mirrors plangolin.encoding.horizon_hetero_encoder.HorizonHGraphEncoder.
  */
-class HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
+class MIFROST_API HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
    enum class Mode {
       full,  ///< Each transition encodes full successor state.
