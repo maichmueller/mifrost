@@ -135,9 +135,10 @@ endif ()
 
 # Conan include fallbacks (some recipes omit include dirs).
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
-# Build the static nanobind runtime. Shared libraries that directly use
-# nanobind internals need those hidden symbols resolved within the same DSO.
-nanobind_build_library(nanobind-static)
+# Build one shared nanobind runtime for the pymimir ABI domain so all DSOs
+# (extension module + core shared library) use the same internals.
+set(MIFROST_NANOBIND_RUNTIME_TARGET nanobind-pymimir_abi_domain)
+nanobind_build_library(${MIFROST_NANOBIND_RUNTIME_TARGET})
 
 set(_python_embed_target "")
 if (TARGET Python::Python)
@@ -284,6 +285,7 @@ target_compile_definitions(
     MIFROST_BUILD_SHARED
     PRIVATE
     MIFROST_ENABLE_PYTHON_API
+    NB_DOMAIN=pymimir_abi_domain
     MIFROST_EXPORTS
 )
 if (NOT TARGET mifrost::core)
@@ -314,34 +316,14 @@ target_link_libraries(
     nauty::nauty
     absl::node_hash_set
     nanobind::nanobind
+    ${MIFROST_NANOBIND_RUNTIME_TARGET}
         dlpack::dlpack
 )
-    if (TARGET nanobind-static)
-        add_dependencies(mifrost_core nanobind-static)
-        if (APPLE)
-            target_link_libraries(
-                    mifrost_core
-                    PRIVATE
-                    "$<BUILD_INTERFACE:-Wl,-force_load,$<TARGET_FILE:nanobind-static>>"
-            )
-        elseif (UNIX)
-            target_link_libraries(
-                    mifrost_core
-                    PRIVATE
-                    "$<BUILD_INTERFACE:-Wl,--whole-archive>"
-                    "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind-static>>"
-                    "$<BUILD_INTERFACE:-Wl,--no-whole-archive>"
-            )
-        else ()
-            target_link_libraries(
-                    mifrost_core
-                    PRIVATE
-                    "$<BUILD_INTERFACE:$<TARGET_FILE:nanobind-static>>"
-            )
-        endif ()
-    endif ()
-    if (_python_embed_target)
+    if (_python_embed_target AND NOT APPLE)
         target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
+    endif ()
+    if (APPLE)
+        target_link_options(mifrost_core PRIVATE "-undefined" "dynamic_lookup")
     endif ()
 
 conan_add_package_include_fallback(mifrost_core abseil SCOPE PUBLIC)
@@ -401,6 +383,7 @@ endif ()
 nanobind_add_module(mifrost_core_module
         ${_mifrost_freethreading}
         STABLE_ABI  # free-threading does not have stable api, but nanobind handles this.
+    NB_SHARED
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/pyg_views.cpp"
@@ -488,6 +471,10 @@ if (MIFROST_RPATH_MODE STREQUAL "dev")
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
     )
+    set_target_properties(${MIFROST_NANOBIND_RUNTIME_TARGET} PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+    )
     set_target_properties(mifrost_core_module PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
@@ -510,6 +497,12 @@ install(TARGETS mifrost_core
     ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
     RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
     INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
+)
+install(TARGETS ${MIFROST_NANOBIND_RUNTIME_TARGET}
+    EXPORT mifrostTargets
+    LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
+    RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
 )
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
 

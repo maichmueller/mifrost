@@ -1115,6 +1115,10 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
    prepare_builder(builder);
 
    const size_t state_count = inputs.states.states.size();
+   if(state_count == 0) {
+      return builder.build();
+   }
+
    std::vector< std::string > batch_target_names;
    for(size_t idx = 0; idx < state_count; ++idx) {
       // Phase 1: collect the per-state inputs from the parsed batch.

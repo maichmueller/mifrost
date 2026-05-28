@@ -2,8 +2,6 @@
 
 #include <algorithm>
 
-#include "mifrost/core/dlpack_utils.hpp"
-
 namespace nb = nanobind;
 
 namespace mifrost {
@@ -219,13 +217,11 @@ nb::handle torch_utils_dlpack_from_dlpack_fn()
    return *fn;
 }
 
-nb::object to_torch_tensor(nb::handle value)
+nb::object to_torch_tensor_impl(PyObject* value_ptr)
 {
+   nb::handle value(value_ptr);
    if(nb::isinstance(value, torch_tensor_type())) {
       return nb::borrow< nb::object >(value);
-   }
-   if(dlpack_utils::is_dlpack_capsule(value)) {
-      return torch_utils_dlpack_from_dlpack_fn()(value);
    }
    if(nb::hasattr(value, "__dlpack__")) {
       return torch_from_dlpack_fn()(nb::borrow< nb::object >(value));

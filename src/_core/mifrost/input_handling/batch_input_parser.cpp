@@ -72,6 +72,13 @@ bool is_sequence_like_but_not_str_bytes(nb::handle value)
    return not is_str_bytes_like(value) and PySequence_Check(value.ptr()) != 0;
 }
 
+inline void clear_python_error_if_possible()
+{
+   if(_PyThreadState_UncheckedGet() != nullptr) {
+      PyErr_Clear();
+   }
+}
+
 bool is_iterable_but_not_str_bytes(nb::handle value)
 {
    if(is_str_bytes_like(value)) {
@@ -79,7 +86,7 @@ bool is_iterable_but_not_str_bytes(nb::handle value)
    }
    PyObject* iter = PyObject_GetIter(value.ptr());
    if(iter == nullptr) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       return false;
    }
    Py_DECREF(iter);
@@ -99,7 +106,7 @@ bool can_cast_noerror(nb::handle value)
       (void) nb::cast< T >(value);
       return true;
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       return false;
    }
 }
@@ -126,7 +133,8 @@ bool has_action_adapter(nb::handle value)
 
 bool is_batch_param(nb::handle value)
 {
-   return nb::isinstance(value, batch_param_type());
+   return value.ptr() != nullptr
+          and Py_TYPE(value.ptr()) == reinterpret_cast< PyTypeObject* >(batch_param_type().ptr());
 }
 
 std::string batch_param_kind(nb::handle value)
@@ -192,7 +200,7 @@ parsed::StateEntry parse_state_entry(nb::handle value, std::string_view field_na
          .state = nb::cast< mimir::search::State >(value),
       };
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       if(has_state_adapter(value)) {
          throw nb::type_error(state_adapter_error().c_str());
       }
@@ -215,7 +223,7 @@ LiteralVariant cast_goal_literal_or_raise(
    try {
       return nb::cast< LiteralVariant >(literal);
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       std::string location;
       if(entry_idx.has_value()) {
          location = fmt::format(" entry at index {}", *entry_idx);
@@ -245,7 +253,7 @@ mimir::formalism::GroundAction cast_action_or_raise(
    try {
       return nb::cast< mimir::formalism::GroundAction >(action);
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       std::string location;
       if(entry_idx.has_value()) {
          location = fmt::format(" entry at index {}", *entry_idx);
@@ -496,6 +504,10 @@ BatchParam< Payload > parse_shared_or_per_state(
    PerStateCandidateFn&& entry_is_per_state_candidate
 )
 {
+   if(value.ptr() == nullptr) {
+      return BatchParam< Payload >::none();
+   }
+
    if(is_batch_param(value)) {
       const std::string kind = batch_param_kind(value);
       nb::handle payload = batch_param_value(value);
@@ -716,7 +728,7 @@ parsed::StateBatch parse_states_batch_param(nb::handle states, std::string_view 
          out.states.reserve(static_cast< size_t >(nb::len(seq)));
       }
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
    }
 
    size_t idx = 0;
@@ -731,7 +743,7 @@ parsed::StateBatch parse_states_batch_param(nb::handle states, std::string_view 
       }
       throw;
    } catch(...) {
-      PyErr_Clear();
+      clear_python_error_if_possible();
       throw nb::type_error(states_iterable_error(field_name).c_str());
    }
    return out;

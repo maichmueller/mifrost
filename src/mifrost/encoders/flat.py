@@ -19,7 +19,6 @@ from .._core import (
     FlatRelationMutableStreamEncoder as _FlatRelationMutableStreamEncoder,
     FlatRelationStreamEncoder as _FlatRelationStreamEncoder,
 )
-from ._batch_contract import parse_states_batch
 from ._action_contract import parse_flat_actions
 from ._target_sources import TargetSource, normalize_target_sources
 from .base import (
@@ -728,7 +727,10 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             is_leaf=is_goal_literal_input,
             convert_leaf=to_advanced_literal,
         )
-        state_count = len(parse_states_batch(states_for_core))
+        if _is_sequence_like(states_for_core):
+            state_count = len(states_for_core)
+        else:
+            state_count = 1
         _validate_subgoal_layers_batch_payload(
             subgoal_layers_for_core,
             state_count=state_count,

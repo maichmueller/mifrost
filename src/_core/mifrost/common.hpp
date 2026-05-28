@@ -59,7 +59,14 @@ MIFROST_API nanobind::handle torch_equal_fn();
 MIFROST_API nanobind::handle torch_as_tensor_fn();
 MIFROST_API nanobind::handle torch_from_dlpack_fn();
 MIFROST_API nanobind::handle torch_utils_dlpack_from_dlpack_fn();
-MIFROST_API nanobind::object to_torch_tensor(nanobind::handle value);
+MIFROST_API nanobind::object to_torch_tensor_impl(PyObject* value);
+inline nanobind::object to_torch_tensor(nanobind::handle value)
+{
+   if(PyCapsule_IsValid(value.ptr(), "dltensor")) {
+      return torch_utils_dlpack_from_dlpack_fn()(nanobind::borrow< nanobind::object >(value));
+   }
+   return to_torch_tensor_impl(value.ptr());
+}
 MIFROST_API nanobind::handle torch_device_ctor();
 MIFROST_API nanobind::handle torch_stack_fn();
 MIFROST_API nanobind::handle torch_zeros_fn();
