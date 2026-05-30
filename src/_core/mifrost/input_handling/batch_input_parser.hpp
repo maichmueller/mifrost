@@ -1,7 +1,5 @@
 #pragma once
 
-#include <nanobind/nanobind.h>
-
 #include <mimir/formalism/ground_action.hpp>
 #include <mimir/search/state.hpp>
 #include <optional>
@@ -14,9 +12,18 @@
 #include "mifrost/core/encoders/common/goal_inputs.hpp"
 #include "mifrost/core/encoders/common/transition_dag.hpp"
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
+   #include <nanobind/nanobind.h>
+#endif
+
+struct _object;
+using PyObject = _object;
+
 namespace mifrost::batch_input {
 
+#if defined(MIFROST_ENABLE_PYTHON_API)
 namespace nb = nanobind;
+#endif
 
 template < typename T >
 class BatchParam {
@@ -73,7 +80,7 @@ class BatchParam {
 namespace parsed {
 
 struct MIFROST_LOCAL StateEntry {
-   nb::object source;
+   PyObject* source = nullptr;
    mimir::search::State state;
 };
 
@@ -132,6 +139,14 @@ struct MIFROST_LOCAL HorizonBatchInputs {
 
 }  // namespace parsed
 
+MIFROST_LOCAL GoalInputs compose_goal_inputs(
+   const parsed::GoalPayload& goals,
+   const parsed::SubgoalLayersPayload* subgoal_layers = nullptr
+);
+
+MIFROST_LOCAL GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_entry);
+
+#if defined(MIFROST_ENABLE_PYTHON_API)
 MIFROST_LOCAL parsed::StateBatch
 parse_states_batch_param(nb::handle states, std::string_view field_name = "states");
 
@@ -149,13 +164,6 @@ MIFROST_LOCAL parsed::SuccessorBatch
 parse_successors_batch_param(nb::handle successors, size_t state_count);
 
 MIFROST_LOCAL parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count);
-
-MIFROST_LOCAL GoalInputs compose_goal_inputs(
-   const parsed::GoalPayload& goals,
-   const parsed::SubgoalLayersPayload* subgoal_layers = nullptr
-);
-
-MIFROST_LOCAL GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_entry);
 
 MIFROST_API parsed::HGraphBatchInputs parse_hgraph_batch_inputs(
    nb::handle states,
@@ -215,5 +223,6 @@ MIFROST_API nb::tuple parse_ilg_batch_inputs_python(
    nb::handle actions,
    nb::handle subgoal_layers
 );
+#endif
 
 }  // namespace mifrost::batch_input

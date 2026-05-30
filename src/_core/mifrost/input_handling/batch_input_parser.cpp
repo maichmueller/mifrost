@@ -196,7 +196,7 @@ parsed::StateEntry parse_state_entry(nb::handle value, std::string_view field_na
 {
    try {
       return parsed::StateEntry{
-         .source = nb::borrow< nb::object >(value),
+         .source = value.ptr(),
          .state = nb::cast< mimir::search::State >(value),
       };
    } catch(...) {
@@ -958,39 +958,6 @@ parsed::DagBatch parse_dags_batch_param(nb::handle dags, size_t state_count)
    return parsed::DagBatch::per_state(std::move(values));
 }
 
-GoalInputs compose_goal_inputs(
-   const parsed::GoalPayload& goals,
-   const parsed::SubgoalLayersPayload* subgoal_layers
-)
-{
-   GoalInputs inputs;
-   inputs.extend(goals, 0);
-   if(subgoal_layers != nullptr) {
-      size_t depth = 1;
-      for(const auto& layer : *subgoal_layers) {
-         inputs.extend(layer, depth);
-         ++depth;
-      }
-   }
-   return inputs;
-}
-
-GoalInputs default_goal_inputs_for_batch_state(const parsed::StateEntry& state_entry)
-{
-   GoalInputs inputs;
-   const auto& problem = state_entry.state.get_problem();
-   for(const auto& goal : problem.get_goal_literals< mimir::formalism::StaticTag >()) {
-      inputs.append(goal, 0);
-   }
-   for(const auto& goal : problem.get_goal_literals< mimir::formalism::FluentTag >()) {
-      inputs.append(goal, 0);
-   }
-   for(const auto& goal : problem.get_goal_literals< mimir::formalism::DerivedTag >()) {
-      inputs.append(goal, 0);
-   }
-   return inputs;
-}
-
 nb::list parse_states_batch_python(nb::handle states)
 {
    // Hard fast-path for the common empty-list case. This avoids any adapter or
@@ -1002,7 +969,7 @@ nb::list parse_states_batch_python(nb::handle states)
    const auto parsed = parse_states_batch_param(states, "states");
    nb::list out;
    for(const auto& state : parsed.states) {
-      out.append(state.source);
+      out.append(nb::borrow< nb::object >(state.source));
    }
    return out;
 }
@@ -1098,7 +1065,7 @@ nb::tuple parse_ilg_batch_inputs_python(
 
    nb::list states_out;
    for(const auto& state : parsed_states.states) {
-      states_out.append(state.source);
+      states_out.append(nb::borrow< nb::object >(state.source));
    }
 
    nb::list goals_out = expand_plan_to_python_list(

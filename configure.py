@@ -137,6 +137,8 @@ def main():
         "-G",
         "Ninja",
         f"-DCMAKE_BUILD_TYPE={args.config}",
+        f"-DPython_EXECUTABLE={sys.executable}",
+        f"-DPython_ROOT_DIR={Path(sys.executable).resolve().parent.parent}",
     ]
     if args.with_benchmarks:
         cmake_args.append("-DMIFROST_BUILD_BENCHMARKS=ON")

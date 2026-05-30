@@ -91,8 +91,12 @@ endif ()
 #unset(_conan_generators)
 
 # Nanobind requires finding Python first.
-# Prefer the active conda env when no explicit Python is configured.
-if (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
+# Prefer the active virtualenv when present, otherwise fall back to the active
+# conda env if no explicit Python is configured.
+if (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{VIRTUAL_ENV})
+    set(Python_EXECUTABLE "$ENV{VIRTUAL_ENV}/bin/python")
+    set(Python_ROOT_DIR "$ENV{VIRTUAL_ENV}")
+elseif (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
     set(Python_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
     set(Python_ROOT_DIR "$ENV{CONDA_PREFIX}")
 endif ()
@@ -135,11 +139,6 @@ endif ()
 
 # Conan include fallbacks (some recipes omit include dirs).
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/ConanFallbacks.cmake")
-# Build one shared nanobind runtime for the pymimir ABI domain so all DSOs
-# (extension module + core shared library) use the same internals.
-set(MIFROST_NANOBIND_RUNTIME_TARGET nanobind-pymimir_abi_domain)
-nanobind_build_library(${MIFROST_NANOBIND_RUNTIME_TARGET})
-
 set(_python_embed_target "")
 if (TARGET Python::Python)
     set(_python_embed_target Python::Python)
@@ -248,9 +247,9 @@ endfunction()
 add_library(
     mifrost_core
     SHARED
-        "_core/mifrost/common.cpp"
         "_core/mifrost/core/batch_builder.cpp"
         "_core/mifrost/core/schema.cpp"
+        "_core/mifrost/input_handling/batch_input_goal_inputs.cpp"
         "_core/mifrost/core/encoders/homo/color_encoder.cpp"
         "_core/mifrost/core/encoders/flat/flat_encoder_common.cpp"
         "_core/mifrost/core/encoders/flat/flat_entity_context.cpp"
@@ -263,12 +262,6 @@ add_library(
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
         "_core/mifrost/core/encoders/hetero/hgraph_stream_encoder.cpp"
         "_core/mifrost/core/encoders/common/target_metadata.cpp"
-        "_core/mifrost/input_handling/batch_input_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_color_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_flat_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_successor_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_horizon_parser.cpp"
         "_core/mifrost/core/encoders/common/transition_dag.cpp"
         "_core/mifrost/core/encoders/hetero/horizon_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/successor_hgraph_encoder.cpp"
@@ -284,8 +277,6 @@ target_compile_definitions(
     PUBLIC
     MIFROST_BUILD_SHARED
     PRIVATE
-    MIFROST_ENABLE_PYTHON_API
-    NB_DOMAIN=pymimir_abi_domain
     MIFROST_EXPORTS
 )
 if (NOT TARGET mifrost::core)
@@ -302,7 +293,6 @@ target_link_libraries(
         mifrost_core
         PUBLIC
     # Public SDK dependencies surfaced by installed headers.
-        Boost::iostreams
         fmt::fmt
     loki::parsers
         mimir::core
@@ -312,22 +302,51 @@ target_link_libraries(
         rollbear::strong_type
         range-v3::range-v3
     PRIVATE
+    Boost::iostreams
     ZLIB::ZLIB
     nauty::nauty
     absl::node_hash_set
-    nanobind::nanobind
-    ${MIFROST_NANOBIND_RUNTIME_TARGET}
-        dlpack::dlpack
+    dlpack::dlpack
 )
-    if (_python_embed_target AND NOT APPLE)
-        target_link_libraries(mifrost_core PRIVATE ${_python_embed_target})
-    endif ()
-    if (APPLE)
-        target_link_options(mifrost_core PRIVATE "-undefined" "dynamic_lookup")
-    endif ()
 
 conan_add_package_include_fallback(mifrost_core abseil SCOPE PUBLIC)
 conan_add_package_include_fallback(mifrost_core onetbb SCOPE PRIVATE)
+
+add_library(
+    mifrost_python_support
+    STATIC
+        "_core/mifrost/common.cpp"
+        "_core/mifrost/core/batch_builder_python.cpp"
+        "_core/mifrost/input_handling/batch_input_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_color_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_flat_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_successor_parser.cpp"
+        "_core/mifrost/input_handling/batch_input_horizon_parser.cpp"
+)
+set_target_properties(mifrost_python_support PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(
+    mifrost_python_support
+    PRIVATE
+    MIFROST_BUILD_SHARED
+    MIFROST_ENABLE_PYTHON_API
+    NB_DOMAIN=pymimir_abi_domain
+    MIFROST_EXPORTS
+)
+target_link_libraries(
+    mifrost_python_support
+    PRIVATE
+    mifrost_core
+    Python::Module
+    nanobind::nanobind
+    dlpack::dlpack
+)
+target_include_directories(
+    mifrost_python_support
+    PRIVATE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/_core>"
+)
+conan_add_package_include_fallback(mifrost_python_support abseil SCOPE PRIVATE)
 
 set(_mifrost_core_rpaths "")
 if (APPLE)
@@ -383,7 +402,6 @@ endif ()
 nanobind_add_module(mifrost_core_module
         ${_mifrost_freethreading}
         STABLE_ABI  # free-threading does not have stable api, but nanobind handles this.
-    NB_SHARED
         NB_DOMAIN pymimir_abi_domain
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/pyg_views.cpp"
@@ -412,6 +430,7 @@ target_link_libraries(
         PRIVATE
     dlpack::dlpack
         mifrost_core
+    mifrost_python_support
 )
 target_compile_definitions(mifrost_core_module PRIVATE MIFROST_ENABLE_PYTHON_API)
 
@@ -471,10 +490,6 @@ if (MIFROST_RPATH_MODE STREQUAL "dev")
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
     )
-    set_target_properties(${MIFROST_NANOBIND_RUNTIME_TARGET} PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-    )
     set_target_properties(mifrost_core_module PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
@@ -497,12 +512,6 @@ install(TARGETS mifrost_core
     ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
     RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
     INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
-)
-install(TARGETS ${MIFROST_NANOBIND_RUNTIME_TARGET}
-    EXPORT mifrostTargets
-    LIBRARY DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
-    ARCHIVE DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
-    RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
 )
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
 
