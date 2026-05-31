@@ -1,4 +1,4 @@
-#include "batch_builder.hpp"
+#include "mifrost/batch_builder_python.hpp"
 
 #if defined(MIFROST_ENABLE_PYTHON_API)
 
@@ -189,8 +189,11 @@ nb::object vector_to_2d_dlpack(std::vector< T >&& vec, size_t rows, size_t cols)
 
 }  // namespace
 
-nb::dict BatchBuilder::build_dict()
+nb::dict batch_builder_build_dict(BatchBuilder& builder)
 {
+   auto& columns = builder.columns;
+   auto& ptrs = builder.ptrs;
+
    nb::dict out;
 
    for(auto& [key, col] : columns) {
@@ -222,8 +225,18 @@ nb::dict BatchBuilder::build_dict()
    return out;
 }
 
-nb::object BatchBuilder::build_pyg()
+nb::object batch_builder_build_pyg(BatchBuilder& builder)
 {
+   auto& columns = builder.columns;
+   auto& ptrs = builder.ptrs;
+   auto& current_node_counts = builder.current_node_counts;
+   auto& node_feature_dims = builder.node_feature_dims;
+   auto& node_names = builder.node_names;
+   auto& object_names = builder.object_names;
+   auto& graph_kind = builder.graph_kind;
+   auto& graph_attrs = builder.graph_attrs;
+   auto& graph_fields = builder.graph_fields;
+
    absl::btree_map< std::string, int64_t > node_counts;
    for(const auto& [key, col] : columns) {
       if(key_has_edge_separator(key)) {
@@ -306,7 +319,7 @@ nb::object BatchBuilder::build_pyg()
       }
    }
 
-   nb::dict payload = build_dict();
+   nb::dict payload = batch_builder_build_dict(builder);
 
    nb::object batch = py::torch_geometric_batch_ctor()(
       nb::arg("_base_cls") = py::torch_geometric_heterodata_ctor()
@@ -491,7 +504,7 @@ nb::object BatchBuilder::build_pyg()
       }
    }
 
-   materialize_builder_lazy_target_names(*this);
+   materialize_builder_lazy_target_names(builder);
    set_graph_attrs_on_pyg_batch(batch, graph_attrs, graph_fields);
 
    if(graph_fields) {
@@ -533,7 +546,7 @@ nb::object BatchBuilder::build_pyg()
       batch.attr("_num_graphs") = graph_count;
    }
 
-   reset();
+   builder.reset();
    return batch;
 }
 

@@ -813,16 +813,6 @@ class HGraphStreamEncoder {
       return out;
    }
 
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   nanobind::object flush_pyg()
-   {
-      ensure_valid();
-      auto out = builder_.build_pyg();
-      reset();
-      return out;
-   }
-#endif
-
    void reset()
    {
       builder_.reset();

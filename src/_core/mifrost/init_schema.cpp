@@ -6,6 +6,7 @@
 #include "mifrost/core/map_view.hpp"
 #include "mifrost/core/nb_instance.hpp"
 #include "mifrost/core/schema.hpp"
+#include "mifrost/schema_python.hpp"
 
 namespace nb = nanobind;
 
@@ -87,8 +88,10 @@ void init_schema(nb::module_& m)
                            nb::rv_policy::move
                         )
                         .def("validate", &Schema::validate)
-                        .def("to_dict", &Schema::to_dict)
-                        .def_static("from_dict", &Schema::from_dict);
+                        .def("to_dict", [](const Schema& schema) { return schema_to_dict(schema); })
+                        .def_static("from_dict", [](const nb::dict& schema) {
+                           return schema_from_dict(schema);
+                        });
 
    schema_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple("flags_view");
 }

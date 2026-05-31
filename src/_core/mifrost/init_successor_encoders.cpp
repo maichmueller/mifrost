@@ -28,6 +28,7 @@
 #include "mifrost/core/encoders/hetero/horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/successor_hgraph_encoder.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
+#include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
@@ -167,7 +168,13 @@ void init_successor_encoders(nb::module_& m)
       .def("remove", &TransitionStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &TransitionStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &TransitionStreamEncoder::flush)
-      .def("flush_pyg", &TransitionStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](TransitionStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &TransitionStreamEncoder::reset);
 }
 

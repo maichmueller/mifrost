@@ -1,6 +1,6 @@
 /**
  * @file schema_bindings.cpp
- * @brief Implements Schema::to_dict and Schema::from_dict (Python API methods).
+ * @brief Implements Schema Python dict interop helpers.
  *
  * This file is compiled only into mifrost_core_module (the nanobind extension),
  * never into libmifrost_core. That guarantees libmifrost_core.so carries no
@@ -14,7 +14,7 @@
 
 #include <stdexcept>
 
-#include "mifrost/core/schema.hpp"
+#include "mifrost/schema_python.hpp"
 
 namespace mifrost {
 
@@ -27,20 +27,20 @@ std::string py_string(nb::handle value)
 
 }  // namespace
 
-nb::dict Schema::to_dict() const
+nb::dict schema_to_dict(const Schema& schema)
 {
    nb::dict out;
-   out["version"] = version;
-   out["graph_kind"] = graph_kind;
+   out["version"] = schema.version;
+   out["graph_kind"] = schema.graph_kind;
 
    nb::list node_type_list;
-   for(const auto& node_type : node_types) {
+   for(const auto& node_type : schema.node_types) {
       node_type_list.append(node_type);
    }
    out["node_types"] = node_type_list;
 
    nb::list edge_type_list;
-   for(const auto& [src, rel, dst] : edge_types) {
+   for(const auto& [src, rel, dst] : schema.edge_types) {
       nb::dict entry;
       entry["src"] = src;
       entry["rel"] = rel;
@@ -50,7 +50,7 @@ nb::dict Schema::to_dict() const
    out["edge_types"] = edge_type_list;
 
    nb::list node_tensor_list;
-   for(const auto& [node_type, attr, key] : node_tensors) {
+   for(const auto& [node_type, attr, key] : schema.node_tensors) {
       nb::dict entry;
       entry["node_type"] = node_type;
       entry["attr"] = attr;
@@ -60,7 +60,7 @@ nb::dict Schema::to_dict() const
    out["node_tensors"] = node_tensor_list;
 
    nb::list edge_tensor_list;
-   for(const auto& [edge_type, attr, key, part] : edge_tensors) {
+   for(const auto& [edge_type, attr, key, part] : schema.edge_tensors) {
       nb::dict entry;
       entry["edge_type"] = edge_type;
       entry["attr"] = attr;
@@ -73,7 +73,7 @@ nb::dict Schema::to_dict() const
    out["edge_tensors"] = edge_tensor_list;
 
    nb::list graph_tensor_list;
-   for(const auto& spec : graph_tensors) {
+   for(const auto& spec : schema.graph_tensors) {
       nb::dict entry;
       entry["attr"] = spec.attr;
       entry["key"] = spec.key;
@@ -94,12 +94,12 @@ nb::dict Schema::to_dict() const
       entry["inc"] = std::move(inc);
       graph_tensor_list.append(entry);
    }
-   if(not graph_tensors.empty()) {
+   if(not schema.graph_tensors.empty()) {
       out["graph_tensors"] = std::move(graph_tensor_list);
    }
 
    nb::dict flags_dict{};
-   for(const auto& [key, value] : flags) {
+   for(const auto& [key, value] : schema.flags) {
       flags_dict[key.c_str()] = value;
    }
    out["flags"] = flags_dict;
@@ -108,7 +108,7 @@ nb::dict Schema::to_dict() const
    return out;
 }
 
-Schema Schema::from_dict(const nb::dict& schema)
+Schema schema_from_dict(const nb::dict& schema)
 {
    Schema out;
    if(schema.contains("version")) {

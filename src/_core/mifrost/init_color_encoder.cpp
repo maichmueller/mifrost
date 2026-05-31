@@ -10,6 +10,7 @@
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/common/goal_inputs.hpp"
 #include "mifrost/core/encoders/homo/color_encoder.hpp"
+#include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
@@ -182,7 +183,13 @@ void init_color_encoder(nb::module_& m)
       .def("remove", &ColorStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &ColorStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &ColorStreamEncoder::flush)
-      .def("flush_pyg", &ColorStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](ColorStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &ColorStreamEncoder::reset);
 }
 

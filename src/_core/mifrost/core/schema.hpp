@@ -9,15 +9,7 @@
 
 #include "graph_fields.hpp"
 
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   #include <nanobind/nanobind.h>
-#endif
-
 namespace mifrost {
-
-#if defined(MIFROST_ENABLE_PYTHON_API)
-namespace nb = nanobind;
-#endif
 
 /**
  * @brief Canonical hetero edge type descriptor.
@@ -118,13 +110,6 @@ struct Schema {
     * Override in derived schemas to apply additional encoder-specific checks.
     */
    virtual void validate() const;
-
-   /// Serialize to Python dictionary form.
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   [[nodiscard]] nb::dict to_dict() const;
-   /// Parse schema from Python dictionary form.
-   static Schema from_dict(const nb::dict& schema);
-#endif
 
   protected:
    /// Base validation shared by all schema variants.

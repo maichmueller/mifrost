@@ -24,6 +24,9 @@ int64_t batch_encoding_num_edges(const BatchBuilder::BatchEncoding& encoding);
 
 nb::list batch_encoding_edge_types(const BatchBuilder::BatchEncoding& encoding);
 
+nb::object
+batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch);
+
 std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner);
 
 void set_owner_target_device(nb::handle owner, nb::handle device);

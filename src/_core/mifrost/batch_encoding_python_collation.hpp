@@ -14,6 +14,8 @@
 #include "common.hpp"
 #include "mifrost/core/batch_builder.hpp"
 
+namespace nb = nanobind;
+
 namespace mifrost {
 
 enum class PythonFieldDType { PYOBJ, STR, F32, I64 };

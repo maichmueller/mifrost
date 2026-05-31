@@ -17,16 +17,7 @@
 #include "graph_fields.hpp"
 #include "schema.hpp"
 
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   #include <nanobind/nanobind.h>
-   #include <nanobind/ndarray.h>
-#endif
-
 namespace mifrost {
-
-#if defined(MIFROST_ENABLE_PYTHON_API)
-namespace nb = nanobind;
-#endif
 
 /**
  * @brief Container for columnar graph data that grows dynamically.
@@ -180,15 +171,6 @@ class MIFROST_API BatchBuilder {
     * caching or C++ assembly.
     */
    BatchEncoding build();
-   /**
-    * @brief Finalize and return a PyG Batch/HeteroData object.
-    *
-    * This call consumes internal tensor buffers (moved into Python-owned ndarrays/tensors).
-    * The builder is reset after export.
-    */
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   nb::object build_pyg();
-#endif
 
    /**
     * @brief Append one graph worth of batch encoding into the current batch.
@@ -248,16 +230,6 @@ class MIFROST_API BatchBuilder {
    /// Get or create a typed column with the requested feature dimension.
    template < typename T >
    std::vector< T >& get_column(const std::string& key, int dim);
-
-   /**
-    * @brief Build tensor dictionary by moving out internal vector storage.
-    *
-    * Destructive export: column and ptr vectors are moved into Python-owned
-    * ndarray capsules for zero-copy transfer.
-    */
-#if defined(MIFROST_ENABLE_PYTHON_API)
-   nb::dict build_dict();
-#endif
    void commit_graph_fields();
 };
 

@@ -30,6 +30,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "mifrost/batch_builder_python.hpp"
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 #include "mifrost/batch_encoding_python_collation.hpp"
 #include "mifrost/binding_kwargs.hpp"
@@ -49,6 +50,7 @@
 #include "mifrost/core/nb_instance.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/pyg_views.hpp"
+#include "mifrost/schema_python.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -812,7 +814,7 @@ nb::dict batch_encoding_to_state_dict(BatchBuilder::BatchEncoding& encoding, boo
    state["graph_fields"] = graph_field_map_to_dict(encoding.graph_fields);
    state["ptrs"] = encoding.ptrs;
    state["node_counts"] = map_to_dict(encoding.node_counts);
-   state["schema"] = encoding.schema.to_dict();
+   state["schema"] = schema_to_dict(encoding.schema);
    if(include_metadata) {
       state["node_names"] = encoding.node_names;
       state["object_names"] = encoding.object_names;
@@ -971,7 +973,7 @@ BatchBuilder::BatchEncoding batch_encoding_from_state_dict(const nb::dict& state
    {
       try {
          nb::dict schema = nb::cast< nb::dict >(state["schema"]);
-         encoding.schema = Schema::from_dict(schema);
+         encoding.schema = schema_from_dict(schema);
       } catch(const std::exception& ex) {
          throw std::invalid_argument("Failed to parse state['schema']: " + std::string(ex.what()));
       }
@@ -1273,7 +1275,7 @@ nb::dict batch_encoding_as_dict(BatchBuilder::BatchEncoding& encoding, nb::handl
 
    nb::dict out;
    out["tensors"] = std::move(tensors);
-   out["schema"] = encoding.schema.to_dict();
+   out["schema"] = schema_to_dict(encoding.schema);
 
    nb::dict node_names_dict;
    for(const auto& [node_type, names] : encoding.node_names) {
@@ -1327,7 +1329,7 @@ batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool
    BatchBuilder builder;
    builder.set_graph_kind(encoding.graph_kind);
    builder.load_from_batch_encoding(encoding);
-   nb::object pyg_batch = builder.build_pyg();
+   nb::object pyg_batch = batch_builder_build_pyg(builder);
 
    if(not want_batch and encoding.num_graphs != 1) {
       throw std::invalid_argument("BatchEncoding.as_pyg(as_batch=False) requires num_graphs == 1");
@@ -1680,7 +1682,7 @@ void init_batch_encoding(nb::module_& m)
          .def("set_node_names", &BatchBuilder::set_node_names)
          .def("set_object_names", &BatchBuilder::set_object_names)
          .def("build", &BatchBuilder::build)
-         .def("build_pyg", &BatchBuilder::build_pyg)
+         .def("build_pyg", [](BatchBuilder& builder) { return batch_builder_build_pyg(builder); })
          .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
          .def(
             "load_from_batch_encoding",

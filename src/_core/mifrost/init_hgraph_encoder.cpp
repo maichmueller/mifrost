@@ -16,6 +16,7 @@
 #include "mifrost/core/encoders/common/default_relations.hpp"
 #include "mifrost/core/encoders/common/goal_inputs.hpp"
 #include "mifrost/core/encoders/hetero/hgraph_stream_encoder.hpp"
+#include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
@@ -375,7 +376,13 @@ void init_hgraph_encoder(nb::module_& m)
       .def("remove", &HGraphMutableStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HGraphMutableStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &HGraphMutableStreamEncoder::flush)
-      .def("flush_pyg", &HGraphMutableStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](HGraphMutableStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &HGraphMutableStreamEncoder::reset);
 
    nb::class_< HGraphStreamEncoder >(m, "HGraphStreamEncoder")
@@ -413,7 +420,13 @@ void init_hgraph_encoder(nb::module_& m)
          nb::call_guard< nb::gil_scoped_release >()
       )
       .def("flush", &HGraphStreamEncoder::flush)
-      .def("flush_pyg", &HGraphStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](HGraphStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &HGraphStreamEncoder::reset);
 }
 

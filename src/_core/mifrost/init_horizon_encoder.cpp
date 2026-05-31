@@ -29,6 +29,7 @@
 #include "mifrost/core/encoders/hetero/horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/successor_hgraph_encoder.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
+#include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
@@ -189,7 +190,13 @@ void init_horizon_encoder(nb::module_& m)
       .def("remove", &HorizonStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &HorizonStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &HorizonStreamEncoder::flush)
-      .def("flush_pyg", &HorizonStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](HorizonStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &HorizonStreamEncoder::reset);
 
    nb::class_< FlatHorizonEncoderEngine::Config >(m, "FlatHorizonEncoderConfig")
@@ -351,7 +358,13 @@ void init_horizon_encoder(nb::module_& m)
       .def("remove", &FlatHorizonStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &FlatHorizonStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &FlatHorizonStreamEncoder::flush)
-      .def("flush_pyg", &FlatHorizonStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](FlatHorizonStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &FlatHorizonStreamEncoder::reset);
 }
 

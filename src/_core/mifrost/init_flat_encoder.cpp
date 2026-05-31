@@ -9,6 +9,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
+#include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace nb = nanobind;
@@ -364,7 +365,13 @@ void init_flat_encoder(nb::module_& m)
       .def("remove", &FlatRelationMutableStreamEncoder::remove, "id"_a)
       .def("set_reuse_removed", &FlatRelationMutableStreamEncoder::set_reuse_removed, "value"_a)
       .def("flush", &FlatRelationMutableStreamEncoder::flush)
-      .def("flush_pyg", &FlatRelationMutableStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](FlatRelationMutableStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &FlatRelationMutableStreamEncoder::reset);
 
    nb::class_< FlatRelationStreamEncoder >(m, "FlatRelationStreamEncoder")
@@ -424,7 +431,13 @@ void init_flat_encoder(nb::module_& m)
          nb::call_guard< nb::gil_scoped_release >()
       )
       .def("flush", &FlatRelationStreamEncoder::flush)
-      .def("flush_pyg", &FlatRelationStreamEncoder::flush_pyg)
+      .def(
+         "flush_pyg",
+         [](FlatRelationStreamEncoder& encoder) {
+            auto encoding = encoder.flush();
+            return batch_encoding_as_pyg(encoding, true);
+         }
+      )
       .def("reset", &FlatRelationStreamEncoder::reset);
 }
 
