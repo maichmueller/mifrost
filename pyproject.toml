@@ -64,6 +64,10 @@ minimum-version = "build-system.requires"
 build-dir = "build/{wheel_tag}"
 # Include the Python package directory in the wheel (src layout)
 wheel.packages = ["src/mifrost"]
+# nanobind generates the public stub in the source package; include it explicitly
+# so wheel builds keep shipping the runtime typing surface.
+wheel.include = ["src/mifrost/_core.pyi"]
+sdist.include = ["src/mifrost/_core.pyi"]
 
 [tool.cibuildwheel]
 # Necessary to see build output from the actual compilation
