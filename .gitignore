@@ -11,3 +11,16 @@ build
 .vs
 
 .idea/
+build_editable/
+cmake-build-*
+build-*
+build_*
+!build_backend.py
+!docs/development/build-and-test.md
+**/*.pyi
+
+# MkDocs build output
+/site/
+
+# Generated snippet include fragments (CI artifact, not committed)
+/docs/_includes/
