@@ -176,7 +176,6 @@ jobs:
     - uses: pypa/cibuildwheel@v3.3
       id: build_wheels_step
       env:
-        MIFROST_WHEEL_GENERATE_STUBS: "0"
         CIBW_BUILD: ${{ matrix.cibw_build }}
         CIBW_SKIP: ${{ matrix.cibw_skip }}
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
@@ -186,8 +185,7 @@ jobs:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
-        CIBW_ENVIRONMENT_PASS_LINUX: MIFROST_WHEEL_GENERATE_STUBS
-        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1 MIFROST_WHEEL_GENERATE_STUBS=0
+        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1
 
     - name: Verify clean directory
       run: git diff --exit-code -- . ':(exclude)src/mifrost/_core.pyi'
