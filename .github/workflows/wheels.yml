@@ -328,15 +328,15 @@ jobs:
         GH_REPO: ${{ github.repository }}
       run: |
         VERSION="${GITHUB_REF_NAME#v}"
-        cat > /tmp/mifrost-release-notes.md <<EOF
-        Wheels for \`mifrost\` ${VERSION} were built, validated, and published from GitHub Actions.
-
-        Package pages:
-        - [PyPI](https://pypi.org/project/mifrost/${VERSION}/)
-        - [TestPyPI](https://test.pypi.org/project/mifrost/${VERSION}/)
-        EOF
+        NOTES=$(printf '%s\n' \
+          "Wheels for \`mifrost\` ${VERSION} were built, validated, and published from GitHub Actions." \
+          "" \
+          "Package pages:" \
+          "- https://pypi.org/project/mifrost/${VERSION}/" \
+          "- https://test.pypi.org/project/mifrost/${VERSION}/")
         gh release create "${GITHUB_REF_NAME}" \
           --title "${GITHUB_REF_NAME}" \
-          --notes-file /tmp/mifrost-release-notes.md \
+          --generate-notes \
+          --notes "$NOTES" \
           --verify-tag \
           --latest
