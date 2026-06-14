@@ -327,8 +327,16 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
       run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        cat > /tmp/mifrost-release-notes.md <<EOF
+        Wheels for \`mifrost\` ${VERSION} were built, validated, and published from GitHub Actions.
+
+        Package pages:
+        - [PyPI](https://pypi.org/project/mifrost/${VERSION}/)
+        - [TestPyPI](https://test.pypi.org/project/mifrost/${VERSION}/)
+        EOF
         gh release create "${GITHUB_REF_NAME}" \
           --title "${GITHUB_REF_NAME}" \
-          --generate-notes \
+          --notes-file /tmp/mifrost-release-notes.md \
           --verify-tag \
           --latest
