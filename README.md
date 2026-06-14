@@ -13,8 +13,8 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 
 | Workflow | Platforms | Python versions               |
 | --- | --- |-------------------------------|
-| Unit & C++ Tests | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
-| Install & Test | macOS, Ubuntu | 3.10-3.13 (3.14 allowed-fail) |
+| Unit & C++ Tests | macOS, Ubuntu | 3.10-3.14 |
+| Install & Test | macOS, Ubuntu | 3.10-3.14 |
 | Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(10-14)`    |
 
 | Docs Check | Ubuntu | 3.12 |
