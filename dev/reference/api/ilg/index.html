@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -309,20 +309,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -981,8 +978,6 @@
       
         
       
-        
-      
     
     
     
@@ -999,8 +994,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1014,8 +1010,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1035,42 +1037,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1189,7 +1163,7 @@
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="mifrost.encoders.base.EncoderBase">EncoderBase</span>[<span title="torch_geometric.data.HeteroData">HeteroData</span>, <a class="autorefs autorefs-internal" title="HeteroEncoding (mifrost.encoders.types.HeteroEncoding)" href="../types/#mifrost.encoders.types.HeteroEncoding">HeteroEncoding</a>]</code></p>
+              Bases: <code><span title="mifrost.encoders.base.EncoderBase">EncoderBase</span>[<span title="torch_geometric.data.HeteroData">HeteroData</span>]</code></p>
 
 
 
@@ -1206,7 +1180,8 @@ via <code>BatchBuilder</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">167</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">166</span>
+<span class="normal">167</span>
 <span class="normal">168</span>
 <span class="normal">169</span>
 <span class="normal">170</span>
@@ -1517,7 +1492,46 @@ via <code>BatchBuilder</code>.</p>
 <span class="normal">475</span>
 <span class="normal">476</span>
 <span class="normal">477</span>
-<span class="normal">478</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ILGEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">HeteroData</span><span class="p">,</span> <span class="n">HeteroEncoding</span><span class="p">]):</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span>
+<span class="normal">512</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ILGEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">HeteroData</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Instance‑Learning Graph encoder (ILG) implemented in Python.</span>
 
@@ -1549,32 +1563,38 @@ via <code>BatchBuilder</code>.</p>
         <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
             <span class="n">predicate_name</span><span class="p">(</span><span class="n">pred</span><span class="p">):</span> <span class="n">predicate_arity</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="k">for</span> <span class="n">pred</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span>
         <span class="p">}</span>
+        <span class="n">actions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_actions</span><span class="p">())</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;get_actions&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">max</span><span class="p">((</span><span class="nb">int</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">get_arity</span><span class="p">())</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_compute_statuses</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">facts</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
         <span class="n">goals</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
         <span class="n">goal_level_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">]]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">AtomStatus</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Compute per-atom status flags and collect unsatisfied goal atoms.</span>
 
 <span class="sd">        Returns ``(missing_goal_facts, status_by_atom)``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">fact_signatures</span> <span class="o">=</span> <span class="p">{</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">fact</span><span class="p">)</span> <span class="k">for</span> <span class="n">fact</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">}</span>
         <span class="n">goal_matches</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
+            <span class="n">atom_signature</span><span class="p">(</span><span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">))</span>
             <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goals</span>
-            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">atoms_equal</span><span class="p">(</span><span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">),</span> <span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">))</span> <span class="ow">in</span> <span class="n">fact_signatures</span><span class="p">)</span>
             <span class="o">==</span> <span class="n">literal_polarity</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
         <span class="p">}</span>
-        <span class="n">statuses</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">statuses</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">AtomStatus</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">missing_goal_facts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goals</span><span class="p">:</span>
             <span class="n">atom</span> <span class="o">=</span> <span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
-            <span class="n">is_satisfied</span> <span class="o">=</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">goal_matches</span>
-            <span class="n">prev</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span>
+            <span class="n">signature</span> <span class="o">=</span> <span class="n">atom_signature</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
+            <span class="n">is_satisfied</span> <span class="o">=</span> <span class="n">signature</span> <span class="ow">in</span> <span class="n">goal_matches</span>
+            <span class="n">prev</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span>
             <span class="n">new_levels</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">prev</span><span class="o">.</span><span class="n">goal_levels</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="n">goal_level_map</span><span class="p">[</span><span class="n">goal</span><span class="p">]}))</span>
-            <span class="n">statuses</span><span class="p">[</span><span class="n">atom</span><span class="p">]</span> <span class="o">=</span> <span class="n">AtomStatus</span><span class="p">(</span>
+            <span class="n">statuses</span><span class="p">[</span><span class="n">signature</span><span class="p">]</span> <span class="o">=</span> <span class="n">AtomStatus</span><span class="p">(</span>
                 <span class="n">is_regular</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                 <span class="n">is_negated</span><span class="o">=</span><span class="ow">not</span> <span class="n">literal_polarity</span><span class="p">(</span><span class="n">goal</span><span class="p">),</span>
                 <span class="n">is_satisfied</span><span class="o">=</span><span class="n">is_satisfied</span><span class="p">,</span>
@@ -1611,6 +1631,11 @@ via <code>BatchBuilder</code>.</p>
             <span class="n">facts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">advanced_state</span><span class="o">.</span><span class="n">get_fluent_atoms</span><span class="p">())</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span>
                 <span class="n">advanced_state</span><span class="o">.</span><span class="n">get_derived_atoms</span><span class="p">()</span>
             <span class="p">)</span>
+            <span class="k">if</span> <span class="n">facts</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">fact</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">fact</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="s2">&quot;ILGEncoder does not support advanced states that expose atom &quot;</span>
+                    <span class="s2">&quot;indices only; pass wrapper states or an explicit iterable of atoms&quot;</span>
+                <span class="p">)</span>
             <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">goals</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">objects</span> <span class="o">=</span> <span class="n">_gather_objects</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span>
@@ -1662,7 +1687,7 @@ via <code>BatchBuilder</code>.</p>
             <span class="n">rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">:</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span>
+                <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">atom</span><span class="p">),</span> <span class="n">AtomStatus</span><span class="p">())</span>
                 <span class="n">value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span>
                 <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">value</span><span class="p">]</span> <span class="o">*</span> <span class="n">feature_dim</span><span class="p">)</span>
                 <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
@@ -1671,10 +1696,10 @@ via <code>BatchBuilder</code>.</p>
             <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="n">names</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">actions_list</span><span class="p">:</span>
-            <span class="n">max_action_arity</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">action_arity</span><span class="p">(</span><span class="n">action</span><span class="p">)</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions_list</span><span class="p">)</span>
-            <span class="n">action_dim</span> <span class="o">=</span> <span class="n">max_action_arity</span> <span class="o">+</span> <span class="mi">1</span>
             <span class="n">action_names</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">action</span><span class="p">)</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions_list</span><span class="p">]</span>
-            <span class="n">action_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">action_names</span><span class="p">),</span> <span class="n">action_dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+            <span class="n">action_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">action_names</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+            <span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">action_x</span><span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span> <span class="n">action_names</span><span class="p">)</span>
 
@@ -1788,8 +1813,8 @@ via <code>BatchBuilder</code>.</p>
         <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one state into ILG format.&quot;&quot;&quot;</span>
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
@@ -1802,26 +1827,55 @@ via <code>BatchBuilder</code>.</p>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">states</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many states into ILG batch format.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">states</span><span class="p">,</span> <span class="n">WRAPPER_STATE_TYPES</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">is_state_input</span><span class="p">(</span><span class="n">states</span><span class="p">):</span>
             <span class="n">state_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">states</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">state_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">states</span><span class="p">)</span>
 
+        <span class="n">states_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">state_list</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_state_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_state</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">goals_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">goals</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">actions_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">actions</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_action_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_action</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">subgoal_layers_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">goals_per_state</span><span class="p">,</span> <span class="n">actions_per_state</span><span class="p">,</span> <span class="n">subgoal_layers_per_state</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">_core</span><span class="o">.</span><span class="n">_parse_ilg_batch_inputs</span><span class="p">(</span>
+                <span class="n">states_for_core</span><span class="p">,</span>
+                <span class="n">goals</span><span class="o">=</span><span class="n">goals_for_core</span><span class="p">,</span>
+                <span class="n">actions</span><span class="o">=</span><span class="n">actions_for_core</span><span class="p">,</span>
+                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_for_core</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">state_list</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">state_list</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_encode_to_builder</span><span class="p">(</span>
                 <span class="n">builder</span><span class="p">,</span>
                 <span class="n">state</span><span class="p">,</span>
-                <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
-                <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
-                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+                <span class="n">goals</span><span class="o">=</span><span class="n">goals_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
+                <span class="n">actions</span><span class="o">=</span><span class="n">actions_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
+                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
             <span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">next_graph</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
@@ -1861,7 +1915,8 @@ via <code>BatchBuilder</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">175</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">174</span>
+<span class="normal">175</span>
 <span class="normal">176</span>
 <span class="normal">177</span>
 <span class="normal">178</span>
@@ -1884,7 +1939,10 @@ via <code>BatchBuilder</code>.</p>
 <span class="normal">195</span>
 <span class="normal">196</span>
 <span class="normal">197</span>
-<span class="normal">198</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
@@ -1908,6 +1966,10 @@ via <code>BatchBuilder</code>.</p>
     <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
         <span class="n">predicate_name</span><span class="p">(</span><span class="n">pred</span><span class="p">):</span> <span class="n">predicate_arity</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="k">for</span> <span class="n">pred</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span>
     <span class="p">}</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_actions</span><span class="p">())</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;get_actions&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="nb">max</span><span class="p">((</span><span class="nb">int</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">get_arity</span><span class="p">())</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1930,9 +1992,9 @@ via <code>BatchBuilder</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming ILG encoder.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ILGEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>

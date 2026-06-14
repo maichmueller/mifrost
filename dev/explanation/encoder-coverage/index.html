@@ -16,12 +16,14 @@
         <link rel="prev" href="../streaming-model/">
       
       
+        <link rel="next" href="../../development/build-and-test/">
+      
       
         
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -313,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -1021,6 +1020,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lgan-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LGAN Surface
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1048,8 +1058,6 @@
       
         
       
-        
-      
     
     
     
@@ -1066,8 +1074,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1081,8 +1090,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1102,42 +1117,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1195,6 +1182,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lgan-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LGAN Surface
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1235,11 +1233,25 @@
 <td><code>examples/encoders/hetero_encoder_example.py</code>, <code>tests/encoding/test_batch_encoding.py</code></td>
 </tr>
 <tr>
+<td><code>FlatRelationEncoder</code></td>
+<td>Compact packed state/goal/action/history encoding</td>
+<td>Packed relation tensors plus target-entity metadata</td>
+<td><code>BatchEncoding</code> (flat-on-homo carrier)</td>
+<td><code>examples/encoders/flat_relation_encoder_example.py</code>, <code>tests/encoding/test_flat_relation_encoder.py</code></td>
+</tr>
+<tr>
 <td><code>HorizonEncoder</code></td>
 <td>Root + lookahead candidate reasoning</td>
 <td>Root state with <code>TransitionDAG</code> target/candidate relations</td>
 <td><code>BatchEncoding</code> (hetero)</td>
 <td><code>examples/encoders/horizon_hetero_encoder_example.py</code>, <code>tests/encoding/test_horizon_encoder.py</code></td>
+</tr>
+<tr>
+<td><code>FlatHorizonEncoder</code></td>
+<td>Compact root + lookahead candidate reasoning</td>
+<td>Packed flat relations with state-target carrier rows from <code>TransitionDAG</code></td>
+<td><code>BatchEncoding</code> (flat-on-homo carrier)</td>
+<td><code>tests/encoding/test_flat_horizon_encoder.py</code></td>
 </tr>
 <tr>
 <td><code>TransitionHGraphEncoder</code></td>
@@ -1254,6 +1266,20 @@
 <td>Transition-focused deltas/effects representation</td>
 <td><code>BatchEncoding</code> (hetero)</td>
 <td><code>examples/encoders/transition_change_hetero_encoder_example.py</code>, <code>tests/encoding/test_transition_change_encoder.py</code></td>
+</tr>
+<tr>
+<td><code>FlatTransitionEncoder</code></td>
+<td>Compact full transition modeling</td>
+<td>One-step successor encoding over the flat state-target substrate</td>
+<td><code>BatchEncoding</code> (flat-on-homo carrier)</td>
+<td><code>examples/encoders/flat_transition_encoder_example.py</code>, <code>tests/encoding/test_flat_transition_encoder.py</code></td>
+</tr>
+<tr>
+<td><code>FlatTransitionEffectsEncoder</code></td>
+<td>Compact effect/delta transition learning</td>
+<td>One-step delta/effects encoding over the flat state-target substrate</td>
+<td><code>BatchEncoding</code> (flat-on-homo carrier)</td>
+<td><code>examples/encoders/flat_transition_encoder_example.py</code>, <code>tests/encoding/test_flat_transition_encoder.py</code></td>
 </tr>
 <tr>
 <td><code>ColorEncoder</code></td>
@@ -1274,7 +1300,16 @@
 <h2 id="streams-and-dynamic-fields-coverage">Streams and Dynamic Fields Coverage</h2>
 <ul>
 <li>Stream semantics/parity: <code>tests/encoding/test_stream_encoder.py</code></li>
+<li>Flat stream semantics/parity: <code>tests/encoding/test_flat_stream_encoder.py</code></li>
 <li>Dynamic graph fields/collation: <code>tests/encoding/test_dynamic_graph_fields.py</code></li>
+</ul>
+<h2 id="lgan-surface">LGAN Surface</h2>
+<ul>
+<li><code>HGraphEncoder</code> and <code>FlatRelationEncoder</code> share the same main-lane LGAN API:
+  <code>include_lgan_edges</code>, <code>lgan_*_edge_pos</code>, and <code>lgan_anchor_sources</code>.</li>
+<li><code>HorizonEncoder</code> and <code>FlatHorizonEncoder</code> use candidate state rows as LGAN
+  anchors and do not expose <code>lgan_anchor_sources</code>.</li>
+<li>Transition encoders on both lanes follow the horizon rule.</li>
 </ul>
 
 

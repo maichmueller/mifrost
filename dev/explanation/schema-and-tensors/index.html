@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -315,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -1002,8 +999,6 @@
       
         
       
-        
-      
     
     
     
@@ -1020,8 +1015,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1035,8 +1031,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1056,42 +1058,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1157,8 +1131,19 @@
 <li><code>tensors</code>: flat tensor payload keyed by schema keys</li>
 <li>optional metadata such as <code>node_names</code>, <code>object_names</code>, <code>graph_attrs</code></li>
 </ul>
+<p><code>tensors</code> values are exported as DLPack-backed Python values (<code>__dlpack__</code>),
+so downstream conversion should use DLPack-aware paths (for example
+<code>mifrost.encoding_to_tensors(...)</code> or <code>torch.utils.dlpack.from_dlpack(...)</code>).</p>
 <p>PyG conversion uses the schema to reconstruct node stores, edge stores, edge indices, and graph-level attributes.</p>
 <p>Dynamic graph fields appear under schema <code>graph_tensors</code> and are attached as root attributes in PyG output (<code>attr</code>, plus optional <code>attr_ptr</code> for ragged fields).</p>
+<p>If a python attr and a native graph field share the same key during <code>as_pyg()</code>,
+the native graph field value is kept and the python attr is skipped. For ragged
+native fields, <code>&lt;attr&gt;_ptr</code> is reserved by the native field as well.</p>
+<p>For native <code>BatchEncoding</code> access (without PyG conversion), native graph fields are
+also reachable as attributes and through <code>get_field(key)</code>. The attribute path
+is routed to native storage for known keys.</p>
+<p>Python graph-field collation specs (<code>dtype="pyobj"</code>) are now validated against native
+graph-field keys. Collisions are rejected explicitly instead of being silently shadowed.</p>
 
 
 

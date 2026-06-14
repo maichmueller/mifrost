@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -309,20 +309,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -981,8 +978,6 @@
       
         
       
-        
-      
     
     
     
@@ -999,8 +994,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1014,8 +1010,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1035,42 +1037,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1156,17 +1130,6 @@
     <span class="md-ellipsis">
       
         encode
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.horizon.HorizonEncoder.__encode_batch" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        __encode_batch
       
     </span>
   </a>
@@ -1261,7 +1224,15 @@ hetero graph representation.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">126</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
 <span class="normal">127</span>
 <span class="normal">128</span>
 <span class="normal">129</span>
@@ -1845,7 +1816,23 @@ hetero graph representation.</p>
 <span class="normal">707</span>
 <span class="normal">708</span>
 <span class="normal">709</span>
-<span class="normal">710</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HorizonEncoder</span><span class="p">(</span><span class="n">HGraphEncoder</span><span class="p">):</span>
+<span class="normal">710</span>
+<span class="normal">711</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span>
+<span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HorizonEncoder</span><span class="p">(</span><span class="n">HGraphEncoder</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Horizon lookahead encoder backed by ``HorizonHGraphEncoderEngine``.</span>
 
@@ -1857,15 +1844,16 @@ hetero graph representation.</p>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">transition_mode</span><span class="p">:</span> <span class="nb">object</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">transition_mode</span><span class="p">:</span> <span class="n">HorizonEncoderMode</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">target_symbol_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">target_sources</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TargetSource</span> <span class="o">|</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">parent_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">sibling_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">cousin_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">enable_parent_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">enable_sibling_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">enable_cousin_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">exclude_root_candidate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">root_policy</span><span class="p">:</span> <span class="n">RootPolicy</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">max_goal_level</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
         <span class="n">ignore_actions</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1875,11 +1863,34 @@ hetero graph representation.</p>
         <span class="n">include_empty_edge_types</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">support_literals</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">goal_derivations</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">lgan_tn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_TN_EDGE_POS</span><span class="p">,</span>
         <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
+        <span class="n">lgan_rr_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span>
         <span class="n">history_link_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a horizon encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a hetero horizon encoder.</span>
+
+<span class="sd">        This lane reads a root state plus a `TransitionDAG` and creates</span>
+<span class="sd">        candidate state rows.</span>
+
+<span class="sd">        `target_sources` is therefore simple on this lane:</span>
+
+<span class="sd">        - `state`: successor or candidate states from the DAG</span>
+
+<span class="sd">        `root_policy` controls how the root state is treated:</span>
+
+<span class="sd">        - `include`: encode the root and expose it as a target</span>
+<span class="sd">        - `encode_only`: encode the root, but omit it from targets and metadata</span>
+<span class="sd">        - `exclude`: omit the root from targets and keep root facts as base facts</span>
+
+<span class="sd">        The main-lane sources `action`, `goal`, `subgoal`, and `history` do</span>
+<span class="sd">        not create separate targets here. When `include_lgan_edges=True`, LGAN</span>
+<span class="sd">        anchors are those candidate state rows. There is no</span>
+<span class="sd">        `lgan_anchor_sources` switch here.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="n">domain</span><span class="p">,</span>
             <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">symbol_type_id</span><span class="p">,</span>
@@ -1891,20 +1902,24 @@ hetero graph representation.</p>
             <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
             <span class="n">max_goal_level</span><span class="o">=</span><span class="n">max_goal_level</span><span class="p">,</span>
             <span class="n">support_literals</span><span class="o">=</span><span class="n">support_literals</span><span class="p">,</span>
+            <span class="n">goal_derivations</span><span class="o">=</span><span class="n">goal_derivations</span><span class="p">,</span>
             <span class="n">nullary_object_name</span><span class="o">=</span><span class="n">nullary_object_name</span><span class="p">,</span>
+            <span class="n">lgan_tn_edge_pos</span><span class="o">=</span><span class="n">lgan_tn_edge_pos</span><span class="p">,</span>
             <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
+            <span class="n">lgan_rr_edge_pos</span><span class="o">=</span><span class="n">lgan_rr_edge_pos</span><span class="p">,</span>
             <span class="n">history_link_relation</span><span class="o">=</span><span class="n">history_link_relation</span><span class="p">,</span>
             <span class="n">_config_cls</span><span class="o">=</span><span class="n">HorizonEncoderConfig</span><span class="p">,</span>
             <span class="n">_engine_cls</span><span class="o">=</span><span class="n">HorizonHGraphEncoderEngine</span><span class="p">,</span>
             <span class="n">transition_mode</span><span class="o">=</span><span class="n">transition_mode</span><span class="p">,</span>
             <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="n">target_symbol_prefix</span><span class="p">,</span>
+            <span class="n">target_sources</span><span class="o">=</span><span class="n">target_sources</span><span class="p">,</span>
             <span class="n">parent_relation</span><span class="o">=</span><span class="n">parent_relation</span><span class="p">,</span>
             <span class="n">sibling_relation</span><span class="o">=</span><span class="n">sibling_relation</span><span class="p">,</span>
             <span class="n">cousin_relation</span><span class="o">=</span><span class="n">cousin_relation</span><span class="p">,</span>
             <span class="n">enable_parent_relation</span><span class="o">=</span><span class="n">enable_parent_relation</span><span class="p">,</span>
             <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="n">enable_sibling_relation</span><span class="p">,</span>
             <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="n">enable_cousin_relation</span><span class="p">,</span>
-            <span class="n">exclude_root_candidate</span><span class="o">=</span><span class="n">exclude_root_candidate</span><span class="p">,</span>
+            <span class="n">root_policy</span><span class="o">=</span><span class="n">normalized_root_policy</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">target_symbol_prefix</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">target_symbol_prefix</span>
@@ -1920,113 +1935,78 @@ hetero graph representation.</p>
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">root</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
-        <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="n">RXStateDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
         <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">_</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalInput</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">_</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">actions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="c1"># Horizon encoding does not consume actions directly.</span>
-            <span class="n">_</span> <span class="o">=</span> <span class="n">actions</span>
+        <span class="n">validate_single_optional_payloads</span><span class="p">(</span>
+            <span class="n">HORIZON_LANE_SPEC</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="n">adv_root</span> <span class="o">=</span> <span class="n">_advanced_state</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
-        <span class="n">dag</span> <span class="o">=</span> <span class="n">_ensure_dag</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag</span><span class="p">)</span>
-        <span class="n">inputs</span> <span class="o">=</span> <span class="n">_prepare_horizon_goals</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
+        <span class="n">dag</span> <span class="o">=</span> <span class="n">ensure_transition_dag</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag</span><span class="p">)</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="n">prepare_goal_inputs</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adv_root</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">inputs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">root</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
-        <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="n">RXStateDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
         <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalInput</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair into native ``BatchEncoding``.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">root</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
             <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
             <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span>
             <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">__encode_batch</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
-        <span class="n">dags</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TransitionDAG</span><span class="p">]</span> <span class="o">|</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Internal batch implementation shared by public batch APIs.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">is_state_input</span><span class="p">(</span><span class="n">roots</span><span class="p">):</span>
-            <span class="n">root_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">roots</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)):</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;encode_batch expects a state or an iterable of states&quot;</span><span class="p">)</span>
-            <span class="n">root_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">roots</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">dags</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">dag_list</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dags</span><span class="p">,</span> <span class="n">TransitionDAG</span><span class="p">):</span>
-            <span class="n">dag_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">dags</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">dag_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dags</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dag_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dags length must match roots length&quot;</span><span class="p">)</span>
-
-        <span class="n">goals_per_state</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="n">goals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-            <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span>
-            <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">goals</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">)</span>
-        <span class="p">):</span>
-            <span class="n">first</span> <span class="o">=</span> <span class="n">goals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">goals</span> <span class="k">else</span> <span class="kc">None</span>
-            <span class="k">if</span> <span class="n">first</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_is_literal</span><span class="p">(</span><span class="n">first</span><span class="p">):</span>
-                <span class="n">goals_per_state</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">goals</span><span class="p">)</span>
-
-        <span class="n">shared_inputs</span><span class="p">:</span> <span class="n">GoalInputs</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">goals_per_state</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">shared_inputs</span> <span class="o">=</span> <span class="n">_split_goals</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-
-        <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">root</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">root_list</span><span class="p">):</span>
-            <span class="n">adv_root</span> <span class="o">=</span> <span class="n">_advanced_state</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
-            <span class="n">dag</span> <span class="o">=</span> <span class="n">_ensure_dag</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag_list</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
-            <span class="k">if</span> <span class="n">goals_per_state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">inputs</span> <span class="o">=</span> <span class="n">_split_goals</span><span class="p">(</span><span class="n">goals_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">inputs</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="n">shared_inputs</span>
-                    <span class="k">if</span> <span class="n">shared_inputs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-                    <span class="k">else</span> <span class="n">_prepare_horizon_goals</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-                <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adv_root</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">builder</span><span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">next_graph</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
-
     <span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
-        <span class="n">dags</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TransitionDAG</span><span class="p">]</span> <span class="o">|</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dags</span><span class="p">:</span> <span class="n">DagBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">batch_attrs</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">collate_spec</span><span class="p">:</span> <span class="n">CollateSpecParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into native ``BatchEncoding``.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
             <span class="n">roots</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
             <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+            <span class="n">batch_attrs</span><span class="o">=</span><span class="n">batch_attrs</span><span class="p">,</span>
+            <span class="n">collate_spec</span><span class="o">=</span><span class="n">collate_spec</span><span class="p">,</span>
             <span class="n">dags</span><span class="o">=</span><span class="n">dags</span><span class="p">,</span>
             <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
@@ -2034,39 +2014,70 @@ hetero graph representation.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_accepted_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept transition DAG kwargs in the generic base API.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;dag&quot;</span><span class="p">,</span> <span class="s2">&quot;dags&quot;</span><span class="p">}</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_dict_to_pyg</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">encoding_dict</span><span class="p">:</span> <span class="n">NativeEncodingInput</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">as_batch</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
-        <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroData</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_encoding_dict_to_pyg</span><span class="p">(</span>
-            <span class="n">encoding_dict</span><span class="p">,</span> <span class="n">as_batch</span><span class="o">=</span><span class="n">as_batch</span><span class="p">,</span> <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span>
-        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;dag&quot;</span><span class="p">,</span> <span class="s2">&quot;dags&quot;</span><span class="p">,</span> <span class="s2">&quot;history_subgoals&quot;</span><span class="p">,</span> <span class="s2">&quot;history_max_steps&quot;</span><span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode_batch</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
-        <span class="n">dags</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TransitionDAG</span><span class="p">]</span> <span class="o">|</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dags</span><span class="p">:</span> <span class="n">DagBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">actions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">history_subgoals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into one batch encoding.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">actions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;HorizonEncoder does not accept actions in encode_batch&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">history_subgoals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">history_max_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;HorizonEncoder does not accept history_subgoals/history_max_steps in encode_batch&quot;</span>
+        <span class="n">validate_batch_optional_payloads</span><span class="p">(</span>
+            <span class="n">HORIZON_LANE_SPEC</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">roots_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">roots</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_state_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_state</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">goals_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">goals</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">actions_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">actions</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_action_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_action</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">subgoal_layers_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">history_subgoals_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+            <span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
+            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">dags_for_core</span> <span class="o">=</span> <span class="n">_normalize_dag_batch_data</span><span class="p">(</span><span class="n">dags</span><span class="p">)</span>
+        <span class="n">parsed_roots</span> <span class="o">=</span> <span class="n">parse_states_batch</span><span class="p">(</span><span class="n">roots_for_core</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dags_for_core</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">parsed_dags</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">parsed_roots</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">parsed_dags</span> <span class="o">=</span> <span class="n">parse_dags_batch_param</span><span class="p">(</span>
+                <span class="n">dags_for_core</span><span class="p">,</span> <span class="n">state_count</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">parsed_roots</span><span class="p">)</span>
             <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__encode_batch</span><span class="p">(</span>
-            <span class="n">roots</span><span class="p">,</span> <span class="n">dags</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span>
+        <span class="k">for</span> <span class="n">adv_root</span><span class="p">,</span> <span class="n">dag</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">parsed_roots</span><span class="p">,</span> <span class="n">parsed_dags</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">dag</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">dag</span><span class="o">.</span><span class="n">root</span><span class="p">()</span><span class="o">.</span><span class="n">get_index</span><span class="p">()</span> <span class="o">!=</span> <span class="n">adv_root</span><span class="o">.</span><span class="n">get_index</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dag root must match root state&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
+            <span class="n">parsed_roots</span><span class="p">,</span>
+            <span class="n">dags</span><span class="o">=</span><span class="n">parsed_dags</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals_for_core</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions_for_core</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_for_core</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals_for_core</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonEncoderStream</span><span class="p">:</span>
@@ -2472,19 +2483,43 @@ hetero graph representation.</p>
 
 
 <h3 id="mifrost.encoders.horizon.HorizonEncoder.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">transition_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">parent_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sibling_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cousin_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_parent_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exclude_root_candidate</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_goal_level</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_static</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_empty_edge_types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">support_literals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span> <span class="n">history_link_relation</span><span class="o">=</span><span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">transition_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_sources</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">parent_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sibling_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cousin_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_parent_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">root_policy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_goal_level</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_static</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_empty_edge_types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">support_literals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">goal_derivations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lgan_tn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_TN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_rr_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span> <span class="n">history_link_relation</span><span class="o">=</span><span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Create a horizon encoder for one domain.</p>
+        <p>Create a hetero horizon encoder.</p>
+<p>This lane reads a root state plus a <code>TransitionDAG</code> and creates
+candidate state rows.</p>
+<p><code>target_sources</code> is therefore simple on this lane:</p>
+<ul>
+<li><code>state</code>: successor or candidate states from the DAG</li>
+</ul>
+<p><code>root_policy</code> controls how the root state is treated:</p>
+<ul>
+<li><code>include</code>: encode the root and expose it as a target</li>
+<li><code>encode_only</code>: encode the root, but omit it from targets and metadata</li>
+<li><code>exclude</code>: omit the root from targets and keep root facts as base facts</li>
+</ul>
+<p>The main-lane sources <code>action</code>, <code>goal</code>, <code>subgoal</code>, and <code>history</code> do
+not create separate targets here. When <code>include_lgan_edges=True</code>, LGAN
+anchors are those candidate state rows. There is no
+<code>lgan_anchor_sources</code> switch here.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
 <span class="normal">135</span>
 <span class="normal">136</span>
 <span class="normal">137</span>
@@ -2541,19 +2576,40 @@ hetero graph representation.</p>
 <span class="normal">188</span>
 <span class="normal">189</span>
 <span class="normal">190</span>
-<span class="normal">191</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
-    <span class="n">transition_mode</span><span class="p">:</span> <span class="nb">object</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">transition_mode</span><span class="p">:</span> <span class="n">HorizonEncoderMode</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">target_symbol_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">target_sources</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TargetSource</span> <span class="o">|</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">parent_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">sibling_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">cousin_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">enable_parent_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">enable_sibling_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">enable_cousin_relation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">exclude_root_candidate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">root_policy</span><span class="p">:</span> <span class="n">RootPolicy</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">max_goal_level</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
     <span class="n">ignore_actions</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2563,11 +2619,34 @@ hetero graph representation.</p>
     <span class="n">include_empty_edge_types</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">support_literals</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">goal_derivations</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">lgan_tn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_TN_EDGE_POS</span><span class="p">,</span>
     <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
+    <span class="n">lgan_rr_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span>
     <span class="n">history_link_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a horizon encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a hetero horizon encoder.</span>
+
+<span class="sd">    This lane reads a root state plus a `TransitionDAG` and creates</span>
+<span class="sd">    candidate state rows.</span>
+
+<span class="sd">    `target_sources` is therefore simple on this lane:</span>
+
+<span class="sd">    - `state`: successor or candidate states from the DAG</span>
+
+<span class="sd">    `root_policy` controls how the root state is treated:</span>
+
+<span class="sd">    - `include`: encode the root and expose it as a target</span>
+<span class="sd">    - `encode_only`: encode the root, but omit it from targets and metadata</span>
+<span class="sd">    - `exclude`: omit the root from targets and keep root facts as base facts</span>
+
+<span class="sd">    The main-lane sources `action`, `goal`, `subgoal`, and `history` do</span>
+<span class="sd">    not create separate targets here. When `include_lgan_edges=True`, LGAN</span>
+<span class="sd">    anchors are those candidate state rows. There is no</span>
+<span class="sd">    `lgan_anchor_sources` switch here.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
     <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
         <span class="n">domain</span><span class="p">,</span>
         <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">symbol_type_id</span><span class="p">,</span>
@@ -2579,20 +2658,24 @@ hetero graph representation.</p>
         <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
         <span class="n">max_goal_level</span><span class="o">=</span><span class="n">max_goal_level</span><span class="p">,</span>
         <span class="n">support_literals</span><span class="o">=</span><span class="n">support_literals</span><span class="p">,</span>
+        <span class="n">goal_derivations</span><span class="o">=</span><span class="n">goal_derivations</span><span class="p">,</span>
         <span class="n">nullary_object_name</span><span class="o">=</span><span class="n">nullary_object_name</span><span class="p">,</span>
+        <span class="n">lgan_tn_edge_pos</span><span class="o">=</span><span class="n">lgan_tn_edge_pos</span><span class="p">,</span>
         <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
+        <span class="n">lgan_rr_edge_pos</span><span class="o">=</span><span class="n">lgan_rr_edge_pos</span><span class="p">,</span>
         <span class="n">history_link_relation</span><span class="o">=</span><span class="n">history_link_relation</span><span class="p">,</span>
         <span class="n">_config_cls</span><span class="o">=</span><span class="n">HorizonEncoderConfig</span><span class="p">,</span>
         <span class="n">_engine_cls</span><span class="o">=</span><span class="n">HorizonHGraphEncoderEngine</span><span class="p">,</span>
         <span class="n">transition_mode</span><span class="o">=</span><span class="n">transition_mode</span><span class="p">,</span>
         <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="n">target_symbol_prefix</span><span class="p">,</span>
+        <span class="n">target_sources</span><span class="o">=</span><span class="n">target_sources</span><span class="p">,</span>
         <span class="n">parent_relation</span><span class="o">=</span><span class="n">parent_relation</span><span class="p">,</span>
         <span class="n">sibling_relation</span><span class="o">=</span><span class="n">sibling_relation</span><span class="p">,</span>
         <span class="n">cousin_relation</span><span class="o">=</span><span class="n">cousin_relation</span><span class="p">,</span>
         <span class="n">enable_parent_relation</span><span class="o">=</span><span class="n">enable_parent_relation</span><span class="p">,</span>
         <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="n">enable_sibling_relation</span><span class="p">,</span>
         <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="n">enable_cousin_relation</span><span class="p">,</span>
-        <span class="n">exclude_root_candidate</span><span class="o">=</span><span class="n">exclude_root_candidate</span><span class="p">,</span>
+        <span class="n">root_policy</span><span class="o">=</span><span class="n">normalized_root_policy</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">target_symbol_prefix</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">target_symbol_prefix</span>
@@ -2609,7 +2692,7 @@ hetero graph representation.</p>
 
 
 <h3 id="mifrost.encoders.horizon.HorizonEncoder.encode" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">encode</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">encode</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">history_subgoals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">history_max_steps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h3>
 
@@ -2621,71 +2704,7 @@ hetero graph representation.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span>
-<span class="normal">234</span>
-<span class="normal">235</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span>
-    <span class="n">root</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
-    <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="o">*</span><span class="p">,</span>
-    <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair into native ``BatchEncoding``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
-        <span class="n">root</span><span class="p">,</span>
-        <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
-        <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span>
-        <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-    <span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.horizon.HorizonEncoder.__encode_batch" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__encode_batch</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">dags</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Internal batch implementation shared by public batch APIs.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">242</span>
 <span class="normal">243</span>
 <span class="normal">244</span>
 <span class="normal">245</span>
@@ -2709,9 +2728,54 @@ hetero graph representation.</p>
 <span class="normal">263</span>
 <span class="normal">264</span>
 <span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
+<span class="normal">266</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">root</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
+    <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="n">RXStateDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalInput</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
+        <span class="n">root</span><span class="p">,</span>
+        <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+        <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span>
+        <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.horizon.HorizonEncoder.encode_batch" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">encode_batch</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">dags</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">history_subgoals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">history_max_steps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_attrs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">collate_spec</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Encode one or many root/DAG pairs into native <code>BatchEncoding</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">268</span>
 <span class="normal">269</span>
 <span class="normal">270</span>
 <span class="normal">271</span>
@@ -2734,116 +2798,36 @@ hetero graph representation.</p>
 <span class="normal">288</span>
 <span class="normal">289</span>
 <span class="normal">290</span>
-<span class="normal">291</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">__encode_batch</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span>
-    <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
-    <span class="n">dags</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TransitionDAG</span><span class="p">]</span> <span class="o">|</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="o">*</span><span class="p">,</span>
-    <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Internal batch implementation shared by public batch APIs.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">is_state_input</span><span class="p">(</span><span class="n">roots</span><span class="p">):</span>
-        <span class="n">root_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">roots</span><span class="p">]</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;encode_batch expects a state or an iterable of states&quot;</span><span class="p">)</span>
-        <span class="n">root_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">roots</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">dags</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">dag_list</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dags</span><span class="p">,</span> <span class="n">TransitionDAG</span><span class="p">):</span>
-        <span class="n">dag_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">dags</span><span class="p">]</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">dag_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dags</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dag_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dags length must match roots length&quot;</span><span class="p">)</span>
-
-    <span class="n">goals_per_state</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="p">(</span>
-        <span class="n">goals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span>
-        <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">goals</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">root_list</span><span class="p">)</span>
-    <span class="p">):</span>
-        <span class="n">first</span> <span class="o">=</span> <span class="n">goals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">goals</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">first</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_is_literal</span><span class="p">(</span><span class="n">first</span><span class="p">):</span>
-            <span class="n">goals_per_state</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">goals</span><span class="p">)</span>
-
-    <span class="n">shared_inputs</span><span class="p">:</span> <span class="n">GoalInputs</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">goals_per_state</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">shared_inputs</span> <span class="o">=</span> <span class="n">_split_goals</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-
-    <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
-    <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">root</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">root_list</span><span class="p">):</span>
-        <span class="n">adv_root</span> <span class="o">=</span> <span class="n">_advanced_state</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
-        <span class="n">dag</span> <span class="o">=</span> <span class="n">_ensure_dag</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag_list</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
-        <span class="k">if</span> <span class="n">goals_per_state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">inputs</span> <span class="o">=</span> <span class="n">_split_goals</span><span class="p">(</span><span class="n">goals_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">inputs</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="n">shared_inputs</span>
-                <span class="k">if</span> <span class="n">shared_inputs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-                <span class="k">else</span> <span class="n">_prepare_horizon_goals</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-            <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adv_root</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">builder</span><span class="p">)</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">next_graph</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.horizon.HorizonEncoder.encode_batch" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">encode_batch</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">dags</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Encode one or many root/DAG pairs into native <code>BatchEncoding</code>.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">293</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
 <span class="normal">294</span>
 <span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span>
-<span class="normal">300</span>
-<span class="normal">301</span>
-<span class="normal">302</span>
-<span class="normal">303</span>
-<span class="normal">304</span>
-<span class="normal">305</span>
-<span class="normal">306</span>
-<span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
-<span class="normal">311</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
+<span class="normal">296</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
-    <span class="n">dags</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TransitionDAG</span><span class="p">]</span> <span class="o">|</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">dags</span><span class="p">:</span> <span class="n">DagBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
-    <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">GoalLiteralInput</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">batch_attrs</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">collate_spec</span><span class="p">:</span> <span class="n">CollateSpecParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HeteroEncoding</span><span class="p">:</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into native ``BatchEncoding``.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
         <span class="n">roots</span><span class="p">,</span>
         <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+        <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="n">batch_attrs</span><span class="o">=</span><span class="n">batch_attrs</span><span class="p">,</span>
+        <span class="n">collate_spec</span><span class="o">=</span><span class="n">collate_spec</span><span class="p">,</span>
         <span class="n">dags</span><span class="o">=</span><span class="n">dags</span><span class="p">,</span>
         <span class="n">include_metadata</span><span class="o">=</span><span class="n">include_metadata</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
@@ -2870,9 +2854,9 @@ hetero graph representation.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">350</span>
-<span class="normal">351</span>
-<span class="normal">352</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonEncoderStream</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonEncoderStream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">HorizonEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -2897,23 +2881,7 @@ hetero graph representation.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">370</span>
 <span class="normal">371</span>
 <span class="normal">372</span>
 <span class="normal">373</span>
@@ -3016,7 +2984,23 @@ hetero graph representation.</p>
 <span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
-<span class="normal">473</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">HeteroData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiGraph</span><span class="p">:</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">HeteroData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiGraph</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert encoded horizon ``HeteroData`` into a named multigraph.&quot;&quot;&quot;</span>
     <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiGraph</span><span class="p">()</span>
     <span class="n">symbol_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span>

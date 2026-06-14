@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -315,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -992,8 +989,6 @@
       
         
       
-        
-      
     
     
     
@@ -1010,8 +1005,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1025,8 +1021,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1046,42 +1048,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1190,14 +1164,69 @@
 <li><code>graph_kind</code>, <code>node_types</code>, <code>edge_types</code></li>
 <li><code>as_dict()</code></li>
 <li><code>as_pyg(as_batch=...)</code></li>
+<li><code>as_hetero()</code>, <code>as_homo()</code> (lazy tensor facades without PyG materialization)</li>
+<li><code>has_field(key)</code>, <code>get_field(key)</code></li>
+<li><code>set_field(key, value)</code>, <code>set_fields({...})</code></li>
+<li><code>collate_spec()</code> (read-only batching metadata)</li>
+<li><code>keys()</code>, <code>items()</code> (lightweight runtime introspection)</li>
 <li><code>schema_fingerprint()</code></li>
+<li><code>dumps(include_metadata=True)</code>, <code>loads(payload)</code></li>
 <li><code>save(path, include_metadata=False)</code></li>
 <li><code>BatchEncoding.load(path)</code></li>
+</ul>
+<p>Native graph fields are also exposed as attributes (<code>encoding.target_indices</code>).
+If a key is native, assignment is routed to native graph-field storage rather than
+stored as a python shadow attribute.</p>
+<p><code>target_indices</code> semantics are encoder-dependent:
+- <code>HorizonEncoder</code>: <code>TransitionDAG</code> node indices.
+- <code>HGraphEncoder</code> with <code>target_sources=["action"]</code>: per-graph action input positions.
+- <code>FlatRelationEncoder</code> with <code>target_sources=["action"]</code>: per-graph action input positions.</p>
+<p><code>target_candidate_ids</code> is row-aligned with <code>target_indices</code> and <code>target_positions</code>:
+- <code>HorizonEncoder</code>: explicit <code>TransitionDAG</code> node <code>candidate_id</code> values when provided for all
+  emitted targets; otherwise falls back to DAG node indices.
+- <code>HGraphEncoder</code> with <code>target_sources=["action"]</code>: per-graph action input positions.
+- <code>FlatRelationEncoder</code> with <code>target_sources=["action"]</code>: per-graph action input positions.</p>
+<p><code>BatchEncoding.as_pyg(...)</code> exposes native graph attrs as top-level PyG attrs
+(<code>data.target_names</code>, <code>data.target_symbol_prefix</code>, etc.). Collisions with
+reserved/structural PyG keys raise an error.</p>
+<p>Ragged field notes:</p>
+<ul>
+<li>Ragged values are keyed at <code>&lt;key&gt;</code>, with ptr metadata at <code>&lt;key&gt;_ptr</code>.</li>
+<li>Direct assignment to <code>&lt;key&gt;_ptr</code> is rejected.</li>
+<li>Assign ragged values as <code>(values, ptr)</code> via <code>set_field</code> / <code>set_fields</code>.</li>
+<li>In-place mutation on returned value tensors is write-through; ptr tensors are returned as snapshots.</li>
+</ul>
+<p>Collision policy:</p>
+<ul>
+<li>During <code>as_pyg(...)</code>, native graph fields still win over python attrs for the same key.</li>
+<li>Registering python collation specs that collide with native graph-field keys now raises <code>ValueError</code>
+  when passed via <code>batch_encodings(..., collate_spec=...)</code>.</li>
+</ul>
+<p>Python-side collation notes:</p>
+<ul>
+<li><code>collate_spec()</code> is informational metadata stored on already-batched outputs.</li>
+<li>It is not a public registration surface and is not implicitly reused when re-batching.</li>
+<li>To control dynamic-attr collation, pass <code>collate_spec=...</code> explicitly to:</li>
+<li><code>mifrost.batch_encodings([...], collate_spec=...)</code></li>
+<li><code>encoder.encode_batch(..., batch_attrs=..., collate_spec=...)</code></li>
 </ul>
 <h2 id="native-helpers">Native Helpers</h2>
 <ul>
 <li><code>mifrost.batch_encodings([...])</code>: merge single-graph encodings with schema checks.</li>
 <li><code>mifrost.encoding_to_tensors(encoding.as_dict())</code>: convert flat tensor payload to torch tensors.</li>
+<li><code>mifrost.transition_dag_from_rustworkx(graph, *, fallback_missing_candidate_id_to_node_index=False)</code>:
+  convert <code>rustworkx.PyDiGraph</code> to native <code>TransitionDAG</code> (delegates to classmethod).</li>
+<li><code>mifrost.TransitionDAG.from_rustworkx(graph, *, fallback_missing_candidate_id_to_node_index=False)</code>:
+  native classmethod implementing the rustworkx-to-<code>TransitionDAG</code> conversion path.</li>
+</ul>
+<p><code>TransitionDAG.register_transition(...)</code> accepts:
+- <code>register_transition(parent, child, action=None, candidate_id=None)</code>
+- <code>register_transitions(records)</code> where each record may be either
+  <code>(parent, child, action)</code> or <code>(parent, child, action, candidate_id)</code>.</p>
+<p>Tensor payload note:</p>
+<ul>
+<li><code>BatchEncoding.as_dict()["tensors"]</code> exports DLPack-backed tensor values.</li>
+<li>Convert with <code>mifrost.encoding_to_tensors(...)</code>, <code>torch.utils.dlpack.from_dlpack(...)</code>, or any consumer supporting <code>__dlpack__</code>.</li>
 </ul>
 <h2 id="config-surfaces">Config Surfaces</h2>
 <p>Key config classes (bindings-defined):</p>
@@ -1206,6 +1235,13 @@
 <li><code>HorizonEncoderConfig</code></li>
 <li><code>SuccessorEncoderConfig</code></li>
 <li><code>ColorEncoderConfig</code></li>
+</ul>
+<p>LGAN config note:</p>
+<ul>
+<li>Main state lanes (<code>HGraphEncoder</code>, <code>FlatRelationEncoder</code>) separate
+  <code>target_sources</code> from <code>lgan_anchor_sources</code>.</li>
+<li>Horizon and transition lanes use candidate state rows as LGAN anchors and do
+  not expose <code>lgan_anchor_sources</code>.</li>
 </ul>
 
 

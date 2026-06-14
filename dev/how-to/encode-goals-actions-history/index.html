@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -315,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -1083,8 +1080,6 @@
       
         
       
-        
-      
     
     
     
@@ -1101,8 +1096,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1116,8 +1112,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1137,42 +1139,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1296,19 +1270,83 @@
 <p>Action inputs are supported in <code>HGraphEncoder</code> state-step workflows:</p>
 <div class="highlight"><pre><span></span><code><span class="n">enc</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">)</span>
 </code></pre></div>
+<p>If you want prediction/readout metadata for encoded action targets, enable
+<code>target_sources=["action"]</code> on <code>HGraphEncoder</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">,</span>
+    <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">target_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;action&quot;</span><span class="p">],</span>
+<span class="p">)</span>
+<span class="n">enc</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span><span class="n">states</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="n">per_state_actions</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">as_pyg</span><span class="p">(</span><span class="n">as_batch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p>When enabled, HGraph emits:
+- <code>target_positions</code> (symbol-node positions with batch node-offset semantics)
+- <code>target_indices</code> (input action positions <code>0..n-1</code> per graph)
+- <code>target_candidate_ids</code> (row-aligned candidate identity; equals action input position)
+- <code>target_names</code> and <code>target_symbol_prefix</code></p>
+<p>On <code>as_pyg(...)</code> outputs these attrs are available directly as top-level PyG attrs
+(for example <code>data.target_names</code>, <code>data.target_symbol_prefix</code>).</p>
+<p>If you only need LGAN anchors and do not want prediction targets, use
+<code>lgan_anchor_sources</code> instead of <code>target_sources</code> on the main state lanes:</p>
+<div class="highlight"><pre><span></span><code><span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">,</span>
+    <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">lgan_anchor_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;goal&quot;</span><span class="p">,</span> <span class="s2">&quot;history&quot;</span><span class="p">],</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><code>FlatRelationEncoder</code> follows the same split:
+- <code>target_sources</code> creates prediction target metadata
+- <code>lgan_anchor_sources</code> creates extra LGAN anchor rows</p>
+<p><code>HGraphEncoder</code> action inputs must be flat. Nested or tuple/macro action payloads are rejected.
+If your planner emits lookahead or macro-transition structures (for example from IW), use
+<code>HorizonEncoder</code> with a <code>TransitionDAG</code> instead of passing nested action payloads to <code>HGraphEncoder</code>.</p>
 <h2 id="history-subgoals">History Subgoals</h2>
-<p><code>HGraphEncoder</code> also supports history-aware subgoals:</p>
+<p><code>HGraphEncoder</code> and <code>FlatRelationEncoder</code> support history-aware subgoals:</p>
 <div class="highlight"><pre><span></span><code><span class="n">enc</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
     <span class="n">state</span><span class="p">,</span>
     <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
-    <span class="n">history_subgoals</span><span class="o">=</span><span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="n">literals_t_minus_1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">literals_t_minus_2</span><span class="p">)],</span>
+    <span class="n">history_subgoals</span><span class="o">=</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">literals_t_minus_1</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">literals_t_minus_2</span><span class="p">)],</span>
     <span class="n">history_max_steps</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
 <span class="p">)</span>
 </code></pre></div>
+<p>History <code>dt</code> values must be negative. <code>-1</code> means one step in the past.</p>
 <h2 id="notes">Notes</h2>
 <ul>
-<li><code>HorizonEncoder</code> takes a root plus <code>TransitionDAG</code>; it does not consume action lists directly in its encoding path.</li>
-<li>Transition encoders require successor inputs (<code>successor</code> or <code>successors</code>).</li>
+<li><code>HorizonEncoder</code> takes a root plus <code>TransitionDAG</code> (or <code>rustworkx.PyDiGraph</code>).
+  Use <code>mifrost.transition_dag_from_rustworkx(...)</code> if you want an explicit conversion step.
+  The helper also supports
+  <code>fallback_missing_candidate_id_to_node_index=True</code> when importing partial
+  <code>candidate_id</code> metadata from <code>PyDiGraph</code> node payloads.
+  In batch mode, <code>dags</code> may be passed as:</li>
+<li>one shared DAG,</li>
+<li>an aligned iterable of <code>TransitionDAG | rustworkx.PyDiGraph | None</code>,</li>
+<li><code>BatchParam.shared(dag)</code>, or</li>
+<li><code>BatchParam.separate([dag0, None, ...])</code></li>
+<li><code>rustworkx</code> interop is Python-level only. There is no raw/native graph handoff:
+  <code>PyDiGraph</code> inputs are converted into <code>TransitionDAG</code> before encoding.</li>
+<li><code>PyDiGraph</code> inputs are treated as already-valid horizon DAGs. <code>mifrost</code> does not
+  pre-verify the incoming graph shape beyond the minimal import constraints needed to
+  build a <code>TransitionDAG</code>; malformed inputs are treated as input errors and may fail
+  during import or downstream encoding.</li>
+<li>Horizon target metadata is row-aligned:</li>
+<li><code>target_positions[i]</code>, <code>target_indices[i]</code>, and <code>target_candidate_ids[i]</code> refer to the same row.</li>
+<li>If no emitted target node has an explicit <code>candidate_id</code>, horizon uses DAG node index as
+    fallback candidate identity.</li>
+<li>If explicit candidate IDs are present, all emitted targets must provide one and they must be unique.</li>
+<li>Horizon <code>target_indices</code> refer to <code>TransitionDAG</code> insertion-order node indices, not
+  the original <code>rustworkx</code> node IDs.</li>
+<li>Transition encoders require successor inputs (<code>successor</code> or <code>successors</code>). In batch mode,
+  <code>successors</code> may be passed as:</li>
+<li>one shared successor state,</li>
+<li>an aligned iterable of successor states,</li>
+<li><code>BatchParam.shared(successor)</code>, or</li>
+<li><code>BatchParam.separate([succ0, succ1, ...])</code></li>
+<li><code>HorizonEncoder</code> and transition encoders currently expose <code>actions</code> / <code>history_subgoals</code>
+  parameters for API consistency, but non-empty payloads are rejected by their current encoding
+  implementations.</li>
+<li><code>HorizonEncoder</code>, <code>FlatHorizonEncoder</code>, and both transition lanes do not use
+  <code>lgan_anchor_sources</code>. Their LGAN anchors come from candidate state rows.</li>
 </ul>
 
 

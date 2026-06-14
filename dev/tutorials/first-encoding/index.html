@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -315,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -541,10 +538,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#batch-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
         Batch Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#program_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
       
     </span>
   </a>
@@ -1072,8 +1113,6 @@
       
         
       
-        
-      
     
     
     
@@ -1090,8 +1129,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1105,8 +1145,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1126,42 +1172,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1209,10 +1227,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#batch-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
         Batch Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#program_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
       
     </span>
   </a>
@@ -1263,20 +1325,163 @@
 
 <h1 id="first-encoding">First Encoding</h1>
 <p>This walkthrough uses <code>HGraphEncoder</code>, the default heterogeneous state encoder.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
+<p>The following is a standalone program and its captured output for this version:</p>
+<p>This page fragment is generated from <code>docs/snippets/hgraph_basic.py</code>.
+It is intended to show the exact code and typical output for this version.</p>
+<p>Commit: <code>cdf0d14b246dbcb6ec4734c154116b8b6f4da91e</code></p>
+<h2 id="program">Program</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
-<span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
-<span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>      <span class="c1"># native BatchEncoding</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">encoding</span><span class="o">.</span><span class="n">as_pyg</span><span class="p">()</span>              <span class="c1"># HeteroData</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_problem</span><span class="p">,</span> <span class="n">print_encoding_summary</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;smedium&quot;</span><span class="p">)</span>
+    <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;HGraphEncoder.encode(initial_state)&quot;</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="output">Output</h2>
+<div class="highlight"><pre><span></span><code>== HGraphEncoder.encode(initial_state) ==
+python: 3.12.13
+platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+graph_kind: hetero
+num_graphs: 1
+num_nodes: 12
+num_edges: 26
+schema_fingerprint: 2869292577121628696
+node_types_count: 28
+edge_types_count: 54
+node_types_head: [&#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]holding[g]&#39;, &#39;[+]holding[g][sat]&#39;, &#39;[+]on[g]&#39;, &#39;[+]on[g][sat]&#39;, &#39;[+]ontable[g]&#39;, &#39;[+]ontable[g][sat]&#39;]
+edge_types_head: [&#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]on[g][sat]|0|_symbol_&#39;, &#39;[+]on[g][sat]|1|_symbol_&#39;, &#39;[+]on[g]|0|_symbol_&#39;, &#39;[+]on[g]|1|_symbol_&#39;, &#39;[+]ontable[g][sat]|0|_symbol_&#39;, &#39;[+]ontable[g]|0|_symbol_&#39;]
+SNAPSHOT_JSON_BEGIN
+{
+  &quot;edge_types_count&quot;: 54,
+  &quot;edge_types_head&quot;: [
+    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
+    &quot;[+]clear[g]|0|_symbol_&quot;,
+    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
+    &quot;[+]holding[g]|0|_symbol_&quot;,
+    &quot;[+]on[g][sat]|0|_symbol_&quot;,
+    &quot;[+]on[g][sat]|1|_symbol_&quot;,
+    &quot;[+]on[g]|0|_symbol_&quot;,
+    &quot;[+]on[g]|1|_symbol_&quot;,
+    &quot;[+]ontable[g][sat]|0|_symbol_&quot;,
+    &quot;[+]ontable[g]|0|_symbol_&quot;
+  ],
+  &quot;graph_kind&quot;: &quot;hetero&quot;,
+  &quot;label&quot;: &quot;HGraphEncoder.encode(initial_state)&quot;,
+  &quot;node_types_count&quot;: 28,
+  &quot;node_types_head&quot;: [
+    &quot;[+]clear[g]&quot;,
+    &quot;[+]clear[g][sat]&quot;,
+    &quot;[+]handempty[g]&quot;,
+    &quot;[+]handempty[g][sat]&quot;,
+    &quot;[+]holding[g]&quot;,
+    &quot;[+]holding[g][sat]&quot;,
+    &quot;[+]on[g]&quot;,
+    &quot;[+]on[g][sat]&quot;,
+    &quot;[+]ontable[g]&quot;,
+    &quot;[+]ontable[g][sat]&quot;
+  ],
+  &quot;num_edges&quot;: 26,
+  &quot;num_graphs&quot;: 1,
+  &quot;num_nodes&quot;: 12,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;python&quot;: &quot;3.12.13&quot;,
+  &quot;schema_fingerprint&quot;: 2869292577121628696
+}
+SNAPSHOT_JSON_END
 </code></pre></div>
 <h2 id="batch-workflow">Batch Workflow</h2>
-<div class="highlight"><pre><span></span><code><span class="n">batch_encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">([</span><span class="n">state1</span><span class="p">,</span> <span class="n">state2</span><span class="p">,</span> <span class="n">state3</span><span class="p">])</span>
-<span class="n">batch</span> <span class="o">=</span> <span class="n">batch_encoding</span><span class="o">.</span><span class="n">as_pyg</span><span class="p">(</span><span class="n">as_batch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<p>This page fragment is generated from <code>docs/snippets/hgraph_batch.py</code>.
+It is intended to show the exact code and typical output for this version.</p>
+<p>Commit: <code>cdf0d14b246dbcb6ec4734c154116b8b6f4da91e</code></p>
+<h2 id="program_1">Program</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">first_successor</span><span class="p">,</span> <span class="n">load_problem</span><span class="p">,</span> <span class="n">print_encoding_summary</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;smedium&quot;</span><span class="p">)</span>
+    <span class="n">_action</span><span class="p">,</span> <span class="n">succ</span> <span class="o">=</span> <span class="n">first_successor</span><span class="p">(</span><span class="n">space</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+    <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">([</span><span class="n">state</span><span class="p">,</span> <span class="n">succ</span><span class="p">])</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span>
+        <span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;HGraphEncoder.encode_batch([state, successor])&quot;</span>
+    <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="output_1">Output</h2>
+<div class="highlight"><pre><span></span><code>== HGraphEncoder.encode_batch([state, successor]) ==
+python: 3.12.13
+platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+graph_kind: hetero
+num_graphs: 2
+num_nodes: 24
+num_edges: 50
+schema_fingerprint: 2869292577121628696
+node_types_count: 28
+edge_types_count: 54
+node_types_head: [&#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]holding[g]&#39;, &#39;[+]holding[g][sat]&#39;, &#39;[+]on[g]&#39;, &#39;[+]on[g][sat]&#39;, &#39;[+]ontable[g]&#39;, &#39;[+]ontable[g][sat]&#39;]
+edge_types_head: [&#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]on[g][sat]|0|_symbol_&#39;, &#39;[+]on[g][sat]|1|_symbol_&#39;, &#39;[+]on[g]|0|_symbol_&#39;, &#39;[+]on[g]|1|_symbol_&#39;, &#39;[+]ontable[g][sat]|0|_symbol_&#39;, &#39;[+]ontable[g]|0|_symbol_&#39;]
+SNAPSHOT_JSON_BEGIN
+{
+  &quot;edge_types_count&quot;: 54,
+  &quot;edge_types_head&quot;: [
+    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
+    &quot;[+]clear[g]|0|_symbol_&quot;,
+    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
+    &quot;[+]holding[g]|0|_symbol_&quot;,
+    &quot;[+]on[g][sat]|0|_symbol_&quot;,
+    &quot;[+]on[g][sat]|1|_symbol_&quot;,
+    &quot;[+]on[g]|0|_symbol_&quot;,
+    &quot;[+]on[g]|1|_symbol_&quot;,
+    &quot;[+]ontable[g][sat]|0|_symbol_&quot;,
+    &quot;[+]ontable[g]|0|_symbol_&quot;
+  ],
+  &quot;graph_kind&quot;: &quot;hetero&quot;,
+  &quot;label&quot;: &quot;HGraphEncoder.encode_batch([state, successor])&quot;,
+  &quot;node_types_count&quot;: 28,
+  &quot;node_types_head&quot;: [
+    &quot;[+]clear[g]&quot;,
+    &quot;[+]clear[g][sat]&quot;,
+    &quot;[+]handempty[g]&quot;,
+    &quot;[+]handempty[g][sat]&quot;,
+    &quot;[+]holding[g]&quot;,
+    &quot;[+]holding[g][sat]&quot;,
+    &quot;[+]on[g]&quot;,
+    &quot;[+]on[g][sat]&quot;,
+    &quot;[+]ontable[g]&quot;,
+    &quot;[+]ontable[g][sat]&quot;
+  ],
+  &quot;num_edges&quot;: 50,
+  &quot;num_graphs&quot;: 2,
+  &quot;num_nodes&quot;: 24,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;python&quot;: &quot;3.12.13&quot;,
+  &quot;schema_fingerprint&quot;: 2869292577121628696
+}
+SNAPSHOT_JSON_END
 </code></pre></div>
 <h2 id="direct-pyg-convenience">Direct PyG Convenience</h2>
-<div class="highlight"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-<span class="n">batch</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch_pyg</span><span class="p">([</span><span class="n">state1</span><span class="p">,</span> <span class="n">state2</span><span class="p">])</span>
-</code></pre></div>
+<p>The native-first examples above are intentionally stable and compact. For PyG conversion convenience helpers, see:</p>
+<ul>
+<li><code>HGraphEncoder.encode_pyg(...)</code></li>
+<li><code>HGraphEncoder.encode_batch_pyg(...)</code></li>
+</ul>
 <h2 id="native-first-recommendation">Native-First Recommendation</h2>
 <p>Use <code>encode</code> / <code>encode_batch</code> if you want to keep a fast native representation for as long as possible. Convert to PyG only when needed by downstream models.</p>
 

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -315,20 +315,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -992,8 +989,6 @@
       
         
       
-        
-      
     
     
     
@@ -1010,8 +1005,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1025,8 +1021,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1046,42 +1048,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/build-and-test.md" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1147,12 +1121,14 @@
 <li>Keeps the fast path in native columnar buffers.</li>
 <li>Avoids immediate graph-object materialization when not needed.</li>
 <li>Makes conversion an explicit boundary (<code>as_pyg</code>, <code>encode_pyg</code>, <code>encode_batch_pyg</code>, <code>flush_pyg</code>).</li>
+<li>Allows model-boundary tensor access via <code>as_hetero()</code> / <code>as_homo()</code> facades without creating PyG objects.</li>
 </ul>
 <p>Recommended pattern:</p>
 <ol>
 <li>Encode to native <code>BatchEncoding</code>.</li>
 <li>Perform any native batching/serialization operations.</li>
-<li>Convert to PyG only at model input boundaries.</li>
+<li>Use <code>as_hetero()</code> / <code>as_homo()</code> for tensor-first model code when possible.</li>
+<li>Convert to PyG only for APIs that require real <code>Data</code> / <code>HeteroData</code>.</li>
 </ol>
 
 

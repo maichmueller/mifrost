@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -313,20 +313,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="development/build-and-test.md" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="development/build-and-test/" class="md-tabs__link">
+        
   
   
     
   
   Development
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -1065,8 +1062,6 @@
       
         
       
-        
-      
     
     
     
@@ -1083,8 +1078,9 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="development/build-and-test/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1098,8 +1094,14 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
@@ -1119,42 +1121,14 @@
   
   
     <li class="md-nav__item">
-      <a href="development/build-and-test.md" class="md-nav__link">
+      <a href="development/architecture/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    None
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="development/architecture.md" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    None
+    Architecture Notes
   
 
     
@@ -1266,9 +1240,13 @@ It provides native <code>BatchEncoding</code> outputs and optional conversion to
 <h2 id="choose-an-encoder-quickly">Choose an Encoder Quickly</h2>
 <ul>
 <li>Use <code>HGraphEncoder</code> for state-centric heterogeneous encodings (goals/actions/history optional).</li>
+<li>Use <code>FlatRelationEncoder</code> for compact packed state/goal/action/history encodings.</li>
 <li>Use <code>HorizonEncoder</code> for root state + lookahead DAG candidate structure.</li>
+<li>Use <code>FlatHorizonEncoder</code> for compact packed lookahead/state-target encodings.</li>
 <li>Use <code>TransitionHGraphEncoder</code> for full current-to-successor transition structure.</li>
+<li>Use <code>FlatTransitionEncoder</code> for compact full current-to-successor transition structure.</li>
 <li>Use <code>TransitionEffectsHGraphEncoder</code> for delta/effects-focused transition features.</li>
+<li>Use <code>FlatTransitionEffectsEncoder</code> for compact delta/effects-focused transition features.</li>
 <li>Use <code>ColorEncoder</code> for compact homogeneous graph baselines.</li>
 <li>Use <code>ILGEncoder</code> for Python-native ILG topology/features.</li>
 </ul>
@@ -1276,6 +1254,7 @@ It provides native <code>BatchEncoding</code> outputs and optional conversion to
 <h2 id="what-is-covered">What Is Covered</h2>
 <ul>
 <li>Native-first API and conversion model</li>
+<li>Native hetero/homo tensor facades (<code>as_hetero</code>, <code>as_homo</code>) for model-boundary use</li>
 <li>Single, batch, append-only stream, and mutable stream workflows</li>
 <li>Dynamic graph fields (<code>GraphFieldSpec</code>) and batching semantics</li>
 <li>Adapter registration for custom wrapper types</li>
