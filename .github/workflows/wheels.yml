@@ -1,25 +1,12 @@
 name: Wheel Builds
 
 on:
-  workflow_dispatch:
-    inputs:
-      publish_target:
-        description: "Publish destination for a manual run"
-        type: choice
-        required: true
-        default: testpypi
-        options:
-          - testpypi
-          - pypi
   pull_request:
   push:
     branches:
       - "**"
     tags:
       - "v*"
-  release:
-    types:
-      - published
 
 env:
   MIFROST_MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -287,10 +274,10 @@ jobs:
         name: dist-${{ matrix.os }}-${{ matrix.flavor }}
 
   upload_all:
-    name: Publish Wheels (Release)
-    needs: [build_wheels, build_sdist]
+    name: Publish Wheels (PyPI)
+    needs: [upload_testpypi]
     runs-on: ubuntu-latest
-    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'workflow_dispatch' && inputs.publish_target == 'pypi')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       id-token: write
@@ -309,7 +296,7 @@ jobs:
     name: Publish Wheels (TestPyPI)
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_target == 'testpypi')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       id-token: write
@@ -325,5 +312,23 @@ jobs:
     - uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
-        user: __token__
-        password: ${{ secrets.test_pypi_password }}
+
+  create_release:
+    name: Create GitHub Release
+    needs: [upload_all]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+    - name: Create release from tag
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        gh release create "${GITHUB_REF_NAME}" \
+          --title "${GITHUB_REF_NAME}" \
+          --generate-notes \
+          --verify-tag \
+          --latest
