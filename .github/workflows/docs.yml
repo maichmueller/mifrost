@@ -125,6 +125,31 @@ jobs:
           name: mifrost-snippet-includes
           path: .
 
+      - name: Normalize snippet includes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          root = Path.cwd()
+          dest = root / "docs" / "_includes"
+          candidates = [
+              root / "docs" / "_includes",
+              root / "_includes",
+              root / "docs" / "docs" / "_includes",
+          ]
+
+          source = next((path for path in candidates if path.is_dir()), None)
+          if source is None:
+              raise SystemExit("snippet includes were not downloaded")
+
+          if source.resolve() != dest.resolve():
+              if dest.exists():
+                  shutil.rmtree(dest)
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              shutil.move(str(source), str(dest))
+          PY
+
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade pip
