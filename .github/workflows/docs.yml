@@ -133,21 +133,15 @@ jobs:
 
           root = Path.cwd()
           dest = root / "docs" / "_includes"
-          candidates = [
-              root / "docs" / "_includes",
-              root / "_includes",
-              root / "docs" / "docs" / "_includes",
-          ]
+          source = root / "snippets"
 
-          source = next((path for path in candidates if path.is_dir()), None)
-          if source is None:
+          if not source.is_dir():
               raise SystemExit("snippet includes were not downloaded")
 
-          if source.resolve() != dest.resolve():
-              if dest.exists():
-                  shutil.rmtree(dest)
-              dest.parent.mkdir(parents=True, exist_ok=True)
-              shutil.move(str(source), str(dest))
+          if dest.exists():
+              shutil.rmtree(dest)
+          dest.parent.mkdir(parents=True, exist_ok=True)
+          shutil.move(str(source), str(dest))
           PY
 
       - name: Install docs dependencies
