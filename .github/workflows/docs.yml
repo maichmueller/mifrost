@@ -123,7 +123,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: mifrost-snippet-includes
-          path: docs
+          path: .
 
       - name: Install docs dependencies
         run: |
