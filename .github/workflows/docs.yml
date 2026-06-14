@@ -132,7 +132,7 @@ jobs:
           import shutil
 
           root = Path.cwd()
-          dest = root / "docs" / "_includes"
+          dest = root / "docs" / "_includes" / "snippets"
           source = root / "snippets"
 
           if not source.is_dir():
