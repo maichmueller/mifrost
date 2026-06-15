@@ -17,7 +17,13 @@ _LAZY_EXPORTS = ENCODER_LAZY_EXPORTS
 if not _in_stubgen:
     from .base import EncoderBase, StreamEncoderBase
     from ._rustworkx_dag import transition_dag_from_rustworkx
-    from .common import _encoding_dict_to_pyg, _split_goals, encoding_to_tensors
+    from .common import _split_goals
+    from .conversion import (
+        _encoding_dict_to_pyg,
+        encoding_to_tensors,
+        to_pyg,
+        to_tensor_payload,
+    )
     from ..graph_fields import CollateSpec
     from ..schema_keys import (
         BATCH_ATTR,

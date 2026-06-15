@@ -228,6 +228,10 @@ Candidate B: PyG conversion boundary.
   small interface:
   `to_pyg(encoding, *, as_batch, include_metadata)` and
   `to_tensor_payload(encoding)`.
+- Status: implemented for the Python wrapper boundary. Conversion now lives in
+  `mifrost.encoders.conversion`, encoder bases use that boundary for the
+  default path, and legacy encoder namespace helpers remain as compatibility
+  exports.
 - Test impact: boundary tests cover hetero, homo, flat, metadata included or
   excluded, and optional dependency degradation.
 - Acceptance: encoder classes no longer need to know low-level schema conversion

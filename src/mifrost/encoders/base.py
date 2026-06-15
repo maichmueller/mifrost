@@ -14,7 +14,7 @@ from typing import (
     TypeVar,
 )
 
-from .common import _encoding_dict_to_pyg
+from .conversion import _encoding_dict_to_pyg, to_pyg
 from ._rustworkx_dag import RXStateDAG
 from ..graph_fields import CollateSpec
 from .types import (
@@ -251,8 +251,10 @@ class EncoderBase(ABC, Generic[PygDataT]):
     ) -> PygDataT:
         if _is_batch_encoding_like(encoding):
             uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
-            if include_metadata and uses_default_converter:
-                return encoding.as_pyg(as_batch=as_batch)
+            if uses_default_converter:
+                return to_pyg(
+                    encoding, as_batch=as_batch, include_metadata=include_metadata
+                )
             return self._dict_to_pyg(
                 encoding.as_dict(),
                 as_batch=as_batch,
@@ -347,8 +349,10 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
             uses_default_converter = (
                 type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
             )
-            if include_metadata and uses_default_converter:
-                return encoding.as_pyg(as_batch=as_batch)
+            if uses_default_converter:
+                return to_pyg(
+                    encoding, as_batch=as_batch, include_metadata=include_metadata
+                )
             return self._dict_to_pyg(
                 encoding.as_dict(),
                 as_batch=as_batch,

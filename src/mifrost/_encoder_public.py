@@ -75,6 +75,8 @@ ENCODER_DIRECT_EXPORTS = (
     "_encoding_dict_to_pyg",
     "_split_goals",
     "encoding_to_tensors",
+    "to_pyg",
+    "to_tensor_payload",
     "CollateSpec",
     "TYPE_ATTR_SEPARATOR",
     "EDGE_TYPE_SEPARATOR",
