@@ -34,7 +34,14 @@ def main():
     parser.add_argument("--deps_policy", default="missing", help="Conan build policy")
     parser.add_argument("--cmake_cmd", default="cmake", help="CMake executable")
     parser.add_argument("--conan_cmd", default="conan", help="Conan executable")
-    parser.add_argument("--build_dir", default="build", help="Build directory")
+    parser.add_argument(
+        "--build_dir",
+        default="build",
+        help=(
+            "Build directory; prefer build/local-release, build/local-debug, "
+            "build/stubs, or build/ci (see AGENTS.md)"
+        ),
+    )
     parser.add_argument("--source_dir", default=".", help="Source directory")
     parser.add_argument(
         "--config", default="Release", help="Build type (Debug, Release, etc.)"

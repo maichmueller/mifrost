@@ -4,6 +4,9 @@ This project uses a Python build backend that configures and builds the C++ core
 
 ## Local setup
 
+Use the `beiw` conda environment and the editable-install workflow described in
+[AGENTS.md](../../AGENTS.md) before running import checks or tests.
+
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -e .[dev]
@@ -18,6 +21,16 @@ python -m pip install pytest mkdocs mkdocs-material
 
 ## Build and install
 
+Use a dedicated subdirectory under `build/` for each local purpose:
+
+- `build/local-release` for normal local development builds
+- `build/local-debug` for debug builds
+- `build/stubs` for stub-generation or typing-oriented work
+- `build/ci` for CI-like local reproductions
+
+Avoid ad hoc root-level build directories like `build_*_probe` unless they are
+short-lived ignored experiments.
+
 Install the package (this triggers a full native build):
 
 ```bash
@@ -29,6 +42,15 @@ For editable development:
 ```bash
 python -m pip install -e .
 ```
+
+For explicit CMake-driven local builds, the blessed layout is:
+
+```bash
+python configure.py --config Release --build_dir build/local-release
+python cbuild.py build/local-release
+```
+
+Use `build/local-debug` with `--config Debug` when you need a debug tree.
 
 ## Run tests
 
