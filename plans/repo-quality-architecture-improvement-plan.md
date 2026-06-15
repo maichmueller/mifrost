@@ -270,7 +270,8 @@ Candidate D: `BatchEncoding` binding split.
   lives in a dedicated native source file, reducing `init_batch_encoding.cpp`
   while keeping the binding registration in place. Owner target-device and
   tensor-cache helpers now live in a shared native helper module used by graph
-  field access, PyG views, and binding methods.
+  field access, PyG views, and binding methods. Schema fingerprinting and PyG
+  tensor-key lookup now live in a dedicated schema helper module.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.

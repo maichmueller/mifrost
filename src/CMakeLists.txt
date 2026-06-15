@@ -408,6 +408,7 @@ nanobind_add_module(mifrost_core_module
         "_core/mifrost/batch_encoding_graph_field_access.cpp"
         "_core/mifrost/batch_encoding_python_collation.cpp"
         "_core/mifrost/batch_encoding_repr.cpp"
+        "_core/mifrost/batch_encoding_schema.cpp"
         "_core/mifrost/batch_encoding_tensor_cache.cpp"
         "_core/mifrost/init_common.cpp"
         "_core/mifrost/init_map_view.cpp"
