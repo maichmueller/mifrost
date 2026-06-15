@@ -667,8 +667,18 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         goals_input = goals if goals is not None else default_goals_from_state(state)
         inputs = _split_goals(goals_input, subgoal_layers)
         if history_list:
+            if history_max_steps is None:
+                self._engine.encode(
+                    adv_state, inputs, action_list, history_list, builder
+                )
+                return
             self._engine.encode(
-                adv_state, inputs, action_list, history_list, history_max_steps, builder
+                adv_state,
+                inputs,
+                action_list,
+                history_list,
+                history_max_steps,
+                builder,
             )
             return
         self._engine.encode(adv_state, inputs, action_list, builder)

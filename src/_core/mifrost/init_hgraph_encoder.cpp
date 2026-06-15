@@ -263,6 +263,22 @@ void init_hgraph_encoder(nb::module_& m)
             const GoalInputs& goals,
             const std::vector< mimir::formalism::GroundAction >& actions,
             const std::vector< HGraphEncoderEngine::HistorySubgoal >& history_subgoals,
+            BatchBuilder& builder) {
+            encoder.encode(state, goals, actions, history_subgoals, std::nullopt, builder);
+         },
+         "state"_a,
+         "goals"_a,
+         "actions"_a,
+         "history_subgoals"_a,
+         "builder"_a
+      )
+      .def(
+         "encode",
+         [](HGraphEncoderEngine& encoder,
+            const mimir::search::State& state,
+            const GoalInputs& goals,
+            const std::vector< mimir::formalism::GroundAction >& actions,
+            const std::vector< HGraphEncoderEngine::HistorySubgoal >& history_subgoals,
             std::optional< int > history_max_steps,
             BatchBuilder& builder) {
             encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
@@ -271,7 +287,7 @@ void init_hgraph_encoder(nb::module_& m)
          "goals"_a,
          "actions"_a,
          "history_subgoals"_a,
-         "history_max_steps"_a = std::nullopt,
+         "history_max_steps"_a,
          "builder"_a
       )
       .def(

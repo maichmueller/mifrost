@@ -619,6 +619,15 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         goals_input = goals if goals is not None else default_goals_from_state(state)
         split_goals = _split_goals(goals_input, subgoal_layers_list)
         if history_list:
+            if history_max_steps is None:
+                self._engine.encode(
+                    adv_state,
+                    split_goals,
+                    action_list,
+                    history_list,
+                    builder,
+                )
+                return
             self._engine.encode(
                 adv_state,
                 split_goals,

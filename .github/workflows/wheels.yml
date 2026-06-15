@@ -88,6 +88,15 @@ jobs:
       run: |
         test -s src/mifrost/_core.pyi
 
+    - name: Validate generated stub syntax
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+
+        path = Path("src/mifrost/_core.pyi")
+        compile(path.read_text(), str(path), "exec")
+        PY
+
     - name: Upload generated stubs
       uses: actions/upload-artifact@v6
       with:
