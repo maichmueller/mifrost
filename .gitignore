@@ -24,3 +24,24 @@ build_*
 
 # Generated snippet include fragments (CI artifact, not committed)
 /docs/_includes/
+
+# Tool caches and local agent state
+.benchmarks/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.serena/
+**/.benchmarks/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/__pycache__/
+
+# Local one-off probe scripts
+/scripts/tmp_probe_*.py
+
+# Editable native build outputs written into the source package in dev mode
+/src/mifrost/_core*.so
+/src/mifrost/_core*.pyd
+/src/mifrost/lib/
+/src/mifrost/lib*.dylib

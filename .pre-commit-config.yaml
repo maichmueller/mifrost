@@ -8,7 +8,16 @@ repos:
     rev: v0.14.14
     hooks:
       # Run the linter.
-      #      - id: ruff-check
+      - id: ruff-check
+        types_or: [ python, pyi ]
       # Run the formatter.
       - id: ruff-format
+        types_or: [ python, pyi ]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: python -m mypy
+        language: system
+        pass_filenames: false
         types_or: [ python, pyi ]
