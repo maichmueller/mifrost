@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "mifrost/batch_encoding_graph_field_access.hpp"
+#include "mifrost/batch_encoding_tensor_cache.hpp"
 #include "mifrost/common.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/schema.hpp"
@@ -26,16 +27,6 @@ nb::list batch_encoding_edge_types(const BatchBuilder::BatchEncoding& encoding);
 
 nb::object
 batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool > as_batch);
-
-std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner);
-
-nb::object owner_target_device(nb::handle owner);
-
-void set_owner_target_device(nb::handle owner, nb::handle device);
-
-void materialize_owner_tensor_cache(nb::handle owner, BatchBuilder::BatchEncoding& encoding);
-
-nb::object zeros_f32_on_owner_device(nb::handle owner, int64_t rows, int64_t cols);
 
 std::optional< std::string >
 find_node_attr_key(const Schema& schema, std::string_view node_type, std::string_view attr);

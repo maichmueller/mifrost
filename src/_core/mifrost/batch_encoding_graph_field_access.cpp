@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "mifrost/batch_encoding_tensor_cache.hpp"
 #include "mifrost/common.hpp"
 #include "mifrost/core/dlpack_utils.hpp"
 
@@ -18,8 +19,6 @@ namespace mifrost {
 
 namespace {
 
-constexpr std::string_view kPythonTensorDeviceAttr = "__mifrost_tensor_device__";
-constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 constexpr std::string_view kPtrKeySuffix = "/ptr";
 constexpr std::string_view kBatchKeySuffix = "/batch";
 
@@ -51,31 +50,9 @@ batch_encoding_lookup_graph_field(BatchBuilder::BatchEncoding& encoding, std::st
    return {};
 }
 
-nb::object target_device_from_owner(nb::handle owner)
-{
-   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
-   if(not attrs.contains(kPythonTensorDeviceAttr.data())) {
-      return nb::none();
-   }
-   return nb::borrow< nb::object >(attrs[kPythonTensorDeviceAttr.data()]);
-}
-
-std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner)
-{
-   nb::dict attrs = nb::cast< nb::dict >(owner.attr("__dict__"));
-   if(not attrs.contains(kPythonTensorCacheAttr.data())) {
-      return std::nullopt;
-   }
-   nb::object raw_cache = nb::borrow< nb::object >(attrs[kPythonTensorCacheAttr.data()]);
-   if(not nb::isinstance< nb::dict >(raw_cache)) {
-      throw std::invalid_argument("BatchEncoding internal tensor cache must be a dict");
-   }
-   return nb::cast< nb::dict >(raw_cache);
-}
-
 nb::object maybe_move_tensor_to_device(nb::object tensor, nb::handle owner)
 {
-   nb::object device = target_device_from_owner(owner);
+   nb::object device = owner_target_device(owner);
    if(device.is_none()) {
       return tensor;
    }
