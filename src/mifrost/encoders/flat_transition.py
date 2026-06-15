@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from ._batch_contract import (
+    convert_batch_payload as _convert_batch_payload,
     parse_states_batch,
     parse_successors_batch_param,
 )
@@ -19,9 +20,6 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
     SuccessorBatchParam,
-)
-from .common import (
-    _convert_batch_payload,
 )
 from .flat_horizon import FlatHorizonEncoder
 from ._lane_specs import (

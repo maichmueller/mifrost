@@ -15,7 +15,11 @@ from .._core import (
     FlatHorizonStreamEncoder as _FlatHorizonStreamEncoder,
     HorizonEncoderMode,
 )
-from ._batch_contract import parse_dags_batch_param, parse_states_batch
+from ._batch_contract import (
+    convert_batch_payload as _convert_batch_payload,
+    parse_dags_batch_param,
+    parse_states_batch,
+)
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
 from .base import (
     ActionBatchInput,
@@ -33,7 +37,6 @@ from .base import (
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _convert_batch_payload,
 )
 from ._lane_specs import (
     FLAT_HORIZON_LANE_SPEC,

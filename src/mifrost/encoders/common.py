@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable as IterableABC
-from collections.abc import Sequence as SequenceABC
-from typing import Any, Callable, Iterable
+from typing import Any, Iterable
 
 import pymimir.advanced.formalism as af
 
 from .types import (
-    BatchParam,
     DomainInput,
     GoalLiteralInput,
     GroundActionInput,
@@ -111,84 +108,11 @@ def _prepare_history_subgoals(
     return out
 
 
-def _convert_batch_payload(
-    value: Any,
-    *,
-    is_leaf: Callable[[object], bool],
-    convert_leaf: Callable[[Any], Any],
-) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, BatchParam):
-        if value.kind == "none":
-            return BatchParam.none()
-        if value.kind == "shared":
-            return BatchParam.shared(
-                _convert_batch_payload(
-                    value.value,
-                    is_leaf=is_leaf,
-                    convert_leaf=convert_leaf,
-                )
-            )
-        if value.kind == "separate":
-            if not isinstance(value.value, SequenceABC) or isinstance(
-                value.value, (str, bytes, bytearray)
-            ):
-                raise TypeError("BatchParam(separate) value must be a sequence")
-            return BatchParam.separate(
-                (
-                    _convert_batch_payload(
-                        entry,
-                        is_leaf=is_leaf,
-                        convert_leaf=convert_leaf,
-                    )
-                    if entry is not None
-                    else None
-                )
-                for entry in value.value
-            )
-        raise ValueError("BatchParam.kind must be 'shared', 'separate', or 'none'")
-    if is_leaf(value):
-        return convert_leaf(value)
-    if isinstance(value, (str, bytes, bytearray)):
-        return value
-    if isinstance(value, tuple):
-        return tuple(
-            _convert_batch_payload(
-                item,
-                is_leaf=is_leaf,
-                convert_leaf=convert_leaf,
-            )
-            for item in value
-        )
-    if isinstance(value, list):
-        return [
-            _convert_batch_payload(
-                item,
-                is_leaf=is_leaf,
-                convert_leaf=convert_leaf,
-            )
-            for item in value
-        ]
-    if isinstance(value, SequenceABC):
-        return [
-            _convert_batch_payload(
-                item,
-                is_leaf=is_leaf,
-                convert_leaf=convert_leaf,
-            )
-            for item in value
-        ]
-    if isinstance(value, IterableABC):
-        return [
-            _convert_batch_payload(
-                item,
-                is_leaf=is_leaf,
-                convert_leaf=convert_leaf,
-            )
-            for item in value
-        ]
-    return value
+def _convert_batch_payload(value: Any, **kwargs: Any) -> Any:
+    """Compatibility wrapper for the batch contract module."""
+    from ._batch_contract import convert_batch_payload
+
+    return convert_batch_payload(value, **kwargs)
 
 
 def _encoding_dict_to_pyg(

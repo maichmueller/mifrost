@@ -31,9 +31,9 @@ from .base import (
     SubgoalLayersBatchParam,
     SuccessorBatchParam,
 )
+from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_state,
-    _convert_batch_payload,
     _split_goals,
 )
 from ._lane_specs import (

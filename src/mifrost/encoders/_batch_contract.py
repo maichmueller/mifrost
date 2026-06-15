@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable as IterableABC
+from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
-from typing import Generic, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Generic, TypeAlias, TypeVar, cast
 
 from .. import _core
 from .._core import TransitionDAG
 from .types import (
+    BatchParam,
     GoalLiteralInput,
     GroundActionInput,
     StateInput,
@@ -148,6 +151,86 @@ def parse_dags_batch_param(
         list[TransitionDAG | None],
         list(_core._parse_dags_batch_param(dags, state_count)),
     )
+
+
+def convert_batch_payload(
+    value: Any,
+    *,
+    is_leaf: Callable[[object], bool],
+    convert_leaf: Callable[[Any], Any],
+) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, BatchParam):
+        if value.kind == "none":
+            return BatchParam.none()
+        if value.kind == "shared":
+            return BatchParam.shared(
+                convert_batch_payload(
+                    value.value,
+                    is_leaf=is_leaf,
+                    convert_leaf=convert_leaf,
+                )
+            )
+        if value.kind == "separate":
+            if not isinstance(value.value, SequenceABC) or isinstance(
+                value.value, (str, bytes, bytearray)
+            ):
+                raise TypeError("BatchParam(separate) value must be a sequence")
+            return BatchParam.separate(
+                (
+                    convert_batch_payload(
+                        entry,
+                        is_leaf=is_leaf,
+                        convert_leaf=convert_leaf,
+                    )
+                    if entry is not None
+                    else None
+                )
+                for entry in value.value
+            )
+        raise ValueError("BatchParam.kind must be 'shared', 'separate', or 'none'")
+    if is_leaf(value):
+        return convert_leaf(value)
+    if isinstance(value, (str, bytes, bytearray)):
+        return value
+    if isinstance(value, tuple):
+        return tuple(
+            convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        )
+    if isinstance(value, list):
+        return [
+            convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        ]
+    if isinstance(value, SequenceABC):
+        return [
+            convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        ]
+    if isinstance(value, IterableABC):
+        return [
+            convert_batch_payload(
+                item,
+                is_leaf=is_leaf,
+                convert_leaf=convert_leaf,
+            )
+            for item in value
+        ]
+    return value
 
 
 def reject_unsupported_batch_field(

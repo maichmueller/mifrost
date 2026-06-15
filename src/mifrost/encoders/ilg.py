@@ -35,11 +35,11 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
+from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_action,
     _advanced_literal,
     _advanced_state,
-    _convert_batch_payload,
 )
 from .types import (
     ATOM_TYPES,

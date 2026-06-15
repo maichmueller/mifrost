@@ -34,11 +34,12 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import parse_dags_batch_param, parse_states_batch
-from .common import (
-    _advanced_state,
-    _convert_batch_payload,
+from ._batch_contract import (
+    convert_batch_payload as _convert_batch_payload,
+    parse_dags_batch_param,
+    parse_states_batch,
 )
+from .common import _advanced_state
 from ._lane_specs import (
     HORIZON_LANE_SPEC,
     ensure_transition_dag,

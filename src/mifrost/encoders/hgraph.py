@@ -33,10 +33,10 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
+from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _convert_batch_payload,
     _prepare_actions,
     _prepare_history_subgoals,
     _split_goals,

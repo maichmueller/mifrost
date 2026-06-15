@@ -211,6 +211,9 @@ Candidate A: encoder lane contract.
 - Dependency category: in-process.
 - Proposed direction: introduce one internal "lane input contract" module that
   returns typed prepared payload objects for single, batch, and stream paths.
+- Status: partially implemented. Existing lane/batch/action contract modules are
+  now the internal owners for parsed batch plans and batch payload conversion;
+  `common.py` keeps compatibility wrappers for older private imports.
 - Test impact: replace narrow helper tests with boundary tests that assert each
   encoder lane accepts/rejects public input shapes consistently.
 - Acceptance: adding a new encoder lane requires defining a lane spec and native
@@ -252,9 +255,11 @@ Candidate C: public export manifest.
 
 Candidate D: `BatchEncoding` binding split.
 
-- Cluster: `init_batch_encoding.cpp`, `batch_encoding_python_collation.*`,
-  `batch_encoding_graph_field_access.*`, `schema_bindings.cpp`, and Python tests
-  currently in `src/_core/mifrost/tests/test_bindings.py`.
+- Cluster: `src/_core/mifrost/init_batch_encoding.cpp`,
+  `src/_core/mifrost/batch_encoding_python_collation.*`,
+  `src/_core/mifrost/batch_encoding_graph_field_access.*`,
+  `src/_core/mifrost/schema_bindings.cpp`, and Python tests currently in
+  `tests/native/`.
 - Why coupled: one binding file owns serialization, schema conversion, tensor
   conversion, graph fields, Python attribute collation, repr behavior, and
   nanobind exposure.
