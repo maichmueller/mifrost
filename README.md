@@ -8,7 +8,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 [![Unit & C++ Tests](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml)
 [![Install Smoke](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml)
 [![Wheel Builds](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml)
-[![Performance Gate](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
+[![Performance Monitor](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
 [![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
 
 | Workflow | Platforms | Python versions |

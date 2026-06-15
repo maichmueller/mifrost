@@ -1,4 +1,4 @@
-name: Performance Gate
+name: Performance Monitor
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ env:
 
 jobs:
   perf-batch-encodings:
-    name: Batch Encodings Perf Gate (macOS)
+    name: Batch Encodings Perf Monitor (macOS)
     runs-on: macos-latest
     outputs:
       boundary_crossed: ${{ steps.gate.outputs.boundary_crossed }}
@@ -48,7 +48,7 @@ jobs:
         run: |
           python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
-      - name: Run batch_encodings benchmark gate
+      - name: Run batch_encodings benchmark monitor
         id: gate
         shell: bash
         run: |
@@ -90,7 +90,7 @@ jobs:
             echo "boundary_crossed=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # Non-blocking gate: always succeed the workflow.
+          # Non-blocking monitor: always succeed the workflow.
           exit 0
 
   perf-boundary-status:
