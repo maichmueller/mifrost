@@ -641,7 +641,6 @@ if (MIFROST_BUILD_BENCHMARKS)
 endif ()
 
 # --- Tests ---
-include(CTest)
 if (BUILD_TESTING)
     find_package(GTest REQUIRED)
     add_executable(

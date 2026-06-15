@@ -9,4 +9,6 @@ endif()
 
 project(mifrost_root LANGUAGES CXX)
 
+include(CTest)
+
 add_subdirectory(src)
