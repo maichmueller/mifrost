@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--conan_cmd", default="conan", help="Conan executable")
     parser.add_argument(
         "--build_dir",
-        default="build",
+        default="build/local-release",
         help=(
             "Build directory; prefer build/local-release, build/local-debug, "
             "build/stubs, or build/ci (see AGENTS.md)"

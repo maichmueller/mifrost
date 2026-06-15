@@ -29,8 +29,8 @@ python -m pip install .
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-python configure.py --config Release --build_dir build
-python cbuild.py build
+python configure.py --config Release
+python cbuild.py
 ```
 
 ### Alternative: CMake Presets
@@ -49,14 +49,14 @@ CMake cache variables.
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-python configure.py --config Release --build_dir build_bench --with_benchmarks
-python cbuild.py build_bench
+python configure.py --config Release --build_dir build/bench-release --with_benchmarks
+python cbuild.py build/bench-release
 ```
 
 If `conan` is not on `PATH`, pass it explicitly:
 
 ```bash
-python configure.py --config Release --build_dir build --conan_cmd /path/to/conan
+python configure.py --config Release --conan_cmd /path/to/conan
 ```
 
 If CMake cannot find `pymimir`, extend `CMAKE_PREFIX_PATH`:

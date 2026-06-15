@@ -306,8 +306,8 @@ Batch hard-break note:
 ### Configure and build C++ targets
 
 ```bash
-python configure.py --config Release --build_dir build
-python cbuild.py build
+python configure.py --config Release
+python cbuild.py
 ```
 
 Or use CMake presets:
@@ -320,8 +320,8 @@ cmake --build build/local-release
 Build benchmarks:
 
 ```bash
-python configure.py --config Release --build_dir build_bench --with_benchmarks
-python cbuild.py build_bench --bench
+python configure.py --config Release --build_dir build/bench-release --with_benchmarks
+python cbuild.py build/bench-release --bench
 ```
 
 Batch collation microbenchmark (`batch_encodings`, including `pyobj` collation):

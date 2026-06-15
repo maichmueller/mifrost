@@ -16,7 +16,7 @@ set(MIFROST_SDK_CMAKE_DIR "${MIFROST_SDK_LIBRARY_DIR}/cmake/mifrost")
 
 set(_mifrost_package_version "${SKBUILD_PROJECT_VERSION}")
 if (NOT _mifrost_package_version)
-    set(_mifrost_package_version "0.2.0")
+    set(_mifrost_package_version "0.0.0.dev0")
 endif ()
 
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
@@ -101,7 +101,7 @@ elseif (NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{CONDA_PREFIX})
     set(Python_ROOT_DIR "$ENV{CONDA_PREFIX}")
 endif ()
 find_package(
-        Python 3.10
+        Python 3.12
         REQUIRED
         COMPONENTS Interpreter Development.Module
         OPTIONAL_COMPONENTS Development.Embed

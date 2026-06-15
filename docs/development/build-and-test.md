@@ -46,8 +46,8 @@ python -m pip install -e .
 For explicit CMake-driven local builds, the blessed layout is:
 
 ```bash
-python configure.py --config Release --build_dir build/local-release
-python cbuild.py build/local-release
+python configure.py --config Release
+python cbuild.py
 ```
 
 Use `build/local-debug` with `--config Debug` when you need a debug tree.

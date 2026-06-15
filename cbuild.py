@@ -6,7 +6,12 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(description="Build Mifrost")
-    parser.add_argument("build_dir", nargs="?", default="build", help="Build directory")
+    parser.add_argument(
+        "build_dir",
+        nargs="?",
+        default="build/local-release",
+        help="Build directory",
+    )
     parser.add_argument("--target", default="all", help="Build target")
     parser.add_argument(
         "--bench",

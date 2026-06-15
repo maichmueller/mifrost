@@ -96,6 +96,8 @@ runtime checks reflect the current native code.
      or document Conan package versioning as intentionally independent.
    - Remove the stale standalone CMake fallback version or set it to a clearly
      non-release dev value.
+   - Status: implemented; Conan reads `pyproject.toml`, and standalone CMake
+     config falls back to `0.0.0.dev0` instead of a stale release version.
    - Acceptance: `pyproject.toml`, Conan export behavior, generated CMake
      package versions, and release tags cannot drift silently.
 
@@ -171,6 +173,9 @@ runtime checks reflect the current native code.
      directory or redirect directory.
    - If direct source output is retained, add a cleanup target that removes stale
      extensions and dylibs before rebuild.
+   - Status: scoped out as an intentional scikit-build editable behavior for
+     now; the repo now ignores those generated artifacts and validates editable
+     rebuilds through the `beiw` workflow.
    - Acceptance: an old `_core.cpython-*.so` cannot load against a newer
      `libmifrost_core.dylib` and break imports.
 
@@ -179,6 +184,9 @@ runtime checks reflect the current native code.
      `build/ci` over ad hoc root directories like `build_*_probe`.
    - Update `configure.py`, `cbuild.py`, docs, and CMake presets to point at
      those locations.
+   - Status: implemented for the Python helper defaults and docs; explicit CI,
+     stub, and benchmark commands still pass purpose-specific subdirectories
+     under `build/`.
    - Acceptance: normal workflows no longer create arbitrary root-level build
      directories.
 
