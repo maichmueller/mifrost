@@ -627,7 +627,6 @@ def test_core_parse_states_rejects_state_adapters(small_blocks):
 
 def test_core_parse_goals_rejects_literal_adapters(small_blocks):
     _space, domain, problem = small_blocks
-    state = problem.get_initial_state()
     goals = _problem_goals(problem)
     if not goals:
         pytest.skip("Fixture has no goals.")

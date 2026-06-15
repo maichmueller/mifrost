@@ -14,7 +14,6 @@ from .._core import (
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    GoalInputs,
     HorizonEncoderConfig,
     HorizonHGraphEncoderEngine,
     HorizonStreamEncoder as _HorizonStreamEncoder,
@@ -54,7 +53,6 @@ from ._rustworkx_dag import (
 )
 from .hgraph import HGraphEncoder, TargetSource
 from .types import (
-    HeteroEncoding,
     DomainInput,
     GoalLiteralInput,
     HistorySubgoalInput,

@@ -8,7 +8,6 @@ import torch
 from torch_geometric.data import Data
 
 from .._core import (
-    BatchBuilder,
     ColorEncoderConfig,
     ColorEncoderEngine,
     ColorStreamEncoder as _ColorStreamEncoder,

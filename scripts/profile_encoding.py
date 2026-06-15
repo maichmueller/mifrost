@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 
 import pymimir
-from torch_geometric.data import Batch
 
 ROOT = Path(__file__).resolve().parents[1]
 

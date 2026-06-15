@@ -128,10 +128,10 @@ def test_flat_horizon_stream_matches_direct_encode_and_accepts_rustworkx(small_b
     space, domain, problem = small_blocks
     root = problem.get_initial_state()
     transitions = _first_distinct_changed_transitions(space, root, count=1)
-    action, successor = transitions[0]
+    if not transitions:
+        pytest.skip("Fixture should yield at least one distinct changed transition")
     dag = _single_step_dag(root, transitions, candidate_ids=[101])
     goals = list(problem.get_goal_condition().get_literals())
-    graph = _horizon_pygraph(root, action, successor)
 
     encoder = FlatHorizonEncoder(domain, ignore_actions=False)
     stream = encoder.stream()

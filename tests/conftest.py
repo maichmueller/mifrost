@@ -6,7 +6,6 @@ breaks wheel tests by shadowing the compiled extension module.
 """
 
 from pathlib import Path
-from typing import Any
 
 import pymimir
 from pymimir import Domain, Problem

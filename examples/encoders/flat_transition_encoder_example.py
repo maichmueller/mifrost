@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+
 from mifrost.encoders import FlatTransitionEffectsEncoder, FlatTransitionEncoder
 
 from _helpers import begin_plot, first_transition, load_space, save_plot
@@ -33,9 +35,7 @@ def main() -> None:
     _print_summary("FlatTransitionEncoder", full_data)
     _print_summary("FlatTransitionEffectsEncoder", delta_data)
 
-    try:
-        from matplotlib import pyplot as plt
-    except ModuleNotFoundError:
+    if importlib.util.find_spec("matplotlib") is None:
         print("matplotlib not installed; skipped plot export")
         return
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from contextlib import contextmanager
 from functools import singledispatch
-from typing import Any, List
+from typing import List
 
 import torch
 from torch_geometric.data import Batch

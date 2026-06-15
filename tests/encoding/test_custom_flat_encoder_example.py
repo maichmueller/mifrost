@@ -10,7 +10,7 @@ EXAMPLES_ENCODERS_DIR = Path(__file__).resolve().parents[2] / "examples" / "enco
 if str(EXAMPLES_ENCODERS_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLES_ENCODERS_DIR))
 
-from _custom_flat_target_mask_encoder import ExampleTargetMaskFlatEncoder
+from _custom_flat_target_mask_encoder import ExampleTargetMaskFlatEncoder  # noqa: E402
 
 
 def _first_action(space, state):

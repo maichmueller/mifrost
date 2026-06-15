@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Collection, Iterable, Sequence
 
 import numpy as np
-import torch
 from torch_geometric.data import HeteroData
 
 from .. import _core
@@ -44,7 +43,6 @@ from .common import (
 )
 from .types import (
     ATOM_TYPES,
-    HeteroEncoding,
     StateInput,
     WRAPPER_STATE_TYPES,
     is_action_input,

@@ -51,8 +51,8 @@ def test_successor_encoder(domain_name: str, problem_name: str):
     # 4. Setup goals
     goal_cond = problem.get_goal_condition()
     goals = [
-        l._advanced_ground_literal
-        for l in goal_cond._static_ground_literals
+        literal._advanced_ground_literal
+        for literal in goal_cond._static_ground_literals
         + goal_cond._fluent_ground_literals
         + goal_cond._derived_ground_literals
     ]

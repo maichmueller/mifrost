@@ -7,7 +7,6 @@ import hashlib
 from typing import Any, Iterable, Mapping
 
 import networkx as nx
-import torch
 
 from .._core import (
     BatchBuilder,
@@ -47,7 +46,6 @@ from .types import (
     BatchParam,
     DomainInput,
     FlatEncoding,
-    GoalLiteralInput,
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,

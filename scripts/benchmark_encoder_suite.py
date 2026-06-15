@@ -9,7 +9,7 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 import pymimir
 

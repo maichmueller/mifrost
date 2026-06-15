@@ -61,9 +61,7 @@ class LokiRecipe(ConanFile):
     }
 
     default_options.update({f"boost/*:without_{comp}": True for comp in BOOST_COMPS})
-    default_options.update(
-        {f"boost/*:without_iostreams": False for comp in BOOST_COMPS}
-    )
+    default_options.update({"boost/*:without_iostreams": False for comp in BOOST_COMPS})
     for comp in ("iostreams", "random", "regex", "system"):
         default_options.update({f"boost/*:without_{comp}": False})
 

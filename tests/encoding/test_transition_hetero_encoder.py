@@ -164,11 +164,12 @@ def test_transition_encoder_multiple_states_and_successors(medium_blocks):
                 for node, data in transition_graph.nodes(data=True)
                 if str(data.get("type", "")).endswith(successor_suffix)
             ]
-            nullary_filter = lambda atom: predicate_arity(atom) > 0
+
+            def non_nullary(atom):
+                return predicate_arity(atom) > 0
+
             assert len(sorted(encoded_successors)) == len(
-                sorted(
-                    set(str(atom) for atom in filter(nullary_filter, successor_facts))
-                )
+                sorted(set(str(atom) for atom in filter(non_nullary, successor_facts)))
             )
 
             for atom in successor_facts:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Sequence
+from typing import Any
 
 import torch
 from torch_geometric.data import Batch, Data

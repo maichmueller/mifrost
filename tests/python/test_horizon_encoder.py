@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import mifrost
-import pymimir
 import pytest
 from pymimir.wrapper_formalism import Domain, Problem
 
@@ -51,13 +50,16 @@ def test_horizon_encoder(domain_name: str, problem_name: str):
     # 4. Encode
     goal_cond = problem.get_goal_condition()
     static_goals = [
-        l._advanced_ground_literal for l in goal_cond._static_ground_literals
+        literal._advanced_ground_literal
+        for literal in goal_cond._static_ground_literals
     ]
     fluent_goals = [
-        l._advanced_ground_literal for l in goal_cond._fluent_ground_literals
+        literal._advanced_ground_literal
+        for literal in goal_cond._fluent_ground_literals
     ]
     derived_goals = [
-        l._advanced_ground_literal for l in goal_cond._derived_ground_literals
+        literal._advanced_ground_literal
+        for literal in goal_cond._derived_ground_literals
     ]
 
     goals = mifrost.GoalInputs(static_goals + fluent_goals + derived_goals)

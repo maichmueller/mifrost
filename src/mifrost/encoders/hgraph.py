@@ -22,7 +22,6 @@ from .._core import (
     HGraphStreamEncoder as _HGraphStreamEncoder,
 )
 from .base import (
-    ActionBatchInput,
     ActionBatchParam,
     CollateSpecParam,
     EncoderBase,
@@ -50,7 +49,6 @@ from .types import (
     DomainInput,
     GoalLiteralInput,
     GroundActionInput,
-    HeteroEncoding,
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,

@@ -8,7 +8,6 @@ from .._core import TransitionDAG
 from .types import (
     GoalLiteralInput,
     GroundActionInput,
-    HistorySubgoalInput,
     StateInput,
 )
 

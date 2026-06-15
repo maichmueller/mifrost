@@ -9,7 +9,6 @@ import mifrost
 from .test_utils import (
     adv_domain,
     adv_state,
-    format_atom_with_suffix,
     format_literal_with_suffix,
     goal_inputs_from_problem,
     object_names,

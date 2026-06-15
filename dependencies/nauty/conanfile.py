@@ -1,6 +1,6 @@
 from conan import ConanFile
 from conan.tools.files import get
-from conan.tools.gnu import AutotoolsToolchain, Autotools, PkgConfig
+from conan.tools.gnu import AutotoolsToolchain, Autotools
 
 
 class NautyRecipe(ConanFile):

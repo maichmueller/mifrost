@@ -118,7 +118,6 @@ def test_successor_delta_marks_added_and_removed_atoms(small_blocks):
     base_atoms = set(state_atoms(state, with_statics=False))
     successor_atoms = set(state_atoms(successor_state, with_statics=False))
     added = successor_atoms - base_atoms
-    removed = base_atoms - successor_atoms
 
     formatter = mifrost.RelationFormatter
 
