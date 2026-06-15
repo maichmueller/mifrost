@@ -11,6 +11,7 @@ build
 .vs
 
 .idea/
+CMakeUserPresets.json
 build_editable/
 cmake-build-*
 build-*
@@ -26,6 +27,7 @@ build_*
 /docs/_includes/
 
 # Tool caches and local agent state
+.conan2*/
 .benchmarks/
 .mypy_cache/
 .pytest_cache/
@@ -39,6 +41,9 @@ build_*
 
 # Local one-off probe scripts
 /scripts/tmp_probe_*.py
+
+# Generated local visualization outputs
+/examples/encoders/_plots/
 
 # Editable native build outputs written into the source package in dev mode
 /src/mifrost/_core*.so

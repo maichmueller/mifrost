@@ -71,6 +71,9 @@ runtime checks reflect the current native code.
      under `src/mifrost`.
    - Keep `src/mifrost/_core.pyi` handling deliberate, because the wheel and
      sdist workflows currently rely on generated stubs.
+   - Status: expanded to cover nested Python/tool caches, editable native
+     outputs, local Conan caches, CMake user presets, and generated example
+     plots.
    - Acceptance: no tool cache remains visible unless intentionally untracked.
 
 3. Remove stale local artifacts from the working tree.
