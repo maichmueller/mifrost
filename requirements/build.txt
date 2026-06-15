@@ -3,3 +3,4 @@ conan>=2.4,<3
 cmake>=3.27,<4
 ninja>=1.11,<2
 pymimir==0.13.60
+PyYAML>=6.0,<7

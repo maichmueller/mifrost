@@ -6,6 +6,7 @@ requires = [
     "conan>=2.4,<3",
     "pymimir>=0.13.60",
     "ninja>=1.11,<2",
+    "PyYAML>=6.0,<7",
 ]
 build-backend = "build_backend"
 backend-path = ["."]
@@ -51,6 +52,7 @@ dev = [
     "pytest>=8.0,<9",
     "ruff>=0.14.14,<0.15",
     "mypy>=1.14,<2",
+    "PyYAML>=6.0,<7",
     "torch>=2.2,<3",
     "numpy",
 ]

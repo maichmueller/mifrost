@@ -103,6 +103,9 @@ runtime checks reflect the current native code.
      are actually referenced by `conandata.yml`.
    - Decide whether `strong_type` is intentionally external or should be
      exported locally like `loki`, `nauty`, `cista`, and `valla`.
+   - Status: implemented; `conan_export.py` now uses PyYAML plus Conan
+     `RecipeReference`, and it exports every local recipe that is referenced by
+     `conandata.yml`, including `strong_type`.
    - Acceptance: adding or removing a local dependency requires changing one
      metadata file, not a script string literal.
 
