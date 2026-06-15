@@ -4,7 +4,6 @@ import pytest
 import pymimir as mimir
 import mifrost
 import torch
-import numpy as np
 
 
 @pytest.fixture
@@ -84,6 +83,7 @@ class TestUnorderedDenseTypecaster:
 
         # 1. Create with level 0
         inputs = mifrost.GoalInputs([p_a._advanced_ground_literal], level=0)
+        assert len(inputs.static_goals) == 1 or len(inputs.fluent_goals) == 1
 
         # 2. Append to existing
         # Note: Current GoalInputs ctor doesn't support appending easily in C++
@@ -293,11 +293,11 @@ class TestBatchBuilderMaps:
         """BatchBuilder uses ankerl::unordered_dense::map internally."""
         dom, prob = simple_domain
         builder = mifrost.BatchBuilder()
-        state = prob.get_initial_state()
         goals = list(prob.get_goal_condition().get_literals())
         inputs = mifrost.GoalInputs(
             [g._advanced_ground_literal for g in goals], level=0
         )
+        assert len(inputs.static_goals) + len(inputs.fluent_goals) == len(goals)
 
         builder.add_node_features("atom", "x", torch.randn(5, 1))
         builder.add_edges(

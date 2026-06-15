@@ -9,20 +9,37 @@ def _package_root() -> _Path:
     return _Path(__file__).resolve().parent
 
 
+def _native_package_root() -> _Path | None:
+    core_module = globals().get("_core")
+    core_file = getattr(core_module, "__file__", None)
+    if core_file is None:
+        return None
+    return _Path(core_file).resolve().parent
+
+
+def _package_roots() -> tuple[_Path, ...]:
+    native_root = _native_package_root()
+    source_root = _package_root()
+    if native_root is None or native_root == source_root:
+        return (source_root,)
+    return (native_root, source_root)
+
+
 def _existing_library_dir() -> _Path | None:
-    pkg_root = _package_root()
-    for libdir in ("lib", "lib64"):
-        candidate = pkg_root / libdir
-        if candidate.is_dir():
-            return candidate
+    for pkg_root in _package_roots():
+        for libdir in ("lib", "lib64"):
+            candidate = pkg_root / libdir
+            if candidate.is_dir():
+                return candidate
     return None
 
 
 def get_include_dir() -> str:
     pkg_root = _package_root()
-    include_dir = pkg_root / "include"
-    if include_dir.is_dir():
-        return str(include_dir)
+    for candidate_root in _package_roots():
+        include_dir = candidate_root / "include"
+        if include_dir.is_dir():
+            return str(include_dir)
 
     source_include_dir = pkg_root.parent / "_core"
     if source_include_dir.is_dir():
@@ -108,7 +125,7 @@ else:
             _ABCMapping[str, CollateSpec | _ABCMapping[str, Any]] | None
         ) = None,
         fast_path: bool = False,
-    ) -> BatchEncoding:
+    ) -> _core.BatchEncoding:
         return _core.batch_encodings(
             encodings,
             _normalize_collate_spec(collate_spec),
@@ -125,6 +142,7 @@ else:
         "FlatRelationEncoderStream",
         "FlatRelationMutableEncoderStream",
         "FlatHorizonEncoder",
+        "FlatRootedHorizonEncoder",
         "FlatHorizonEncoderStream",
         "FlatHorizonMutableEncoderStream",
         "FlatTransitionEncoder",
@@ -171,6 +189,7 @@ else:
             FlatHorizonEncoder,
             FlatHorizonMutableEncoderStream,
             FlatHorizonEncoderStream,
+            FlatRootedHorizonEncoder,
             FlatRelationEncoder,
             FlatRelationEncoderStream,
             FlatRelationMutableEncoderStream,
