@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python `>=3.10`
+- Python `>=3.12`
 - A working C++ toolchain
 - `pymimir>=0.13.60` available in the active environment
 - Conan 2 (for source builds via `configure.py`)

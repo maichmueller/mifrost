@@ -11,12 +11,11 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 [![Performance Gate](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
 [![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
 
-| Workflow | Platforms | Python versions               |
-| --- | --- |-------------------------------|
-| Unit & C++ Tests | macOS, Ubuntu | 3.10-3.14 |
-| Install & Test | macOS, Ubuntu | 3.10-3.14 |
-| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(10-14)`    |
-
+| Workflow | Platforms | Python versions |
+| --- | --- | --- |
+| Unit & C++ Tests | macOS, Ubuntu | 3.12-3.14 |
+| Install & Test | macOS, Ubuntu | 3.12-3.14 |
+| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(12-14)` |
 | Docs Check | Ubuntu | 3.12 |
 
 ## Documentation
@@ -41,7 +40,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 
 ## Requirements
 
-- Python `>= 3.10`
+- Python `>= 3.12`
 - A working C++ toolchain
 - `pymimir>=0.13.60` available in the Python environment used for build/runtime
 - For Python-side graph assembly: `torch` and `torch-geometric`
@@ -53,7 +52,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 - `requirements/build.txt`: Python tooling for source builds (`conan`, `cmake`, `ninja`, etc.)
 - `requirements/test.txt`: test-only Python dependencies
 - `requirements/perf.txt`: performance-gate dependencies
-- `requirements/dev.txt`: convenience union of build + test + perf
+- `requirements/dev.txt`: convenience union of build + test + perf + quality tools
 - `requirements/constraints-ci.txt`: CI-only version constraints used by workflows
 - `pyproject.toml` extras: `.[test]`, `.[perf]`, `.[dev]`
 

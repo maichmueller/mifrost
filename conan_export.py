@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
 import argparse
-import os
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 # Parse arguments
 parser = argparse.ArgumentParser(description="Export dependencies using Conan.")
@@ -21,30 +22,30 @@ conan_cmd = args.conan_cmd
 
 # Read versions from conandata.yml
 def read_versions_from_conandata(file_path):
-    if not os.path.exists(file_path):
+    file_path = Path(file_path)
+    if not file_path.exists():
         raise FileNotFoundError(f"conandata.yml not found at {file_path}")
 
     dependencies = {}
-    with open(file_path, "r") as f:
-        lines = [l.strip() for l in f.readlines()]
-        try:
-            req_start = lines.index("requirements:")
-        except ValueError:
-            raise ValueError("No 'requirements:' section found in conandata.yml.")
-        for line in lines[req_start + 1 :]:
-            line = line.strip()
-            if not line:
-                break
-            if line.startswith("-"):
-                try:
-                    dep, version = str(line[1:].strip().strip('"')).split("/")
-                    dependencies[dep.strip()] = version.strip()
-                except ValueError:
-                    print(f"Warning: Skipping malformed line: {line}")
+    in_requirements = False
+    for line in file_path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped == "requirements:":
+            in_requirements = True
+            continue
+        if not in_requirements:
+            continue
+        if not stripped:
+            continue
+        match = re.match(r'-\s*["\']?([^/"\']+)/([^"\']+)["\']?\s*$', stripped)
+        if match is None:
+            raise ValueError(f"Malformed requirement line in conandata.yml: {line}")
+        dependencies[match.group(1).strip()] = match.group(2).strip()
     return dependencies
 
 
-conandata_path = "conandata.yml"
+repo_root = Path(__file__).resolve().parent
+conandata_path = repo_root / "conandata.yml"
 
 
 try:
@@ -54,25 +55,16 @@ except Exception as e:
     exit(1)
 
 
-dependencies = """
-loki
-nauty
-cista
-valla
-"""
-
-
 # export dependencies
 had_errors = False
-for dep in (dep.strip() for dep in dependencies.splitlines() if dep):
-    version = dependency_versions.get(dep)
-    if not version:
-        print(f"Warning: Version for dependency '{dep}' not found in conandata.yml.")
+for dep, version in dependency_versions.items():
+    recipe_dir = repo_root / "dependencies" / dep
+    if not (recipe_dir / "conanfile.py").is_file():
         continue
 
     try:
         subprocess.run(
-            [conan_cmd, "export", f"dependencies/{dep}", f"--version={version}"],
+            [conan_cmd, "export", str(recipe_dir), f"--version={version}"],
             check=True,
         )
         print(f"Successfully exported {dep} version {version}.")

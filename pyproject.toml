@@ -15,7 +15,7 @@ name = "mifrost"
 version = "0.3.1"
 description = "STRIPS states to graph encoding C++ extension module."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "pymimir>=0.13.60",
 ]
@@ -23,6 +23,7 @@ authors = [
     { name = "Michael Aichmüller", email = "m.aichmueller@gmail.com" },
 ]
 license = { text = "GPL-3.0-only" }
+license-files = ["LICENSE"]
 classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
@@ -48,6 +49,8 @@ dev = [
     "cmake>=3.27,<5",
     "ninja>=1.11,<2",
     "pytest>=8.0,<9",
+    "ruff>=0.14.14,<0.15",
+    "mypy>=1.14,<2",
     "torch>=2.2,<3",
     "numpy",
 ]
@@ -68,6 +71,37 @@ wheel.packages = ["src/mifrost"]
 # sdist so the wheel build path can copy it into the final wheel.
 sdist.include = ["src/mifrost/_core.pyi"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = [
+    ".conan2*",
+    ".venv",
+    "build",
+    "build_*",
+    "cmake-build-*",
+    "dist",
+    "site",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+    "src/mifrost/encoders/types.py",
+    "src/mifrost/graph_fields.py",
+    "src/mifrost/schema_keys.py",
+    "tests/python/test_public_api_exports.py",
+]
+ignore_missing_imports = true
+allow_redefinition = true
+warn_unused_ignores = true
+
 [tool.cibuildwheel]
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
@@ -77,8 +111,9 @@ build-verbosity = 1
 # heavy dependencies (torch, torch_geometric, etc.).
 test-command = "python -c \"import pymimir, mifrost; print('pymimir', getattr(pymimir, '__version__', 'unknown')); print('mifrost', mifrost.__file__)\""
 
-# Don't test Python 3.8 wheels on macOS/arm64
-test-skip = "cp38-macosx_*:arm64"
+# Only build and test wheels for supported Python versions.
+build = ["cp312-*", "cp313-*", "cp314-*"]
+test-skip = "cp314t-*"
 
 [tool.cibuildwheel.linux.environment]
 # Ensure Conan's provider path resolves b2 from source in manylinux/musllinux,

@@ -2,3 +2,5 @@
 -r build.txt
 -r test.txt
 -r perf.txt
+ruff>=0.14.14,<0.15
+mypy>=1.14,<2
