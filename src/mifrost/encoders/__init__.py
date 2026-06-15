@@ -3,80 +3,16 @@
 Exports concrete encoders, stream variants, and shared base/helpers.
 """
 
+# ruff: noqa: F401
+
 import sys as _sys
 from importlib import import_module as _import_module
 
+from .._encoder_public import ENCODER_LAZY_EXPORTS, ENCODER_NAMESPACE_EXPORTS
+
 _in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
 
-# Keep all encoder wrappers behind one declarative lazy-export table. This keeps
-# `mifrost.encoders` lightweight at import time while preserving the flat public API.
-_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "HGraphEncoder": (".hgraph", "HGraphEncoder"),
-    "HGraphEncoderStream": (".hgraph", "HGraphEncoderStream"),
-    "HGraphMutableEncoderStream": (".hgraph", "HGraphMutableEncoderStream"),
-    "HorizonEncoder": (".horizon", "HorizonEncoder"),
-    "HorizonEncoderStream": (".horizon", "HorizonEncoderStream"),
-    "ColorEncoder": (".color", "ColorEncoder"),
-    "ColorEncoderStream": (".color", "ColorEncoderStream"),
-    "FlatRelationEncoder": (".flat", "FlatRelationEncoder"),
-    "FlatRelationEncoderStream": (".flat", "FlatRelationEncoderStream"),
-    "FlatRelationMutableEncoderStream": (
-        ".flat",
-        "FlatRelationMutableEncoderStream",
-    ),
-    "FlatHorizonEncoder": (".flat_horizon", "FlatHorizonEncoder"),
-    "FlatRootedHorizonEncoder": (
-        ".flat_rooted_horizon",
-        "FlatRootedHorizonEncoder",
-    ),
-    "FlatHorizonEncoderStream": (".flat_horizon", "FlatHorizonEncoderStream"),
-    "FlatHorizonMutableEncoderStream": (
-        ".flat_horizon",
-        "FlatHorizonMutableEncoderStream",
-    ),
-    "FlatTransitionEncoder": (".flat_transition", "FlatTransitionEncoder"),
-    "FlatTransitionEffectsEncoder": (
-        ".flat_transition",
-        "FlatTransitionEffectsEncoder",
-    ),
-    "FlatTransitionEncoderStream": (
-        ".flat_transition",
-        "FlatTransitionEncoderStream",
-    ),
-    "FlatTransitionEffectsEncoderStream": (
-        ".flat_transition",
-        "FlatTransitionEffectsEncoderStream",
-    ),
-    "FlatRelationData": (".flat_data", "FlatRelationData"),
-    "FlatRelationSchema": (".flat_data", "FlatRelationSchema"),
-    "TransitionHGraphEncoder": (
-        ".transition",
-        "TransitionHGraphEncoder",
-    ),
-    "TransitionEffectsHGraphEncoder": (
-        ".transition",
-        "TransitionEffectsHGraphEncoder",
-    ),
-    "TransitionHGraphEncoderStream": (
-        ".transition",
-        "TransitionHGraphEncoderStream",
-    ),
-    "TransitionEffectsHGraphEncoderStream": (
-        ".transition",
-        "TransitionEffectsHGraphEncoderStream",
-    ),
-    "ILGEncoder": (".ilg", "ILGEncoder"),
-    "ILGEncoderStream": (".ilg", "ILGEncoderStream"),
-    "AtomStatus": (".ilg", "AtomStatus"),
-    "ExampleConstantEncoder": (
-        ".custom_example",
-        "ExampleConstantEncoder",
-    ),
-    "ExampleConstantStreamEncoder": (
-        ".custom_example",
-        "ExampleConstantStreamEncoder",
-    ),
-}
+_LAZY_EXPORTS = ENCODER_LAZY_EXPORTS
 
 if not _in_stubgen:
     from .base import EncoderBase, StreamEncoderBase
@@ -125,67 +61,7 @@ def __dir__() -> list[str]:
     return sorted(set(globals()) | set(__all__) | set(_LAZY_EXPORTS))
 
 
-__all__ = [
-    "HGraphEncoder",
-    "HGraphEncoderStream",
-    "HGraphMutableEncoderStream",
-    "HorizonEncoder",
-    "HorizonEncoderStream",
-    "ColorEncoder",
-    "ColorEncoderStream",
-    "FlatRelationEncoder",
-    "FlatRelationEncoderStream",
-    "FlatRelationMutableEncoderStream",
-    "FlatHorizonEncoder",
-    "FlatRootedHorizonEncoder",
-    "FlatHorizonEncoderStream",
-    "FlatHorizonMutableEncoderStream",
-    "FlatTransitionEncoder",
-    "FlatTransitionEffectsEncoder",
-    "FlatTransitionEncoderStream",
-    "FlatTransitionEffectsEncoderStream",
-    "FlatRelationData",
-    "FlatRelationSchema",
-    "TransitionHGraphEncoder",
-    "TransitionEffectsHGraphEncoder",
-    "TransitionHGraphEncoderStream",
-    "TransitionEffectsHGraphEncoderStream",
-    "ILGEncoder",
-    "ILGEncoderStream",
-    "AtomStatus",
-    "ExampleConstantEncoder",
-    "ExampleConstantStreamEncoder",
-]
-
-if not _in_stubgen:
-    __all__ += [
-        "EncoderBase",
-        "StreamEncoderBase",
-        "transition_dag_from_rustworkx",
-        "_encoding_dict_to_pyg",
-        "_split_goals",
-        "encoding_to_tensors",
-        "CollateSpec",
-        "TYPE_ATTR_SEPARATOR",
-        "EDGE_TYPE_SEPARATOR",
-        "EDGE_INDEX_ATTR_PREFIX",
-        "EDGE_INDEX_KEY_PREFIX",
-        "EDGE_INDEX_SRC_COMPONENT",
-        "EDGE_INDEX_DST_COMPONENT",
-        "PTR_ATTR",
-        "BATCH_ATTR",
-        "make_type_attr_key",
-        "make_edge_type_key",
-        "BatchEncodingLike",
-        "BatchEncodingInput",
-        "BatchParam",
-        "FlatEncoding",
-        "register_state_adapter",
-        "unregister_state_adapter",
-        "register_domain_adapter",
-        "unregister_domain_adapter",
-        "register_literal_adapter",
-        "unregister_literal_adapter",
-        "register_action_adapter",
-        "unregister_action_adapter",
-    ]
+if _in_stubgen:
+    __all__ = list(_LAZY_EXPORTS)
+else:
+    __all__ = list(ENCODER_NAMESPACE_EXPORTS)

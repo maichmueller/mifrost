@@ -100,6 +100,7 @@ else:
     install_map_view_wrappers(_core)
     _ABCMapping.register(_core.RelationDict)
     from ._core import *  # noqa: F401,F403
+    from ._encoder_public import TOP_LEVEL_ENCODER_EXPORTS
     from .graph_fields import CollateSpec, DType, GraphFieldSpec, Inc, Mode
 
     def _batch_encoding_from_payload(payload: bytes):
@@ -132,100 +133,21 @@ else:
             fast_path,
         )
 
-    _encoder_exports = [
-        "HGraphEncoder",
-        "HGraphEncoderStream",
-        "HGraphMutableEncoderStream",
-        "ColorEncoder",
-        "ColorEncoderStream",
-        "FlatRelationEncoder",
-        "FlatRelationEncoderStream",
-        "FlatRelationMutableEncoderStream",
-        "FlatHorizonEncoder",
-        "FlatRootedHorizonEncoder",
-        "FlatHorizonEncoderStream",
-        "FlatHorizonMutableEncoderStream",
-        "FlatTransitionEncoder",
-        "FlatTransitionEffectsEncoder",
-        "FlatTransitionEncoderStream",
-        "FlatTransitionEffectsEncoderStream",
-        "FlatRelationData",
-        "FlatRelationSchema",
-        "HorizonEncoder",
-        "HorizonEncoderStream",
-        "TransitionHGraphEncoder",
-        "TransitionEffectsHGraphEncoder",
-        "TransitionHGraphEncoderStream",
-        "TransitionEffectsHGraphEncoderStream",
-        "ILGEncoder",
-        "ILGEncoderStream",
-        "EncoderBase",
-        "StreamEncoderBase",
-        "transition_dag_from_rustworkx",
-        "encoding_to_tensors",
-        "BatchEncodingLike",
-        "BatchEncodingInput",
-        "FlatEncoding",
-        "register_state_adapter",
-        "unregister_state_adapter",
-        "register_domain_adapter",
-        "unregister_domain_adapter",
-        "register_literal_adapter",
-        "unregister_literal_adapter",
-        "register_action_adapter",
-        "unregister_action_adapter",
-    ]
+    _encoder_exports = list(TOP_LEVEL_ENCODER_EXPORTS)
 
     _encoders_import_error: Exception | None = None
     try:
-        from .encoders import (  # noqa: F401
-            ColorEncoder,
-            ColorEncoderStream,
-            BatchEncodingInput,
-            BatchEncodingLike,
-            EncoderBase,
-            FlatEncoding,
-            FlatRelationData,
-            FlatHorizonEncoder,
-            FlatHorizonMutableEncoderStream,
-            FlatHorizonEncoderStream,
-            FlatRootedHorizonEncoder,
-            FlatRelationEncoder,
-            FlatRelationEncoderStream,
-            FlatRelationMutableEncoderStream,
-            FlatTransitionEncoder,
-            FlatTransitionEffectsEncoder,
-            FlatTransitionEncoderStream,
-            FlatTransitionEffectsEncoderStream,
-            FlatRelationSchema,
-            HGraphEncoder,
-            HGraphEncoderStream,
-            HGraphMutableEncoderStream,
-            HorizonEncoder,
-            HorizonEncoderStream,
-            ILGEncoder,
-            ILGEncoderStream,
-            StreamEncoderBase,
-            TransitionEffectsHGraphEncoder,
-            TransitionEffectsHGraphEncoderStream,
-            TransitionHGraphEncoder,
-            TransitionHGraphEncoderStream,
-            encoding_to_tensors,
-            transition_dag_from_rustworkx,
-            register_action_adapter,
-            register_domain_adapter,
-            register_literal_adapter,
-            register_state_adapter,
-            unregister_action_adapter,
-            unregister_domain_adapter,
-            unregister_literal_adapter,
-            unregister_state_adapter,
-        )
+        from . import encoders as _encoders
+
+        for _name in _encoder_exports:
+            globals()[_name] = getattr(_encoders, _name)
     except Exception as e:  # pragma: no cover - exercised in minimal wheel tests
         # Keep `import mifrost` working for core-only consumers and for wheel
         # smoke tests. Encoder wrappers depend on optional heavy deps
         # (torch/torch_geometric).
         _encoders_import_error = e
+        for _name in _encoder_exports:
+            globals().pop(_name, None)
 
         def __getattr__(name: str):
             if name in _encoder_exports:
