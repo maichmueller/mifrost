@@ -266,6 +266,9 @@ Candidate D: `BatchEncoding` binding split.
 - Dependency category: in-process.
 - Proposed direction: move behavior into native units with plain C++ tests where
   possible, leaving nanobind files as thin adapters.
+- Status: partially implemented. Repr/string formatting for `BatchEncoding` now
+  lives in a dedicated native source file, reducing `init_batch_encoding.cpp`
+  while keeping the binding registration in place.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.

@@ -29,6 +29,8 @@ batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool
 
 std::optional< nb::dict > owner_tensor_cache_if_present(nb::handle owner);
 
+nb::object owner_target_device(nb::handle owner);
+
 void set_owner_target_device(nb::handle owner, nb::handle device);
 
 void materialize_owner_tensor_cache(nb::handle owner, BatchBuilder::BatchEncoding& encoding);
@@ -42,5 +44,9 @@ std::pair< std::optional< std::string >, std::optional< std::string > >
 find_edge_index_keys(const Schema& schema, int edge_type_idx);
 
 std::optional< std::string > find_edge_attr_key(const Schema& schema, int edge_type_idx);
+
+std::string batch_encoding_repr(nb::handle self, const BatchBuilder::BatchEncoding& encoding);
+
+std::string batch_encoding_str(nb::handle self, const BatchBuilder::BatchEncoding& encoding);
 
 }  // namespace mifrost
