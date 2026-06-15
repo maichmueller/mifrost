@@ -1005,7 +1005,7 @@ nb::list parse_successors_batch_param_python(nb::handle successors, size_t state
    if(parsed.is_per_state()) {
       for(const auto& entry : parsed.per_state()) {
          if(entry.has_value()) {
-            out.append(entry->source);
+            out.append(nb::borrow< nb::object >(entry->source));
          } else {
             out.append(nb::none());
          }
@@ -1016,7 +1016,7 @@ nb::list parse_successors_batch_param_python(nb::handle successors, size_t state
    for(size_t idx = 0; idx < state_count; ++idx) {
       (void) idx;
       if(parsed.is_shared()) {
-         out.append(parsed.shared()->source);
+         out.append(nb::borrow< nb::object >(parsed.shared()->source));
       } else {
          out.append(nb::none());
       }

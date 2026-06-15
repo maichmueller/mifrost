@@ -20,7 +20,9 @@ def test_sdk_helpers_expose_installed_layout():
     batch_builder_header = include_dir / "mifrost" / "core" / "batch_builder.hpp"
     assert batch_builder_header.is_file()
     assert "nanobind" not in batch_builder_header.read_text()
-    assert not (include_dir / "mifrost" / "core" / "map_view.hpp").exists()
+    source_include_dir = Path(__file__).resolve().parents[1] / "src" / "_core"
+    if include_dir.resolve() != source_include_dir.resolve():
+        assert not (include_dir / "mifrost" / "core" / "map_view.hpp").exists()
 
     assert library_dir.is_dir()
     assert any(

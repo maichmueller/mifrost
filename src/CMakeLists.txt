@@ -515,6 +515,16 @@ install(TARGETS mifrost_core
 )
 install(TARGETS mifrost_core_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
 
+foreach (_mifrost_private_sdk_header IN ITEMS
+    dlpack_utils.hpp
+    map_view.hpp
+    nanobind_unordered_dense.hpp
+    nb_instance.hpp
+)
+    install(CODE
+        "file(REMOVE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${MIFROST_SDK_INCLUDE_DIR}/mifrost/core/${_mifrost_private_sdk_header}\")"
+    )
+endforeach ()
 install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/core/"
     DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost/core"
     FILES_MATCHING
