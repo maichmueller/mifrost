@@ -1,4 +1,4 @@
-name: Install & Test
+name: Install Smoke
 
 on:
   workflow_dispatch:
@@ -11,8 +11,8 @@ env:
   MIFROST_MACOSX_DEPLOYMENT_TARGET: "11.0"
 
 jobs:
-  build:
-    name: Install test (${{ matrix.os }}, py${{ matrix.python-version }})
+  smoke:
+    name: Install smoke (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
@@ -65,15 +65,44 @@ jobs:
       run: |
         echo "MACOSX_DEPLOYMENT_TARGET=${MIFROST_MACOSX_DEPLOYMENT_TARGET}" >> $GITHUB_ENV
 
-    - name: Install test dependency
+    - name: Install build/runtime dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r requirements/build.txt -r requirements/test.txt -r requirements.txt
+        python -m pip install -r requirements/build.txt -r requirements.txt
 
     - name: Build and install
       id: build_install
       run: |
         python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
-    - name: Test
-      run: python -m pytest
+    - name: Smoke check
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+
+        import mifrost
+        import pymimir
+
+        print("pymimir version:", getattr(pymimir, "__version__", "unknown"))
+        print("pymimir path:", Path(pymimir.__file__).resolve())
+        print("mifrost version:", getattr(mifrost, "__version__", "unknown"))
+        print("mifrost path:", Path(mifrost.__file__).resolve())
+
+        include_dir = Path(mifrost.get_include_dir()).resolve()
+        library_dir = Path(mifrost.get_library_dir()).resolve()
+        cmake_dir = Path(mifrost.get_cmake_dir()).resolve()
+
+        print("include dir:", include_dir)
+        print("library dir:", library_dir)
+        print("cmake dir:", cmake_dir)
+
+        assert include_dir.is_dir()
+        assert library_dir.is_dir()
+        assert cmake_dir.is_dir()
+        assert (include_dir / "mifrost" / "core" / "batch_builder.hpp").is_file()
+        assert (cmake_dir / "mifrostConfig.cmake").is_file()
+        assert (cmake_dir / "mifrostTargets.cmake").is_file()
+        assert any(
+            path.name.startswith("libmifrost_core") for path in library_dir.iterdir()
+        )
+        PY

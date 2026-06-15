@@ -6,7 +6,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 (`Data` / `HeteroData`) objects are built on demand.
 
 [![Unit & C++ Tests](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/tests.yml)
-[![Install & Test](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml)
+[![Install Smoke](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/pip.yml)
 [![Wheel Builds](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/wheels.yml)
 [![Performance Gate](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/perf-batch-encodings.yml)
 [![Docs Check](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml/badge.svg)](https://github.com/maichmueller/mifrost/actions/workflows/docs-check.yml)
@@ -14,7 +14,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 | Workflow | Platforms | Python versions |
 | --- | --- | --- |
 | Unit & C++ Tests | macOS, Ubuntu | 3.12-3.14 |
-| Install & Test | macOS, Ubuntu | 3.12-3.14 |
+| Install Smoke | macOS, Ubuntu | 3.12-3.14 |
 | Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(12-14)` |
 | Docs Check | Ubuntu | 3.12 |
 
@@ -388,8 +388,8 @@ python scripts/benchmark_encoder_suite.py --benchmark-pyg
 
 ## Encoder architecture note
 
-- See `src/ENCODER_INHERITANCE_ARCHITECTURE.md` for the C++/Python inheritance
-  and config layering used by hetero encoders.
+- See `docs/development/architecture.md` for the current Python/native layout
+  and encoder architecture notes.
 
 ## License
 
