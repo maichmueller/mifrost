@@ -10,6 +10,8 @@ internal native core.
   schema helpers, and encoder engines.
 - `src/CMakeLists.txt` ties the native sources into the build.
 - `src/mifrost/_core.pyi` provides the public stub for the extension module.
+  Nanobind generates it, git ignores it, CI regenerates it before packaging,
+  and `pyproject.toml` includes the generated file in release artifacts.
 
 The Python layer stays intentionally small: it exposes the user-facing API,
 package-level helpers, and convenience wrappers, while the native layer owns

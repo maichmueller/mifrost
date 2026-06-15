@@ -67,8 +67,9 @@ minimum-version = "build-system.requires"
 build-dir = "build/{wheel_tag}"
 # Include the Python package directory in the wheel (src layout)
 wheel.packages = ["src/mifrost"]
-# nanobind generates the public stub in the source package; include it in the
-# sdist so the wheel build path can copy it into the final wheel.
+# nanobind generates the public stub in the source package. Git ignores the
+# file, but packaging still needs it, so include it in the sdist; the wheel
+# build path then carries the generated stub into the final wheel artifact.
 sdist.include = ["src/mifrost/_core.pyi"]
 
 [tool.pytest.ini_options]
