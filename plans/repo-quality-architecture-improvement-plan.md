@@ -301,7 +301,8 @@ Candidate D: `BatchEncoding` binding split.
   spec and state serialization now live in a dedicated graph-field
   serialization helper module. Graph-field input coercion and mutation helpers
   now live in a dedicated graph-field mutation module used by both builder and
-  encoding bindings.
+  encoding bindings. `BatchEncoding` state serialization/loading now lives in a
+  dedicated state helper module.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.
