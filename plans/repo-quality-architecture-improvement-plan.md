@@ -309,7 +309,8 @@ Candidate D: `BatchEncoding` binding split.
   a dedicated conversion helper module. Dynamic attributes, key/item iteration,
   and device migration now live in a dedicated attribute helper module. Save,
   load, dumps, pickle reduce, and setstate wrappers now delegate into the state
-  helper module.
+  helper module. The `batch_encodings` collection/collation implementation now
+  lives in a dedicated collection helper module.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.
