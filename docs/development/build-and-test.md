@@ -4,8 +4,9 @@ This project uses a Python build backend that configures and builds the C++ core
 
 ## Local setup
 
-Use the `beiw` conda environment and the editable-install workflow described in
-[AGENTS.md](../../AGENTS.md) before running import checks or tests.
+Activate the Python environment you use for development before running import
+checks or tests. Editable installs should use the normal rebuild behavior so
+native C++ changes are reflected in Python runtime checks.
 
 ```bash
 python -m pip install --upgrade pip
