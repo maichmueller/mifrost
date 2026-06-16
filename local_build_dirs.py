@@ -14,5 +14,5 @@ def local_build_dir_help_text() -> str:
     return (
         "Build directory; prefer "
         + ", ".join(STANDARD_LOCAL_BUILD_DIRS[:-1])
-        + f", or {STANDARD_LOCAL_BUILD_DIRS[-1]} (see AGENTS.md)"
+        + f", or {STANDARD_LOCAL_BUILD_DIRS[-1]} (see docs/development/build-and-test.md)"
     )

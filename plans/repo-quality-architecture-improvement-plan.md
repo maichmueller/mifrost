@@ -317,6 +317,9 @@ Candidate E: reusable build/package support.
   virtual or conda environments.
 - Proposed direction: one build orchestration module or script owns build modes:
   `editable-dev`, `ci-source`, `wheel`, `stubs`, and `bench`.
+- Status: started. Local build directory defaults now live in
+  `local_build_dirs.py`, and `configure.py`/`cbuild.py` share that default
+  instead of each hardcoding `build/local-release`.
 - Test impact: add script-level smoke tests for command construction and one CI
   smoke per build mode.
 - Acceptance: adding a new build mode does not require editing multiple scripts
@@ -368,5 +371,6 @@ Candidate E: reusable build/package support.
   normalization into one small contract boundary.
 - Continue Candidate D until `init_batch_encoding.cpp` is mostly registration
   glue plus small adapters.
-- Candidate E is still open: build/package orchestration remains split across
-  `build_backend.py`, `configure.py`, `cbuild.py`, CMake presets, and workflows.
+- Continue Candidate E by moving beyond shared local build-directory defaults
+  toward one owner for editable, CI source, wheel, stubs, and benchmark build
+  modes.
