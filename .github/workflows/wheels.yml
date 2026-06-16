@@ -78,11 +78,11 @@ jobs:
     - name: Configure build
       id: configure_stubs
       run: |
-        python configure.py --build_dir build_stubs --config Release
+        python configure.py --mode stubs
 
     - name: Generate nanobind stubs
       run: |
-        cmake --build build_stubs --target mifrost_core_module_stubs
+        python cbuild.py --mode stubs
 
     - name: Validate generated stubs
       run: python scripts/validate_generated_stub.py

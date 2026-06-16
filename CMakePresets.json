@@ -49,6 +49,31 @@
       "cacheVariables": {
         "MIFROST_RPATH_MODE": "wheel"
       }
+    },
+    {
+      "name": "local-release",
+      "inherits": "dev-release",
+      "binaryDir": "${sourceDir}/build/local-release"
+    },
+    {
+      "name": "local-debug",
+      "inherits": "dev-debug",
+      "binaryDir": "${sourceDir}/build/local-debug"
+    },
+    {
+      "name": "stubs",
+      "inherits": "dev-release",
+      "binaryDir": "${sourceDir}/build/stubs"
+    },
+    {
+      "name": "ci",
+      "inherits": "dev-release",
+      "binaryDir": "${sourceDir}/build/ci"
+    },
+    {
+      "name": "bench",
+      "inherits": "dev-bench-release",
+      "binaryDir": "${sourceDir}/build/bench-release"
     }
   ]
 }

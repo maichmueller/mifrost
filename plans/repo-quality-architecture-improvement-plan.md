@@ -42,12 +42,13 @@ runtime checks reflect the current native code.
      - `conda activate beiw`
      - `python -c "import sys, mifrost; print(sys.executable); print(mifrost.__file__)"`
      - `python -m pytest -q`
-     - `python configure.py --build_dir build_ci --config Release`
-     - `cmake --build build_ci --target mifrost_tests`
-     - `ctest --test-dir build_ci -R mifrost_tests --output-on-failure`
+     - `python configure.py --mode ci`
+     - `python cbuild.py --mode ci`
+     - `ctest --test-dir build/ci -R mifrost_tests --output-on-failure`
    - Acceptance: baseline failures, if any, are documented before fixes start.
-   - Status: passed from `beiw` on 2026-06-16. Import, full pytest, `build_ci`
-     configure, `mifrost_tests` build, and CTest all pass.
+   - Status: passed from `beiw` on 2026-06-16. Import, full pytest,
+     `build/ci` configure through `--mode ci`, `mifrost_tests` build, and
+     CTest all pass.
 
 3. Create a tracked cleanup checklist for ignored local outputs.
    - Include root `build*`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`,
@@ -203,9 +204,11 @@ runtime checks reflect the current native code.
      `build/ci` over ad hoc root directories like `build_*_probe`.
    - Update `configure.py`, `cbuild.py`, docs, and CMake presets to point at
      those locations.
-   - Status: implemented for the Python helper defaults and docs; explicit CI,
-     stub, and benchmark commands still pass purpose-specific subdirectories
-     under `build/`.
+   - Status: implemented. `local_build_dirs.py` owns named helper modes for
+     `local-release`, `local-debug`, `stubs`, `ci`, and `bench`; `configure.py`,
+     `cbuild.py`, CMake presets, CI source builds, stub generation, benchmark
+     docs, and local docs now use those names instead of ad hoc root-level build
+     directories.
    - Acceptance: normal workflows no longer create arbitrary root-level build
      directories.
 
@@ -325,9 +328,15 @@ Candidate E: reusable build/package support.
   virtual or conda environments.
 - Proposed direction: one build orchestration module or script owns build modes:
   `editable-dev`, `ci-source`, `wheel`, `stubs`, and `bench`.
-- Status: started. Local build directory defaults now live in
-  `local_build_dirs.py`, and `configure.py`/`cbuild.py` share that default
-  instead of each hardcoding `build/local-release`.
+- Status: implemented for helper-driven CMake modes. `local_build_dirs.py` now
+  owns `local-release`, `local-debug`, `stubs`, `ci`, and `bench` mode records,
+  including build directory, build type, default target, and benchmark toggle.
+  `configure.py`, `cbuild.py`, CMake presets, source-test CI, wheel stub
+  generation, and docs consume those names. Editable and wheel builds remain
+  scikit-build-owned by `build_backend.py` plus the static
+  `[tool.scikit-build] build-dir = "build/{wheel_tag}"` setting in
+  `pyproject.toml`; this is intentional because PEP 517 build frontends control
+  those build roots.
 - Test impact: add script-level smoke tests for command construction and one CI
   smoke per build mode.
 - Acceptance: adding a new build mode does not require editing multiple scripts
@@ -351,9 +360,9 @@ Candidate E: reusable build/package support.
 - Local baseline from `beiw`:
   - `python -c "import mifrost; print(mifrost.__file__)"`
   - `python -m pytest -q`
-  - `python configure.py --build_dir build_ci --config Release`
-  - `cmake --build build_ci --target mifrost_tests`
-  - `ctest --test-dir build_ci -R mifrost_tests --output-on-failure`
+  - `python configure.py --mode ci`
+  - `python cbuild.py --mode ci`
+  - `ctest --test-dir build/ci -R mifrost_tests --output-on-failure`
 - Quality gates:
   - `pre-commit run --all-files`
   - `python -m ruff check .`
@@ -380,6 +389,6 @@ Candidate E: reusable build/package support.
   boundary.
 - Continue Candidate D until `init_batch_encoding.cpp` is mostly registration
   glue plus small adapters.
-- Continue Candidate E by moving beyond shared local build-directory defaults
-  toward one owner for editable, CI source, wheel, stubs, and benchmark build
-  modes.
+- Candidate E is complete for helper-driven build modes. Revisit only if the
+  project decides to generate static scikit-build metadata from a Python source
+  of truth instead of keeping the PEP 517 build-dir in `pyproject.toml`.

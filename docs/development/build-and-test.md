@@ -21,21 +21,29 @@ python -m pip install pytest mkdocs mkdocs-material
 
 ## Build and install
 
-Use a dedicated subdirectory under `build/` for each local purpose:
+Use a named build mode for each local purpose. `configure.py` and `cbuild.py`
+read these modes from `local_build_dirs.py`, so the default directories,
+configs, benchmark toggle, and default build targets stay in one place:
 
-- `build/local-release` for normal local development builds
-- `build/local-debug` for debug builds
-- `build/stubs` for stub-generation or typing-oriented work
-- `build/ci` for CI-like local reproductions
+- `local-release`: `build/local-release`, `Release`, target `all`
+- `local-debug`: `build/local-debug`, `Debug`, target `all`
+- `stubs`: `build/stubs`, `Release`, target `mifrost_core_module_stubs`
+- `ci`: `build/ci`, `Release`, target `mifrost_tests`
+- `bench`: `build/bench-release`, `Release`, benchmarks enabled, target
+  `mifrost_bench_hgraph`
 
 Avoid ad hoc root-level build directories like `build_*_probe` unless they are
 short-lived ignored experiments.
 
-The Python helpers treat those names as the canonical local build roots:
+The Python helpers treat those modes as the canonical local build roots:
 
 - `configure.py` prepares a build tree and installs dependencies.
 - `cbuild.py` only builds an already configured tree.
 - `build_backend.py` owns editable/wheel build-time environment setup.
+
+You can still pass `--build_dir`, `--config`, or `--target` for short-lived
+experiments, but prefer `--mode` for checked-in commands and reproducible
+developer workflows.
 
 Install the package (this triggers a full native build):
 
@@ -52,11 +60,16 @@ python -m pip install -e .
 For explicit CMake-driven local builds, the blessed layout is:
 
 ```bash
-python configure.py --config Release
-python cbuild.py
+python configure.py --mode local-release
+python cbuild.py --mode local-release
 ```
 
-Use `build/local-debug` with `--config Debug` when you need a debug tree.
+Use the debug mode when you need a debug tree:
+
+```bash
+python configure.py --mode local-debug
+python cbuild.py --mode local-debug
+```
 
 ## Generated stubs
 
@@ -72,8 +85,8 @@ ignored in version control, but the packaging flow still expects it to exist:
 Local generation commands:
 
 ```bash
-python configure.py --config Release --build_dir build/stubs
-python cbuild.py build/stubs --target mifrost_core_module_stubs
+python configure.py --mode stubs
+python cbuild.py --mode stubs
 python scripts/validate_generated_stub.py
 ```
 
@@ -92,6 +105,21 @@ Run a single test module while iterating:
 
 ```bash
 python -m pytest tests/encoding/test_color_encoder.py -q
+```
+
+Run the C++ test target through the CI-like mode:
+
+```bash
+python configure.py --mode ci
+python cbuild.py --mode ci
+ctest --test-dir build/ci -R mifrost_tests --output-on-failure
+```
+
+Build the benchmark target:
+
+```bash
+python configure.py --mode bench
+python cbuild.py --mode bench
 ```
 
 ## Build docs

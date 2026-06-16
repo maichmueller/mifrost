@@ -5,7 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from local_build_dirs import DEFAULT_LOCAL_BUILD_DIR, local_build_dir_help_text
+from local_build_dirs import (
+    DEFAULT_LOCAL_BUILD_MODE,
+    get_local_build_mode,
+    local_build_dir_help_text,
+    local_build_mode_help_text,
+    local_build_mode_names,
+)
 
 
 def find_mimir_prefix():
@@ -37,13 +43,19 @@ def main():
     parser.add_argument("--cmake_cmd", default="cmake", help="CMake executable")
     parser.add_argument("--conan_cmd", default="conan", help="Conan executable")
     parser.add_argument(
+        "--mode",
+        choices=local_build_mode_names(),
+        default=DEFAULT_LOCAL_BUILD_MODE.name,
+        help=local_build_mode_help_text(),
+    )
+    parser.add_argument(
         "--build_dir",
-        default=DEFAULT_LOCAL_BUILD_DIR,
+        default=None,
         help=local_build_dir_help_text(),
     )
     parser.add_argument("--source_dir", default=".", help="Source directory")
     parser.add_argument(
-        "--config", default="Release", help="Build type (Debug, Release, etc.)"
+        "--config", default=None, help="Build type (Debug, Release, etc.)"
     )
     parser.add_argument("--toolchain_file", help="CMake toolchain file")
     parser.add_argument(
@@ -53,13 +65,18 @@ def main():
     )
 
     args, extra_args = parser.parse_known_args()
+    build_mode = get_local_build_mode(args.mode)
 
     use_conan = not args.noconan
-    build_dir = Path(args.build_dir).resolve()
+    build_dir = Path(args.build_dir or build_mode.build_dir).resolve()
     source_dir = Path(args.source_dir).resolve()
     script_dir = Path(__file__).parent.resolve()
+    build_config = args.config or build_mode.config
+    with_benchmarks = args.with_benchmarks or build_mode.with_benchmarks
 
-    print(f"Configuring Mifrost: config={args.config}, conan={use_conan}")
+    print(
+        f"Configuring Mifrost: mode={build_mode.name}, config={build_config}, conan={use_conan}"
+    )
 
     # 1. Conan Install
     cmake_toolchain_file = args.toolchain_file
@@ -88,7 +105,7 @@ def main():
         conan_install_dir = build_dir / "conan"
         conan_args = [
             "-s",
-            f"build_type={args.config}",
+            f"build_type={build_config}",
             "-s:h",
             "compiler.cppstd=gnu23",
             "-s:b",
@@ -99,7 +116,7 @@ def main():
             "--options=nauty/*:fPIC=True",
             f"--build={args.deps_policy}",
         ]
-        if args.with_benchmarks:
+        if with_benchmarks:
             conan_args.append("--options=mifrost/*:with_benchmarks=True")
 
         install_cmd = [
@@ -108,7 +125,7 @@ def main():
             str(source_dir),
             f"-of={conan_install_dir}",
             "-s",
-            f"&:build_type={args.config}",  # Sets build type for consumer
+            f"&:build_type={build_config}",  # Sets build type for consumer
         ] + conan_args
 
         print(f"Running Conan: {' '.join(install_cmd)}")
@@ -119,7 +136,7 @@ def main():
             possible_path = (
                 conan_install_dir
                 / "build"
-                / args.config
+                / build_config
                 / "generators"
                 / "conan_toolchain.cmake"
             )
@@ -141,11 +158,11 @@ def main():
         str(build_dir),
         "-G",
         "Ninja",
-        f"-DCMAKE_BUILD_TYPE={args.config}",
+        f"-DCMAKE_BUILD_TYPE={build_config}",
         f"-DPython_EXECUTABLE={sys.executable}",
         f"-DPython_ROOT_DIR={Path(sys.executable).resolve().parent.parent}",
     ]
-    if args.with_benchmarks:
+    if with_benchmarks:
         cmake_args.append("-DMIFROST_BUILD_BENCHMARKS=ON")
 
     if cmake_toolchain_file:

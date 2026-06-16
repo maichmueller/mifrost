@@ -29,8 +29,8 @@ python -m pip install .
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-python configure.py --config Release
-python cbuild.py
+python configure.py --mode local-release
+python cbuild.py --mode local-release
 ```
 
 ### Alternative: CMake Presets
@@ -40,17 +40,18 @@ cmake --preset local-release
 cmake --build build/local-release
 ```
 
-In CLion, use `local-release` / `local-debug`. If your conda env is not
-`rgnet_new`, set `Python_EXECUTABLE=/path/to/env/bin/python` in the profile's
-CMake cache variables.
+In CLion, use `local-release` / `local-debug`. If CMake does not auto-detect
+the intended Python environment, set
+`Python_EXECUTABLE=/path/to/env/bin/python` in the profile's CMake cache
+variables.
 
 ### With Benchmarks Enabled
 
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-python configure.py --config Release --build_dir build/bench-release --with_benchmarks
-python cbuild.py build/bench-release
+python configure.py --mode bench
+python cbuild.py --mode bench
 ```
 
 If `conan` is not on `PATH`, pass it explicitly:

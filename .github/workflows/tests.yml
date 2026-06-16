@@ -99,11 +99,11 @@ jobs:
       - name: Build C++ tests
         id: build_cpp_tests
         run: |
-          python configure.py --build_dir build_ci --config Release
-          cmake --build build_ci --target mifrost_tests
+          python configure.py --mode ci
+          python cbuild.py --mode ci
 
       - name: Run C++ tests
-        run: ctest --test-dir build_ci -R mifrost_tests --output-on-failure
+        run: ctest --test-dir build/ci -R mifrost_tests --output-on-failure
 
       - name: Save Conan cache
         if: >-
