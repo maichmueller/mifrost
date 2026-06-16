@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from local_build_dirs import DEFAULT_LOCAL_BUILD_DIR, local_build_dir_help_text
+
 
 def find_mimir_prefix():
     """Try to find mimir cmake directory via python import."""
@@ -36,11 +38,8 @@ def main():
     parser.add_argument("--conan_cmd", default="conan", help="Conan executable")
     parser.add_argument(
         "--build_dir",
-        default="build/local-release",
-        help=(
-            "Build directory; prefer build/local-release, build/local-debug, "
-            "build/stubs, or build/ci (see AGENTS.md)"
-        ),
+        default=DEFAULT_LOCAL_BUILD_DIR,
+        help=local_build_dir_help_text(),
     )
     parser.add_argument("--source_dir", default=".", help="Source directory")
     parser.add_argument(

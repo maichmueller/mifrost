@@ -20,6 +20,7 @@ def _load_script_module(name: str, relative_path: str):
 
 def test_configure_defaults_to_local_release_build_dir(monkeypatch) -> None:
     module = _load_script_module("configure_defaults_test", "configure.py")
+    build_paths = _load_script_module("build_paths_test", "local_build_dirs.py")
     calls: list[list[str]] = []
 
     monkeypatch.setattr(sys, "argv", ["configure.py", "--noconan"])
@@ -35,12 +36,13 @@ def test_configure_defaults_to_local_release_build_dir(monkeypatch) -> None:
     assert calls
     assert "-B" in calls[0]
     assert calls[0][calls[0].index("-B") + 1] == str(
-        (ROOT / "build/local-release").resolve()
+        (ROOT / build_paths.DEFAULT_LOCAL_BUILD_DIR).resolve()
     )
 
 
 def test_cbuild_defaults_to_local_release_build_dir(monkeypatch) -> None:
     module = _load_script_module("cbuild_defaults_test", "cbuild.py")
+    build_paths = _load_script_module("build_paths_test_cbuild", "local_build_dirs.py")
     calls: list[list[str]] = []
 
     monkeypatch.setattr(sys, "argv", ["cbuild.py"])
@@ -52,4 +54,6 @@ def test_cbuild_defaults_to_local_release_build_dir(monkeypatch) -> None:
 
     module.main()
 
-    assert calls == [["cmake", "--build", "build/local-release", "--target", "all"]]
+    assert calls == [
+        ["cmake", "--build", build_paths.DEFAULT_LOCAL_BUILD_DIR, "--target", "all"]
+    ]

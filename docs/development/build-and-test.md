@@ -31,6 +31,12 @@ Use a dedicated subdirectory under `build/` for each local purpose:
 Avoid ad hoc root-level build directories like `build_*_probe` unless they are
 short-lived ignored experiments.
 
+The Python helpers treat those names as the canonical local build roots:
+
+- `configure.py` prepares a build tree and installs dependencies.
+- `cbuild.py` only builds an already configured tree.
+- `build_backend.py` owns editable/wheel build-time environment setup.
+
 Install the package (this triggers a full native build):
 
 ```bash

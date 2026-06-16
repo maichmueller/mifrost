@@ -3,13 +3,15 @@ import argparse
 import subprocess
 from pathlib import Path
 
+from local_build_dirs import DEFAULT_LOCAL_BUILD_DIR
+
 
 def main():
     parser = argparse.ArgumentParser(description="Build Mifrost")
     parser.add_argument(
         "build_dir",
         nargs="?",
-        default="build/local-release",
+        default=DEFAULT_LOCAL_BUILD_DIR,
         help="Build directory",
     )
     parser.add_argument("--target", default="all", help="Build target")
