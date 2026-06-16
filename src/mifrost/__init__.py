@@ -100,7 +100,10 @@ else:
     install_map_view_wrappers(_core)
     _ABCMapping.register(_core.RelationDict)
     from ._core import *  # noqa: F401,F403
-    from ._encoder_public import TOP_LEVEL_ENCODER_EXPORTS
+    from ._encoder_public import (
+        ENCODER_OPTIONAL_DEPENDENCY_MESSAGE,
+        TOP_LEVEL_ENCODER_EXPORTS,
+    )
     from .graph_fields import CollateSpec, DType, GraphFieldSpec, Inc, Mode
 
     def _batch_encoding_from_payload(payload: bytes):
@@ -151,11 +154,9 @@ else:
 
         def __getattr__(name: str):
             if name in _encoder_exports:
-                raise ModuleNotFoundError(
-                    "mifrost encoder wrappers require optional dependencies. "
-                    "Install with `pip install mifrost[test]` (for tests) or "
-                    "`pip install mifrost[torch]` / `pip install mifrost[perf]`."
-                ) from _encoders_import_error
+                raise ModuleNotFoundError(ENCODER_OPTIONAL_DEPENDENCY_MESSAGE) from (
+                    _encoders_import_error
+                )
             raise AttributeError(name)
 
     __all__ = [

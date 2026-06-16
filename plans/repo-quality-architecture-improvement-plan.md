@@ -248,6 +248,10 @@ Candidate C: public export manifest.
 - Dependency category: in-process.
 - Proposed direction: one manifest owns public encoder exports, optional
   dependency behavior, lazy imports, and top-level re-export policy.
+- Status: implemented. `_encoder_public.py` now owns structured export records,
+  top-level export ordering, lazy import targets, and the optional-dependency
+  error message; package-root and encoder-namespace exports derive their
+  compatibility tables from that manifest.
 - Test impact: add export-manifest tests and remove duplicated name assertions.
 - Acceptance: `FlatRootedHorizonEncoder`-style drift cannot happen.
 
