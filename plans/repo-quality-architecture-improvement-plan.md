@@ -280,7 +280,9 @@ Candidate D: `BatchEncoding` binding split.
   field access, PyG views, and binding methods. Schema fingerprinting and PyG
   tensor-key lookup now live in a dedicated schema helper module. Graph-field
   spec and state serialization now live in a dedicated graph-field
-  serialization helper module.
+  serialization helper module. Graph-field input coercion and mutation helpers
+  now live in a dedicated graph-field mutation module used by both builder and
+  encoding bindings.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.

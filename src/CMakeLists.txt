@@ -406,6 +406,7 @@ nanobind_add_module(mifrost_core_module
         "_core/mifrost/mifrost.cpp"
         "_core/mifrost/pyg_views.cpp"
         "_core/mifrost/batch_encoding_graph_field_access.cpp"
+        "_core/mifrost/batch_encoding_graph_field_mutation.cpp"
         "_core/mifrost/batch_encoding_graph_field_serialization.cpp"
         "_core/mifrost/batch_encoding_python_collation.cpp"
         "_core/mifrost/batch_encoding_repr.cpp"
