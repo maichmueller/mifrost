@@ -168,4 +168,6 @@ class HomoBatchEncodingView {
    nb::object edge_attr_cache_;
 };
 
+void register_batch_encoding_views(nb::module_& m);
+
 }  // namespace mifrost
