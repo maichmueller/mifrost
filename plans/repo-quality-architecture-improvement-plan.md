@@ -307,7 +307,9 @@ Candidate D: `BatchEncoding` binding split.
   encoding bindings. `BatchEncoding` state serialization/loading now lives in a
   dedicated state helper module. Tensor payload and PyG conversion now live in
   a dedicated conversion helper module. Dynamic attributes, key/item iteration,
-  and device migration now live in a dedicated attribute helper module.
+  and device migration now live in a dedicated attribute helper module. Save,
+  load, dumps, pickle reduce, and setstate wrappers now delegate into the state
+  helper module.
 - Test impact: use C++ tests for schema/collation/serialization core behavior
   and Python tests for binding-level lifetime and conversion behavior.
 - Acceptance: binding files become mostly declarations and small adapters.

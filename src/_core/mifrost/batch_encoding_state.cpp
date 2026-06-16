@@ -389,4 +389,54 @@ nb::object batch_encoding_object_from_state(const nb::dict& state)
    return obj;
 }
 
+void batch_encoding_save(nb::handle self, const std::string& path, bool include_metadata)
+{
+   nb::object file = py::builtins_open()(path, "wb");
+   nb::bytes payload = batch_encoding_dumps(self, include_metadata);
+   file.attr("write")(payload);
+   file.attr("close")();
+}
+
+nb::object batch_encoding_load(const std::string& path)
+{
+   nb::object file = py::builtins_open()(path, "rb");
+   nb::bytes payload = nb::cast< nb::bytes >(file.attr("read")());
+   file.attr("close")();
+   return batch_encoding_loads(payload);
+}
+
+nb::bytes batch_encoding_dumps(nb::handle self, bool include_metadata)
+{
+   nb::dict state = batch_encoding_state_from_instance(self, include_metadata);
+   return nb::cast< nb::bytes >(py::pickle_dumps()(state, 5));
+}
+
+nb::object batch_encoding_loads(nb::bytes payload)
+{
+   nb::dict state = nb::cast< nb::dict >(py::pickle_loads()(payload));
+   return batch_encoding_object_from_state(state);
+}
+
+nb::dict batch_encoding_getstate(nb::handle self)
+{
+   return batch_encoding_state_from_instance(self, true);
+}
+
+nb::tuple batch_encoding_reduce(nb::handle self)
+{
+   nb::bytes payload = batch_encoding_dumps(self, true);
+   return nb::make_tuple(py::mifrost_batch_encoding_loader(), nb::make_tuple(std::move(payload)));
+}
+
+void batch_encoding_setstate(nb::handle self, const nb::dict& state)
+{
+   auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
+      self, "BatchEncoding.__setstate__ called with invalid instance"
+   );
+   *encoding = batch_encoding_from_state_dict(state);
+   batch_encoding_clear_python_attrs(self);
+   batch_encoding_apply_python_attrs_from_state(self, state);
+   clear_owner_tensor_cache(self);
+}
+
 }  // namespace mifrost
