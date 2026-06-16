@@ -36,10 +36,9 @@ from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _prepare_actions,
-    _prepare_history_subgoals,
     _split_goals,
 )
+from ._lane_specs import prepare_optional_payloads
 from .flat_data import FlatRelationData
 from .types import (
     BatchParam,
@@ -273,8 +272,12 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
         used when subgoals or history are requested.
         """
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
@@ -337,8 +340,12 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
     ) -> int:
         """Append one state payload and return its stream id."""
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
@@ -387,8 +394,12 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
     ) -> None:
         """Replace one previously appended item in place."""
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
@@ -596,8 +607,12 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
     ) -> None:
         """Append one flat encoding step into a caller-owned builder."""
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,

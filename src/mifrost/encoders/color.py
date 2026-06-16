@@ -28,9 +28,9 @@ from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _prepare_actions,
     _split_goals,
 )
+from ._lane_specs import prepare_optional_payloads
 from .types import (
     HomoEncoding,
     DomainInput,
@@ -137,7 +137,10 @@ class ColorEncoder(EncoderBase[Data]):
     ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
+        action_list = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=None,
+        ).actions
         if goals is None and subgoal_layers is None and not action_list:
             return self._engine.encode(adv_state)
         if goals is None:

@@ -37,10 +37,9 @@ from ._batch_contract import convert_batch_payload as _convert_batch_payload
 from .common import (
     _advanced_domain,
     _advanced_state,
-    _prepare_actions,
-    _prepare_history_subgoals,
     _split_goals,
 )
+from ._lane_specs import prepare_optional_payloads
 from ._target_sources import TargetSource, normalize_target_sources
 from .types import (
     DomainInput,
@@ -389,8 +388,12 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         If goals/actions are omitted, the engine uses the state's problem goals.
         """
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         if (
             goals is None
             and subgoal_layers is None
@@ -432,8 +435,12 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         if (
             goals is None
             and subgoal_layers is None
@@ -488,8 +495,12 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> int:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         if (
             goals is None
             and subgoal_layers is None
@@ -646,8 +657,12 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_list = _prepare_actions(actions)
-        history_list = _prepare_history_subgoals(history_subgoals)
+        payloads = prepare_optional_payloads(
+            actions=actions,
+            history_subgoals=history_subgoals,
+        )
+        action_list = payloads.actions
+        history_list = payloads.history_subgoals
         if (
             goals is None
             and subgoal_layers is None

@@ -601,6 +601,30 @@ def test_batch_accepts_action_adapters(small_blocks):
         mifrost.unregister_action_adapter(WrappedAction)
 
 
+def test_lane_optional_payloads_prepare_actions_and_history(small_blocks):
+    space, _domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+    transitions = _first_transitions(space, state, count=1)
+    if not transitions:
+        pytest.skip("Fixture does not provide forward transitions.")
+    action0, _ = transitions[0]
+
+    from mifrost.encoders._lane_specs import prepare_optional_payloads
+
+    payloads = prepare_optional_payloads(
+        actions=[action0],
+        history_subgoals=[(0, [goals[0]])],
+    )
+
+    assert payloads.actions == [adv_action(action0)]
+    assert payloads.history_subgoals == [
+        (0, [getattr(goals[0], "_advanced_ground_literal", goals[0])])
+    ]
+
+
 def test_core_parse_states_rejects_state_adapters(small_blocks):
     _space, domain, problem = small_blocks
     state = problem.get_initial_state()

@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+import pymimir.advanced.formalism as af
+
 from .._core import GoalInputs, TransitionDAG
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_leaf
 from .common import (
@@ -13,6 +15,7 @@ from .common import (
 )
 from .types import (
     BatchParam,
+    AdvancedGroundLiteral,
     GoalLiteralInput,
     GroundActionInput,
     HistorySubgoalInput,
@@ -41,6 +44,12 @@ class EncoderLaneSpec:
         if not self.lgan_requires_actions:
             return True
         return include_actions
+
+
+@dataclass(frozen=True)
+class PreparedLaneOptionalPayloads:
+    actions: list[af.GroundAction]
+    history_subgoals: list[tuple[int, list[AdvancedGroundLiteral]]]
 
 
 HGRAPH_BENCH_SPEC = EncoderLaneSpec(
@@ -195,15 +204,30 @@ def require_batch_payload(spec: EncoderLaneSpec, value: object) -> None:
         raise ValueError(spec.batch_required_error)
 
 
+def prepare_optional_payloads(
+    *,
+    actions: Iterable[GroundActionInput] | None,
+    history_subgoals: HistorySubgoalInput | None,
+) -> PreparedLaneOptionalPayloads:
+    return PreparedLaneOptionalPayloads(
+        actions=_prepare_actions(actions),
+        history_subgoals=_prepare_history_subgoals(history_subgoals),
+    )
+
+
 def validate_single_optional_payloads(
     spec: EncoderLaneSpec,
     *,
     actions: Iterable[GroundActionInput] | None,
     history_subgoals: HistorySubgoalInput | None,
     history_max_steps: int | None,
-) -> tuple[list[object], list[tuple[int, list[GoalLiteralInput]]]]:
-    action_list = _prepare_actions(actions)
-    history_list = _prepare_history_subgoals(history_subgoals)
+) -> tuple[list[af.GroundAction], list[tuple[int, list[AdvancedGroundLiteral]]]]:
+    payloads = prepare_optional_payloads(
+        actions=actions,
+        history_subgoals=history_subgoals,
+    )
+    action_list = payloads.actions
+    history_list = payloads.history_subgoals
     if action_list and spec.single_action_error is not None:
         raise ValueError(spec.single_action_error)
     if (
