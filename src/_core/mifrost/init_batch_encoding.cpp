@@ -65,141 +65,7 @@ void init_batch_encoding(nb::module_& m)
    register_mapview_maybe< absl::btree_map< std::string, bool > >(m);
    register_mapview_maybe< hash_map< std::string, int > >(m);
 
-   auto batch_builder_cls =
-      nb::class_< BatchBuilder >(m, "BatchBuilder")
-         .def(nb::init<>())
-         .def(
-            "add_node_features",
-            [](BatchBuilder& builder,
-               const std::string& node_type,
-               const std::string& attr_name,
-               nb::ndarray< nb::numpy, float > data) {
-               if(data.ndim() != 1 and data.ndim() != 2) {
-                  throw std::invalid_argument("add_node_features expects a 1D/2D array");
-               }
-               const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
-               const auto count = static_cast< size_t >(data.size());
-               builder.add_node_features(
-                  node_type, attr_name, std::span< const float >(data.data(), count), feature_dim
-               );
-            }
-         )
-         .def(
-            "add_edges",
-            [](BatchBuilder& builder,
-               const std::string& src_type,
-               const std::string& rel_type,
-               const std::string& dst_type,
-               nb::ndarray< nb::numpy, int64_t > src,
-               nb::ndarray< nb::numpy, int64_t > dst) {
-               if(src.ndim() != 1 or dst.ndim() != 1) {
-                  throw std::invalid_argument("add_edges expects 1D arrays for src/dst indices");
-               }
-               if(src.size() != dst.size()) {
-                  throw std::invalid_argument("add_edges expects src/dst arrays of equal length");
-               }
-               builder.add_edges(
-                  src_type,
-                  rel_type,
-                  dst_type,
-                  std::span< const int64_t >(src.data(), src.size()),
-                  std::span< const int64_t >(dst.data(), dst.size())
-               );
-            }
-         )
-         .def(
-            "add_edge_features",
-            [](BatchBuilder& builder,
-               const std::string& src_type,
-               const std::string& rel_type,
-               const std::string& dst_type,
-               const std::string& attr_name,
-               nb::ndarray< nb::numpy, float > data) {
-               if(data.ndim() != 1 and data.ndim() != 2) {
-                  throw std::invalid_argument("add_edge_features expects a 1D/2D array");
-               }
-               const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
-               const auto count = static_cast< size_t >(data.size());
-               builder.add_edge_features(
-                  src_type,
-                  rel_type,
-                  dst_type,
-                  attr_name,
-                  std::span< const float >(data.data(), count),
-                  feature_dim
-               );
-            }
-         )
-         .def("add_nodes", &BatchBuilder::add_nodes)
-         .def("add_edge", &BatchBuilder::add_edge)
-         .def("set_node_names", &BatchBuilder::set_node_names)
-         .def("set_object_names", &BatchBuilder::set_object_names)
-         .def("build", &BatchBuilder::build)
-         .def("build_pyg", [](BatchBuilder& builder) { return batch_builder_build_pyg(builder); })
-         .def("append_batch_encoding", &BatchBuilder::append_batch_encoding)
-         .def(
-            "load_from_batch_encoding",
-            nb::overload_cast< const BatchBuilder::BatchEncoding& >(
-               &BatchBuilder::load_from_batch_encoding
-            )
-         )
-         .def("next_graph", &BatchBuilder::next_graph)
-         .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
-         .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
-         .def(
-            "schema_flags_view",
-            [](nb::handle self) {
-               auto* builder = require_instance_ptr< BatchBuilder >(
-                  self, "BatchBuilder.schema_flags_view called with invalid instance"
-               );
-               return make_map_view(builder->schema_flags, self);
-            },
-            nb::rv_policy::move
-         )
-         .def(
-            "node_feature_dims_view",
-            [](nb::handle self) {
-               auto* builder = require_instance_ptr< BatchBuilder >(
-                  self, "BatchBuilder.node_feature_dims_view called with invalid instance"
-               );
-               return make_map_view(builder->node_feature_dims, self);
-            },
-            nb::rv_policy::move
-         )
-         .def("field_keys", &BatchBuilder::field_keys)
-         .def(
-            "field_specs",
-            [](const BatchBuilder& builder) {
-               nb::dict out;
-               for(const auto& [key, spec] : builder.field_specs()) {
-                  out[key.c_str()] = graph_field_spec_to_dict(spec);
-               }
-               return out;
-            }
-         )
-         .def(
-            "register_field",
-            [](BatchBuilder& builder, const std::string& key, const nb::dict& spec) {
-               builder.register_field(key, graph_field_spec_from_dict(spec));
-            },
-            "key"_a,
-            "spec"_a
-         )
-         .def(
-            "set_field",
-            [](BatchBuilder& builder, const std::string& key, nb::handle value) {
-               set_batch_builder_graph_field(builder, key, value);
-            },
-            "key"_a,
-            "value"_a
-         )
-         .def(
-            "set_fields",
-            [](BatchBuilder& builder, const nb::dict& values) {
-               set_batch_builder_graph_fields(builder, values);
-            },
-            "values"_a
-         );
+   register_batch_builder(m);
 
    nb::class_< HeteroBatchEncodingView >(m, "HeteroBatchEncodingView")
       .def_prop_ro("num_graphs", &HeteroBatchEncodingView::num_graphs)
@@ -357,7 +223,9 @@ void init_batch_encoding(nb::module_& m)
          )
          .def(
             "to",
-            [](nb::handle self, nb::handle device) { return batch_encoding_to_device(self, device); },
+            [](nb::handle self, nb::handle device) {
+               return batch_encoding_to_device(self, device);
+            },
             "device"_a
          )
          .def(
@@ -434,14 +302,8 @@ void init_batch_encoding(nb::module_& m)
                return batch_encoding_str(self, *encoding);
             }
          )
-         .def(
-            "keys",
-            [](nb::handle self) { return batch_encoding_keys(self); }
-         )
-         .def(
-            "items",
-            [](nb::handle self) { return batch_encoding_items(self); }
-         )
+         .def("keys", [](nb::handle self) { return batch_encoding_keys(self); })
+         .def("items", [](nb::handle self) { return batch_encoding_items(self); })
          .def(
             "as_pyg",
             [](nb::handle self, std::optional< bool > as_batch, bool include_python_attrs) {
@@ -505,10 +367,7 @@ void init_batch_encoding(nb::module_& m)
             "path"_a,
             "include_metadata"_a = false
          )
-         .def_static(
-            "load",
-            [](const std::string& path) { return batch_encoding_load(path); }
-         )
+         .def_static("load", [](const std::string& path) { return batch_encoding_load(path); })
          .def(
             "dumps",
             [](nb::handle self, bool include_metadata) {
@@ -521,25 +380,13 @@ void init_batch_encoding(nb::module_& m)
             [](nb::bytes payload) { return batch_encoding_loads(std::move(payload)); },
             "payload"_a
          )
-         .def(
-            "__getstate__",
-            [](nb::handle self) { return batch_encoding_getstate(self); }
-         )
-         .def(
-            "__reduce__",
-            [](nb::handle self) { return batch_encoding_reduce(self); }
-         )
-         .def(
-            "__reduce_ex__",
-            [](nb::handle self, int) { return batch_encoding_reduce(self); }
-         )
+         .def("__getstate__", [](nb::handle self) { return batch_encoding_getstate(self); })
+         .def("__reduce__", [](nb::handle self) { return batch_encoding_reduce(self); })
+         .def("__reduce_ex__", [](nb::handle self, int) { return batch_encoding_reduce(self); })
          .def("__setstate__", [](nb::handle self, const nb::dict& state) {
             batch_encoding_setstate(self, state);
          });
 
-   batch_builder_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple(
-      "schema_flags_view", "node_feature_dims_view"
-   );
    batch_encoding_cls.attr("__mifrost_map_view_methods__") = nb::make_tuple(
       "schema_flags_view", "node_feature_dims_view"
    );

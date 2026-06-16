@@ -14,6 +14,8 @@ nb::dict batch_builder_build_dict(BatchBuilder& builder);
 
 nb::object batch_builder_build_pyg(BatchBuilder& builder);
 
+void register_batch_builder(nb::module_& m);
+
 }  // namespace mifrost
 
 #endif
