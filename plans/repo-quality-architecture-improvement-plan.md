@@ -46,6 +46,8 @@ runtime checks reflect the current native code.
      - `cmake --build build_ci --target mifrost_tests`
      - `ctest --test-dir build_ci -R mifrost_tests --output-on-failure`
    - Acceptance: baseline failures, if any, are documented before fixes start.
+   - Status: passed from `beiw` on 2026-06-16. Import, full pytest, `build_ci`
+     configure, `mifrost_tests` build, and CTest all pass.
 
 3. Create a tracked cleanup checklist for ignored local outputs.
    - Include root `build*`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`,
@@ -53,6 +55,7 @@ runtime checks reflect the current native code.
      `src/mifrost/lib/`, and `src/mifrost/ops/__pycache__/`.
    - Acceptance: `git status --ignored=matching` becomes readable enough for
      agents and IDEs.
+   - Status: implemented through `.gitignore` updates and local workflow docs.
 
 ## Phase 1: Repository Hygiene and Legal Correctness
 
@@ -63,6 +66,7 @@ runtime checks reflect the current native code.
      only in GitHub releases.
    - Acceptance: `twine check dist/*` still passes, and package metadata has a
      corresponding license file.
+   - Status: implemented with `LICENSE`, `SECURITY.md`, and `CHANGELOG.md`.
 
 2. Tighten `.gitignore`.
    - Add explicit entries for cache and local-agent directories:
@@ -81,6 +85,8 @@ runtime checks reflect the current native code.
      `__pycache__`.
    - Remove ad hoc probe scripts or move useful probes into named tests.
    - Acceptance: no source package directories exist only because of bytecode.
+   - Status: implemented for tracked/source-package artifacts; local ignored
+     caches and probe files are covered by `.gitignore`.
 
 ## Phase 2: Version and Dependency Source of Truth
 
@@ -89,6 +95,8 @@ runtime checks reflect the current native code.
      `conandata.yml` is missing or malformed.
    - Acceptance: there is no path that silently builds against a Loki revision
      different from `conandata.yml`.
+   - Status: implemented; missing or malformed `conandata.yml` now fails
+     instead of falling back to a duplicated requirement list.
 
 2. Unify project version flow.
    - Choose `pyproject.toml` as the release version source.
@@ -122,12 +130,15 @@ runtime checks reflect the current native code.
      `tests/native/` or `tests/python/native/`.
    - Keep any C++-only tests under `tests/cpp/`.
    - Acceptance: `python -m pytest -q` from `beiw` runs these tests by default.
+   - Status: implemented; native binding Python tests live under
+     `tests/native/`.
 
 2. Consolidate pytest config into `pyproject.toml`.
    - Move `pytest.ini` settings into `[tool.pytest.ini_options]`.
    - Use one `testpaths` entry for `tests`.
    - Add markers if slow/perf/native tests need opt-in treatment.
    - Acceptance: no redundant `tests/python` path, and no orphaned Python tests.
+   - Status: implemented with `[tool.pytest.ini_options] testpaths = ["tests"]`.
 
 3. Rationalize CI test workflows.
    - Make `tests.yml` the authoritative source build and test workflow.
@@ -136,11 +147,16 @@ runtime checks reflect the current native code.
    - Keep wheel validation in `wheels.yml`.
    - Acceptance: pull requests show one clear source-test signal, one wheel
      signal, one docs signal, and optional performance signal.
+   - Status: implemented. `tests.yml` owns source tests plus quality gates,
+     `pip.yml` is reduced to install smoke, `wheels.yml` owns packaging, and
+     docs/performance have separate named workflows.
 
 4. Decide performance gate semantics.
    - Either keep it explicitly non-blocking and rename it to "Performance
      Monitor", or make boundary failures block on protected branches.
    - Acceptance: the workflow name and check conclusion match its enforcement.
+   - Status: implemented as a non-blocking "Performance Monitor" workflow with
+     a separate status/check summary.
 
 ## Phase 4: Lint, Type, and API Surface Gates
 
@@ -149,6 +165,7 @@ runtime checks reflect the current native code.
    - Re-enable `ruff-check` in pre-commit.
    - Add a CI lint job or fold it into the source-test workflow before builds.
    - Acceptance: formatting and linting are both enforced.
+   - Status: implemented in pre-commit, `pyproject.toml`, and CI.
 
 2. Add a type-checking gate.
    - Choose mypy or pyright for Python wrappers and tests.
@@ -157,6 +174,7 @@ runtime checks reflect the current native code.
      available.
    - Acceptance: wrapper API typing is checked in CI, and cache directories are
      not the only evidence of local type checking.
+   - Status: implemented with mypy config and CI/pre-commit hooks.
 
 3. Add public API export tests.
    - Assert that top-level `mifrost.__all__`, `mifrost.encoders.__all__`, and
@@ -164,6 +182,7 @@ runtime checks reflect the current native code.
    - Add a test for `mifrost.FlatRootedHorizonEncoder` if top-level export is
      intended, or document that it is intentionally under `mifrost.encoders`.
    - Acceptance: export-table drift fails fast.
+   - Status: implemented in `tests/python/test_public_api_exports.py`.
 
 ## Phase 5: Build Output Isolation
 
@@ -332,12 +351,21 @@ Candidate E: reusable build/package support.
   - wheel workflow or local `pip wheel . -w wheelhouse --no-deps`
   - `python scripts/smoke_installed_wheel.py` against an installed wheel
 
-## Open Decisions
+## Resolved Decisions
 
-- Should `FlatRootedHorizonEncoder` be top-level public API or only
-  `mifrost.encoders` API?
-- Should generated `_core.pyi` be committed, generated in CI, or generated only
-  for release artifacts?
-- Should the performance workflow block protected branches?
-- Should `strong_type` be exported locally, or is the Conan Center package
-  deliberately sufficient?
+- `FlatRootedHorizonEncoder` is top-level public API and covered by export
+  manifest tests.
+- Generated `_core.pyi` remains ignored, generated by nanobind in CI/local stub
+  workflows, and included in release artifacts.
+- The performance workflow is a non-blocking monitor.
+- `strong_type` is exported locally because it is referenced by
+  `conandata.yml`.
+
+## Remaining Work
+
+- Finish Candidate A by moving the remaining single/batch/stream lane
+  normalization into one small contract boundary.
+- Continue Candidate D until `init_batch_encoding.cpp` is mostly registration
+  glue plus small adapters.
+- Candidate E is still open: build/package orchestration remains split across
+  `build_backend.py`, `configure.py`, `cbuild.py`, CMake presets, and workflows.
