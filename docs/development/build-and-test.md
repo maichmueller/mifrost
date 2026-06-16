@@ -68,17 +68,11 @@ Local generation commands:
 ```bash
 python configure.py --config Release --build_dir build/stubs
 python cbuild.py build/stubs --target mifrost_core_module_stubs
-test -s src/mifrost/_core.pyi
-python - <<'PY'
-from pathlib import Path
-
-path = Path("src/mifrost/_core.pyi")
-compile(path.read_text(), str(path), "exec")
-PY
+python scripts/validate_generated_stub.py
 ```
 
-The size check and syntax check match the CI guards and confirm that the stub
-file was produced and is valid Python syntax.
+The validation script is the same guard used by CI. It confirms that the stub
+file was produced, is non-empty, and is valid Python syntax.
 
 ## Run tests
 

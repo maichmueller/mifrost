@@ -27,8 +27,8 @@ jobs:
         name: mifrost-stubs
         path: src/mifrost
 
-    - name: Verify stub file
-      run: test -s src/mifrost/_core.pyi
+    - name: Validate stub file
+      run: python scripts/validate_generated_stub.py
 
     - name: Build SDist
       run: pipx run build --sdist
@@ -84,18 +84,8 @@ jobs:
       run: |
         cmake --build build_stubs --target mifrost_core_module_stubs
 
-    - name: Verify generated stub exists
-      run: |
-        test -s src/mifrost/_core.pyi
-
-    - name: Validate generated stub syntax
-      run: |
-        python - <<'PY'
-        from pathlib import Path
-
-        path = Path("src/mifrost/_core.pyi")
-        compile(path.read_text(), str(path), "exec")
-        PY
+    - name: Validate generated stubs
+      run: python scripts/validate_generated_stub.py
 
     - name: Upload generated stubs
       uses: actions/upload-artifact@v6
@@ -151,8 +141,8 @@ jobs:
         name: mifrost-stubs
         path: src/mifrost
 
-    - name: Verify stub file
-      run: test -s src/mifrost/_core.pyi
+    - name: Validate stub file
+      run: python scripts/validate_generated_stub.py
 
     - name: Set cache dirs
       run: |
