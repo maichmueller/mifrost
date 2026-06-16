@@ -31,7 +31,6 @@ from .common import (
     _prepare_actions,
     _split_goals,
 )
-from ._action_contract import parse_flat_actions
 from .types import (
     HomoEncoding,
     DomainInput,
@@ -138,8 +137,7 @@ class ColorEncoder(EncoderBase[Data]):
     ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
         adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
+        action_list = _prepare_actions(actions)
         if goals is None and subgoal_layers is None and not action_list:
             return self._engine.encode(adv_state)
         if goals is None:

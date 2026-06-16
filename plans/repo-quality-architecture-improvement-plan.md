@@ -236,6 +236,9 @@ Candidate A: encoder lane contract.
 - Status: partially implemented. Existing lane/batch/action contract modules are
   now the internal owners for parsed batch plans and batch payload conversion;
   `common.py` keeps compatibility wrappers for older private imports.
+  `_prepare_actions` now owns flat action normalization for single and stream
+  callers instead of requiring each caller to invoke `parse_flat_actions`
+  first.
 - Test impact: replace narrow helper tests with boundary tests that assert each
   encoder lane accepts/rejects public input shapes consistently.
 - Acceptance: adding a new encoder lane requires defining a lane spec and native
@@ -369,7 +372,8 @@ Candidate E: reusable build/package support.
 ## Remaining Work
 
 - Finish Candidate A by moving the remaining single/batch/stream lane
-  normalization into one small contract boundary.
+  normalization beyond shared flat action handling into one small contract
+  boundary.
 - Continue Candidate D until `init_batch_encoding.cpp` is mostly registration
   glue plus small adapters.
 - Continue Candidate E by moving beyond shared local build-directory defaults

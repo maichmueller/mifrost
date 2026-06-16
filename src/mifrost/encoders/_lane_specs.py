@@ -4,9 +4,13 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from .._core import GoalInputs, TransitionDAG
-from ._action_contract import parse_flat_actions
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_leaf
-from .common import _advanced_state, _prepare_history_subgoals, _split_goals
+from .common import (
+    _advanced_state,
+    _prepare_actions,
+    _prepare_history_subgoals,
+    _split_goals,
+)
 from .types import (
     BatchParam,
     GoalLiteralInput,
@@ -197,8 +201,8 @@ def validate_single_optional_payloads(
     actions: Iterable[GroundActionInput] | None,
     history_subgoals: HistorySubgoalInput | None,
     history_max_steps: int | None,
-) -> tuple[list[GroundActionInput], list[tuple[int, list[GoalLiteralInput]]]]:
-    action_list = parse_flat_actions(actions)
+) -> tuple[list[object], list[tuple[int, list[GoalLiteralInput]]]]:
+    action_list = _prepare_actions(actions)
     history_list = _prepare_history_subgoals(history_subgoals)
     if action_list and spec.single_action_error is not None:
         raise ValueError(spec.single_action_error)

@@ -335,6 +335,24 @@ def test_hgraph_encode_rejects_tuple_nested_actions_with_horizon_guidance(small_
         encoder.encode(state, actions=[(action0, action1)])
 
 
+def test_hgraph_encode_accepts_shared_generator_actions(small_blocks):
+    space, domain, problem = small_blocks
+    state = problem.get_initial_state()
+    action0, _action1 = _first_actions(space, state, count=2)
+
+    encoder = HGraphEncoder(domain, ignore_actions=False)
+    generated = encoder.encode(
+        state,
+        actions=(item for item in [action0]),
+    ).as_pyg(as_batch=False)
+    listed = encoder.encode(state, actions=[action0]).as_pyg(as_batch=False)
+
+    assert generated.num_nodes == listed.num_nodes
+    assert generated.num_edges == listed.num_edges
+    assert _has_action_node(generated, action0)
+    assert _has_action_node(listed, action0)
+
+
 def test_hgraph_encode_batch_rejects_nested_per_state_actions_with_guidance(
     small_blocks,
 ):

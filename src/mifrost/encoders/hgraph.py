@@ -41,9 +41,6 @@ from .common import (
     _prepare_history_subgoals,
     _split_goals,
 )
-from ._action_contract import (
-    parse_flat_actions,
-)
 from ._target_sources import TargetSource, normalize_target_sources
 from .types import (
     DomainInput,
@@ -392,8 +389,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         If goals/actions are omitted, the engine uses the state's problem goals.
         """
         adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
+        action_list = _prepare_actions(actions)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -436,8 +432,7 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
+        action_list = _prepare_actions(actions)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -493,8 +488,7 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> int:
         adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
+        action_list = _prepare_actions(actions)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None
@@ -652,8 +646,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> None:
         adv_state = _advanced_state(state)
-        action_inputs = parse_flat_actions(actions)
-        action_list = _prepare_actions(action_inputs)
+        action_list = _prepare_actions(actions)
         history_list = _prepare_history_subgoals(history_subgoals)
         if (
             goals is None

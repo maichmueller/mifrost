@@ -16,6 +16,7 @@ from .types import (
     to_advanced_literal,
     to_advanced_state,
 )
+from ._action_contract import parse_flat_actions
 
 from .._core import GoalInputs
 
@@ -76,9 +77,11 @@ def _prepare_actions(
     must provide flat action sequences, or use ``HorizonEncoder`` for
     IW/lookahead DAG workflows.
     """
-    if actions is None:
-        return []
-    return [_advanced_action(action) for action in actions]
+    return (
+        []
+        if actions is None
+        else [_advanced_action(action) for action in parse_flat_actions(actions)]
+    )
 
 
 def _prepare_history_subgoals(
