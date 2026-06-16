@@ -28,6 +28,7 @@
 #include <utility>
 
 #include "mifrost/batch_builder_python.hpp"
+#include "mifrost/batch_encoding_attributes.hpp"
 #include "mifrost/batch_encoding_conversion.hpp"
 #include "mifrost/batch_encoding_graph_field_access.hpp"
 #include "mifrost/batch_encoding_graph_field_mutation.hpp"
@@ -355,33 +356,7 @@ void init_batch_encoding(nb::module_& m)
          )
          .def(
             "to",
-            [](nb::handle self, nb::handle device) {
-               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.to called with invalid instance"
-               );
-               (void) encoding;
-               if(device.is_none()) {
-                  return nb::borrow< nb::object >(self);
-               }
-               nb::object normalized = py::torch_device_ctor()(device);
-               const bool same_device = owner_target_device_matches(self, normalized);
-               set_owner_target_device(self, normalized);
-               nb::dict attrs = batch_encoding_python_attrs(self);
-               for(auto [key_obj, value_obj] : attrs) {
-                  const std::string key = py::to_std_string(key_obj);
-                  if(is_forbidden_dynamic_attr_key(*encoding, key)) {
-                     continue;
-                  }
-                  attrs[key_obj] = move_object_to_device(
-                     nb::borrow< nb::object >(value_obj), normalized
-                  );
-               }
-               if(not same_device) {
-                  clear_owner_tensor_cache(self);
-                  materialize_owner_tensor_cache(self, *encoding);
-               }
-               return nb::borrow< nb::object >(self);
-            },
+            [](nb::handle self, nb::handle device) { return batch_encoding_to_device(self, device); },
             "device"_a
          )
          .def(
@@ -431,44 +406,13 @@ void init_batch_encoding(nb::module_& m)
          .def(
             "__getattr__",
             [](nb::handle self, const std::string& key) -> nb::object {
-               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.__getattr__ called with invalid instance"
-               );
-               if(batch_encoding_has_graph_field(*encoding, key)) {
-                  return batch_encoding_get_graph_field(*encoding, key, self);
-               }
-               if(auto value = batch_encoding_graph_attr_if_present(*encoding, key);
-                  value.has_value()) {
-                  return std::move(*value);
-               }
-               const std::string message = "'BatchEncoding' object has no attribute '" + key + "'";
-               PyErr_SetString(PyExc_AttributeError, message.c_str());
-               throw nb::python_error();
+               return batch_encoding_getattr(self, key);
             }
          )
          .def(
             "__setattr__",
             [](nb::handle self, const std::string& key, nb::handle value) {
-               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.__setattr__ called with invalid instance"
-               );
-               if(batch_encoding_has_graph_field(*encoding, key)) {
-                  if(is_native_graph_field_ptr_key(*encoding, key)) {
-                     throw std::invalid_argument(
-                        "Direct assignment to ragged ptr key '" + key
-                        + "' is not supported; assign the base field as (values, ptr)"
-                     );
-                  }
-                  set_batch_encoding_graph_field(*encoding, key, value);
-                  clear_owner_tensor_cache(self);
-                  return;
-               }
-               if(is_forbidden_dynamic_attr_key(*encoding, key)) {
-                  throw std::invalid_argument(
-                     "Dynamic attribute key '" + key + "' collides with reserved/native key"
-                  );
-               }
-               py::set_python_attribute(self, key, value);
+               batch_encoding_setattr(self, key, value);
             }
          )
          .def(
@@ -491,56 +435,11 @@ void init_batch_encoding(nb::module_& m)
          )
          .def(
             "keys",
-            [](nb::handle self) {
-               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.keys called with invalid instance"
-               );
-               auto key_set = batch_encoding_native_graph_field_keys(*encoding);
-               nb::dict attrs = batch_encoding_python_attrs(self);
-               for(auto [key_obj, value_obj] : attrs) {
-                  (void) value_obj;
-                  const std::string key = py::to_std_string(key_obj);
-                  if(is_forbidden_dynamic_attr_key(*encoding, key) or key_set.contains(key)) {
-                     continue;
-                  }
-                  key_set.insert(key);
-               }
-               nb::list out;
-               for(const auto& key : key_set) {
-                  out.append(key);
-               }
-               return out;
-            }
+            [](nb::handle self) { return batch_encoding_keys(self); }
          )
          .def(
             "items",
-            [](nb::handle self) {
-               auto* encoding = require_instance_ptr< BatchBuilder::BatchEncoding >(
-                  self, "BatchEncoding.items called with invalid instance"
-               );
-               auto key_set = batch_encoding_native_graph_field_keys(*encoding);
-               nb::dict attrs = batch_encoding_python_attrs(self);
-               for(auto [key_obj, value_obj] : attrs) {
-                  (void) value_obj;
-                  const std::string key = py::to_std_string(key_obj);
-                  if(is_forbidden_dynamic_attr_key(*encoding, key) or key_set.contains(key)) {
-                     continue;
-                  }
-                  key_set.insert(key);
-               }
-
-               nb::list out;
-               for(const auto& key : key_set) {
-                  nb::object value;
-                  if(batch_encoding_has_graph_field(*encoding, key)) {
-                     value = batch_encoding_get_graph_field(*encoding, key, self);
-                  } else {
-                     value = nb::borrow< nb::object >(attrs[key.c_str()]);
-                  }
-                  out.append(nb::make_tuple(key, std::move(value)));
-               }
-               return out;
-            }
+            [](nb::handle self) { return batch_encoding_items(self); }
          )
          .def(
             "as_pyg",
