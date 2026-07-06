@@ -113,18 +113,15 @@ jobs:
           - os: ubuntu-latest
             flavor: manylinux
             conan_home_dir: .conan2_wheels_manylinux
-            cibw_build: "cp312-manylinux_* cp313-manylinux_* cp314-manylinux_*"
-            cibw_skip: "cp314t-*"
+            cibw_build: "cp312-manylinux_* cp313-manylinux_*"
           - os: ubuntu-latest
             flavor: musllinux
             conan_home_dir: .conan2_wheels_musllinux
-            cibw_build: "cp312-musllinux_* cp313-musllinux_* cp314-musllinux_*"
-            cibw_skip: "cp314t-*"
+            cibw_build: "cp312-musllinux_* cp313-musllinux_*"
           - os: macos-latest
             flavor: macos
             conan_home_dir: .conan2_wheels_macos
-            cibw_build: "cp312-* cp313-* cp314-*"
-            cibw_skip: "cp314t-*"
+            cibw_build: "cp312-* cp313-*"
 
     steps:
     - uses: actions/checkout@v6
@@ -172,7 +169,6 @@ jobs:
       id: build_wheels_step
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
-        CIBW_SKIP: ${{ matrix.cibw_skip }}
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
         CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -r /project/requirements/build.txt
