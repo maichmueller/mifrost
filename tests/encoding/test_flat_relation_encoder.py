@@ -14,7 +14,7 @@ from mifrost.encoders import (
 from mifrost.encoders.flat import _relation_name_color
 from mifrost.encoders.flat_data import flat_relation_data_from_pyg
 
-from .test_utils import adv_action
+from .test_utils import adv_action, relation_major_from_graph_major
 
 
 def _assert_flat_batch_equal(
@@ -183,33 +183,9 @@ def _assert_flat_batch_equal(
     assert getattr(actual, "lgan_rr_edge_pos", None) == getattr(
         expected, "lgan_rr_edge_pos", None
     )
-
-
-def _relation_major_from_graph_major(
-    relation_args: torch.Tensor,
-    relation_counts: torch.Tensor,
-    relation_arities: torch.Tensor,
-) -> torch.Tensor:
-    counts = relation_counts.view(-1, int(relation_arities.numel())).cpu()
-    arities = relation_arities.view(-1).cpu()
-    chunks_by_relation: list[list[torch.Tensor]] = [
-        [] for _ in range(int(arities.numel()))
-    ]
-    cursor = 0
-    for graph_index in range(int(counts.size(0))):
-        for relation_index in range(int(arities.numel())):
-            width = int(counts[graph_index, relation_index] * arities[relation_index])
-            next_cursor = cursor + width
-            if width:
-                chunks_by_relation[relation_index].append(
-                    relation_args[cursor:next_cursor]
-                )
-            cursor = next_cursor
-    assert cursor == int(relation_args.numel())
-    parts = [torch.cat(chunks) for chunks in chunks_by_relation if chunks]
-    if not parts:
-        return relation_args.new_empty((0,))
-    return torch.cat(parts)
+    assert getattr(actual, "relation_args_layout", None) == getattr(
+        expected, "relation_args_layout", None
+    )
 
 
 def _first_action(space, state):
@@ -541,7 +517,7 @@ def test_flat_relation_relation_major_packing_is_opt_in(small_blocks):
     )
     graph_major_counts = graph_major.get_field("relation_counts")
     graph_major_args = graph_major.get_field("relation_args")
-    expected_relation_major = _relation_major_from_graph_major(
+    expected_relation_major = relation_major_from_graph_major(
         graph_major_args,
         graph_major_counts,
         relation_arities,
@@ -553,6 +529,50 @@ def test_flat_relation_relation_major_packing_is_opt_in(small_blocks):
     assert torch.equal(
         relation_major.get_field("relation_args"), expected_relation_major
     )
+
+
+def test_flat_relation_relation_major_flattened_view_matches_graph_major(
+    small_blocks,
+):
+    space, domain, problem = small_blocks
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+
+    graph_major = FlatRelationEncoder(domain).encode_batch(states).as_pyg(as_batch=True)
+    relation_major = (
+        FlatRelationEncoder(
+            domain,
+            pack_relation_args_relation_major=True,
+        )
+        .encode_batch(states)
+        .as_pyg(as_batch=True)
+    )
+
+    assert relation_major.relation_args_layout == "relation_major"
+    assert not torch.equal(graph_major.relation_args, relation_major.relation_args)
+    for graph_index in range(2):
+        graph_major_view = graph_major.flattened_relations_view(graph_index=graph_index)
+        relation_major_view = relation_major.flattened_relations_view(
+            graph_index=graph_index
+        )
+        for relation_name in graph_major.schema.names:
+            assert torch.equal(
+                relation_major_view[relation_name],
+                graph_major_view[relation_name],
+            )
+
+    graph_major_all = graph_major.flattened_relations_view()
+    relation_major_all = relation_major.flattened_relations_view()
+    for relation_name in graph_major.schema.names:
+        assert torch.equal(
+            relation_major_all[relation_name],
+            graph_major_all[relation_name],
+        )
+
+    with pytest.raises(ValueError, match="not representable"):
+        relation_major.relation_slot_offsets(graph_index=1)
 
 
 def test_flat_relation_relation_major_single_graph_keeps_args(small_blocks):

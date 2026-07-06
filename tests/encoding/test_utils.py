@@ -163,6 +163,33 @@ def encoding_dict_to_pyg(encoding_dict: dict) -> HeteroData:
     return _encoding_dict_to_pyg(encoding_dict, as_batch=None)
 
 
+def relation_major_from_graph_major(
+    relation_args: torch.Tensor,
+    relation_counts: torch.Tensor,
+    relation_arities: torch.Tensor,
+) -> torch.Tensor:
+    counts = relation_counts.view(-1, int(relation_arities.numel())).cpu()
+    arities = relation_arities.view(-1).cpu()
+    chunks_by_relation: list[list[torch.Tensor]] = [
+        [] for _ in range(int(arities.numel()))
+    ]
+    cursor = 0
+    for graph_index in range(int(counts.size(0))):
+        for relation_index in range(int(arities.numel())):
+            width = int(counts[graph_index, relation_index] * arities[relation_index])
+            next_cursor = cursor + width
+            if width:
+                chunks_by_relation[relation_index].append(
+                    relation_args[cursor:next_cursor]
+                )
+            cursor = next_cursor
+    assert cursor == int(relation_args.numel())
+    parts = [torch.cat(chunks) for chunks in chunks_by_relation if chunks]
+    if not parts:
+        return relation_args.new_empty((0,))
+    return torch.cat(parts)
+
+
 def goal_inputs_from_problem(problem, *, goals=None, subgoal_layers=None):
     if goals is None:
         goals = list(problem.get_goal_condition().get_literals())
