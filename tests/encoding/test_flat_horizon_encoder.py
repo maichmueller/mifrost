@@ -48,6 +48,33 @@ def _single_step_dag(root, transitions, *, candidate_ids: list[int] | None = Non
     return dag
 
 
+def _relation_major_from_graph_major(
+    relation_args: torch.Tensor,
+    relation_counts: torch.Tensor,
+    relation_arities: torch.Tensor,
+) -> torch.Tensor:
+    counts = relation_counts.view(-1, int(relation_arities.numel())).cpu()
+    arities = relation_arities.view(-1).cpu()
+    chunks_by_relation: list[list[torch.Tensor]] = [
+        [] for _ in range(int(arities.numel()))
+    ]
+    cursor = 0
+    for graph_index in range(int(counts.size(0))):
+        for relation_index in range(int(arities.numel())):
+            width = int(counts[graph_index, relation_index] * arities[relation_index])
+            next_cursor = cursor + width
+            if width:
+                chunks_by_relation[relation_index].append(
+                    relation_args[cursor:next_cursor]
+                )
+            cursor = next_cursor
+    assert cursor == int(relation_args.numel())
+    parts = [torch.cat(chunks) for chunks in chunks_by_relation if chunks]
+    if not parts:
+        return relation_args.new_empty((0,))
+    return torch.cat(parts)
+
+
 def _delta_literals(root, target, problem):
     root_atoms = set(root.get_atoms(ignore_static=True))
     target_atoms = set(target.get_atoms(ignore_static=True))
@@ -514,6 +541,48 @@ def test_flat_horizon_batch_matches_from_data_list(small_blocks):
     )
 
     _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_horizon_relation_major_packing_is_opt_in(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    succ_state = transitions[0][1]
+
+    root_dag = _single_step_dag(root, transitions, candidate_ids=[11])
+    succ_dag = mifrost.TransitionDAG(adv_state(succ_state))
+    graph_major_encoder = FlatHorizonEncoder(domain, ignore_actions=False)
+    relation_major_encoder = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        pack_relation_args_relation_major=True,
+    )
+
+    graph_major = graph_major_encoder.encode_batch(
+        [root, succ_state], dags=[root_dag, succ_dag]
+    )
+    relation_major = relation_major_encoder.encode_batch(
+        [root, succ_state], dags=[root_dag, succ_dag]
+    )
+
+    relation_arities = torch.as_tensor(
+        graph_major.graph_attrs["relation_arities"],
+        dtype=torch.long,
+    )
+    graph_major_counts = graph_major.get_field("relation_counts")
+    graph_major_args = graph_major.get_field("relation_args")
+    expected_relation_major = _relation_major_from_graph_major(
+        graph_major_args,
+        graph_major_counts,
+        relation_arities,
+    )
+
+    assert graph_major.graph_attrs["relation_args_layout"] == "graph_major"
+    assert relation_major.graph_attrs["relation_args_layout"] == "relation_major"
+    assert torch.equal(relation_major.get_field("relation_counts"), graph_major_counts)
+    assert torch.equal(
+        relation_major.get_field("relation_args"), expected_relation_major
+    )
 
 
 def test_flat_horizon_to_networkx_exposes_state_target_metadata(small_blocks):

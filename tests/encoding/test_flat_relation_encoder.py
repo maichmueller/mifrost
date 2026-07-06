@@ -185,6 +185,33 @@ def _assert_flat_batch_equal(
     )
 
 
+def _relation_major_from_graph_major(
+    relation_args: torch.Tensor,
+    relation_counts: torch.Tensor,
+    relation_arities: torch.Tensor,
+) -> torch.Tensor:
+    counts = relation_counts.view(-1, int(relation_arities.numel())).cpu()
+    arities = relation_arities.view(-1).cpu()
+    chunks_by_relation: list[list[torch.Tensor]] = [
+        [] for _ in range(int(arities.numel()))
+    ]
+    cursor = 0
+    for graph_index in range(int(counts.size(0))):
+        for relation_index in range(int(arities.numel())):
+            width = int(counts[graph_index, relation_index] * arities[relation_index])
+            next_cursor = cursor + width
+            if width:
+                chunks_by_relation[relation_index].append(
+                    relation_args[cursor:next_cursor]
+                )
+            cursor = next_cursor
+    assert cursor == int(relation_args.numel())
+    parts = [torch.cat(chunks) for chunks in chunks_by_relation if chunks]
+    if not parts:
+        return relation_args.new_empty((0,))
+    return torch.cat(parts)
+
+
 def _first_action(space, state):
     transitions = list(space.get_forward_transitions(state))
     actions = [action for action, _ in transitions if action is not None]
@@ -493,6 +520,61 @@ def test_flat_relation_batch_matches_from_data_list(small_blocks):
     )
 
     _assert_flat_batch_equal(actual, expected)
+
+
+def test_flat_relation_relation_major_packing_is_opt_in(small_blocks):
+    space, domain, problem = small_blocks
+    states = [
+        problem.get_initial_state(),
+        space._advanced_state_space_sampler.sample_state_n_steps_from_goal(0),
+    ]
+
+    graph_major = FlatRelationEncoder(domain).encode_batch(states)
+    relation_major = FlatRelationEncoder(
+        domain,
+        pack_relation_args_relation_major=True,
+    ).encode_batch(states)
+
+    relation_arities = torch.as_tensor(
+        graph_major.graph_attrs["relation_arities"],
+        dtype=torch.long,
+    )
+    graph_major_counts = graph_major.get_field("relation_counts")
+    graph_major_args = graph_major.get_field("relation_args")
+    expected_relation_major = _relation_major_from_graph_major(
+        graph_major_args,
+        graph_major_counts,
+        relation_arities,
+    )
+
+    assert graph_major.graph_attrs["relation_args_layout"] == "graph_major"
+    assert relation_major.graph_attrs["relation_args_layout"] == "relation_major"
+    assert torch.equal(relation_major.get_field("relation_counts"), graph_major_counts)
+    assert torch.equal(
+        relation_major.get_field("relation_args"), expected_relation_major
+    )
+
+
+def test_flat_relation_relation_major_single_graph_keeps_args(small_blocks):
+    _, domain, problem = small_blocks
+    state = problem.get_initial_state()
+
+    graph_major = FlatRelationEncoder(domain).encode(state)
+    relation_major = FlatRelationEncoder(
+        domain,
+        pack_relation_args_relation_major=True,
+    ).encode(state)
+
+    assert graph_major.graph_attrs["relation_args_layout"] == "graph_major"
+    assert relation_major.graph_attrs["relation_args_layout"] == "relation_major"
+    assert torch.equal(
+        relation_major.get_field("relation_counts"),
+        graph_major.get_field("relation_counts"),
+    )
+    assert torch.equal(
+        relation_major.get_field("relation_args"),
+        graph_major.get_field("relation_args"),
+    )
 
 
 def test_flat_relation_python_conversion_matches_native(small_blocks):

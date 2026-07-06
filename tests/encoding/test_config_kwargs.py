@@ -61,6 +61,7 @@ def test_flat_relation_config_accepts_lgan_kwargs() -> None:
         lgan_tn_edge_pos="_flat_tn_",
         lgan_nn_edge_pos="_flat_nn_",
         lgan_rr_edge_pos="_flat_rr_",
+        pack_relation_args_relation_major=True,
     )
     assert config.include_lgan_edges is True
     assert config.use_predicate_virtual_nodes is True
@@ -68,6 +69,7 @@ def test_flat_relation_config_accepts_lgan_kwargs() -> None:
     assert config.lgan_tn_edge_pos == "_flat_tn_"
     assert config.lgan_nn_edge_pos == "_flat_nn_"
     assert config.lgan_rr_edge_pos == "_flat_rr_"
+    assert config.pack_relation_args_relation_major is True
 
 
 def test_flat_horizon_config_accepts_lgan_kwargs() -> None:
@@ -77,12 +79,14 @@ def test_flat_horizon_config_accepts_lgan_kwargs() -> None:
         lgan_tn_edge_pos="_flat_tn_",
         lgan_nn_edge_pos="_flat_nn_",
         lgan_rr_edge_pos="_flat_rr_",
+        pack_relation_args_relation_major=True,
     )
     assert config.include_lgan_edges is True
     assert config.use_predicate_virtual_nodes is True
     assert config.lgan_tn_edge_pos == "_flat_tn_"
     assert config.lgan_nn_edge_pos == "_flat_nn_"
     assert config.lgan_rr_edge_pos == "_flat_rr_"
+    assert config.pack_relation_args_relation_major is True
 
 
 def test_successor_config_accepts_kwargs() -> None:
@@ -165,12 +169,15 @@ def test_flat_relation_encoder_exposes_unified_lgan_config(small_blocks) -> None
         lgan_anchor_sources=["goal"],
         lgan_tn_edge_pos="_flat_tn_custom_",
         lgan_rr_edge_pos="_flat_rr_custom_",
+        pack_relation_args_relation_major=True,
     )
     assert encoder.config.include_lgan_edges is True
     assert encoder.config.use_predicate_virtual_nodes is True
     assert set(encoder.config.lgan_anchor_sources) == {mifrost.TargetSource.goals}
     assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
+    assert encoder.config.pack_relation_args_relation_major is True
+    assert encoder.pack_relation_args_relation_major is True
 
 
 def test_flat_horizon_encoder_exposes_unified_lgan_config(small_blocks) -> None:
@@ -181,11 +188,14 @@ def test_flat_horizon_encoder_exposes_unified_lgan_config(small_blocks) -> None:
         use_predicate_virtual_nodes=True,
         lgan_tn_edge_pos="_flat_tn_custom_",
         lgan_rr_edge_pos="_flat_rr_custom_",
+        pack_relation_args_relation_major=True,
     )
     assert encoder.config.include_lgan_edges is True
     assert encoder.config.use_predicate_virtual_nodes is True
     assert encoder.config.lgan_tn_edge_pos == "_flat_tn_custom_"
     assert encoder.config.lgan_rr_edge_pos == "_flat_rr_custom_"
+    assert encoder.config.pack_relation_args_relation_major is True
+    assert encoder.pack_relation_args_relation_major is True
 
 
 def test_hgraph_encoder_lgan_requires_explicit_targets(small_blocks) -> None:

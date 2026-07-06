@@ -44,6 +44,22 @@ def test_flat_relation_append_only_stream_matches_encode_batch(small_blocks):
     _assert_flat_batch_equal(actual, expected)
 
 
+def test_flat_relation_relation_major_stream_matches_encode_batch(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    succ = _first_successor(space, root)
+
+    encoder = FlatRelationEncoder(domain, pack_relation_args_relation_major=True)
+    stream = encoder.stream()
+    stream.append(root)
+    stream.append(succ)
+
+    actual = stream.flush_pyg()
+    expected = encoder.encode_batch([root, succ]).as_pyg(as_batch=True)
+
+    _assert_flat_batch_equal(actual, expected)
+
+
 def test_flat_relation_append_only_stream_has_no_update_remove(small_blocks):
     _space, domain, _problem = small_blocks
     stream = FlatRelationEncoder(domain).stream()
@@ -147,6 +163,32 @@ def test_flat_horizon_stream_matches_direct_encode_and_accepts_rustworkx(small_b
 
     _assert_flat_batch_equal(actual, expected)
     assert actual.graph_target_depths(1).tolist() == [1]
+
+
+def test_flat_horizon_relation_major_stream_matches_encode_batch(small_blocks):
+    pytest.importorskip("rustworkx")
+
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    goals = list(problem.get_goal_condition().get_literals())
+
+    encoder = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        pack_relation_args_relation_major=True,
+    )
+    stream = encoder.stream()
+    stream.append(root, goals=goals)
+    stream.append(root, dag=dag, goals=goals)
+
+    actual = stream.flush_pyg()
+    expected = encoder.encode_batch(
+        [root, root], dags=[None, dag], goals=[goals, goals]
+    ).as_pyg(as_batch=True)
+
+    _assert_flat_batch_equal(actual, expected)
 
 
 def test_flat_horizon_append_only_stream_has_no_update_remove(small_blocks):

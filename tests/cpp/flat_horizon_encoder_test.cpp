@@ -40,6 +40,11 @@ str_attr(const BatchBuilder::BatchEncoding& encoding, std::string_view key)
    return std::get< std::vector< std::string > >(encoding.graph_attrs.at(key));
 }
 
+const std::string& string_attr(const BatchBuilder::BatchEncoding& encoding, std::string_view key)
+{
+   return std::get< std::string >(encoding.graph_attrs.at(key));
+}
+
 std::optional< size_t >
 relation_index_for(const std::vector< std::string >& relation_names, std::string_view relation_name)
 {
@@ -61,6 +66,44 @@ size_t relation_slot_offset(
       total += static_cast< size_t >(relation_counts[idx] * relation_arities[idx]);
    }
    return total;
+}
+
+std::vector< int64_t > relation_major_from_graph_major(
+   const std::vector< int64_t >& relation_args,
+   std::span< const int64_t > relation_counts,
+   std::span< const int64_t > relation_arities,
+   size_t graph_count
+)
+{
+   const size_t relation_count = relation_arities.size();
+   std::vector< size_t > starts(graph_count * relation_count, 0);
+   std::vector< size_t > widths(graph_count * relation_count, 0);
+   size_t cursor = 0;
+   for(size_t graph_idx = 0; graph_idx < graph_count; ++graph_idx) {
+      for(size_t relation_idx = 0; relation_idx < relation_count; ++relation_idx) {
+         const size_t index = graph_idx * relation_count + relation_idx;
+         starts[index] = cursor;
+         widths[index] = static_cast< size_t >(
+            relation_counts[index] * relation_arities[relation_idx]
+         );
+         cursor += widths[index];
+      }
+   }
+   EXPECT_EQ(cursor, relation_args.size());
+
+   std::vector< int64_t > out;
+   out.reserve(relation_args.size());
+   for(size_t relation_idx = 0; relation_idx < relation_count; ++relation_idx) {
+      for(size_t graph_idx = 0; graph_idx < graph_count; ++graph_idx) {
+         const size_t index = graph_idx * relation_count + relation_idx;
+         out.insert(
+            out.end(),
+            relation_args.begin() + static_cast< ptrdiff_t >(starts[index]),
+            relation_args.begin() + static_cast< ptrdiff_t >(starts[index] + widths[index])
+         );
+      }
+   }
+   return out;
 }
 
 BatchBuilder::BatchEncoding encode_single(
@@ -129,6 +172,54 @@ TEST_P(FlatHorizonEncoderTest, EmitsStateTargetMetadataAndCarrierRows)
    EXPECT_EQ(str_attr(encoding, "target_groups"), std::vector< std::string >({"state"}));
    EXPECT_EQ(entity_names[ctx.problem->get_objects().size()], "_root_state_");
    EXPECT_EQ(entity_names[target_entity_indices[0]], "target:1");
+}
+
+TEST_P(FlatHorizonEncoderTest, RelationMajorPackingIsOptInForBatches)
+{
+   const auto param = GetParam();
+   auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   auto [succ_state, succ_action] = mifrost_test::find_successor(ctx);
+
+   TransitionDAG root_dag(ctx.root);
+   root_dag.register_transition(ctx.root, succ_state, succ_action, int64_t{101});
+   TransitionDAG succ_dag(succ_state);
+   const auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   FlatHorizonEncoderEngine::Config base_config;
+   base_config.ignore_actions = false;
+   FlatHorizonEncoderEngine graph_major_engine(ctx.problem->get_domain(), base_config);
+   BatchBuilder graph_major_builder;
+   graph_major_engine.encode(ctx.root, root_dag, goals, graph_major_builder);
+   graph_major_builder.next_graph();
+   graph_major_engine.encode(succ_state, succ_dag, goals, graph_major_builder);
+   graph_major_builder.next_graph();
+   const auto graph_major = graph_major_builder.build();
+
+   auto relation_major_config = base_config;
+   relation_major_config.pack_relation_args_relation_major = true;
+   FlatHorizonEncoderEngine relation_major_engine(ctx.problem->get_domain(), relation_major_config);
+   BatchBuilder relation_major_builder;
+   relation_major_engine.encode(ctx.root, root_dag, goals, relation_major_builder);
+   relation_major_builder.next_graph();
+   relation_major_engine.encode(succ_state, succ_dag, goals, relation_major_builder);
+   relation_major_builder.next_graph();
+   auto relation_major = relation_major_builder.build();
+   relation_major_engine.finalize_batch_encoding(relation_major);
+
+   const auto relation_arities = i64_attr(graph_major, "relation_arities");
+   const auto graph_major_counts = i64_field(graph_major, "relation_counts");
+   const auto graph_major_args = i64_field(graph_major, "relation_args");
+   const auto expected_relation_major = relation_major_from_graph_major(
+      graph_major_args,
+      std::span{graph_major_counts},
+      std::span{relation_arities},
+      /*graph_count=*/2
+   );
+
+   EXPECT_EQ(string_attr(graph_major, "relation_args_layout"), "graph_major");
+   EXPECT_EQ(string_attr(relation_major, "relation_args_layout"), "relation_major");
+   EXPECT_EQ(i64_field(relation_major, "relation_counts"), graph_major_counts);
+   EXPECT_EQ(i64_field(relation_major, "relation_args"), expected_relation_major);
 }
 
 TEST_P(FlatHorizonEncoderTest, RelationsAnchorOnStateCarrierRows)
