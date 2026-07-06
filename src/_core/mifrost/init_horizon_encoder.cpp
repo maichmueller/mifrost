@@ -234,6 +234,10 @@ void init_horizon_encoder(nb::module_& m)
       .def_rw("enable_sibling_relation", &FlatHorizonEncoderEngine::Config::enable_sibling_relation)
       .def_rw("enable_cousin_relation", &FlatHorizonEncoderEngine::Config::enable_cousin_relation)
       .def_rw("root_policy", &FlatHorizonEncoderEngine::Config::root_policy)
+      .def_rw(
+         "pack_relation_args_relation_major",
+         &FlatHorizonEncoderEngine::Config::pack_relation_args_relation_major
+      )
       .def_rw("goal_derivations", &FlatHorizonEncoderEngine::Config::goal_derivations);
 
    nb::class_< FlatHorizonEncoderEngine >(m, "FlatHorizonEncoderEngine")

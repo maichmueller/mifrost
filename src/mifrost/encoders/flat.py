@@ -459,6 +459,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
+        pack_relation_args_relation_major: bool = False,
         goal_derivations: Iterable[Any] | None = None,
     ) -> None:
         """Build a flat encoder for state-style workloads.
@@ -514,6 +515,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             "lgan_tn_edge_pos": lgan_tn_edge_pos,
             "lgan_nn_edge_pos": lgan_nn_edge_pos,
             "lgan_rr_edge_pos": lgan_rr_edge_pos,
+            "pack_relation_args_relation_major": pack_relation_args_relation_major,
         }
         if normalized_lgan_anchor_sources is not None:
             config_kwargs["lgan_anchor_sources"] = normalized_lgan_anchor_sources
@@ -533,6 +535,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
         self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
         self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)
+        self.pack_relation_args_relation_major = bool(
+            config.pack_relation_args_relation_major
+        )
         self._lgan_edge_positions = {
             self.lgan_tn_edge_pos,
             self.lgan_nn_edge_pos,

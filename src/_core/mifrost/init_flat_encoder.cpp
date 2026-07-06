@@ -56,6 +56,10 @@ void init_flat_encoder(nb::module_& m)
       .def_rw("lgan_tn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_tn_edge_pos)
       .def_rw("lgan_nn_edge_pos", &FlatRelationEncoderEngine::Config::lgan_nn_edge_pos)
       .def_rw("lgan_rr_edge_pos", &FlatRelationEncoderEngine::Config::lgan_rr_edge_pos)
+      .def_rw(
+         "pack_relation_args_relation_major",
+         &FlatRelationEncoderEngine::Config::pack_relation_args_relation_major
+      )
       .def_rw("goal_derivations", &FlatRelationEncoderEngine::Config::goal_derivations);
 
    nb::class_< FlatRelationEncoderEngine >(m, "FlatRelationEncoderEngine")

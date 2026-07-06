@@ -227,6 +227,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         lgan_tn_edge_pos: str = DEFAULT_LGAN_TN_EDGE_POS,
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
+        pack_relation_args_relation_major: bool = False,
         goal_derivations: Any | None = None,
     ) -> None:
         """Create a flat horizon encoder.
@@ -264,6 +265,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             "enable_sibling_relation": enable_sibling_relation,
             "enable_cousin_relation": enable_cousin_relation,
             "root_policy": normalized_root_policy,
+            "pack_relation_args_relation_major": pack_relation_args_relation_major,
         }
         normalized_mode = _normalize_flat_horizon_mode(transition_mode)
         if normalized_mode is not None:
@@ -283,6 +285,9 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         self.lgan_tn_edge_pos = str(config.lgan_tn_edge_pos)
         self.lgan_nn_edge_pos = str(config.lgan_nn_edge_pos)
         self.lgan_rr_edge_pos = str(config.lgan_rr_edge_pos)
+        self.pack_relation_args_relation_major = bool(
+            config.pack_relation_args_relation_major
+        )
         self._lgan_edge_positions = {
             self.lgan_tn_edge_pos,
             self.lgan_nn_edge_pos,
