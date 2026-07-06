@@ -86,6 +86,7 @@ class MIFROST_API FlatRelationEncoderEngine {
       std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
       std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
       std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
+      bool pack_relation_args_relation_major = false;
       std::set< GoalDerivation > goal_derivations = {
          GoalDerivation::plain,
          GoalDerivation::satisfied,
@@ -133,6 +134,8 @@ class MIFROST_API FlatRelationEncoderEngine {
       const batch_input::parsed::FlatBatchInputs& inputs,
       std::optional< int > history_max_steps = std::nullopt
    );
+   /// Apply configured batch-level post-processing to a built flat batch.
+   void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    /// Return the effective immutable encoder config.
    [[nodiscard]] const Config& get_config() const { return config_; }
@@ -289,6 +292,7 @@ BOOST_DESCRIBE_STRUCT(
     lgan_tn_edge_pos,
     lgan_nn_edge_pos,
     lgan_rr_edge_pos,
+    pack_relation_args_relation_major,
     goal_derivations)
 )
 
@@ -471,6 +475,16 @@ class FlatRelationMutableStreamEncoder:
       engine_->encode(*step.state, builder);
    }
 
+   BatchEncoding flush()
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationMutableStreamEncoder requires engine");
+      }
+      auto encoding = StreamEncoderBase::flush();
+      engine_->finalize_batch_encoding(encoding);
+      return encoding;
+   }
+
   private:
    FlatRelationEncoderEngine* engine_ = nullptr;
 };
@@ -547,7 +561,15 @@ class FlatRelationStreamEncoder {
       return next_id_++;
    }
 
-   BatchEncoding flush() { return builder_.build(); }
+   BatchEncoding flush()
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatRelationStreamEncoder requires engine");
+      }
+      auto encoding = builder_.build();
+      engine_->finalize_batch_encoding(encoding);
+      return encoding;
+   }
 
    void reset()
    {

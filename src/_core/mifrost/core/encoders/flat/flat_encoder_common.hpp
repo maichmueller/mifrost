@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,6 +43,9 @@ inline constexpr std::string_view kTargetSizesField = "target_sizes";
 inline constexpr std::string_view kRelationInstanceSizesField = "relation_instance_sizes";
 inline constexpr std::string_view kRelationCountsField = "relation_counts";
 inline constexpr std::string_view kRelationArgsField = "relation_args";
+inline constexpr std::string_view kRelationArgsLayoutAttr = "relation_args_layout";
+inline constexpr std::string_view kRelationArgsGraphMajorLayout = "graph_major";
+inline constexpr std::string_view kRelationArgsRelationMajorLayout = "relation_major";
 inline constexpr std::string_view kLGANTNSizesField = "lgan_tn_sizes";
 inline constexpr std::string_view kLGANTNRelationIndicesField = "lgan_tn_relation_indices";
 inline constexpr std::string_view kLGANTNEntityIndicesField = "lgan_tn_entity_indices";
@@ -70,6 +74,7 @@ struct FlatBuilderGraphConfig {
    std::string lgan_tn_edge_pos;
    std::string lgan_nn_edge_pos;
    std::string lgan_rr_edge_pos;
+   bool pack_relation_args_relation_major = false;
 };
 
 /// Convert configured target sources to stable exported source names.
@@ -92,5 +97,11 @@ void register_flat_target_entity_fields(BatchBuilder& builder);
 void register_flat_relation_instance_fields(BatchBuilder& builder, int relation_count_dim);
 /// Register LGAN adjacency fields for flat graphs.
 void register_flat_lgan_fields(BatchBuilder& builder);
+
+/// Optionally reorder built flat relation args from graph-major to relation-major layout.
+void pack_flat_relation_args_relation_major(
+   BatchBuilder::BatchEncoding& encoding,
+   std::span< const int64_t > relation_arities
+);
 
 }  // namespace mifrost

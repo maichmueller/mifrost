@@ -535,6 +535,7 @@ void FlatHorizonEncoderEngine::prepare_builder(BatchBuilder& builder) const
          .lgan_tn_edge_pos = config_.lgan_tn_edge_pos,
          .lgan_nn_edge_pos = config_.lgan_nn_edge_pos,
          .lgan_rr_edge_pos = config_.lgan_rr_edge_pos,
+         .pack_relation_args_relation_major = config_.pack_relation_args_relation_major,
       }
    );
 
@@ -1496,7 +1497,16 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
    builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    builder.set_graph_attr(std::string(kParentRelationAttr), config_.parent_relation);
    print_flat_horizon_batch_profile(profile);
-   return builder.build();
+   auto encoding = builder.build();
+   finalize_batch_encoding(encoding);
+   return encoding;
+}
+
+void FlatHorizonEncoderEngine::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
+{
+   if(config_.pack_relation_args_relation_major) {
+      pack_flat_relation_args_relation_major(encoding, std::span{relation_arities_});
+   }
 }
 
 }  // namespace mifrost

@@ -75,6 +75,7 @@ class MIFROST_API FlatHorizonEncoderEngine {
       bool enable_sibling_relation = false;
       bool enable_cousin_relation = false;
       RootPolicy root_policy = RootPolicy::exclude;
+      bool pack_relation_args_relation_major = false;
       std::set< GoalDerivation > goal_derivations = {
          GoalDerivation::plain,
          GoalDerivation::satisfied,
@@ -101,6 +102,8 @@ class MIFROST_API FlatHorizonEncoderEngine {
 
    /// Encode a parsed batch of horizon inputs into one flat batch encoding.
    BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::HorizonBatchInputs& inputs);
+   /// Apply configured batch-level post-processing to a built flat batch.
+   void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const { return config_; }
    [[nodiscard]] const RelationDict& get_relation_dict() const { return relation_dict_; }
@@ -222,6 +225,7 @@ BOOST_DESCRIBE_STRUCT(
     enable_sibling_relation,
     enable_cousin_relation,
     root_policy,
+    pack_relation_args_relation_major,
     goal_derivations)
 )
 
@@ -294,6 +298,16 @@ class FlatHorizonStreamEncoder:
       }
       // Streaming mode already stores a complete step payload, so this path is a thin dispatch.
       engine_->encode(*step.root, *step.dag, *step.goals, builder);
+   }
+
+   BatchEncoding flush()
+   {
+      if(engine_ == nullptr) {
+         throw std::invalid_argument("FlatHorizonStreamEncoder requires engine");
+      }
+      auto encoding = StreamEncoderBase::flush();
+      engine_->finalize_batch_encoding(encoding);
+      return encoding;
    }
 
   private:
