@@ -440,6 +440,7 @@ target_link_libraries(
         PRIVATE
         dlpack::dlpack
         mifrost_core
+        Python::Module
         nanobind::nanobind
 )
 target_compile_definitions(mifrost_core_module PRIVATE MIFROST_ENABLE_PYTHON_API)
