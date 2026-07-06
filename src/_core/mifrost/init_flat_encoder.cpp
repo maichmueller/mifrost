@@ -90,13 +90,20 @@ void init_flat_encoder(nb::module_& m)
       )
       .def_prop_ro("slot_role_names", &FlatRelationEncoderEngine::get_slot_role_names)
       .def(
+         "finalize_batch_encoding",
+         &FlatRelationEncoderEngine::finalize_batch_encoding,
+         "encoding"_a
+      )
+      .def(
          "encode",
          [](FlatRelationEncoderEngine& encoder, const mimir::search::State& state) {
             BatchBuilder builder;
             builder.set_graph_kind("flat");
             encoder.encode(state, builder);
             builder.next_graph();
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "state"_a
       )
@@ -109,7 +116,9 @@ void init_flat_encoder(nb::module_& m)
             builder.set_graph_kind("flat");
             encoder.encode(state, actions, builder);
             builder.next_graph();
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "state"_a,
          "actions"_a
@@ -126,7 +135,9 @@ void init_flat_encoder(nb::module_& m)
             builder.set_graph_kind("flat");
             encoder.encode(state, goals, actions, history_subgoals, history_max_steps, builder);
             builder.next_graph();
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "state"_a,
          "goals"_a,
@@ -144,7 +155,9 @@ void init_flat_encoder(nb::module_& m)
             builder.set_graph_kind("flat");
             encoder.encode(state, goals, actions, builder);
             builder.next_graph();
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "state"_a,
          "goals"_a,
@@ -159,7 +172,9 @@ void init_flat_encoder(nb::module_& m)
             builder.set_graph_kind("flat");
             encoder.encode(state, goals, builder);
             builder.next_graph();
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "state"_a,
          "goals"_a

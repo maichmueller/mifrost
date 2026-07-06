@@ -268,6 +268,9 @@ void init_horizon_encoder(nb::module_& m)
       )
       .def_prop_ro("slot_role_names", &FlatHorizonEncoderEngine::get_slot_role_names)
       .def(
+         "finalize_batch_encoding", &FlatHorizonEncoderEngine::finalize_batch_encoding, "encoding"_a
+      )
+      .def(
          "encode",
          [](FlatHorizonEncoderEngine& encoder,
             const mimir::search::State& root,
@@ -276,7 +279,9 @@ void init_horizon_encoder(nb::module_& m)
             BatchBuilder builder;
             builder.set_graph_kind("flat");
             encoder.encode(root, dag, goals, builder);
-            return builder.build();
+            auto encoding = builder.build();
+            encoder.finalize_batch_encoding(encoding);
+            return encoding;
          },
          "root"_a,
          "dag"_a,

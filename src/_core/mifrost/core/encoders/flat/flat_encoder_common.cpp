@@ -50,6 +50,32 @@ size_t checked_relation_width(int64_t count, int64_t arity)
    return count_size * arity_size;
 }
 
+bool relation_args_layout_is_relation_major(const BatchBuilder::BatchEncoding& encoding)
+{
+   const auto it = encoding.graph_attrs.find(std::string(kRelationArgsLayoutAttr));
+   if(it == encoding.graph_attrs.end()) {
+      return false;
+   }
+   const auto* layout = std::get_if< std::string >(&it->second);
+   if(layout == nullptr) {
+      throw std::invalid_argument("Flat graph attr 'relation_args_layout' must be a string");
+   }
+   if(*layout == kRelationArgsRelationMajorLayout) {
+      return true;
+   }
+   if(*layout != kRelationArgsGraphMajorLayout) {
+      throw std::invalid_argument("Unknown flat relation_args_layout '" + *layout + "'");
+   }
+   return false;
+}
+
+void set_relation_args_layout_relation_major(BatchBuilder::BatchEncoding& encoding)
+{
+   encoding.graph_attrs[std::string(kRelationArgsLayoutAttr)] = std::string(
+      kRelationArgsRelationMajorLayout
+   );
+}
+
 }  // namespace
 
 std::vector< std::string > source_names_for(const std::set< TargetSource >& sources)
@@ -105,11 +131,7 @@ void set_flat_graph_attrs(
    builder.set_graph_attr(std::string(kLGANNNEdgePosAttr), config.lgan_nn_edge_pos);
    builder.set_graph_attr(std::string(kLGANRREdgePosAttr), config.lgan_rr_edge_pos);
    builder.set_graph_attr(
-      std::string(kRelationArgsLayoutAttr),
-      std::string(
-         config.pack_relation_args_relation_major ? kRelationArgsRelationMajorLayout
-                                                  : kRelationArgsGraphMajorLayout
-      )
+      std::string(kRelationArgsLayoutAttr), std::string(kRelationArgsGraphMajorLayout)
    );
    builder.set_graph_attr(
       std::string(kUsePredicateVirtualNodesAttr),
@@ -340,7 +362,11 @@ void pack_flat_relation_args_relation_major(
    std::span< const int64_t > relation_arities
 )
 {
+   if(relation_args_layout_is_relation_major(encoding)) {
+      return;
+   }
    if(encoding.num_graphs <= 1) {
+      set_relation_args_layout_relation_major(encoding);
       return;
    }
 
@@ -354,6 +380,7 @@ void pack_flat_relation_args_relation_major(
             "relation_counts/relation_args must be empty when relation_arities is empty"
          );
       }
+      set_relation_args_layout_relation_major(encoding);
       return;
    }
    if(relation_counts.size() != graph_count * relation_count) {
@@ -370,6 +397,7 @@ void pack_flat_relation_args_relation_major(
             "relation_args is empty but relation_counts implies relation slots"
          );
       }
+      set_relation_args_layout_relation_major(encoding);
       return;
    }
 
@@ -414,6 +442,7 @@ void pack_flat_relation_args_relation_major(
       }
    }
    relation_args.swap(relation_major);
+   set_relation_args_layout_relation_major(encoding);
 }
 
 }  // namespace mifrost

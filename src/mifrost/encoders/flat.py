@@ -682,7 +682,9 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
             history_max_steps=history_max_steps,
         )
         builder.next_graph()
-        return builder.build()
+        encoding = builder.build()
+        self._engine.finalize_batch_encoding(encoding)
+        return encoding
 
     def encode(
         self,

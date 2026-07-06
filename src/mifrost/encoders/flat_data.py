@@ -7,6 +7,9 @@ from typing import Any, cast
 import torch
 from torch_geometric.data import Batch, Data
 
+_RELATION_ARGS_GRAPH_MAJOR = "graph_major"
+_RELATION_ARGS_RELATION_MAJOR = "relation_major"
+
 
 def _normalize_str_tuple(values: Any | None) -> tuple[str, ...]:
     if values is None:
@@ -214,6 +217,9 @@ def normalize_flat_relation_batch_metadata(
     data.lgan_rr_edge_pos = _normalize_shared_scalar(
         getattr(data, "lgan_rr_edge_pos", None)
     )
+    data.relation_args_layout = _normalize_shared_scalar(
+        getattr(data, "relation_args_layout", None)
+    )
     for attr in (
         "target_positions_ptr",
         "target_indices_ptr",
@@ -334,6 +340,11 @@ class FlatRelationData(Data):
 
     def relation_slot_offsets(self, graph_index: int | None = None) -> torch.Tensor:
         """Return slot offsets into `relation_args` for one graph or the whole batch."""
+        if self._uses_relation_major_args() and graph_index is not None:
+            raise ValueError(
+                "relation_slot_offsets(graph_index=...) is not representable for "
+                "relation-major relation_args because one graph is not contiguous"
+            )
         counts = self._relation_counts_for(graph_index)
         arities = self._relation_arities_tensor(counts.device)
         slot_counts = counts * arities
@@ -369,6 +380,22 @@ class FlatRelationData(Data):
                 }
             counts = counts.long()
             arities = self.schema.arities
+            if self._uses_relation_major_args():
+                graph_out: dict[str, torch.Tensor] = {}
+                counts_matrix = self._relation_counts_matrix(counts.device)
+                start = 0
+                for relation_idx, relation_name in enumerate(self.schema.names):
+                    arity = arities[relation_idx]
+                    instances = int(counts_matrix[:, relation_idx].sum().item())
+                    slots = instances * arity
+                    chunk = relation_args[start : start + slots]
+                    graph_out[relation_name] = (
+                        chunk.view(instances, arity)
+                        if arity > 0
+                        else chunk.new_empty((instances, 0))
+                    )
+                    start += slots
+                return graph_out
             chunks: dict[str, list[torch.Tensor]] = {
                 name: [] for name in self.schema.names
             }
@@ -396,6 +423,22 @@ class FlatRelationData(Data):
 
         counts = self._relation_counts_for(graph_index)
         arities = self.schema.arities
+        if self._uses_relation_major_args() and graph_index is not None:
+            starts = self._relation_major_slot_offsets_for_graph(graph_index)
+            out: dict[str, torch.Tensor] = {}
+            for relation_idx, name in enumerate(self.schema.names):
+                arity = arities[relation_idx]
+                instances = (
+                    int(counts[relation_idx].item()) if counts.numel() > 0 else 0
+                )
+                slots = instances * arity
+                start = int(starts[relation_idx].item())
+                chunk = relation_args[start : start + slots]
+                if arity > 0:
+                    out[name] = chunk.view(instances, arity)
+                else:
+                    out[name] = chunk.new_empty((instances, 0))
+            return out
         start = self._relation_arg_start(graph_index)
         out: dict[str, torch.Tensor] = {}
         for relation_idx, name in enumerate(self.schema.names):
@@ -663,6 +706,19 @@ class FlatRelationData(Data):
             return torch.zeros((len(self.schema.names),), dtype=torch.long)
         counts = counts.long()
         if counts.dim() == 1:
+            relation_count = len(self.schema.names)
+            if self.num_graphs > 1 and relation_count > 0:
+                expected = self.num_graphs * relation_count
+                if counts.numel() == expected:
+                    counts_matrix = counts.view(self.num_graphs, relation_count)
+                    if graph_index is None:
+                        return counts_matrix.sum(dim=0)
+                    if graph_index < 0 or graph_index >= counts_matrix.size(0):
+                        raise IndexError(
+                            f"graph_index {graph_index} out of range for "
+                            f"{counts_matrix.size(0)} graphs"
+                        )
+                    return counts_matrix[graph_index]
             return counts
         if graph_index is None:
             return counts.sum(dim=0)
@@ -671,6 +727,28 @@ class FlatRelationData(Data):
                 f"graph_index {graph_index} out of range for {counts.size(0)} graphs"
             )
         return counts[graph_index]
+
+    def _relation_counts_matrix(
+        self, device: torch.device | None = None
+    ) -> torch.Tensor:
+        counts = getattr(self, "relation_counts", None)
+        relation_count = len(self.schema.names)
+        if counts is None:
+            return torch.zeros(
+                (self.num_graphs, relation_count),
+                dtype=torch.long,
+                device=device or torch.device("cpu"),
+            )
+        counts = counts.long()
+        if device is not None:
+            counts = counts.to(device=device)
+        if counts.dim() == 1:
+            if self.num_graphs > 1 and relation_count > 0:
+                expected = self.num_graphs * relation_count
+                if counts.numel() == expected:
+                    return counts.view(self.num_graphs, relation_count)
+            return counts.view(1, -1)
+        return counts
 
     def _graph_cat_field_slice(
         self,
@@ -733,12 +811,50 @@ class FlatRelationData(Data):
         counts = getattr(self, "relation_counts", None)
         if counts is None:
             return 0
-        counts = counts.long()
+        counts = self._relation_counts_matrix()
         if graph_index <= 0:
             return 0
         arities = self._relation_arities_tensor(counts.device)
         prior_counts = counts[:graph_index].sum(dim=0)
         return int((prior_counts * arities).sum().item())
+
+    def _relation_args_layout(self) -> str:
+        layout = getattr(self, "relation_args_layout", None)
+        if layout is None:
+            return _RELATION_ARGS_GRAPH_MAJOR
+        value = str(layout)
+        if value not in {_RELATION_ARGS_GRAPH_MAJOR, _RELATION_ARGS_RELATION_MAJOR}:
+            raise ValueError(
+                "Unknown FlatRelationData relation_args_layout "
+                f"{value!r}; expected 'graph_major' or 'relation_major'"
+            )
+        return value
+
+    def _uses_relation_major_args(self) -> bool:
+        return self._relation_args_layout() == _RELATION_ARGS_RELATION_MAJOR
+
+    def _relation_major_slot_offsets_for_graph(self, graph_index: int) -> torch.Tensor:
+        counts = self._relation_counts_matrix()
+        if graph_index < 0 or graph_index >= counts.size(0):
+            raise IndexError(
+                f"graph_index {graph_index} out of range for {counts.size(0)} graphs"
+            )
+        arities = self._relation_arities_tensor(counts.device)
+        slot_counts = counts * arities
+        relation_totals = slot_counts.sum(dim=0)
+        relation_starts = torch.zeros(
+            (relation_totals.numel() + 1,),
+            dtype=torch.long,
+            device=counts.device,
+        )
+        if relation_totals.numel() > 0:
+            relation_starts[1:] = torch.cumsum(relation_totals, dim=0)
+        prior_graph_slots = (
+            slot_counts[:graph_index].sum(dim=0)
+            if graph_index > 0
+            else torch.zeros_like(relation_totals)
+        )
+        return relation_starts[:-1] + prior_graph_slots
 
     def _group_mask(
         self,
