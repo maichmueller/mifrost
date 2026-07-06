@@ -42,10 +42,11 @@ class EncoderExportManifest:
             )
 
         top_level_names = {
-            export.name
-            for export in (*self.lazy_exports, *self.direct_exports)
-            if export.top_level
+            export.name for export in self.lazy_exports if export.top_level
         }
+        top_level_names.update(
+            export.name for export in self.direct_exports if export.top_level
+        )
         unlisted = top_level_names - set(self.top_level_order)
         if unlisted:
             unlisted_text = ", ".join(sorted(unlisted))
@@ -260,29 +261,11 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
 )
 
 
-def encoder_lazy_imports() -> dict[str, tuple[str, str]]:
-    return ENCODER_EXPORT_MANIFEST.lazy_imports
-
-
-def encoder_direct_export_names() -> tuple[str, ...]:
-    return ENCODER_EXPORT_MANIFEST.direct_export_names
-
-
-def encoder_namespace_export_names() -> tuple[str, ...]:
-    return ENCODER_EXPORT_MANIFEST.namespace_export_names
-
-
-def top_level_encoder_export_names() -> tuple[str, ...]:
-    return ENCODER_EXPORT_MANIFEST.top_level_export_names
-
-
-ENCODER_LAZY_EXPORTS = encoder_lazy_imports()
-ENCODER_DIRECT_EXPORTS = encoder_direct_export_names()
-ENCODER_NAMESPACE_EXPORTS = encoder_namespace_export_names()
-TOP_LEVEL_ENCODER_EXPORTS = top_level_encoder_export_names()
+ENCODER_LAZY_EXPORTS = ENCODER_EXPORT_MANIFEST.lazy_imports
+ENCODER_NAMESPACE_EXPORTS = ENCODER_EXPORT_MANIFEST.namespace_export_names
+TOP_LEVEL_ENCODER_EXPORTS = ENCODER_EXPORT_MANIFEST.top_level_export_names
 
 __all__ = [
-    "ENCODER_DIRECT_EXPORTS",
     "ENCODER_EXPORT_MANIFEST",
     "ENCODER_LAZY_EXPORTS",
     "ENCODER_NAMESPACE_EXPORTS",
@@ -291,8 +274,4 @@ __all__ = [
     "DirectEncoderExport",
     "EncoderExportManifest",
     "LazyEncoderExport",
-    "encoder_direct_export_names",
-    "encoder_lazy_imports",
-    "encoder_namespace_export_names",
-    "top_level_encoder_export_names",
 ]

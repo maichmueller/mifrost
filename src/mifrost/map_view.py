@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABCMeta
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -25,17 +25,20 @@ class _MapViewMeta(ABCMeta):
         pair = (key_type, value_type)
         cached = _MapViewMeta._typed_cache.get(pair)
         if cached is not None:
-            return cached
+            return cast(type["MapView[Any, Any]"], cached)
 
-        typed_cls = _MapViewMeta(
-            f"MapView[{key_type.__name__},{value_type.__name__}]",
-            (MapView,),
-            {
-                "__module__": MapView.__module__,
-                "_typed": True,
-                "_expected_key_type": key_type,
-                "_expected_value_type": value_type,
-            },
+        typed_cls = cast(
+            type["MapView[Any, Any]"],
+            _MapViewMeta(
+                f"MapView[{key_type.__name__},{value_type.__name__}]",
+                (MapView,),
+                {
+                    "__module__": MapView.__module__,
+                    "_typed": True,
+                    "_expected_key_type": key_type,
+                    "_expected_value_type": value_type,
+                },
+            ),
         )
         _MapViewMeta._typed_cache[pair] = typed_cls
         return typed_cls
@@ -64,7 +67,7 @@ class MapView(Mapping[K, V], Generic[K, V], metaclass=_MapViewMeta):
 
     _typed = False
 
-    def __init__(self, impl: object) -> None:
+    def __init__(self, impl: Any) -> None:
         key_type, value_type = _resolve_impl_types(impl)
         if not isinstance(key_type, type) or not isinstance(value_type, type):
             raise TypeError(
@@ -75,7 +78,7 @@ class MapView(Mapping[K, V], Generic[K, V], metaclass=_MapViewMeta):
         self.value_type = value_type
 
     @classmethod
-    def from_impl(cls, impl: object) -> "MapView[Any, Any]":
+    def from_impl(cls, impl: Any) -> "MapView[Any, Any]":
         if isinstance(impl, MapView):
             return impl
         return cls(impl)
@@ -95,13 +98,13 @@ class MapView(Mapping[K, V], Generic[K, V], metaclass=_MapViewMeta):
     def __bool__(self) -> bool:
         return bool(self._impl)
 
-    def keys(self) -> KeysView[K] | object:
+    def keys(self) -> KeysView[K]:
         return self._impl.keys()
 
-    def values(self) -> ValuesView[V] | object:
+    def values(self) -> ValuesView[V]:
         return self._impl.values()
 
-    def items(self) -> ItemsView[K, V] | object:
+    def items(self) -> ItemsView[K, V]:
         return self._impl.items()
 
     def as_dict(self) -> dict[K, V]:
@@ -114,7 +117,7 @@ class MapView(Mapping[K, V], Generic[K, V], metaclass=_MapViewMeta):
         )
 
 
-def _wrap_map_view_method(owner_cls: type[object], name: str) -> None:
+def _wrap_map_view_method(owner_cls: type[Any], name: str) -> None:
     original = getattr(owner_cls, name)
     if getattr(original, "__mifrost_map_view_wrapped__", False):
         return
@@ -127,14 +130,18 @@ def _wrap_map_view_method(owner_cls: type[object], name: str) -> None:
         original, "__qualname__", f"{owner_cls.__name__}.{wrapped.__name__}"
     )
     wrapped.__doc__ = getattr(original, "__doc__", None)
-    wrapped.__mifrost_map_view__ = getattr(original, "__mifrost_map_view__", False)
-    wrapped.__mifrost_map_view_wrapped__ = True
+    setattr(
+        wrapped,
+        "__mifrost_map_view__",
+        getattr(original, "__mifrost_map_view__", False),
+    )
+    setattr(wrapped, "__mifrost_map_view_wrapped__", True)
     setattr(owner_cls, name, wrapped)
 
 
 def _iter_marked_map_view_methods(
-    core_module: object,
-) -> Iterator[tuple[type[object], str]]:
+    core_module: Any,
+) -> Iterator[tuple[type[Any], str]]:
     for class_name in dir(core_module):
         owner_cls = getattr(core_module, class_name, None)
         if not isinstance(owner_cls, type):
@@ -152,14 +159,14 @@ def _iter_marked_map_view_methods(
                 yield owner_cls, method_name
 
 
-def _infer_types_from_impl(impl: object) -> tuple[type[Any], type[Any]] | None:
+def _infer_types_from_impl(impl: Any) -> tuple[type[Any], type[Any]] | None:
     items = impl.items()
     for key, value in items:
         return type(key), type(value)
     return None
 
 
-def _resolve_impl_types(impl: object) -> tuple[type[Any], type[Any]]:
+def _resolve_impl_types(impl: Any) -> tuple[type[Any], type[Any]]:
     impl_cls = impl.__class__
     key_type = getattr(impl_cls, "key_type", None)
     value_type = getattr(impl_cls, "value_type", None)

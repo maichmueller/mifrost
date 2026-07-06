@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch_geometric.data import Batch, Data
 
 
-def _normalize_str_tuple(values: object | None) -> tuple[str, ...]:
+def _normalize_str_tuple(values: Any | None) -> tuple[str, ...]:
     if values is None:
         return ()
     if isinstance(values, list) and values and isinstance(values[0], (list, tuple)):
@@ -22,7 +22,7 @@ def _normalize_str_tuple(values: object | None) -> tuple[str, ...]:
     return tuple(str(value) for value in values)
 
 
-def _normalize_int_tuple(values: object | None) -> tuple[int, ...]:
+def _normalize_int_tuple(values: Any | None) -> tuple[int, ...]:
     if values is None:
         return ()
     if torch.is_tensor(values):
@@ -41,7 +41,7 @@ def _copy_data_attrs(dst: Data, src: Data) -> None:
         dst._num_graphs = int(src._num_graphs)
 
 
-def _normalize_optional_int(value: object | None) -> int | None:
+def _normalize_optional_int(value: Any | None) -> int | None:
     if value is None:
         return None
     if torch.is_tensor(value):
@@ -67,11 +67,12 @@ def _normalize_optional_int(value: object | None) -> int | None:
 
 
 def _split_names_by_sizes(
-    values: object | None,
-    sizes: object | None,
-) -> object | None:
+    values: Any | None,
+    sizes: Any | None,
+) -> Any | None:
     if not isinstance(values, list) or not torch.is_tensor(sizes):
         return values
+    sizes = cast(torch.Tensor, sizes)
     offsets = sizes.long().view(-1).tolist()
     if values and isinstance(values[0], (list, tuple)):
         if len(values) == len(offsets):
@@ -89,16 +90,17 @@ def _split_names_by_sizes(
     return split
 
 
-def _sizes_from_ptr(ptr: object | None) -> torch.Tensor | None:
+def _sizes_from_ptr(ptr: Any | None) -> torch.Tensor | None:
     if not torch.is_tensor(ptr):
         return None
+    ptr = cast(torch.Tensor, ptr)
     ptr = ptr.long().view(-1)
     if ptr.numel() <= 1:
         return torch.zeros((0,), dtype=torch.long, device=ptr.device)
     return ptr[1:] - ptr[:-1]
 
 
-def _normalize_shared_str_list(values: object | None) -> object | None:
+def _normalize_shared_str_list(values: Any | None) -> Any | None:
     if values is None:
         return None
     if isinstance(values, list) and values and isinstance(values[0], (list, tuple)):
@@ -111,7 +113,7 @@ def _normalize_shared_str_list(values: object | None) -> object | None:
     return values
 
 
-def _normalize_shared_scalar(value: object | None) -> object | None:
+def _normalize_shared_scalar(value: Any | None) -> Any | None:
     if value is None or isinstance(value, str):
         return value
     if isinstance(value, list):
@@ -123,7 +125,7 @@ def _normalize_shared_scalar(value: object | None) -> object | None:
     return value
 
 
-def _normalize_shared_bool(value: object | None) -> bool | None:
+def _normalize_shared_bool(value: Any | None) -> bool | None:
     if value is None:
         return None
     if torch.is_tensor(value):
@@ -382,15 +384,15 @@ class FlatRelationData(Data):
                     else:
                         chunks[name].append(chunk.new_empty((instances, 0)))
                     start += slots
-            out: dict[str, torch.Tensor] = {}
+            graph_out: dict[str, torch.Tensor] = {}
             for relation_name, arity in zip(self.schema.names, self.schema.arities):
                 parts = chunks[relation_name]
-                out[relation_name] = (
+                graph_out[relation_name] = (
                     torch.cat(parts, dim=0)
                     if parts
                     else relation_args.new_empty((0, arity))
                 )
-            return out
+            return graph_out
 
         counts = self._relation_counts_for(graph_index)
         arities = self.schema.arities
