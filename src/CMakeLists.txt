@@ -314,7 +314,7 @@ conan_add_package_include_fallback(mifrost_core onetbb SCOPE PRIVATE)
 
 add_library(
     mifrost_python_support
-    STATIC
+    OBJECT
         "_core/mifrost/common.cpp"
         "_core/mifrost/core/batch_builder_python.cpp"
         "_core/mifrost/input_handling/batch_input_parser.cpp"
@@ -428,6 +428,7 @@ nanobind_add_module(mifrost_core_module
         "_core/mifrost/init_horizon_encoder.cpp"
         "_core/mifrost/init_successor_encoders.cpp"
         "_core/mifrost/init_transition_dag.cpp"
+        $<TARGET_OBJECTS:mifrost_python_support>
 )
 set_target_properties(
         mifrost_core_module
@@ -437,9 +438,9 @@ set_target_properties(
 target_link_libraries(
         mifrost_core_module
         PRIVATE
-    dlpack::dlpack
+        dlpack::dlpack
         mifrost_core
-    mifrost_python_support
+        nanobind::nanobind
 )
 target_compile_definitions(mifrost_core_module PRIVATE MIFROST_ENABLE_PYTHON_API)
 

@@ -381,7 +381,7 @@ class FlatRelationData(Data):
             counts = counts.long()
             arities = self.schema.arities
             if self._uses_relation_major_args():
-                graph_out: dict[str, torch.Tensor] = {}
+                relation_major_graph_out: dict[str, torch.Tensor] = {}
                 counts_matrix = self._relation_counts_matrix(counts.device)
                 start = 0
                 for relation_idx, relation_name in enumerate(self.schema.names):
@@ -389,13 +389,13 @@ class FlatRelationData(Data):
                     instances = int(counts_matrix[:, relation_idx].sum().item())
                     slots = instances * arity
                     chunk = relation_args[start : start + slots]
-                    graph_out[relation_name] = (
+                    relation_major_graph_out[relation_name] = (
                         chunk.view(instances, arity)
                         if arity > 0
                         else chunk.new_empty((instances, 0))
                     )
                     start += slots
-                return graph_out
+                return relation_major_graph_out
             chunks: dict[str, list[torch.Tensor]] = {
                 name: [] for name in self.schema.names
             }
@@ -411,21 +411,21 @@ class FlatRelationData(Data):
                     else:
                         chunks[name].append(chunk.new_empty((instances, 0)))
                     start += slots
-            graph_out: dict[str, torch.Tensor] = {}
+            graph_major_graph_out: dict[str, torch.Tensor] = {}
             for relation_name, arity in zip(self.schema.names, self.schema.arities):
                 parts = chunks[relation_name]
-                graph_out[relation_name] = (
+                graph_major_graph_out[relation_name] = (
                     torch.cat(parts, dim=0)
                     if parts
                     else relation_args.new_empty((0, arity))
                 )
-            return graph_out
+            return graph_major_graph_out
 
         counts = self._relation_counts_for(graph_index)
         arities = self.schema.arities
         if self._uses_relation_major_args() and graph_index is not None:
             starts = self._relation_major_slot_offsets_for_graph(graph_index)
-            out: dict[str, torch.Tensor] = {}
+            relation_major_out: dict[str, torch.Tensor] = {}
             for relation_idx, name in enumerate(self.schema.names):
                 arity = arities[relation_idx]
                 instances = (
@@ -435,23 +435,23 @@ class FlatRelationData(Data):
                 start = int(starts[relation_idx].item())
                 chunk = relation_args[start : start + slots]
                 if arity > 0:
-                    out[name] = chunk.view(instances, arity)
+                    relation_major_out[name] = chunk.view(instances, arity)
                 else:
-                    out[name] = chunk.new_empty((instances, 0))
-            return out
+                    relation_major_out[name] = chunk.new_empty((instances, 0))
+            return relation_major_out
         start = self._relation_arg_start(graph_index)
-        out: dict[str, torch.Tensor] = {}
+        graph_major_out: dict[str, torch.Tensor] = {}
         for relation_idx, name in enumerate(self.schema.names):
             arity = arities[relation_idx]
             instances = int(counts[relation_idx].item()) if counts.numel() > 0 else 0
             slots = instances * arity
             chunk = relation_args[start : start + slots]
             if arity > 0:
-                out[name] = chunk.view(instances, arity)
+                graph_major_out[name] = chunk.view(instances, arity)
             else:
-                out[name] = chunk.new_empty((instances, 0))
+                graph_major_out[name] = chunk.new_empty((instances, 0))
             start += slots
-        return out
+        return graph_major_out
 
     def graph_node_names(self, graph_index: int = 0) -> list[str]:
         """Return entity-row names for one graph."""

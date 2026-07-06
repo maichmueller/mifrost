@@ -51,6 +51,8 @@ def _plan_from_core_tuple(
 ) -> ParsedBatchPlan:
     is_per_state, value = payload
     if bool(is_per_state):
+        if not isinstance(value, IterableABC):
+            raise TypeError("per-state batch payload must be iterable")
         return ParsedBatchPlan(
             state_count=state_count,
             per_state=cast(list[object | None], list(value)),
