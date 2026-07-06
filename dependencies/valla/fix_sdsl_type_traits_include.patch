@@ -1,0 +1,9 @@
+diff --git a/include/sdsl/io.hpp b/include/sdsl/io.hpp
+index 1c4e8a6..25f5c95 100644
+--- a/include/sdsl/io.hpp
++++ b/include/sdsl/io.hpp
+@@ -30,3 +30,4 @@
+ #include <iostream>
+ #include <string>
+ #include <vector>
++#include <type_traits>

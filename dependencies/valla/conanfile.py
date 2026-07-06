@@ -2,7 +2,7 @@ from conan import ConanFile
 from conan.tools.build import check_min_cppstd
 from conan.tools.cmake import CMake, cmake_layout, CMakeToolchain
 from conan.tools.scm import Git
-from conan.tools.files import chdir
+from conan.tools.files import chdir, patch
 
 
 class VallaRecipe(ConanFile):
@@ -10,6 +10,7 @@ class VallaRecipe(ConanFile):
     package_type = "library"
     settings = "os", "compiler", "build_type", "arch"
     generators = "CMakeDeps"
+    exports_sources = "fix_sdsl_type_traits_include.patch"
 
     options = {
         "shared": [True, False],
@@ -45,6 +46,12 @@ class VallaRecipe(ConanFile):
                 git.checkout(self.version)
             else:
                 git.checkout(f"v{self.version}")
+
+        patch(
+            self,
+            base_path="valla_src",
+            patch_file="fix_sdsl_type_traits_include.patch",
+        )
 
     def layout(self):
         cmake_layout(self)

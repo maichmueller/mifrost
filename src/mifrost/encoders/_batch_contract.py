@@ -15,7 +15,6 @@ from .types import (
 )
 
 _PayloadT = TypeVar("_PayloadT")
-core = cast(Any, _core)
 
 
 @dataclass(frozen=True)
@@ -46,7 +45,7 @@ ParsedHistorySubgoalsBatch: TypeAlias = ParsedBatchPlan[
 
 
 def _plan_from_core_tuple(
-    payload: tuple[bool, Any],
+    payload: tuple[bool, object],
     *,
     state_count: int,
 ) -> ParsedBatchPlan:
@@ -60,7 +59,7 @@ def _plan_from_core_tuple(
 
 
 def parse_states_batch(states) -> list[StateInput]:
-    return cast(list[StateInput], list(core._parse_states_batch(states)))
+    return cast(list[StateInput], list(_core._parse_states_batch(states)))
 
 
 def parse_goals_batch_param(
@@ -68,10 +67,14 @@ def parse_goals_batch_param(
     *,
     state_count: int,
 ) -> ParsedGoalsBatch:
-    payload = cast(tuple[bool, Any], core._parse_goals_batch_param(goals, state_count))
     return cast(
         ParsedGoalsBatch,
-        _plan_from_core_tuple(payload, state_count=state_count),
+        _plan_from_core_tuple(
+            cast(
+                tuple[bool, object], _core._parse_goals_batch_param(goals, state_count)
+            ),
+            state_count=state_count,
+        ),
     )
 
 
@@ -80,12 +83,15 @@ def parse_actions_batch_param(
     *,
     state_count: int,
 ) -> ParsedActionsBatch:
-    payload = cast(
-        tuple[bool, Any], core._parse_actions_batch_param(actions, state_count)
-    )
     return cast(
         ParsedActionsBatch,
-        _plan_from_core_tuple(payload, state_count=state_count),
+        _plan_from_core_tuple(
+            cast(
+                tuple[bool, object],
+                _core._parse_actions_batch_param(actions, state_count),
+            ),
+            state_count=state_count,
+        ),
     )
 
 
@@ -94,13 +100,15 @@ def parse_subgoal_layers_batch_param(
     *,
     state_count: int,
 ) -> ParsedSubgoalLayersBatch:
-    payload = cast(
-        tuple[bool, Any],
-        core._parse_subgoal_layers_batch_param(subgoal_layers, state_count),
-    )
     return cast(
         ParsedSubgoalLayersBatch,
-        _plan_from_core_tuple(payload, state_count=state_count),
+        _plan_from_core_tuple(
+            cast(
+                tuple[bool, object],
+                _core._parse_subgoal_layers_batch_param(subgoal_layers, state_count),
+            ),
+            state_count=state_count,
+        ),
     )
 
 
@@ -109,13 +117,17 @@ def parse_history_subgoals_batch_param(
     *,
     state_count: int,
 ) -> ParsedHistorySubgoalsBatch:
-    payload = cast(
-        tuple[bool, Any],
-        core._parse_history_subgoals_batch_param(history_subgoals, state_count),
-    )
     return cast(
         ParsedHistorySubgoalsBatch,
-        _plan_from_core_tuple(payload, state_count=state_count),
+        _plan_from_core_tuple(
+            cast(
+                tuple[bool, object],
+                _core._parse_history_subgoals_batch_param(
+                    history_subgoals, state_count
+                ),
+            ),
+            state_count=state_count,
+        ),
     )
 
 
@@ -126,12 +138,7 @@ def parse_successors_batch_param(
 ) -> list[StateInput]:
     return cast(
         list[StateInput],
-        list(
-            cast(
-                IterableABC[Any],
-                core._parse_successors_batch_param(successors, state_count),
-            )
-        ),
+        list(_core._parse_successors_batch_param(successors, state_count)),
     )
 
 
@@ -142,7 +149,7 @@ def parse_dags_batch_param(
 ) -> list[TransitionDAG | None]:
     return cast(
         list[TransitionDAG | None],
-        list(cast(IterableABC[Any], core._parse_dags_batch_param(dags, state_count))),
+        list(_core._parse_dags_batch_param(dags, state_count)),
     )
 
 

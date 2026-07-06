@@ -156,9 +156,9 @@ class EncoderBase(ABC, Generic[PygDataT]):
         if normalized_collate_spec:
             from .. import _core as _core_module
 
-            setter = getattr(_core_module, "_set_batch_encoding_collate_spec", None)
-            if callable(setter):
-                setter(encoding, normalized_collate_spec)
+            _core_module._set_batch_encoding_collate_spec(
+                encoding, normalized_collate_spec
+            )
         return encoding
 
     def encode_pyg(

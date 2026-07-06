@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Iterable
+from typing import Any, Iterable
 
 import pymimir.advanced.formalism as af
 
@@ -109,3 +109,48 @@ def _prepare_history_subgoals(
         adv_literals = [_advanced_literal(literal) for literal in literals]
         out.append((int(dt), adv_literals))
     return out
+
+
+def _convert_batch_payload(value: Any, **kwargs: Any) -> Any:
+    """Compatibility wrapper for the batch contract module."""
+    from ._batch_contract import convert_batch_payload
+
+    return convert_batch_payload(value, **kwargs)
+
+
+def _encoding_dict_to_pyg(
+    encoding: Any,
+    *,
+    as_batch: bool | None = None,
+    include_metadata: bool = True,
+) -> Any:
+    """Compatibility wrapper for the conversion boundary module."""
+    from .conversion import _encoding_dict_to_pyg as convert
+
+    return convert(encoding, as_batch=as_batch, include_metadata=include_metadata)
+
+
+def to_pyg(
+    encoding: Any,
+    *,
+    as_batch: bool | None = None,
+    include_metadata: bool = True,
+) -> Any:
+    """Compatibility wrapper for the conversion boundary module."""
+    from .conversion import to_pyg as convert
+
+    return convert(encoding, as_batch=as_batch, include_metadata=include_metadata)
+
+
+def to_tensor_payload(encoding: Any) -> Any:
+    """Compatibility wrapper for the conversion boundary module."""
+    from .conversion import to_tensor_payload as convert
+
+    return convert(encoding)
+
+
+def encoding_to_tensors(encoding: Any) -> Any:
+    """Compatibility wrapper for the conversion boundary module."""
+    from .conversion import encoding_to_tensors as convert
+
+    return convert(encoding)
