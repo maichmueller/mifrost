@@ -17,12 +17,12 @@ jobs:
     needs: [generate_stubs]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
     - name: Download generated stubs
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: mifrost-stubs
         path: src/mifrost
@@ -36,7 +36,7 @@ jobs:
     - name: Check metadata
       run: pipx run twine check dist/*
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: dist-sdist
         path: dist/*.tar.gz
@@ -45,7 +45,7 @@ jobs:
     name: Generate Stubs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
@@ -59,7 +59,7 @@ jobs:
 
     - name: Restore Conan cache
       id: conan_cache_restore
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v6
       with:
         path: ${{ env.CONAN_HOME }}
         key: conan-stubs-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py', 'dependencies/**/conanfile.py', '.github/workflows/wheels.yml') }}
@@ -89,7 +89,7 @@ jobs:
         test -s src/mifrost/_core.pyi
 
     - name: Upload generated stubs
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: mifrost-stubs
         path: src/mifrost/_core.pyi
@@ -97,7 +97,7 @@ jobs:
 
     - name: Save Conan cache
       if: always() && steps.conan_cache_restore.outcome == 'success' && steps.configure_stubs.outcome == 'success'
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v6
       with:
         path: ${{ env.CONAN_HOME }}
         key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
@@ -128,7 +128,7 @@ jobs:
             cibw_skip: "cp314t-*"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
@@ -137,7 +137,7 @@ jobs:
         python-version: "3.12"
 
     - name: Download generated stubs
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: mifrost-stubs
         path: src/mifrost
@@ -152,7 +152,7 @@ jobs:
       shell: bash
 
     - name: Cache cibuildwheel
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{ env.CIBW_CACHE_PATH }}
         key: cibw-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pyproject.toml') }}
@@ -161,7 +161,7 @@ jobs:
 
     - name: Restore Conan cache
       id: conan_cache_restore
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v6
 
       with:
         path: ${{ env.CONAN_HOME }}
@@ -169,7 +169,7 @@ jobs:
         restore-keys: |
           conan-wheel-${{ matrix.flavor }}-${{ runner.os }}-${{ runner.arch }}-${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }}-
 
-    - uses: pypa/cibuildwheel@v3.3
+    - uses: pypa/cibuildwheel@v4.1
       id: build_wheels_step
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
@@ -189,7 +189,7 @@ jobs:
 
     - name: Save Conan cache
       if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_wheels_step.outcome == 'success'
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v6
       with:
         path: ${{ env.CONAN_HOME }}
         key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
@@ -268,7 +268,7 @@ jobs:
         PY
 
     - name: Upload wheels
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         path: wheelhouse/*.whl
         name: dist-${{ matrix.os }}-${{ matrix.flavor }}
@@ -284,7 +284,7 @@ jobs:
 
     steps:
     - uses: actions/setup-python@v6
-    - uses: actions/download-artifact@v7
+    - uses: actions/download-artifact@v8
       with:
         path: dist
         pattern: dist-*
@@ -303,7 +303,7 @@ jobs:
 
     steps:
     - uses: actions/setup-python@v6
-    - uses: actions/download-artifact@v7
+    - uses: actions/download-artifact@v8
       with:
         path: dist
         pattern: dist-*

@@ -51,7 +51,7 @@ jobs:
             allow_failure: false
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - uses: actions/setup-python@v6
       with:
@@ -63,7 +63,7 @@ jobs:
 
     - name: Restore Conan cache
       id: conan_cache_restore
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v6
 
       with:
         path: ${{ env.CONAN_HOME }}
