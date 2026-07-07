@@ -49,11 +49,17 @@ jobs:
           - os: macos-latest
             python-version: "3.13"
             allow_failure: false
+          - os: macos-latest
+            python-version: "3.14"
+            allow_failure: false
           - os: ubuntu-latest
             python-version: "3.12"
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.13"
+            allow_failure: false
+          - os: ubuntu-latest
+            python-version: "3.14"
             allow_failure: false
 
     steps:

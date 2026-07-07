@@ -16,7 +16,7 @@ name = "mifrost"
 version = "0.3.1"
 description = "STRIPS states to graph encoding C++ extension module."
 readme = "README.md"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     "pymimir>=0.13.60",
 ]
@@ -111,8 +111,8 @@ build-verbosity = 1
 # heavy dependencies (torch, torch_geometric, etc.).
 test-command = "python -c \"import pymimir, mifrost; print('pymimir', getattr(pymimir, '__version__', 'unknown')); print('mifrost', mifrost.__file__)\""
 
-# Only build and test wheels for supported Python versions.
-build = ["cp312-*", "cp313-*"]
+build = ["cp312-*", "cp313-*", "cp314-*"]
+test-skip = "cp314t-*"
 
 [tool.cibuildwheel.linux.environment]
 # Ensure Conan's provider path resolves b2 from source in manylinux/musllinux,
