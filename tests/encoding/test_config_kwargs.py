@@ -114,6 +114,20 @@ def test_unknown_config_kwarg_raises() -> None:
         mifrost.HGraphEncoderConfig(does_not_exist=True)
 
 
+@pytest.mark.parametrize("method_name", ["encode", "encode_batch"])
+def test_encoder_runtime_rejects_unknown_kwargs(small_blocks, method_name) -> None:
+    _, domain, problem = small_blocks
+    encoder = mifrost.ColorEncoder(domain)
+    state = problem.get_initial_state()
+    state_input = state if method_name == "encode" else [state]
+
+    with pytest.raises(
+        TypeError,
+        match=r"ColorEncoder got unexpected keyword argument: 'goasl'",
+    ):
+        getattr(encoder, method_name)(state_input, goasl=[])
+
+
 def test_horizon_encoder_exposes_unified_config(small_blocks) -> None:
     _, domain, _ = small_blocks
     encoder = mifrost.HorizonEncoder(

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import numbers
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping
 
 import networkx as nx
 from torch_geometric.data import HeteroData
-from torch_geometric.utils import to_networkx
 
 from .._core import BatchEncoding
 from .. import _core
@@ -33,7 +31,7 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import convert_batch_payload as _convert_batch_payload
+from ._batch_contract import prepare_core_batch_inputs
 from .common import (
     _advanced_domain,
     _advanced_state,
@@ -41,6 +39,11 @@ from .common import (
 )
 from ._lane_specs import prepare_optional_payloads
 from ._target_sources import TargetSource, normalize_target_sources
+from ._visualization import (
+    HGraphVisualizationContext,
+    draw_hgraph,
+    hgraph_to_networkx,
+)
 from .types import (
     DomainInput,
     GoalLiteralInput,
@@ -48,12 +51,6 @@ from .types import (
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
-    is_action_input,
-    is_goal_literal_input,
-    is_state_input,
-    to_advanced_action,
-    to_advanced_literal,
-    to_advanced_state,
 )
 
 _HGraphMutableStreamEncoder = getattr(
@@ -65,301 +62,6 @@ def _build_config(config_cls, **kwargs: Any):
     """Build a nanobind config object from non-None keyword values."""
     clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
     return config_cls(**clean_kwargs)
-
-
-def _draw_hgraph_graph(
-    graph: nx.Graph,
-    *,
-    symbol_type_id: str,
-    lgan_tn_edge_pos: str,
-    lgan_nn_edge_pos: str,
-    lgan_rr_edge_pos: str,
-    include_lgan_edges: bool,
-    ax=None,
-    with_labels: bool = True,
-    edge_labels: bool = True,
-    node_kwargs: dict | None = None,
-    edge_kwargs: dict | None = None,
-    layout: dict | None = None,
-    node_size: float | None = None,
-    node_alpha: float | None = None,
-    edge_width: float | None = None,
-    edge_alpha: float | None = None,
-    label_font_size: float | None = None,
-    label_nodes: Iterable[str] | None = None,
-    label_node_types: Iterable[str] | None = None,
-    label_edges: Iterable[tuple[str, ...]] | None = None,
-    symbol_node_scale: float = 1.5,
-    non_symbol_linestyle: str | None = "--",
-):
-    import matplotlib.pyplot as plt
-
-    node_kwargs = node_kwargs or {}
-    edge_kwargs = edge_kwargs or {}
-
-    if ax is None:
-        _, ax = plt.subplots()
-
-    pos = layout or nx.spring_layout(graph)
-
-    node_types = [graph.nodes[n]["type"] for n in graph.nodes]
-    unique_types = list(dict.fromkeys(node_types))
-    if unique_types:
-        cmap = plt.get_cmap("tab20_r")
-        type_to_color = {
-            ntype: cmap(i / max(1, len(unique_types) - 1))
-            for i, ntype in enumerate(unique_types)
-        }
-
-    base_node_kwargs = dict(node_kwargs)
-    if node_size is not None:
-        base_node_kwargs.setdefault("node_size", node_size)
-    if node_alpha is not None:
-        base_node_kwargs.setdefault("alpha", node_alpha)
-
-    base_node_size_value = base_node_kwargs.get("node_size")
-    if isinstance(base_node_size_value, Sequence) and not isinstance(
-        base_node_size_value, (str, bytes)
-    ):
-        base_node_size_value = base_node_size_value[0] if base_node_size_value else None
-    if base_node_size_value is None:
-        inferred_size = node_size if node_size is not None else 300
-        base_node_kwargs.setdefault("node_size", inferred_size)
-        base_node_size_value = inferred_size
-    elif not isinstance(base_node_size_value, numbers.Real):
-        base_node_size_value = 300
-
-    label_edge_set = None
-    if label_edges is not None:
-        label_edge_set = {tuple(edge) for edge in label_edges}
-
-    symbol_nodes = [
-        node for node in graph.nodes if graph.nodes[node]["type"] == symbol_type_id
-    ]
-    symbol_set = set(symbol_nodes)
-    other_nodes = [node for node in graph.nodes if node not in symbol_set]
-
-    other_kwargs = dict(base_node_kwargs)
-    other_kwargs.setdefault("edgecolors", "#444444")
-    other_kwargs.setdefault("linewidths", 1.2)
-
-    if other_nodes:
-        other_colors = [
-            type_to_color[graph.nodes[node]["type"]] for node in other_nodes
-        ]
-        other_collection = nx.draw_networkx_nodes(
-            graph,
-            pos,
-            nodelist=other_nodes,
-            node_color=other_colors,
-            ax=ax,
-            **other_kwargs,
-        )
-        if (
-            non_symbol_linestyle
-            and other_collection is not None
-            and hasattr(other_collection, "set_linestyle")
-        ):
-            other_collection.set_linestyle(non_symbol_linestyle)
-
-    if symbol_nodes:
-        symbol_colors = [type_to_color[symbol_type_id] for _ in symbol_nodes]
-        symbol_kwargs = dict(base_node_kwargs)
-        if isinstance(base_node_size_value, numbers.Real):
-            symbol_kwargs["node_size"] = base_node_size_value * symbol_node_scale
-        else:
-            symbol_kwargs["node_size"] = 300 * symbol_node_scale
-        symbol_kwargs.setdefault("edgecolors", "black")
-        symbol_kwargs.setdefault("linewidths", 2.4)
-        symbol_collection = nx.draw_networkx_nodes(
-            graph,
-            pos,
-            nodelist=symbol_nodes,
-            node_color=symbol_colors,
-            ax=ax,
-            **symbol_kwargs,
-        )
-        if symbol_collection is not None:
-            symbol_collection.set_facecolor(symbol_colors)
-            symbol_collection.set_edgecolor("black")
-
-    labels_to_draw = {}
-    explicit_labels = set(label_nodes or [])
-    if label_node_types:
-        type_set = {t for t in label_node_types}
-        explicit_labels.update(
-            node
-            for node, data in graph.nodes(data=True)
-            if data.get("type") in type_set
-        )
-    if explicit_labels:
-        labels_to_draw = {node: node for node in graph.nodes if node in explicit_labels}
-    elif with_labels:
-        labels_to_draw = {node: node for node in graph.nodes}
-
-    if labels_to_draw:
-        label_kwargs = {}
-        if label_font_size is not None:
-            label_kwargs["font_size"] = label_font_size
-        nx.draw_networkx_labels(
-            graph, pos, labels=labels_to_draw, ax=ax, **label_kwargs
-        )
-
-    lgan_edge_positions = {lgan_tn_edge_pos, lgan_nn_edge_pos, lgan_rr_edge_pos}
-
-    edge_attr_name = "position"
-    standard_edges = []
-    standard_colors = []
-    lgan_edges = []
-    lgan_colors = []
-
-    if graph.is_multigraph():
-        all_edge_iter = graph.edges(keys=True, data=True)
-    else:
-        all_edge_iter = graph.edges(data=True)
-
-    all_positions = []
-    for edge_info in all_edge_iter:
-        data_dict = edge_info[-1]
-        pos_value = data_dict.get(edge_attr_name)
-        if pos_value is not None:
-            all_positions.append(pos_value)
-
-    unique_positions = list(dict.fromkeys(p for p in all_positions))
-    edge_pos_to_color = {}
-    if unique_positions:
-        cmap = plt.get_cmap("Dark2")
-        edge_pos_to_color = {
-            value: cmap(i / max(1, len(unique_positions) - 1))
-            for i, value in enumerate(unique_positions)
-        }
-
-    if graph.is_multigraph():
-        all_edge_iter = graph.edges(keys=True, data=True)
-    else:
-        all_edge_iter = graph.edges(data=True)
-
-    for edge_info in all_edge_iter:
-        src, dst = edge_info[0], edge_info[1]
-        data_dict = edge_info[-1]
-        pos_value = data_dict.get(edge_attr_name)
-        color = edge_pos_to_color.get(pos_value, "#666666")
-
-        if pos_value in lgan_edge_positions:
-            lgan_edges.append((src, dst))
-            lgan_colors.append(color)
-        else:
-            standard_edges.append((src, dst))
-            standard_colors.append(color)
-
-    if edge_width is not None:
-        edge_kwargs.setdefault("width", edge_width)
-    if edge_alpha is not None:
-        edge_kwargs.setdefault("alpha", edge_alpha)
-
-    if standard_edges:
-        nx.draw_networkx_edges(
-            graph,
-            pos,
-            edgelist=standard_edges,
-            edge_color=standard_colors,
-            arrows=graph.is_directed(),
-            ax=ax,
-            **edge_kwargs,
-        )
-
-    if lgan_edges:
-        lgan_kwargs = dict(edge_kwargs)
-        lgan_kwargs["style"] = "dashed"
-        nx.draw_networkx_edges(
-            graph,
-            pos,
-            edgelist=lgan_edges,
-            edge_color=lgan_colors,
-            arrows=graph.is_directed(),
-            ax=ax,
-            **lgan_kwargs,
-        )
-
-    if unique_types:
-        from matplotlib.patches import Patch
-
-        legend_handles = [
-            Patch(facecolor=type_to_color[ntype], edgecolor="none", label=str(ntype))
-            for ntype in unique_types
-        ]
-        node_title = "Node Types"
-        if include_lgan_edges:
-            node_title += "\n(Relations = Linegraph Nodes)"
-        node_legend = ax.legend(
-            handles=legend_handles,
-            loc="upper left",
-            bbox_to_anchor=(1.02, 1.0),
-            frameon=False,
-            title=node_title,
-        )
-        ax.add_artist(node_legend)
-
-    if unique_positions:
-        from matplotlib.lines import Line2D
-
-        edge_handles = [
-            Line2D(
-                [0],
-                [0],
-                color=edge_pos_to_color[pos_value],
-                linestyle="dashed" if pos_value in lgan_edge_positions else "solid",
-                label=(
-                    f"LGAN ({pos_value})"
-                    if pos_value in lgan_edge_positions
-                    else f"pos: {pos_value}"
-                ),
-            )
-            for pos_value in unique_positions
-        ]
-        ax.legend(
-            handles=edge_handles,
-            loc="lower left",
-            bbox_to_anchor=(1.02, 0.0),
-            frameon=False,
-            title="Edge Roles",
-        )
-
-    ax.figure.subplots_adjust(right=0.8)
-
-    draw_edge_labels = edge_labels or label_edges is not None
-    if draw_edge_labels and unique_positions:
-        if graph.is_multigraph():
-            labels = {}
-            for src, dst, key, data in graph.edges(keys=True, data=True):
-                if (
-                    label_edge_set is not None
-                    and (src, dst, key) not in label_edge_set
-                    and (src, dst) not in label_edge_set
-                ):
-                    continue
-                labels[(src, dst, key)] = data.get(edge_attr_name)
-        else:
-            labels = {}
-            for src, dst, data in graph.edges(data=True):
-                if label_edge_set is not None and (src, dst) not in label_edge_set:
-                    continue
-                labels[(src, dst)] = data.get(edge_attr_name)
-        labels = {edge: value for edge, value in labels.items() if value is not None}
-        label_kwargs = {}
-        if label_font_size is not None:
-            label_kwargs["font_size"] = label_font_size
-        nx.draw_networkx_edge_labels(
-            graph,
-            pos,
-            edge_labels=labels,
-            font_color="black",
-            ax=ax,
-            **label_kwargs,
-        )
-
-    ax.set_axis_off()
-    return ax
 
 
 @dataclass
@@ -719,7 +421,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         self._engine.update_relations(core_relation_dict)
 
     def _accepted_kwargs(self) -> set[str]:
-        return {"history_subgoals", "history_max_steps"}
+        return super()._accepted_kwargs() | {"history_subgoals", "history_max_steps"}
 
     def _encode(
         self,
@@ -781,37 +483,19 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> BatchEncoding:
         """Encode one or many states to one native batch encoding."""
-        states_for_core = _convert_batch_payload(
+        inputs = prepare_core_batch_inputs(
             states,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
-        )
-        goals_for_core = _convert_batch_payload(
-            goals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        actions_for_core = _convert_batch_payload(
-            actions,
-            is_leaf=is_action_input,
-            convert_leaf=to_advanced_action,
-        )
-        subgoal_layers_for_core = _convert_batch_payload(
-            subgoal_layers,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        history_subgoals_for_core = _convert_batch_payload(
-            history_subgoals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
         )
         return self._engine.encode_batch(
-            states_for_core,
-            goals=goals_for_core,
-            actions=actions_for_core,
-            subgoal_layers=subgoal_layers_for_core,
-            history_subgoals=history_subgoals_for_core,
+            inputs.states,
+            goals=inputs.goals,
+            actions=inputs.actions,
+            subgoal_layers=inputs.subgoal_layers,
+            history_subgoals=inputs.history_subgoals,
             history_max_steps=history_max_steps,
         )
 
@@ -851,49 +535,16 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         """Create a mutable streaming encoder supporting update/remove."""
         return HGraphMutableEncoderStream(self._engine)
 
+    def _visualization_context(self) -> HGraphVisualizationContext:
+        return HGraphVisualizationContext(
+            symbol_type_id=self.symbol_type_id,
+            include_lgan_edges=self.include_lgan_edges,
+            lgan_edge_positions=frozenset(self._lgan_edge_positions),
+        )
+
     def to_networkx(self, data: HeteroData) -> nx.MultiDiGraph:
         """Convert ``HeteroData`` to named NetworkX graph for plotting."""
-        graph = to_networkx(
-            data, node_attrs=["node_names"], edge_attrs=[], to_multi=True
-        )
-        renaming: dict[object, str] = {}
-        used_names: dict[str, int] = {}
-
-        for node, attrs in graph.nodes(data=True):
-            if isinstance(node, tuple) and len(node) == 2:
-                node_type = str(node[0])
-                attrs.setdefault("type", node_type)
-            else:
-                node_type = str(attrs.get("type", ""))
-                attrs.setdefault("type", node_type)
-
-            name = attrs.get("node_names")
-            if name is None:
-                if isinstance(node, tuple) and len(node) == 2:
-                    name = f"{node[0]}:{node[1]}"
-                else:
-                    name = str(node)
-            name = str(name)
-            suffix = used_names.get(name, 0)
-            if suffix > 0:
-                display_name = f"{name}#{suffix}"
-            else:
-                display_name = name
-            used_names[name] = suffix + 1
-            renaming[node] = display_name
-
-        graph = nx.relabel_nodes(graph, renaming, copy=True)
-        if graph.is_multigraph():
-            for _, _, _, attrs in graph.edges(keys=True, data=True):
-                edge_type = attrs.get("edge_type") or attrs.get("type")
-                if isinstance(edge_type, tuple) and len(edge_type) > 1:
-                    attrs["position"] = edge_type[1]
-        else:
-            for _, _, attrs in graph.edges(data=True):
-                edge_type = attrs.get("edge_type") or attrs.get("type")
-                if isinstance(edge_type, tuple) and len(edge_type) > 1:
-                    attrs["position"] = edge_type[1]
-        return graph
+        return hgraph_to_networkx(data)
 
     def draw(
         self,
@@ -916,291 +567,27 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         symbol_node_scale: float = 1.5,
         non_symbol_linestyle: str | None = "--",
     ):
-        import matplotlib.pyplot as plt
-
-        node_kwargs = node_kwargs or {}
-        edge_kwargs = edge_kwargs or {}
-
-        if ax is None:
-            _, ax = plt.subplots()
-
         graph = data if isinstance(data, nx.Graph) else self.to_networkx(data)
-        pos = layout or nx.spring_layout(graph)
-
-        node_types = [graph.nodes[n]["type"] for n in graph.nodes]
-        unique_types = list(dict.fromkeys(node_types))
-        if unique_types:
-            cmap = plt.get_cmap("tab20_r")
-            type_to_color = {
-                ntype: cmap(i / max(1, len(unique_types) - 1))
-                for i, ntype in enumerate(unique_types)
-            }
-
-        base_node_kwargs = dict(node_kwargs)
-        if node_size is not None:
-            base_node_kwargs.setdefault("node_size", node_size)
-        if node_alpha is not None:
-            base_node_kwargs.setdefault("alpha", node_alpha)
-
-        base_node_size_value = base_node_kwargs.get("node_size")
-        if isinstance(base_node_size_value, Sequence) and not isinstance(
-            base_node_size_value, (str, bytes)
-        ):
-            base_node_size_value = (
-                base_node_size_value[0] if base_node_size_value else None
-            )
-        if base_node_size_value is None:
-            inferred_size = node_size if node_size is not None else 300
-            base_node_kwargs.setdefault("node_size", inferred_size)
-            base_node_size_value = inferred_size
-        elif not isinstance(base_node_size_value, numbers.Real):
-            base_node_size_value = 300
-
-        label_edge_set = None
-        if label_edges is not None:
-            label_edge_set = {tuple(edge) for edge in label_edges}
-
-        symbol_nodes = [
-            node
-            for node in graph.nodes
-            if graph.nodes[node]["type"] == self.symbol_type_id
-        ]
-        symbol_set = set(symbol_nodes)
-        other_nodes = [node for node in graph.nodes if node not in symbol_set]
-
-        other_kwargs = dict(base_node_kwargs)
-        other_kwargs.setdefault("edgecolors", "#444444")
-        other_kwargs.setdefault("linewidths", 1.2)
-
-        if other_nodes:
-            other_colors = [
-                type_to_color[graph.nodes[node]["type"]] for node in other_nodes
-            ]
-            other_collection = nx.draw_networkx_nodes(
-                graph,
-                pos,
-                nodelist=other_nodes,
-                node_color=other_colors,
-                ax=ax,
-                **other_kwargs,
-            )
-            if (
-                non_symbol_linestyle
-                and other_collection is not None
-                and hasattr(other_collection, "set_linestyle")
-            ):
-                other_collection.set_linestyle(non_symbol_linestyle)
-
-        if symbol_nodes:
-            symbol_colors = [type_to_color[self.symbol_type_id] for _ in symbol_nodes]
-            symbol_kwargs = dict(base_node_kwargs)
-            if isinstance(base_node_size_value, numbers.Real):
-                symbol_kwargs["node_size"] = base_node_size_value * symbol_node_scale
-            else:
-                symbol_kwargs["node_size"] = 300 * symbol_node_scale
-            symbol_kwargs.setdefault("edgecolors", "black")
-            symbol_kwargs.setdefault("linewidths", 2.4)
-            symbol_collection = nx.draw_networkx_nodes(
-                graph,
-                pos,
-                nodelist=symbol_nodes,
-                node_color=symbol_colors,
-                ax=ax,
-                **symbol_kwargs,
-            )
-            if symbol_collection is not None:
-                symbol_collection.set_facecolor(symbol_colors)
-                symbol_collection.set_edgecolor("black")
-
-        labels_to_draw = {}
-        explicit_labels = set(label_nodes or [])
-        if label_node_types:
-            type_set = {t for t in label_node_types}
-            explicit_labels.update(
-                node
-                for node, data in graph.nodes(data=True)
-                if data.get("type") in type_set
-            )
-        if explicit_labels:
-            labels_to_draw = {
-                node: node for node in graph.nodes if node in explicit_labels
-            }
-        elif with_labels:
-            labels_to_draw = {node: node for node in graph.nodes}
-
-        if labels_to_draw:
-            label_kwargs = {}
-            if label_font_size is not None:
-                label_kwargs["font_size"] = label_font_size
-            nx.draw_networkx_labels(
-                graph, pos, labels=labels_to_draw, ax=ax, **label_kwargs
-            )
-
-        # Edge coloring by argument position
-        edge_attr_name = "position"
-
-        # Split edges into standard (numerical) and LGAN (structural - linegraph)
-        standard_edges = []
-        standard_colors = []
-        lgan_edges = []
-        lgan_colors = []
-
-        if graph.is_multigraph():
-            all_edge_iter = graph.edges(keys=True, data=True)
-        else:
-            all_edge_iter = graph.edges(data=True)
-
-        all_positions = []
-        for e_info in all_edge_iter:
-            data_dict = e_info[-1]
-            p_val = data_dict.get(edge_attr_name)
-            if p_val is not None:
-                all_positions.append(p_val)
-
-        unique_positions = list(dict.fromkeys(p for p in all_positions))
-        edge_pos_to_color = {}
-        if unique_positions:
-            cmap = plt.get_cmap("Dark2")
-            edge_pos_to_color = {
-                val: cmap(i / max(1, len(unique_positions) - 1))
-                for i, val in enumerate(unique_positions)
-            }
-
-        # Re-iterate to separate by style
-        if graph.is_multigraph():
-            all_edge_iter = graph.edges(keys=True, data=True)
-        else:
-            all_edge_iter = graph.edges(data=True)
-
-        for e_info in all_edge_iter:
-            u, v = e_info[0], e_info[1]
-            data_dict = e_info[-1]
-            p_val = data_dict.get(edge_attr_name)
-            color = edge_pos_to_color.get(p_val, "#666666")
-
-            if p_val in self._lgan_edge_positions:
-                lgan_edges.append((u, v))
-                lgan_colors.append(color)
-            else:
-                standard_edges.append((u, v))
-                standard_colors.append(color)
-
-        if edge_width is not None:
-            edge_kwargs.setdefault("width", edge_width)
-        if edge_alpha is not None:
-            edge_kwargs.setdefault("alpha", edge_alpha)
-
-        # Draw standard edges
-        if standard_edges:
-            nx.draw_networkx_edges(
-                graph,
-                pos,
-                edgelist=standard_edges,
-                edge_color=standard_colors,
-                arrows=graph.is_directed(),
-                ax=ax,
-                **edge_kwargs,
-            )
-
-        # Draw LGAN (linegraph) edges as dashed
-        if lgan_edges:
-            lg_kwargs = dict(edge_kwargs)
-            lg_kwargs["style"] = "dashed"
-            nx.draw_networkx_edges(
-                graph,
-                pos,
-                edgelist=lgan_edges,
-                edge_color=lgan_colors,
-                arrows=graph.is_directed(),
-                ax=ax,
-                **lg_kwargs,
-            )
-
-        if unique_types:
-            from matplotlib.patches import Patch
-
-            legend_handles = [
-                Patch(
-                    facecolor=type_to_color[ntype], edgecolor="none", label=str(ntype)
-                )
-                for ntype in unique_types
-            ]
-            node_title = "Node Types"
-            if self.include_lgan_edges:
-                node_title += "\n(Relations = Linegraph Nodes)"
-            node_legend = ax.legend(
-                handles=legend_handles,
-                loc="upper left",
-                bbox_to_anchor=(1.02, 1.0),
-                frameon=False,
-                title=node_title,
-            )
-            ax.add_artist(node_legend)
-
-        if unique_positions:
-            from matplotlib.lines import Line2D
-
-            edge_handles = [
-                Line2D(
-                    [0],
-                    [0],
-                    color=edge_pos_to_color[p_val],
-                    linestyle=(
-                        "dashed" if p_val in self._lgan_edge_positions else "solid"
-                    ),
-                    label=(
-                        f"LGAN ({p_val})"
-                        if p_val in self._lgan_edge_positions
-                        else f"pos: {p_val}"
-                    ),
-                )
-                for p_val in unique_positions
-            ]
-            ax.legend(
-                handles=edge_handles,
-                loc="lower left",
-                bbox_to_anchor=(1.02, 0.0),
-                frameon=False,
-                title="Edge Roles",
-            )
-
-        ax.figure.subplots_adjust(right=0.8)
-
-        draw_edge_labels = edge_labels or label_edges is not None
-        if draw_edge_labels and unique_positions:
-            if graph.is_multigraph():
-                labels = {}
-                for u, v, k, data in graph.edges(keys=True, data=True):
-                    if (
-                        label_edge_set is not None
-                        and (u, v, k) not in label_edge_set
-                        and (u, v) not in label_edge_set
-                    ):
-                        continue
-                    labels[(u, v, k)] = data.get(edge_attr_name)
-            else:
-                labels = {}
-                for u, v, data in graph.edges(data=True):
-                    if label_edge_set is not None and (u, v) not in label_edge_set:
-                        continue
-                    labels[(u, v)] = data.get(edge_attr_name)
-            labels = {
-                edge: value for edge, value in labels.items() if value is not None
-            }
-            label_kwargs = {}
-            if label_font_size is not None:
-                label_kwargs["font_size"] = label_font_size
-            nx.draw_networkx_edge_labels(
-                graph,
-                pos,
-                edge_labels=labels,
-                font_color="black",
-                ax=ax,
-                **label_kwargs,
-            )
-
-        ax.set_axis_off()
-        return ax
+        return draw_hgraph(
+            graph,
+            context=self._visualization_context(),
+            ax=ax,
+            with_labels=with_labels,
+            edge_labels=edge_labels,
+            node_kwargs=node_kwargs,
+            edge_kwargs=edge_kwargs,
+            layout=layout,
+            node_size=node_size,
+            node_alpha=node_alpha,
+            edge_width=edge_width,
+            edge_alpha=edge_alpha,
+            label_font_size=label_font_size,
+            label_nodes=label_nodes,
+            label_node_types=label_node_types,
+            label_edges=label_edges,
+            symbol_node_scale=symbol_node_scale,
+            non_symbol_linestyle=non_symbol_linestyle,
+        )
 
 
 __all__ = ["HGraphEncoder", "HGraphEncoderStream", "HGraphMutableEncoderStream"]

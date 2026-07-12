@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from ._batch_contract import (
-    convert_batch_payload as _convert_batch_payload,
     parse_states_batch,
     parse_successors_batch_param,
+    prepare_core_batch_inputs,
 )
 from .base import (
     ActionBatchInput,
@@ -33,8 +33,6 @@ from ._lane_specs import (
 from .types import (
     HistorySubgoalInput,
     StateInput,
-    is_state_input,
-    to_advanced_state,
 )
 
 
@@ -46,7 +44,12 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
     """
 
     def _accepted_kwargs(self) -> set[str]:
-        return {"successor", "successors", "history_subgoals", "history_max_steps"}
+        return {
+            "successor",
+            "successors",
+            "history_subgoals",
+            "history_max_steps",
+        }
 
     def _encode(
         self,
@@ -122,19 +125,13 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        states_for_batch = _convert_batch_payload(
+        inputs = prepare_core_batch_inputs(
             states,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
+            successors=successors,
         )
-        successors_for_batch = _convert_batch_payload(
-            successors,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
-        )
-        states_list = parse_states_batch(states_for_batch)
+        states_list = parse_states_batch(inputs.states)
         successors_list = parse_successors_batch_param(
-            successors_for_batch,
+            inputs.successors,
             state_count=len(states_list),
         )
         dags = [

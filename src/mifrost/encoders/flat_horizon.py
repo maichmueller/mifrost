@@ -16,9 +16,9 @@ from .._core import (
     HorizonEncoderMode,
 )
 from ._batch_contract import (
-    convert_batch_payload as _convert_batch_payload,
     parse_dags_batch_param,
     parse_states_batch,
+    prepare_core_batch_inputs,
 )
 from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
 from .base import (
@@ -56,10 +56,6 @@ from .types import (
     FlatEncoding,
     HistorySubgoalInput,
     StateInput,
-    is_goal_literal_input,
-    is_state_input,
-    to_advanced_literal,
-    to_advanced_state,
 )
 
 
@@ -310,7 +306,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         return self._engine.relation_dict
 
     def _accepted_kwargs(self) -> set[str]:
-        return {"dag", "dags", "history_subgoals", "history_max_steps"}
+        return super()._accepted_kwargs() | {"dag", "dags"}
 
     def _encode(
         self,
@@ -359,12 +355,13 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         `history_subgoals` are accepted for API consistency but non-empty
         payloads are rejected on this lane.
         """
+        if dag is not None:
+            kwargs["dag"] = dag
         return super().encode(
             root,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
-            dag=dag,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
             include_metadata=include_metadata,
@@ -388,25 +385,15 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        roots_for_core = _convert_batch_payload(
+        inputs = prepare_core_batch_inputs(
             roots,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
-        )
-        goals_for_core = _convert_batch_payload(
-            goals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        subgoal_layers_for_core = _convert_batch_payload(
-            subgoal_layers,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
         )
         dags_for_core = _normalize_dag_batch_data(dags)
-        parsed_roots = parse_states_batch(roots_for_core)
+        parsed_roots = parse_states_batch(inputs.states)
         _validate_subgoal_layers_batch_payload(
-            subgoal_layers_for_core,
+            inputs.subgoal_layers,
             state_count=len(parsed_roots),
             max_goal_level=int(self._config.max_goal_level),
         )
@@ -422,9 +409,9 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         return self._engine.encode_batch(
             parsed_roots,
             dags=parsed_dags,
-            goals=goals_for_core,
+            goals=inputs.goals,
             actions=None,
-            subgoal_layers=subgoal_layers_for_core,
+            subgoal_layers=inputs.subgoal_layers,
             history_subgoals=None,
             history_max_steps=None,
         )
@@ -445,12 +432,13 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         **kwargs,
     ) -> FlatEncoding:
         """Encode many root/DAG inputs into one flat batch."""
+        if dags is not None:
+            kwargs["dags"] = dags
         return super().encode_batch(
             roots,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
-            dags=dags,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
             batch_attrs=batch_attrs,

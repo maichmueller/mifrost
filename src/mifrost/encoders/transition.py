@@ -31,7 +31,7 @@ from .base import (
     SubgoalLayersBatchParam,
     SuccessorBatchParam,
 )
-from ._batch_contract import convert_batch_payload as _convert_batch_payload
+from ._batch_contract import prepare_core_batch_inputs
 from .common import (
     _advanced_state,
     _split_goals,
@@ -50,10 +50,6 @@ from .types import (
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
-    is_goal_literal_input,
-    is_state_input,
-    to_advanced_literal,
-    to_advanced_state,
 )
 
 
@@ -122,7 +118,7 @@ class _TransitionEncoderBase(HGraphEncoder):
 
     def _accepted_kwargs(self) -> set[str]:
         """Accept successor/successors kwargs in generic base API calls."""
-        return {"successor", "successors", "history_subgoals", "history_max_steps"}
+        return super()._accepted_kwargs() | {"successor", "successors"}
 
     def _encode(
         self,
@@ -229,33 +225,19 @@ class _TransitionEncoderBase(HGraphEncoder):
             history_max_steps=history_max_steps,
         )
         _ = kwargs
-        states_for_core = _convert_batch_payload(
+        inputs = prepare_core_batch_inputs(
             states,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
-        )
-        successors_for_core = _convert_batch_payload(
-            successors,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
-        )
-        goals_for_core = _convert_batch_payload(
-            goals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        subgoal_layers_for_core = _convert_batch_payload(
-            subgoal_layers,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            successors=successors,
         )
         return self._engine.encode_batch(
             self.__class__.__name__,
-            states_for_core,
-            successors_for_core,
-            goals_for_core,
+            inputs.states,
+            inputs.successors,
+            inputs.goals,
             None,
-            subgoal_layers_for_core,
+            inputs.subgoal_layers,
             None,
             history_max_steps,
         )

@@ -89,7 +89,59 @@ def _normalize_collate_spec(
     return out
 
 
-class EncoderBase(ABC, Generic[PygDataT]):
+def _apply_collate_spec(
+    encoding: BatchEncoding,
+    collate_spec: dict[str, dict[str, Any]],
+) -> None:
+    """Call the private native collate hook hidden from generated stubs."""
+    from .. import _core as _core_module
+
+    setter = getattr(_core_module, "_set_batch_encoding_collate_spec")
+    setter(encoding, collate_spec)
+
+
+class _EncodingConversionMixin(Generic[PygDataT]):
+    """Own conversion from native/dict encodings to the PyG-facing boundary."""
+
+    def _dict_to_pyg(
+        self,
+        encoding_dict: EncodingDict,
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> PygDataT:
+        return _encoding_dict_to_pyg(
+            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
+        )
+
+    def _to_pyg(
+        self,
+        encoding: BatchEncodingInput,
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> PygDataT:
+        if isinstance(encoding, Mapping):
+            return self._dict_to_pyg(
+                encoding, as_batch=as_batch, include_metadata=include_metadata
+            )
+        if _is_batch_encoding_like(encoding):
+            uses_default_converter = (
+                type(self)._dict_to_pyg is _EncodingConversionMixin._dict_to_pyg
+            )
+            if uses_default_converter:
+                return to_pyg(
+                    encoding, as_batch=as_batch, include_metadata=include_metadata
+                )
+            return self._dict_to_pyg(
+                encoding.as_dict(),
+                as_batch=as_batch,
+                include_metadata=include_metadata,
+            )
+        raise TypeError(f"Unsupported encoding type: {type(encoding)}")
+
+
+class EncoderBase(_EncodingConversionMixin[PygDataT], ABC):
     """
     Base class for all non-stream encoders.
 
@@ -104,10 +156,16 @@ class EncoderBase(ABC, Generic[PygDataT]):
         return set()
 
     def _filter_kwargs(self, kwargs: Mapping[str, Any]) -> dict[str, Any]:
-        """Drop kwargs that are not explicitly supported by this encoder."""
+        """Validate and return keyword arguments supported by this encoder."""
         accepted = self._accepted_kwargs()
-        if not accepted:
-            return {}
+        unexpected = sorted(set(kwargs).difference(accepted))
+        if unexpected:
+            formatted = ", ".join(repr(name) for name in unexpected)
+            plural = "s" if len(unexpected) != 1 else ""
+            raise TypeError(
+                f"{type(self).__name__} got unexpected keyword argument{plural}: "
+                f"{formatted}"
+            )
         return {key: value for key, value in kwargs.items() if key in accepted}
 
     def encode(
@@ -154,11 +212,7 @@ class EncoderBase(ABC, Generic[PygDataT]):
                 setattr(encoding, str(key), value)
         normalized_collate_spec = _normalize_collate_spec(collate_spec)
         if normalized_collate_spec:
-            from .. import _core as _core_module
-
-            _core_module._set_batch_encoding_collate_spec(
-                encoding, normalized_collate_spec
-            )
+            _apply_collate_spec(encoding, normalized_collate_spec)
         return encoding
 
     def encode_pyg(
@@ -231,43 +285,8 @@ class EncoderBase(ABC, Generic[PygDataT]):
         """Encode one or many inputs into native batch encoding."""
         ...
 
-    def _dict_to_pyg(
-        self,
-        encoding_dict: EncodingDict,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> PygDataT:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
 
-    def _to_pyg(
-        self,
-        encoding: BatchEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> PygDataT:
-        if isinstance(encoding, Mapping):
-            return self._dict_to_pyg(
-                encoding, as_batch=as_batch, include_metadata=include_metadata
-            )
-        if _is_batch_encoding_like(encoding):
-            uses_default_converter = type(self)._dict_to_pyg is EncoderBase._dict_to_pyg
-            if uses_default_converter:
-                return to_pyg(
-                    encoding, as_batch=as_batch, include_metadata=include_metadata
-                )
-            return self._dict_to_pyg(
-                encoding.as_dict(),
-                as_batch=as_batch,
-                include_metadata=include_metadata,
-            )
-        raise TypeError(f"Unsupported encoding type: {type(encoding)}")
-
-
-class StreamEncoderBase(ABC, Generic[PygDataT]):
+class StreamEncoderBase(_EncodingConversionMixin[PygDataT], ABC):
     """Base class for stream encoders that accumulate graphs incrementally."""
 
     @abstractmethod
@@ -328,40 +347,3 @@ class StreamEncoderBase(ABC, Generic[PygDataT]):
     def _reset_builder(self) -> None:
         """Create/reset the internal builder used by ``append``."""
         ...
-
-    def _dict_to_pyg(
-        self,
-        encoding_dict: EncodingDict,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> PygDataT:
-        return _encoding_dict_to_pyg(
-            encoding_dict, as_batch=as_batch, include_metadata=include_metadata
-        )
-
-    def _to_pyg(
-        self,
-        encoding: BatchEncodingInput,
-        *,
-        as_batch: bool,
-        include_metadata: bool = True,
-    ) -> PygDataT:
-        if isinstance(encoding, Mapping):
-            return self._dict_to_pyg(
-                encoding, as_batch=as_batch, include_metadata=include_metadata
-            )
-        if _is_batch_encoding_like(encoding):
-            uses_default_converter = (
-                type(self)._dict_to_pyg is StreamEncoderBase._dict_to_pyg
-            )
-            if uses_default_converter:
-                return to_pyg(
-                    encoding, as_batch=as_batch, include_metadata=include_metadata
-                )
-            return self._dict_to_pyg(
-                encoding.as_dict(),
-                as_batch=as_batch,
-                include_metadata=include_metadata,
-            )
-        raise TypeError(f"Unsupported encoding type: {type(encoding)}")

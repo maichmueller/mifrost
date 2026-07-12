@@ -53,7 +53,7 @@ class ExampleConstantEncoder(EncoderBase[HeteroData]):
 
     def _accepted_kwargs(self) -> set[str]:
         """Allow overriding the scalar value via ``value=...``."""
-        return {"value"}
+        return super()._accepted_kwargs() | {"value"}
 
     def _encode(
         self,

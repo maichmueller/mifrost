@@ -601,6 +601,35 @@ def test_batch_accepts_action_adapters(small_blocks):
         mifrost.unregister_action_adapter(WrappedAction)
 
 
+def test_core_batch_input_boundary_adapts_all_standard_lanes(small_blocks):
+    space, _domain, problem = small_blocks
+    state = problem.get_initial_state()
+    goals = _problem_goals(problem)
+    if not goals:
+        pytest.skip("Fixture has no goals.")
+    (action, successor), _ = _first_transitions(space, state, count=2)
+
+    from mifrost.encoders._batch_contract import prepare_core_batch_inputs
+    from mifrost.encoders.types import BatchParam
+
+    inputs = prepare_core_batch_inputs(
+        BatchParam.separate([state]),
+        goals=BatchParam.shared([goals[0]]),
+        actions=BatchParam.separate([[action]]),
+        subgoal_layers=[[[goals[0]]]],
+        history_subgoals=[[(0, [goals[0]])]],
+        successors=BatchParam.shared(successor),
+    )
+
+    advanced_goal = getattr(goals[0], "_advanced_ground_literal", goals[0])
+    assert inputs.states == BatchParam.separate([adv_state(state)])
+    assert inputs.goals == BatchParam.shared([advanced_goal])
+    assert inputs.actions == BatchParam.separate([[adv_action(action)]])
+    assert inputs.subgoal_layers == [[[advanced_goal]]]
+    assert inputs.history_subgoals == [[(0, [advanced_goal])]]
+    assert inputs.successors == BatchParam.shared(adv_state(successor))
+
+
 def test_lane_optional_payloads_prepare_actions_and_history(small_blocks):
     space, _domain, problem = small_blocks
     state = problem.get_initial_state()

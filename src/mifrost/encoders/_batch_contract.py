@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable as IterableABC
 from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Generic, Protocol, TypeAlias, TypeVar, cast
 
 from .. import _core
 from .._core import TransitionDAG
@@ -12,9 +12,42 @@ from .types import (
     GoalLiteralInput,
     GroundActionInput,
     StateInput,
+    is_action_input,
+    is_goal_literal_input,
+    is_state_input,
+    to_advanced_action,
+    to_advanced_literal,
+    to_advanced_state,
 )
 
 _PayloadT = TypeVar("_PayloadT")
+
+
+class _CoreBatchContract(Protocol):
+    """Typed port for private native batch parsers omitted from generated stubs."""
+
+    def _parse_states_batch(self, states: Any, /) -> Any: ...
+
+    def _parse_goals_batch_param(self, goals: Any, state_count: int, /) -> Any: ...
+
+    def _parse_actions_batch_param(self, actions: Any, state_count: int, /) -> Any: ...
+
+    def _parse_subgoal_layers_batch_param(
+        self, subgoal_layers: Any, state_count: int, /
+    ) -> Any: ...
+
+    def _parse_history_subgoals_batch_param(
+        self, history_subgoals: Any, state_count: int, /
+    ) -> Any: ...
+
+    def _parse_successors_batch_param(
+        self, successors: Any, state_count: int, /
+    ) -> Any: ...
+
+    def _parse_dags_batch_param(self, dags: Any, state_count: int, /) -> Any: ...
+
+
+_CORE_BATCH = cast(_CoreBatchContract, _core)
 
 
 @dataclass(frozen=True)
@@ -44,6 +77,24 @@ ParsedHistorySubgoalsBatch: TypeAlias = ParsedBatchPlan[
 ]
 
 
+@dataclass(frozen=True, slots=True)
+class CoreBatchInputs:
+    """Batch payloads adapted to the objects accepted by the native core.
+
+    The original shared/per-state container shape, including ``BatchParam``,
+    is preserved. Only domain leaves are adapted. Keeping that policy here
+    prevents individual encoder facades from drifting as new input adapters
+    are added.
+    """
+
+    states: Any
+    goals: Any
+    actions: Any
+    subgoal_layers: Any
+    history_subgoals: Any
+    successors: Any
+
+
 def _plan_from_core_tuple(
     payload: tuple[bool, object],
     *,
@@ -61,7 +112,7 @@ def _plan_from_core_tuple(
 
 
 def parse_states_batch(states) -> list[StateInput]:
-    return cast(list[StateInput], list(_core._parse_states_batch(states)))
+    return cast(list[StateInput], list(_CORE_BATCH._parse_states_batch(states)))
 
 
 def parse_goals_batch_param(
@@ -73,7 +124,8 @@ def parse_goals_batch_param(
         ParsedGoalsBatch,
         _plan_from_core_tuple(
             cast(
-                tuple[bool, object], _core._parse_goals_batch_param(goals, state_count)
+                tuple[bool, object],
+                _CORE_BATCH._parse_goals_batch_param(goals, state_count),
             ),
             state_count=state_count,
         ),
@@ -90,7 +142,7 @@ def parse_actions_batch_param(
         _plan_from_core_tuple(
             cast(
                 tuple[bool, object],
-                _core._parse_actions_batch_param(actions, state_count),
+                _CORE_BATCH._parse_actions_batch_param(actions, state_count),
             ),
             state_count=state_count,
         ),
@@ -107,7 +159,9 @@ def parse_subgoal_layers_batch_param(
         _plan_from_core_tuple(
             cast(
                 tuple[bool, object],
-                _core._parse_subgoal_layers_batch_param(subgoal_layers, state_count),
+                _CORE_BATCH._parse_subgoal_layers_batch_param(
+                    subgoal_layers, state_count
+                ),
             ),
             state_count=state_count,
         ),
@@ -124,7 +178,7 @@ def parse_history_subgoals_batch_param(
         _plan_from_core_tuple(
             cast(
                 tuple[bool, object],
-                _core._parse_history_subgoals_batch_param(
+                _CORE_BATCH._parse_history_subgoals_batch_param(
                     history_subgoals, state_count
                 ),
             ),
@@ -140,7 +194,7 @@ def parse_successors_batch_param(
 ) -> list[StateInput]:
     return cast(
         list[StateInput],
-        list(_core._parse_successors_batch_param(successors, state_count)),
+        list(_CORE_BATCH._parse_successors_batch_param(successors, state_count)),
     )
 
 
@@ -151,7 +205,7 @@ def parse_dags_batch_param(
 ) -> list[TransitionDAG | None]:
     return cast(
         list[TransitionDAG | None],
-        list(_core._parse_dags_batch_param(dags, state_count)),
+        list(_CORE_BATCH._parse_dags_batch_param(dags, state_count)),
     )
 
 
@@ -233,6 +287,57 @@ def convert_batch_payload(
             for item in value
         ]
     return value
+
+
+def prepare_core_batch_inputs(
+    states: Any,
+    *,
+    goals: Any = None,
+    actions: Any = None,
+    subgoal_layers: Any = None,
+    history_subgoals: Any = None,
+    successors: Any = None,
+) -> CoreBatchInputs:
+    """Adapt all standard encoder batch lanes at one native-core boundary.
+
+    Encoder facades should call this once, then pass the returned fields to
+    their native engine or parser. This is intentionally the only place that
+    maps the standard state, literal, and action lanes to their advanced
+    pymimir representations.
+    """
+
+    return CoreBatchInputs(
+        states=convert_batch_payload(
+            states,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        ),
+        goals=convert_batch_payload(
+            goals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        ),
+        actions=convert_batch_payload(
+            actions,
+            is_leaf=is_action_input,
+            convert_leaf=to_advanced_action,
+        ),
+        subgoal_layers=convert_batch_payload(
+            subgoal_layers,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        ),
+        history_subgoals=convert_batch_payload(
+            history_subgoals,
+            is_leaf=is_goal_literal_input,
+            convert_leaf=to_advanced_literal,
+        ),
+        successors=convert_batch_payload(
+            successors,
+            is_leaf=is_state_input,
+            convert_leaf=to_advanced_state,
+        ),
+    )
 
 
 def reject_unsupported_batch_field(

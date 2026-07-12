@@ -32,7 +32,7 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import convert_batch_payload as _convert_batch_payload
+from ._batch_contract import prepare_core_batch_inputs
 from .common import (
     _advanced_domain,
     _advanced_state,
@@ -47,12 +47,6 @@ from .types import (
     HistorySubgoalInput,
     StateInput,
     default_goals_from_state,
-    is_action_input,
-    is_goal_literal_input,
-    is_state_input,
-    to_advanced_action,
-    to_advanced_literal,
-    to_advanced_state,
 )
 
 
@@ -658,7 +652,7 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         self._engine.encode(adv_state, split_goals, builder)
 
     def _accepted_kwargs(self) -> set[str]:
-        return {"history_subgoals", "history_max_steps"}
+        return super()._accepted_kwargs() | {"history_subgoals", "history_max_steps"}
 
     def _encode(
         self,
@@ -726,46 +720,28 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ) -> FlatEncoding:
-        states_for_core = _convert_batch_payload(
+        inputs = prepare_core_batch_inputs(
             states,
-            is_leaf=is_state_input,
-            convert_leaf=to_advanced_state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
         )
-        goals_for_core = _convert_batch_payload(
-            goals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        actions_for_core = _convert_batch_payload(
-            actions,
-            is_leaf=is_action_input,
-            convert_leaf=to_advanced_action,
-        )
-        subgoal_layers_for_core = _convert_batch_payload(
-            subgoal_layers,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        history_subgoals_for_core = _convert_batch_payload(
-            history_subgoals,
-            is_leaf=is_goal_literal_input,
-            convert_leaf=to_advanced_literal,
-        )
-        if _is_sequence_like(states_for_core):
-            state_count = len(states_for_core)
+        if _is_sequence_like(inputs.states):
+            state_count = len(inputs.states)
         else:
             state_count = 1
         _validate_subgoal_layers_batch_payload(
-            subgoal_layers_for_core,
+            inputs.subgoal_layers,
             state_count=state_count,
             max_goal_level=int(self._config.max_goal_level),
         )
         return self._engine.encode_batch(
-            states_for_core,
-            goals=goals_for_core,
-            actions=actions_for_core,
-            subgoal_layers=subgoal_layers_for_core,
-            history_subgoals=history_subgoals_for_core,
+            inputs.states,
+            goals=inputs.goals,
+            actions=inputs.actions,
+            subgoal_layers=inputs.subgoal_layers,
+            history_subgoals=inputs.history_subgoals,
             history_max_steps=history_max_steps,
         )
 

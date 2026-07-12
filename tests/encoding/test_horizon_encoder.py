@@ -429,6 +429,34 @@ def test_horizon_to_networkx_preserves_object_symbol_nodes(small_blocks):
         )
 
 
+def test_horizon_draw_accepts_encoded_data_after_networkx_conversion(small_blocks):
+    pytest.importorskip("matplotlib")
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = list(space.get_forward_transitions(root))[:1]
+    if not transitions:
+        pytest.skip("Fixture should yield at least 1 transition")
+
+    dag = mifrost.TransitionDAG(adv_state(root))
+    action, target = transitions[0]
+    dag.register_transition(adv_state(root), adv_state(target), adv_action(action))
+
+    class TrackingHorizonEncoder(mifrost.HorizonEncoder):
+        conversion_called = False
+
+        def to_networkx(self, data):
+            self.conversion_called = True
+            return super().to_networkx(data)
+
+    encoder = TrackingHorizonEncoder(domain)
+    data = encoder.encode_pyg(root, dag=dag)
+
+    ax = encoder.draw(data, with_labels=False, edge_labels=False)
+
+    assert encoder.conversion_called is True
+    assert ax.axison is False
+
+
 def test_horizon_encode_accepts_rustworkx_digraph(small_blocks):
     rx = pytest.importorskip("rustworkx")
     space, domain, problem = small_blocks
