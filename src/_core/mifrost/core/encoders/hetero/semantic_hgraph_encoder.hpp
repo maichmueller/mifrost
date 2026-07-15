@@ -1,0 +1,83 @@
+/** Planner-neutral heterogeneous graph encoder. */
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "mifrost/core/api.hpp"
+#include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/encoders/common/default_relations.hpp"
+#include "mifrost/core/encoders/common/goal_derivation.hpp"
+#include "mifrost/core/encoders/common/target_source.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
+
+namespace mifrost {
+
+/** Runtime policy for `SemanticHGraphEncoderEngine`. */
+struct SemanticHGraphEncoderConfig {
+   std::string symbol_type_id = defaults::symbol_type_id;
+   std::string target_symbol_prefix = "target:";
+   std::string nullary_object_name = "![nullary_symbol]!";
+   std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
+   std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
+   std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
+   std::string history_link_relation = defaults::history_link_relation;
+   size_t max_goal_level = 0;
+   bool support_literals = false;
+   bool add_nullary_predicates = false;
+   bool ignore_actions = true;
+   bool include_lgan_edges = false;
+   bool include_static = true;
+   bool include_empty_edge_types = true;
+   bool export_node_names = true;
+   std::set< TargetSource > lgan_anchor_sources = {};
+   std::set< TargetSource > target_sources = {};
+   std::set< GoalDerivation > goal_derivations = {
+      GoalDerivation::plain,
+      GoalDerivation::satisfied,
+   };
+};
+
+/**
+ * Encode `SemanticFlatRelationInput` as the legacy heterogeneous graph schema.
+ *
+ * Predicate, action, object, atom, and literal indices are local to the owned
+ * semantic input and schema. No planning-library types cross this interface.
+ */
+class MIFROST_API SemanticHGraphEncoderEngine {
+  public:
+   using Config = SemanticHGraphEncoderConfig;
+
+   SemanticHGraphEncoderEngine(
+      std::vector< SemanticPredicateSpec > predicates,
+      std::vector< SemanticActionSpec > actions,
+      Config config = {}
+   );
+   SemanticHGraphEncoderEngine(const SemanticHGraphEncoderEngine&) = delete;
+   SemanticHGraphEncoderEngine& operator=(const SemanticHGraphEncoderEngine&) = delete;
+   SemanticHGraphEncoderEngine(SemanticHGraphEncoderEngine&&) noexcept;
+   SemanticHGraphEncoderEngine& operator=(SemanticHGraphEncoderEngine&&) noexcept;
+   ~SemanticHGraphEncoderEngine();
+
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
+   void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      const std::vector< SemanticFlatRelationInput >& inputs
+   ) const;
+
+   [[nodiscard]] const Config& get_config() const;
+   [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
+   [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
+   [[nodiscard]] const std::map< std::string, int >& get_relation_arities() const;
+
+  private:
+   struct Impl;
+   std::unique_ptr< Impl > impl_;
+};
+
+}  // namespace mifrost

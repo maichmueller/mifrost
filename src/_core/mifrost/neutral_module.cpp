@@ -16,6 +16,7 @@ NB_MODULE(_neutral_core, m)
    init_batch_encoding(m);
    init_semantic_flat_encoder(m);
    init_semantic_color_encoder(m);
+   init_semantic_hgraph_encoder(m);
 }
 
 }  // namespace mifrost
