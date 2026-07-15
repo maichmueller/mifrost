@@ -75,6 +75,7 @@ nav:
   - How-To:
       - how-to/choose-an-encoder.md
       - how-to/encode-goals-actions-history.md
+      - how-to/encode-semantic-flat-inputs.md
       - how-to/dynamic-graph-fields.md
       - how-to/adapters.md
       - how-to/performance.md
