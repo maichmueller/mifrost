@@ -373,6 +373,7 @@ add_library(
         "_core/mifrost/core/encoders/flat/flat_lgan.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
         "_core/mifrost/core/encoders/flat/semantic_flat_relation_encoder.cpp"
+        "_core/mifrost/core/encoders/homo/semantic_color_encoder.cpp"
         "_core/mifrost/core/encoders/common/target_metadata.cpp"
 )
 set_target_properties(
@@ -459,6 +460,7 @@ if (MIFROST_BUILD_PYTHON)
         "_core/mifrost/schema_bindings.cpp"
         "_core/mifrost/init_batch_encoding.cpp"
         "_core/mifrost/init_semantic_flat_encoder.cpp"
+        "_core/mifrost/init_semantic_color_encoder.cpp"
     )
     set_target_properties(
         mifrost_neutral_core_module
@@ -1001,6 +1003,7 @@ else ()
         "core/encoders/flat/flat_relation_schema.hpp"
         "core/encoders/flat/flat_tuple_layout.hpp"
         "core/encoders/flat/semantic_flat_relation_encoder.hpp"
+        "core/encoders/homo/semantic_color_encoder.hpp"
     )
     foreach (_mifrost_header IN LISTS _mifrost_neutral_public_headers)
         get_filename_component(_mifrost_header_dir "${_mifrost_header}" DIRECTORY)
