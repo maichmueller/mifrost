@@ -13,6 +13,7 @@
 
 #include "mifrost/backends/pytyr/semantic_flat_encoder.hpp"
 #include "mifrost/capsule_bridge.hpp"
+#include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
 
 namespace nb = nanobind;
@@ -264,6 +265,24 @@ NB_MODULE(_pytyr_adapter, m)
             return owned_capsule(
                SemanticColorEncoderEngine(self.get_engine().get_predicates(), *config),
                capsule_bridge::color_engine_name
+            );
+         },
+         "config_capsule"_a
+      )
+      .def(
+         "_make_hgraph_engine_capsule",
+         [owned_capsule](const Encoder& self, nb::handle config_capsule) {
+            const auto* config = capsule_bridge::get< SemanticHGraphEncoderConfig >(
+               config_capsule.ptr(), capsule_bridge::hgraph_config_name
+            );
+            if(config == nullptr) {
+               throw nb::python_error();
+            }
+            return owned_capsule(
+               SemanticHGraphEncoderEngine(
+                  self.get_engine().get_predicates(), self.get_engine().get_actions(), *config
+               ),
+               capsule_bridge::hgraph_engine_name
             );
          },
          "config_capsule"_a

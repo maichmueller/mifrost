@@ -1,6 +1,7 @@
 /** Planner-neutral heterogeneous graph encoder. */
 #pragma once
 
+#include <boost/describe.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -42,6 +43,29 @@ struct SemanticHGraphEncoderConfig {
       GoalDerivation::satisfied,
    };
 };
+
+BOOST_DESCRIBE_STRUCT(
+   SemanticHGraphEncoderConfig,
+   (),
+   (symbol_type_id,
+    target_symbol_prefix,
+    nullary_object_name,
+    lgan_tn_edge_pos,
+    lgan_nn_edge_pos,
+    lgan_rr_edge_pos,
+    history_link_relation,
+    max_goal_level,
+    support_literals,
+    add_nullary_predicates,
+    ignore_actions,
+    include_lgan_edges,
+    include_static,
+    include_empty_edge_types,
+    export_node_names,
+    lgan_anchor_sources,
+    target_sources,
+    goal_derivations)
+)
 
 /**
  * Encode `SemanticFlatRelationInput` as the legacy heterogeneous graph schema.

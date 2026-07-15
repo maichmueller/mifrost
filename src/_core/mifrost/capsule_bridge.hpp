@@ -14,6 +14,8 @@ inline constexpr char inputs_name[] = "mifrost.SemanticFlatRelationInputs.v1";
 inline constexpr char engine_name[] = "mifrost.SemanticFlatRelationEncoderEngine.v1";
 inline constexpr char color_config_name[] = "mifrost.SemanticColorEncoderConfig.v1";
 inline constexpr char color_engine_name[] = "mifrost.SemanticColorEncoderEngine.v1";
+inline constexpr char hgraph_config_name[] = "mifrost.SemanticHGraphEncoderConfig.v1";
+inline constexpr char hgraph_engine_name[] = "mifrost.SemanticHGraphEncoderEngine.v1";
 inline constexpr char consumed_name[] = "mifrost.consumed.v1";
 
 template < typename T >

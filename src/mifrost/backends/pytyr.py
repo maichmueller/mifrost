@@ -199,6 +199,14 @@ class SemanticPlanningTaskAdapter:
         engine_capsule = self._native._make_color_engine_capsule(config_capsule)
         return _neutral_core._consume_semantic_color_engine_capsule(engine_capsule)
 
+    def make_hgraph_engine(self, config: Any) -> Any:
+        """Build a neutral HGraph engine from this task adapter's cached schema."""
+        from mifrost import _neutral_core
+
+        config_capsule = _neutral_core._semantic_hgraph_config_capsule(config)
+        engine_capsule = self._native._make_hgraph_engine_capsule(config_capsule)
+        return _neutral_core._consume_semantic_hgraph_engine_capsule(engine_capsule)
+
     @staticmethod
     def _literal_key(value: object) -> LiteralKey:
         if isinstance(value, LiteralKey):

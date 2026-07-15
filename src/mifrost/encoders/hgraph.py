@@ -6,19 +6,17 @@ from typing import Any, Iterable, Mapping
 import networkx as nx
 from torch_geometric.data import HeteroData
 
-from .._core import BatchEncoding
-from .. import _core
+from .. import _core, _neutral_core
 from .._core import (
+    BatchEncoding,
     BatchBuilder,
     DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    HGraphEncoderConfig,
-    HGraphEncoderEngine,
-    HGraphStreamEncoder as _HGraphStreamEncoder,
 )
+from ..backends._hgraph_runtime import HGraphBackendName, create_hgraph_runtime
 from .base import (
     ActionBatchParam,
     CollateSpecParam,
@@ -31,13 +29,6 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import prepare_core_batch_inputs
-from .common import (
-    _advanced_domain,
-    _advanced_state,
-    _split_goals,
-)
-from ._lane_specs import prepare_optional_payloads
 from ._target_sources import TargetSource, normalize_target_sources
 from ._visualization import (
     HGraphVisualizationContext,
@@ -53,9 +44,8 @@ from .types import (
     default_goals_from_state,
 )
 
-_HGraphMutableStreamEncoder = getattr(
-    _core, "HGraphMutableStreamEncoder", _HGraphStreamEncoder
-)
+_BASE_HGRAPH_CONFIG_CLS = _neutral_core.SemanticHGraphEncoderConfig
+_BASE_HGRAPH_ENGINE_CLS = None
 
 
 def _build_config(config_cls, **kwargs: Any):
@@ -68,10 +58,20 @@ def _build_config(config_cls, **kwargs: Any):
 class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
     """Mutable streaming wrapper (append/update/remove) for ``HGraphEncoderEngine``."""
 
-    _engine: HGraphEncoderEngine
+    _owner: Any
 
     def __post_init__(self) -> None:
-        self._stream = _HGraphMutableStreamEncoder(self._engine)
+        self._stream: Any
+        runtime = getattr(self._owner, "_runtime", None)
+        if runtime is None:
+            stream_type = getattr(
+                _core,
+                "HGraphMutableStreamEncoder",
+                getattr(_core, "HGraphStreamEncoder"),
+            )
+            self._stream = stream_type(self._owner)
+        else:
+            self._stream = runtime.make_stream(mutable=True)
         self._reset_builder()
 
     def append(
@@ -89,6 +89,20 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
 
         If goals/actions are omitted, the engine uses the state's problem goals.
         """
+        if getattr(self._owner, "_runtime", None) is not None:
+            return self._coerce_stream_id(
+                self._stream.append(
+                    state,
+                    goals=goals,
+                    actions=actions,
+                    subgoal_layers=subgoal_layers,
+                    history_subgoals=history_subgoals,
+                    history_max_steps=history_max_steps,
+                )
+            )
+        from ._lane_specs import prepare_optional_payloads
+        from .common import _advanced_state, _split_goals
+
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
             actions=actions,
@@ -136,6 +150,20 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> None:
+        if getattr(self._owner, "_runtime", None) is not None:
+            self._stream.update(
+                stream_id,
+                state,
+                goals=goals,
+                actions=actions,
+                subgoal_layers=subgoal_layers,
+                history_subgoals=history_subgoals,
+                history_max_steps=history_max_steps,
+            )
+            return
+        from ._lane_specs import prepare_optional_payloads
+        from .common import _advanced_state, _split_goals
+
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
             actions=actions,
@@ -180,10 +208,15 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
 class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
     """Append-only streaming wrapper for ``HGraphEncoderEngine``."""
 
-    _engine: HGraphEncoderEngine
+    _owner: Any
 
     def __post_init__(self) -> None:
-        self._stream = _HGraphStreamEncoder(self._engine)
+        self._stream: Any
+        runtime = getattr(self._owner, "_runtime", None)
+        if runtime is None:
+            self._stream = _core.HGraphStreamEncoder(self._owner)
+        else:
+            self._stream = runtime.make_stream(mutable=False)
         self._reset_builder()
 
     def append(
@@ -196,6 +229,20 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> int:
+        if getattr(self._owner, "_runtime", None) is not None:
+            return self._coerce_stream_id(
+                self._stream.append(
+                    state,
+                    goals=goals,
+                    actions=actions,
+                    subgoal_layers=subgoal_layers,
+                    history_subgoals=history_subgoals,
+                    history_max_steps=history_max_steps,
+                )
+            )
+        from ._lane_specs import prepare_optional_payloads
+        from .common import _advanced_state, _split_goals
+
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
             actions=actions,
@@ -249,9 +296,12 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         domain: DomainInput,
         config: Any,
         *,
-        engine_cls=HGraphEncoderEngine,
+        engine_cls: Any,
     ) -> None:
         """Initialize encoder runtime state from a prepared config object."""
+        from .common import _advanced_domain
+
+        self._runtime = None
         self._engine = engine_cls(_advanced_domain(domain), config)
         self._config = config
         self.symbol_type_id = config.symbol_type_id
@@ -276,6 +326,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         self,
         domain: DomainInput,
         *,
+        backend: HGraphBackendName | str | None = None,
         symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
         target_symbol_prefix: str = "target:",
         ignore_actions: bool = True,
@@ -294,8 +345,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         lgan_nn_edge_pos: str = DEFAULT_LGAN_NN_EDGE_POS,
         lgan_rr_edge_pos: str = DEFAULT_LGAN_RR_EDGE_POS,
         history_link_relation: str = DEFAULT_HISTORY_LINK_RELATION,
-        _config_cls=HGraphEncoderConfig,
-        _engine_cls=HGraphEncoderEngine,
+        _config_cls=_BASE_HGRAPH_CONFIG_CLS,
+        _engine_cls=_BASE_HGRAPH_ENGINE_CLS,
         **extra_config_kwargs,
     ) -> None:
         """Create an HGraph encoder for one domain.
@@ -313,6 +364,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         create LGAN-only anchor symbols for `goal`, `subgoal`, and `history`
         without turning them into prediction targets.
         """
+        self._runtime: Any = None
         normalized_lgan_anchor_sources = normalize_target_sources(lgan_anchor_sources)
         if (
             normalized_lgan_anchor_sources is not None
@@ -322,6 +374,15 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                 "HGraphEncoder currently supports lgan_anchor_sources="
                 "{'action', 'goal', 'subgoal', 'history'} only; 'state' "
                 "belongs to HorizonEncoder candidate targets"
+            )
+        uses_public_base_runtime = (
+            _config_cls is _BASE_HGRAPH_CONFIG_CLS
+            and _engine_cls is _BASE_HGRAPH_ENGINE_CLS
+        )
+        if not uses_public_base_runtime and backend is not None:
+            raise ValueError(
+                "backend selection is supported only by the base HGraphEncoder; "
+                "derived Horizon/Successor/Transition encoders remain Pymimir-only"
             )
         config = self._make_config(
             _config_cls,
@@ -345,7 +406,24 @@ class HGraphEncoder(EncoderBase[HeteroData]):
             history_link_relation=history_link_relation,
             **extra_config_kwargs,
         )
-        self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
+        if uses_public_base_runtime:
+            self._runtime = create_hgraph_runtime(domain, config, backend=backend)
+            self._engine = self._runtime.engine
+            self._config = config
+            self.backend = self._runtime.backend_name
+            self.symbol_type_id = config.symbol_type_id
+            self.lgan_tn_edge_pos = config.lgan_tn_edge_pos
+            self.lgan_nn_edge_pos = config.lgan_nn_edge_pos
+            self.lgan_rr_edge_pos = config.lgan_rr_edge_pos
+            self.include_lgan_edges = config.include_lgan_edges
+            self.lgan_anchor_sources = set(config.lgan_anchor_sources)
+            self._lgan_edge_positions = {
+                self.lgan_tn_edge_pos,
+                self.lgan_nn_edge_pos,
+                self.lgan_rr_edge_pos,
+            }
+        else:
+            self._init_engine_from_config(domain, config, engine_cls=_engine_cls)
 
     def _encode_one_into_builder(
         self,
@@ -358,6 +436,20 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> None:
+        if self._runtime is not None:
+            self._runtime.append_into_builder(
+                state,
+                builder,
+                goals=goals,
+                actions=actions,
+                subgoal_layers=subgoal_layers,
+                history_subgoals=history_subgoals,
+                history_max_steps=history_max_steps,
+            )
+            return
+        from ._lane_specs import prepare_optional_payloads
+        from .common import _advanced_state, _split_goals
+
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
             actions=actions,
@@ -394,7 +486,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         self._engine.encode(adv_state, inputs, action_list, builder)
 
     @property
-    def engine(self) -> HGraphEncoderEngine:
+    def engine(self) -> Any:
         """Expose the underlying C++ engine for advanced usage."""
         return self._engine
 
@@ -406,10 +498,15 @@ class HGraphEncoder(EncoderBase[HeteroData]):
     @property
     def relation_dict(self) -> Any:
         """Expose the effective built relation dictionary from the C++ engine."""
+        if self._runtime is not None:
+            return self._runtime.relation_dict
         return self._engine.relation_dict
 
     def update_relations(self, relation_dict: Any) -> None:
         """Replace relation dictionary used by the underlying C++ engine."""
+        if self._runtime is not None:
+            self._runtime.update_relations(relation_dict)
+            return
         if isinstance(relation_dict, _core.RelationDict):
             core_relation_dict = relation_dict
         elif isinstance(relation_dict, Mapping):
@@ -483,6 +580,17 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         history_max_steps: int | None = None,
     ) -> BatchEncoding:
         """Encode one or many states to one native batch encoding."""
+        if self._runtime is not None:
+            return self._runtime.encode_batch(
+                states,
+                goals=goals,
+                actions=actions,
+                subgoal_layers=subgoal_layers,
+                history_subgoals=history_subgoals,
+                history_max_steps=history_max_steps,
+            )
+        from ._batch_contract import prepare_core_batch_inputs
+
         inputs = prepare_core_batch_inputs(
             states,
             goals=goals,
@@ -529,11 +637,13 @@ class HGraphEncoder(EncoderBase[HeteroData]):
 
     def stream(self) -> HGraphEncoderStream:
         """Create an append-only streaming encoder sharing this encoder's C++ engine."""
-        return HGraphEncoderStream(self._engine)
+        return HGraphEncoderStream(self if self._runtime is not None else self._engine)
 
     def mutable_stream(self) -> HGraphMutableEncoderStream:
         """Create a mutable streaming encoder supporting update/remove."""
-        return HGraphMutableEncoderStream(self._engine)
+        return HGraphMutableEncoderStream(
+            self if self._runtime is not None else self._engine
+        )
 
     def _visualization_context(self) -> HGraphVisualizationContext:
         return HGraphVisualizationContext(

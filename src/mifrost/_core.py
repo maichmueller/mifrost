@@ -33,9 +33,11 @@ _install_legacy_map_view_names()
 
 # These policy constants are planner-neutral even though the historical native
 # binding exported them from the Pymimir adapter module.
+DEFAULT_SYMBOL_TYPE_ID = "_symbol_"
 DEFAULT_LGAN_TN_EDGE_POS = "_lgan_tn_"
 DEFAULT_LGAN_NN_EDGE_POS = "_lgan_nn_"
 DEFAULT_LGAN_RR_EDGE_POS = "_lgan_rr_"
+DEFAULT_HISTORY_LINK_RELATION = "_history_link_"
 
 
 _pymimir_adapter_error: ImportError | None = None
@@ -45,6 +47,7 @@ except ImportError as error:
     _pymimir_adapter_error = error
     _pymimir_adapter = None
     ColorEncoderConfig = _neutral_core.SemanticColorEncoderConfig
+    HGraphEncoderConfig = _neutral_core.SemanticHGraphEncoderConfig
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
@@ -68,12 +71,14 @@ _set_batch_encoding_collate_spec = getattr(
 
 __all__ = _public_names(_neutral_core)
 __all__ += [
+    "DEFAULT_SYMBOL_TYPE_ID",
     "DEFAULT_LGAN_TN_EDGE_POS",
     "DEFAULT_LGAN_NN_EDGE_POS",
     "DEFAULT_LGAN_RR_EDGE_POS",
+    "DEFAULT_HISTORY_LINK_RELATION",
 ]
 if _pymimir_adapter is not None:
     __all__ += _public_names(_pymimir_adapter)
 else:
-    __all__.append("ColorEncoderConfig")
+    __all__ += ["ColorEncoderConfig", "HGraphEncoderConfig"]
 __all__ = list(dict.fromkeys(__all__))
