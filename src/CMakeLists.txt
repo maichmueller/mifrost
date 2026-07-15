@@ -377,6 +377,7 @@ add_library(
         "_core/mifrost/core/encoders/hetero/semantic_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/common/target_metadata.cpp"
+        "_core/mifrost/core/semantic/semantic_transition_dag.cpp"
 )
 set_target_properties(
     mifrost_neutral_core
@@ -464,6 +465,7 @@ if (MIFROST_BUILD_PYTHON)
         "_core/mifrost/init_semantic_flat_encoder.cpp"
         "_core/mifrost/init_semantic_color_encoder.cpp"
         "_core/mifrost/init_semantic_hgraph_encoder.cpp"
+        "_core/mifrost/init_semantic_transition_dag.cpp"
     )
     set_target_properties(
         mifrost_neutral_core_module
@@ -1009,6 +1011,7 @@ else ()
         "core/encoders/homo/semantic_color_encoder.hpp"
         "core/encoders/hetero/semantic_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
+        "core/semantic/semantic_transition_dag.hpp"
     )
     foreach (_mifrost_header IN LISTS _mifrost_neutral_public_headers)
         get_filename_component(_mifrost_header_dir "${_mifrost_header}" DIRECTORY)
@@ -1179,6 +1182,7 @@ if (BUILD_TESTING)
     add_executable(
             mifrost_neutral_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/semantic_transition_dag_test.cpp"
     )
     target_include_directories(mifrost_neutral_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/_core")
     target_link_libraries(mifrost_neutral_tests PRIVATE GTest::gtest_main mifrost_neutral_core)
