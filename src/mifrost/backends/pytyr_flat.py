@@ -1,0 +1,314 @@
+"""PyTyr runtime for the public flat relation encoder."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Literal, cast
+
+from .pytyr import SemanticFlatRelationEncoder
+from ..encoders._flat_validation import validate_subgoal_layers_state_payload
+
+
+_STR_BYTES = (str, bytes, bytearray)
+
+
+def _sequence(value: object, *, field: str) -> list[Any]:
+    if isinstance(value, _STR_BYTES) or not isinstance(value, Iterable):
+        raise TypeError(f"{field} must be an iterable")
+    return list(value)
+
+
+def _is_state(value: object) -> bool:
+    return all(
+        hasattr(value, member)
+        for member in ("static_atoms", "fluent_facts", "derived_atoms")
+    )
+
+
+def _is_action(value: object) -> bool:
+    return hasattr(value, "get_action") and hasattr(value, "get_objects")
+
+
+def _is_history_entry(value: object) -> bool:
+    return isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], int)
+
+
+def _batch_param(value: object) -> tuple[str, object]:
+    kind = getattr(value, "kind", None)
+    if kind in {"shared", "separate", "none"} and hasattr(value, "value"):
+        return str(kind), getattr(value, "value")
+    return "implicit", value
+
+
+def _lane_values(
+    value: object,
+    *,
+    state_count: int,
+    field: str,
+    leaf: Any,
+) -> list[Any | None]:
+    kind, payload = _batch_param(value)
+    if kind == "none" or payload is None:
+        return [None] * state_count
+    if kind == "shared":
+        return [payload] * state_count
+    if kind == "separate":
+        values = _sequence(payload, field=field)
+        if len(values) != state_count:
+            raise ValueError(f"{field} length must match states length")
+        return values
+
+    values = _sequence(payload, field=field)
+    per_state = bool(values) and any(
+        item is None or (not leaf(item) and isinstance(item, Sequence))
+        for item in values
+    )
+    if per_state:
+        if len(values) != state_count:
+            raise ValueError(f"{field} length must match states length")
+        return values
+    return [values] * state_count
+
+
+def _subgoal_values(value: object, *, state_count: int) -> list[Any | None]:
+    kind, payload = _batch_param(value)
+    if kind == "none" or payload is None:
+        return [None] * state_count
+    if kind == "shared":
+        return [payload] * state_count
+    values = _sequence(payload, field="subgoal_layers")
+    if kind == "separate":
+        if len(values) != state_count:
+            raise ValueError("subgoal_layers length must match states length")
+        return values
+    per_state = any(
+        item is None
+        or (isinstance(item, Sequence) and bool(item) and isinstance(item[0], Sequence))
+        for item in values
+    )
+    if per_state:
+        if len(values) != state_count:
+            raise ValueError("subgoal_layers length must match states length")
+        return values
+    return [values] * state_count
+
+
+def _history_values(value: object, *, state_count: int) -> list[Any | None]:
+    return _lane_values(
+        value,
+        state_count=state_count,
+        field="history_subgoals",
+        leaf=_is_history_entry,
+    )
+
+
+@dataclass(slots=True)
+class _StreamItem:
+    state: object
+    goals: object
+    actions: object
+    subgoal_layers: object
+    history_subgoals: object
+    history_max_steps: int | None
+
+
+class _PyTyrFlatStream:
+    def __init__(self, runtime: "PyTyrFlatRuntime", *, mutable: bool) -> None:
+        self._runtime = runtime
+        self._mutable = mutable
+        self._reuse_removed = False
+        self.reset()
+
+    def append(self, state: object, **kwargs: Any) -> int:
+        item = _StreamItem(
+            state=state,
+            goals=kwargs.get("goals"),
+            actions=kwargs.get("actions"),
+            subgoal_layers=kwargs.get("subgoal_layers"),
+            history_subgoals=kwargs.get("history_subgoals"),
+            history_max_steps=kwargs.get("history_max_steps"),
+        )
+        if self._reuse_removed and self._removed:
+            stream_id = min(self._removed)
+            self._removed.remove(stream_id)
+            self._items[stream_id] = item
+            return stream_id
+        stream_id = self._next_id
+        self._next_id += 1
+        self._items[stream_id] = item
+        return stream_id
+
+    def update(self, stream_id: int, state: object, **kwargs: Any) -> None:
+        if not self._mutable:
+            raise NotImplementedError("update is not implemented for this stream")
+        if stream_id not in self._items:
+            raise KeyError(stream_id)
+        self._items[stream_id] = _StreamItem(
+            state=state,
+            goals=kwargs.get("goals"),
+            actions=kwargs.get("actions"),
+            subgoal_layers=kwargs.get("subgoal_layers"),
+            history_subgoals=kwargs.get("history_subgoals"),
+            history_max_steps=kwargs.get("history_max_steps"),
+        )
+
+    def remove(self, stream_id: int) -> None:
+        if not self._mutable:
+            raise NotImplementedError("remove is not implemented for this stream")
+        if stream_id not in self._items:
+            raise KeyError(stream_id)
+        del self._items[stream_id]
+        self._removed.add(stream_id)
+
+    def set_reuse_removed(self, value: bool) -> None:
+        self._reuse_removed = bool(value)
+
+    def flush(self) -> Any:
+        values = [self._items[key] for key in sorted(self._items)]
+        if not values:
+            return self._runtime.engine.encode_batch([])
+        max_steps = {item.history_max_steps for item in values}
+        if len(max_steps) != 1:
+            raise ValueError("stream items must use one shared history_max_steps value")
+        return self._runtime.encode_batch(
+            [item.state for item in values],
+            goals=_Separate([item.goals for item in values]),
+            actions=_Separate([item.actions for item in values]),
+            subgoal_layers=_Separate([item.subgoal_layers for item in values]),
+            history_subgoals=_Separate([item.history_subgoals for item in values]),
+            history_max_steps=next(iter(max_steps)),
+        )
+
+    def reset(self) -> None:
+        self._items: dict[int, _StreamItem] = {}
+        self._removed: set[int] = set()
+        self._next_id = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _Separate:
+    value: list[Any]
+    kind: str = "separate"
+
+
+class PyTyrFlatRuntime:
+    """Adapt PyTyr task/state/action views to compact semantic inputs."""
+
+    backend_name: Literal["pytyr"] = "pytyr"
+
+    def __init__(self, planning_task: object, config: Any) -> None:
+        self._adapter = SemanticFlatRelationEncoder(planning_task, config)
+        self.engine = self._adapter.engine
+        self._relation_dict = MappingProxyType(
+            dict(
+                zip(
+                    self.engine.relation_names,
+                    self.engine.relation_arities,
+                    strict=True,
+                )
+            )
+        )
+
+    @property
+    def relation_dict(self) -> Any:
+        return self._relation_dict
+
+    def _input(
+        self,
+        state: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+        history_subgoals: object = None,
+        history_max_steps: int | None = None,
+    ) -> Any:
+        if not _is_state(state):
+            raise TypeError(
+                "a PyTyr FlatRelationEncoder expects a lifted or ground PyTyr "
+                f"state, got {type(state)!r}"
+            )
+        return self._adapter.make_input(
+            state,
+            cast(Iterable[object], () if actions is None else actions),
+            goals=cast(Iterable[object] | None, goals),
+            subgoal_layers=cast(
+                Iterable[Iterable[object]],
+                () if subgoal_layers is None else subgoal_layers,
+            ),
+            history=cast(
+                Iterable[tuple[int, Iterable[object]]],
+                () if history_subgoals is None else history_subgoals,
+            ),
+            history_max_steps=history_max_steps,
+        )
+
+    def encode_one(self, state: object, **kwargs: Any) -> Any:
+        return self.engine.encode(self._input(state, **kwargs))
+
+    def encode_batch(
+        self,
+        states: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+        history_subgoals: object = None,
+        history_max_steps: int | None = None,
+    ) -> Any:
+        state_values = (
+            [states] if _is_state(states) else _sequence(states, field="states")
+        )
+        if not all(_is_state(state) for state in state_values):
+            raise TypeError(
+                "a PyTyr FlatRelationEncoder batch can contain only PyTyr states"
+            )
+        count = len(state_values)
+
+        def is_literal(value: object) -> bool:
+            try:
+                self._adapter._literal_key(value)
+            except (TypeError, ValueError):
+                return False
+            return True
+
+        goal_values = _lane_values(
+            goals, state_count=count, field="goals", leaf=is_literal
+        )
+        action_values = _lane_values(
+            actions, state_count=count, field="actions", leaf=_is_action
+        )
+        subgoal_values = _subgoal_values(subgoal_layers, state_count=count)
+        for index, value in enumerate(subgoal_values):
+            validate_subgoal_layers_state_payload(
+                value,
+                state_index=index,
+                max_goal_level=int(self.engine.config.max_goal_level),
+            )
+        history_values = _history_values(history_subgoals, state_count=count)
+        inputs = [
+            self._input(
+                state,
+                goals=goal_values[index],
+                actions=action_values[index],
+                subgoal_layers=subgoal_values[index],
+                history_subgoals=history_values[index],
+                history_max_steps=history_max_steps,
+            )
+            for index, state in enumerate(state_values)
+        ]
+        return self.engine.encode_batch(inputs)
+
+    def append_into_builder(self, state: object, builder: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "PyTyr semantic-flat encoding returns an owned BatchEncoding; "
+            "caller-owned BatchBuilder composition is not available yet"
+        )
+
+    def make_stream(self, *, mutable: bool) -> Any:
+        return _PyTyrFlatStream(self, mutable=mutable)
+
+
+__all__ = ["PyTyrFlatRuntime"]

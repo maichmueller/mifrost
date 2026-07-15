@@ -162,28 +162,18 @@ else:
     _encoder_exports = list(TOP_LEVEL_ENCODER_EXPORTS)
 
     _encoders_import_error: Exception | None = None
-    try:
-        from . import encoders as _encoders
 
-        for _name in _encoder_exports:
-            globals()[_name] = getattr(_encoders, _name)
-    except Exception as e:  # pragma: no cover - exercised in minimal wheel tests
-        # Keep `import mifrost` working for core-only consumers and for wheel
-        # smoke tests. Encoder wrappers depend on optional heavy deps
-        # (torch/torch_geometric).
-        _encoders_import_error = e
-        for _name in _encoder_exports:
-            globals().pop(_name, None)
-
-        def __getattr__(name: str):
-            if name in _encoder_exports:
-                if getattr(_core, "_pymimir_adapter_error", None) is not None:
-                    require_adapter = getattr(_core, "_require_pymimir_adapter")
-                    require_adapter()
-                raise ModuleNotFoundError(ENCODER_OPTIONAL_DEPENDENCY_MESSAGE) from (
-                    _encoders_import_error
-                )
+    def __getattr__(name: str):
+        if name not in _encoder_exports:
             raise AttributeError(name)
+        try:
+            from . import encoders as _encoders
+
+            value = getattr(_encoders, name)
+        except ModuleNotFoundError as error:
+            raise ModuleNotFoundError(ENCODER_OPTIONAL_DEPENDENCY_MESSAGE) from error
+        globals()[name] = value
+        return value
 
     _native_exports = list(getattr(_core, "__all__", []))
 
@@ -214,5 +204,4 @@ else:
         "get_cmake_dir",
     ]
 
-    if _encoders_import_error is None:
-        __all__ += _encoder_exports
+    __all__ += _encoder_exports

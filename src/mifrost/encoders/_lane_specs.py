@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Any, cast
 
 import pymimir.advanced.formalism as af
 
@@ -125,7 +126,7 @@ def _payload_has_non_empty_entries(
                 if entry is not None
             )
     if is_entry is not None and is_entry(value):
-        return bool(value[1])
+        return bool(cast(tuple[Any, Any], value)[1])
     if is_leaf(value):
         return True
     if isinstance(value, _STR_BYTES):

@@ -31,6 +31,12 @@ def _install_legacy_map_view_names() -> None:
 
 _install_legacy_map_view_names()
 
+# These policy constants are planner-neutral even though the historical native
+# binding exported them from the Pymimir adapter module.
+DEFAULT_LGAN_TN_EDGE_POS = "_lgan_tn_"
+DEFAULT_LGAN_NN_EDGE_POS = "_lgan_nn_"
+DEFAULT_LGAN_RR_EDGE_POS = "_lgan_rr_"
+
 
 _pymimir_adapter_error: ImportError | None = None
 try:
@@ -60,6 +66,11 @@ _set_batch_encoding_collate_spec = getattr(
 )
 
 __all__ = _public_names(_neutral_core)
+__all__ += [
+    "DEFAULT_LGAN_TN_EDGE_POS",
+    "DEFAULT_LGAN_NN_EDGE_POS",
+    "DEFAULT_LGAN_RR_EDGE_POS",
+]
 if _pymimir_adapter is not None:
     __all__ += _public_names(_pymimir_adapter)
 __all__ = list(dict.fromkeys(__all__))

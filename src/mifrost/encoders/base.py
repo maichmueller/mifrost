@@ -15,7 +15,6 @@ from typing import (
 )
 
 from .conversion import _encoding_dict_to_pyg, to_pyg
-from ._rustworkx_dag import RXStateDAG
 from ..graph_fields import CollateSpec
 from .types import (
     BatchEncodingInput,
@@ -27,14 +26,18 @@ from .types import (
     HistorySubgoalInput,
     StateInput,
 )
-from .._core import BatchEncoding, TransitionDAG
+from .._core import BatchEncoding
 
 if TYPE_CHECKING:
     from torch_geometric.data import Data, HeteroData
+    from ._rustworkx_dag import RXStateDAG
+    from .._core import TransitionDAG
 
     PygDataT = TypeVar("PygDataT", Data, HeteroData)
 else:
     PygDataT = TypeVar("PygDataT")
+    RXStateDAG = Any
+    TransitionDAG = Any
 StateBatchInput: TypeAlias = Iterable[StateInput] | StateInput
 GoalBatchInput: TypeAlias = Iterable[GoalLiteralInput] | None
 SubgoalLayersInput: TypeAlias = Iterable[Iterable[GoalLiteralInput]] | None

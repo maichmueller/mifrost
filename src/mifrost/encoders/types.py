@@ -15,10 +15,41 @@ from typing import (
     TypeVar,
     runtime_checkable,
 )
+from types import SimpleNamespace
 
-import pymimir.advanced.formalism as af
-import pymimir.advanced.search as ase
-import pymimir.wrapper_formalism as wf
+try:
+    import pymimir.advanced.formalism as af
+    import pymimir.advanced.search as ase
+    import pymimir.wrapper_formalism as wf
+except ImportError:  # pragma: no cover - exercised in single-backend wheel smoke
+
+    class _UnavailablePymimirType:
+        pass
+
+    af = SimpleNamespace(
+        Domain=_UnavailablePymimirType,
+        GroundAction=_UnavailablePymimirType,
+        StaticGroundLiteral=_UnavailablePymimirType,
+        FluentGroundLiteral=_UnavailablePymimirType,
+        DerivedGroundLiteral=_UnavailablePymimirType,
+        StaticGroundAtom=_UnavailablePymimirType,
+        FluentGroundAtom=_UnavailablePymimirType,
+        DerivedGroundAtom=_UnavailablePymimirType,
+        StaticPredicate=_UnavailablePymimirType,
+        FluentPredicate=_UnavailablePymimirType,
+        DerivedPredicate=_UnavailablePymimirType,
+        Object=_UnavailablePymimirType,
+    )
+    ase = SimpleNamespace(State=_UnavailablePymimirType)
+    wf = SimpleNamespace(
+        Domain=_UnavailablePymimirType,
+        State=_UnavailablePymimirType,
+        GroundAction=_UnavailablePymimirType,
+        GroundLiteral=_UnavailablePymimirType,
+        GroundAtom=_UnavailablePymimirType,
+        Predicate=_UnavailablePymimirType,
+        Object=_UnavailablePymimirType,
+    )
 
 if TYPE_CHECKING:
     import torch

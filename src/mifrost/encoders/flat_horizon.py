@@ -47,9 +47,9 @@ from ._lane_specs import (
 )
 from ._root_policy import RootPolicy, normalize_root_policy
 from .flat import FlatRelationEncoder
-from .flat import (
-    _validate_subgoal_layers_batch_payload,
-    _validate_subgoal_layers_state_payload,
+from ._flat_validation import (
+    validate_subgoal_layers_batch_payload as _validate_subgoal_layers_batch_payload,
+    validate_subgoal_layers_state_payload as _validate_subgoal_layers_state_payload,
 )
 from .types import (
     DomainInput,
