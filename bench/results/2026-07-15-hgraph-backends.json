@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-15",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "python": "3.12.12",
+  "scenario": {
+    "domain": "blocks",
+    "problem": "smedium",
+    "batch_size": 32,
+    "state_pool_size": 22,
+    "warmup": 30,
+    "repeats_per_round": 200,
+    "rounds": 3,
+    "paths": [
+      "batch_default",
+      "batch_explicit_goals",
+      "single_loop",
+      "stream_end_to_end"
+    ]
+  },
+  "methodology": {
+    "reference_commit": "a71f916697db372bbbc303e7e1885cef6efe2e07",
+    "reference_worktree": "/private/tmp/bifrost-origin-dev-reference",
+    "environment": "same isolated venv, wheel replaced between alternating rounds; Python -S kept the installed wheel authoritative over the development environment's editable source path",
+    "wheel_order": [
+      "original",
+      "current",
+      "original",
+      "current",
+      "current",
+      "original"
+    ],
+    "path_order": "forward on odd rounds, reverse on even rounds",
+    "aggregate": "median of three per-round medians",
+    "current_backend_comparison": "three same-process source-build rounds with alternating backend order",
+    "harness": "scripts/benchmark_hgraph_backends.py"
+  },
+  "wheels": {
+    "original_pymimir": {
+      "path": "/private/tmp/bifrost-origin-dev-wheel/mifrost-0.3.1-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "e5620d92ed7399ac564de61ddb119c1793e5e3bcaafa8aff655b74b8b74fa748"
+    },
+    "current_pymimir": {
+      "path": "/private/tmp/bifrost-hgraph-current-pymimir-wheel/mifrost-0.3.1-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "85aff72622f9c925e1742de82bb5151cc0841bde754ff92bc83a6392c60169fe"
+    },
+    "current_pytyr": {
+      "path": "/private/tmp/bifrost-hgraph-pytyr-wheel-final/mifrost-0.3.1-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "fde1fb6628ce76cf6b53a99320134f51e64386c3cfe1c99e35ce9dde984d6386"
+    }
+  },
+  "packaging_validation": {
+    "build_command": "MIFROST_BUILD_BACKENDS=pytyr MIFROST_WHEEL_GENERATE_STUBS=1 CMAKE_BUILD_PARALLEL_LEVEL=2 python -m pip wheel . --no-deps --wheel-dir /private/tmp/bifrost-hgraph-pytyr-wheel-final",
+    "fresh_venv": "/private/tmp/bifrost-hgraph-pytyr-smoke-final",
+    "installed_pytyr": "0.0.30",
+    "artifact_check": {
+      "pytyr_adapter_present": true,
+      "neutral_core_present": true,
+      "pymimir_adapter_present": false
+    },
+    "blocked_import_smoke": {
+      "blocked": [
+        "pymimir",
+        "pymimir.*",
+        "mifrost._pymimir_adapter"
+      ],
+      "fixture": "data/pddl/blocks/{domain,small}.pddl",
+      "public_encoder": "mifrost.HGraphEncoder",
+      "detected_backend": "pytyr",
+      "batch_graphs": 2,
+      "pymimir_loaded": false,
+      "passed": true
+    }
+  },
+  "original_vs_refactored": [
+    {
+      "path": "batch_default",
+      "original_round_medians_ms": [
+        0.6617920007556677,
+        0.6585630035260692,
+        0.6562500057043508
+      ],
+      "refactored_round_medians_ms": [
+        0.6361874984577298,
+        0.6294374979916029,
+        0.649583489575889
+      ],
+      "original_median_ms": 0.6585630035260692,
+      "refactored_median_ms": 0.6361874984577298,
+      "refactored_change_percent": -3.3976255800184263,
+      "acceptance_threshold_percent": 5.0,
+      "accepted": true
+    },
+    {
+      "path": "batch_explicit_goals",
+      "original_round_medians_ms": [
+        0.6645210087299347,
+        0.6653540040133521,
+        0.6609999982174486
+      ],
+      "refactored_round_medians_ms": [
+        0.6411254944396205,
+        0.6316875078482553,
+        0.6616044920519926
+      ],
+      "original_median_ms": 0.6645210087299347,
+      "refactored_median_ms": 0.6411254944396205,
+      "refactored_change_percent": -3.520658336299831,
+      "acceptance_threshold_percent": 5.0,
+      "accepted": true
+    },
+    {
+      "path": "single_loop",
+      "original_round_medians_ms": [
+        2.6496669961488806,
+        2.6323755009798333,
+        2.6878964927163906
+      ],
+      "refactored_round_medians_ms": [
+        2.788458004943095,
+        2.6889790024142712,
+        2.7484584934427403
+      ],
+      "original_median_ms": 2.6496669961488806,
+      "refactored_median_ms": 2.7484584934427403,
+      "refactored_change_percent": 3.7284495537532436,
+      "acceptance_threshold_percent": 10.0,
+      "accepted": true
+    },
+    {
+      "path": "stream_end_to_end",
+      "original_round_medians_ms": [
+        0.6686874985462055,
+        0.6938544975128025,
+        0.6702499958919361
+      ],
+      "refactored_round_medians_ms": [
+        0.6918534927535802,
+        0.7008959946688265,
+        0.7016875024419278
+      ],
+      "original_median_ms": 0.6702499958919361,
+      "refactored_median_ms": 0.7008959946688265,
+      "refactored_change_percent": 4.572323605329998,
+      "acceptance_threshold_percent": 10.0,
+      "accepted": true
+    }
+  ],
+  "current_backend_comparison": [
+    {
+      "path": "batch_default",
+      "pymimir_round_medians_ms": [
+        0.6469790023402311,
+        0.6272079990594648,
+        0.6463745012297295
+      ],
+      "pytyr_round_medians_ms": [
+        0.8091250056168064,
+        0.840082997456193,
+        0.7973334941198118
+      ],
+      "pymimir_median_ms": 0.6463745012297295,
+      "pytyr_median_ms": 0.8091250056168064,
+      "pytyr_change_percent": 25.178979690170888
+    },
+    {
+      "path": "batch_explicit_goals",
+      "pymimir_round_medians_ms": [
+        0.6593749931198545,
+        0.6475209956988692,
+        0.6510414968943223
+      ],
+      "pytyr_round_medians_ms": [
+        0.8401875020354055,
+        0.8325210073962808,
+        0.8533330037607811
+      ],
+      "pymimir_median_ms": 0.6510414968943223,
+      "pytyr_median_ms": 0.8401875020354055,
+      "pytyr_change_percent": 29.052833965787215
+    },
+    {
+      "path": "single_loop",
+      "pymimir_round_medians_ms": [
+        2.70475050638197,
+        2.7016454987460747,
+        2.6904374972218648
+      ],
+      "pytyr_round_medians_ms": [
+        2.9896670021116734,
+        2.9734375057159923,
+        2.951396003481932
+      ],
+      "pymimir_median_ms": 2.7016454987460747,
+      "pytyr_median_ms": 2.9734375057159923,
+      "pytyr_change_percent": 10.060239476129107
+    },
+    {
+      "path": "stream_end_to_end",
+      "pymimir_round_medians_ms": [
+        0.691854496835731,
+        0.7017289972282015,
+        0.6992499984335154
+      ],
+      "pytyr_round_medians_ms": [
+        0.8621250017313287,
+        0.8781874930718914,
+        0.8793544984655455
+      ],
+      "pymimir_median_ms": 0.6992499984335154,
+      "pytyr_median_ms": 0.8781874930718914,
+      "pytyr_change_percent": 25.589917059597855
+    }
+  ],
+  "optimization": {
+    "status": "not required",
+    "reason": "both refactored Pymimir hot-batch paths passed the 5% gate and both single/end-to-end paths passed the 10% gate",
+    "current_contract": "Pymimir retains native batch and stream paths; PyTyr retains one owned semantic-input vector capsule per batch"
+  },
+  "process_memory": {
+    "metric": "macOS /usr/bin/time -l maximum resident set size and peak memory footprint",
+    "original_rounds_bytes": {
+      "maximum_resident_set_size": [
+        485769216,
+        482099200,
+        482115584
+      ],
+      "peak_memory_footprint": [
+        357713360,
+        355009976,
+        357025136
+      ]
+    },
+    "refactored_rounds_bytes": {
+      "maximum_resident_set_size": [
+        492421120,
+        484278272,
+        479461376
+      ],
+      "peak_memory_footprint": [
+        365561296,
+        355009952,
+        357680544
+      ]
+    },
+    "current_both_backends_bytes": {
+      "maximum_resident_set_size": 498352128,
+      "peak_memory_footprint": 368002488
+    },
+    "interpretation": "process memory is dominated by planner and PyTorch imports; these values are contextual and are not an allocation-level encoder gate"
+  }
+}
