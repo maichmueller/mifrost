@@ -164,6 +164,29 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       },
       "capsule"_a
    );
+   m.def(
+      "_semantic_successor_hgraph_config_capsule",
+      [](const SemanticSuccessorHGraphEncoderConfig& config) {
+         auto* capsule = capsule_bridge::make_owned(
+            SemanticSuccessorHGraphEncoderConfig(config),
+            capsule_bridge::successor_hgraph_config_name
+         );
+         if(capsule == nullptr) {
+            throw nb::python_error();
+         }
+         return nb::steal< nb::object >(capsule);
+      },
+      "config"_a
+   );
+   m.def(
+      "_consume_semantic_successor_hgraph_engine_capsule",
+      [](nb::handle capsule) {
+         return capsule_bridge::take< SemanticSuccessorHGraphEncoderEngine >(
+            capsule.ptr(), capsule_bridge::successor_hgraph_engine_name
+         );
+      },
+      "capsule"_a
+   );
 }
 
 }  // namespace mifrost

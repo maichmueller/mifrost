@@ -207,6 +207,18 @@ class SemanticPlanningTaskAdapter:
         engine_capsule = self._native._make_hgraph_engine_capsule(config_capsule)
         return _neutral_core._consume_semantic_hgraph_engine_capsule(engine_capsule)
 
+    def make_successor_hgraph_engine(self, config: Any) -> Any:
+        """Build a neutral successor HGraph engine from the cached task schema."""
+        from mifrost import _neutral_core
+
+        config_capsule = _neutral_core._semantic_successor_hgraph_config_capsule(config)
+        engine_capsule = self._native._make_successor_hgraph_engine_capsule(
+            config_capsule
+        )
+        return _neutral_core._consume_semantic_successor_hgraph_engine_capsule(
+            engine_capsule
+        )
+
     @staticmethod
     def _literal_key(value: object) -> LiteralKey:
         if isinstance(value, LiteralKey):

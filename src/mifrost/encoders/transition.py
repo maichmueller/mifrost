@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from torch_geometric.data import HeteroData
 
+from .. import _neutral_core
 from .._core import (
+    BatchBuilder,
+    BatchEncoding,
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    SuccessorEncoderConfig,
-    SuccessorEncoderMode,
-    SuccessorHGraphEncoderEngine,
-    TransitionStreamEncoder as _TransitionStreamEncoder,
-    BatchEncoding,
 )
-from dataclasses import dataclass
+from ..backends._transition_runtime import (
+    TransitionBackendName,
+    create_transition_runtime,
+)
 
 from .base import (
     ActionBatchInput,
@@ -31,17 +33,11 @@ from .base import (
     SubgoalLayersBatchParam,
     SuccessorBatchParam,
 )
-from ._batch_contract import prepare_core_batch_inputs
-from .common import (
-    _advanced_state,
-    _split_goals,
-)
-from ._lane_specs import (
-    TRANSITION_LANE_SPEC,
-    require_batch_payload,
-    require_single_payload,
-    validate_batch_optional_payloads,
-    validate_single_optional_payloads,
+from ._transition_validation import (
+    require_batch_successors,
+    require_single_successor,
+    validate_batch_unsupported_lanes,
+    validate_single_unsupported_lanes,
 )
 from .hgraph import HGraphEncoder
 from .types import (
@@ -49,8 +45,11 @@ from .types import (
     HeteroEncoding,
     HistorySubgoalInput,
     StateInput,
-    default_goals_from_state,
 )
+
+
+_TRANSITION_CONFIG_CLS = _neutral_core.SemanticSuccessorHGraphEncoderConfig
+_TRANSITION_MODE = _neutral_core.SemanticSuccessorEncoderMode
 
 
 class _TransitionEncoderBase(HGraphEncoder):
@@ -65,8 +64,9 @@ class _TransitionEncoderBase(HGraphEncoder):
         self,
         domain: DomainInput,
         *,
-        successor_mode: SuccessorEncoderMode,
+        successor_mode: Any,
         successor_suffix: str,
+        backend: TransitionBackendName | str | None = None,
         include_successor_goal_satisfaction: bool = False,
         symbol_type_id: str = DEFAULT_SYMBOL_TYPE_ID,
         ignore_actions: bool = True,
@@ -88,8 +88,8 @@ class _TransitionEncoderBase(HGraphEncoder):
         `include_lgan_edges` uses successor-state candidates as anchors. Unlike
         `HGraphEncoder`, this lane does not take `lgan_anchor_sources`.
         """
-        super().__init__(
-            domain,
+        config = self._make_config(
+            _TRANSITION_CONFIG_CLS,
             symbol_type_id=symbol_type_id,
             ignore_actions=ignore_actions,
             add_nullary_predicates=add_nullary_predicates,
@@ -104,15 +104,30 @@ class _TransitionEncoderBase(HGraphEncoder):
             lgan_tn_edge_pos=lgan_tn_edge_pos,
             lgan_nn_edge_pos=lgan_nn_edge_pos,
             lgan_rr_edge_pos=lgan_rr_edge_pos,
-            _config_cls=SuccessorEncoderConfig,
-            _engine_cls=SuccessorHGraphEncoderEngine,
             successor_mode=successor_mode,
             successor_suffix=successor_suffix,
             include_successor_goal_satisfaction=include_successor_goal_satisfaction,
         )
+        if successor_mode == _TRANSITION_MODE.delta:
+            config.support_literals = True
+        self._runtime = create_transition_runtime(domain, config, backend=backend)
+        self._engine = self._runtime.engine
+        self._config = self._engine.config
+        self.backend = self._runtime.backend_name
+        self.symbol_type_id = self._config.symbol_type_id
+        self.lgan_tn_edge_pos = self._config.lgan_tn_edge_pos
+        self.lgan_nn_edge_pos = self._config.lgan_nn_edge_pos
+        self.lgan_rr_edge_pos = self._config.lgan_rr_edge_pos
+        self.include_lgan_edges = self._config.include_lgan_edges
+        self.lgan_anchor_sources = set(self._config.lgan_anchor_sources)
+        self._lgan_edge_positions = {
+            self.lgan_tn_edge_pos,
+            self.lgan_nn_edge_pos,
+            self.lgan_rr_edge_pos,
+        }
 
     @property
-    def engine(self) -> SuccessorHGraphEncoderEngine:
+    def engine(self) -> Any:
         """Expose the underlying successor encoder engine."""
         return self._engine
 
@@ -133,20 +148,46 @@ class _TransitionEncoderBase(HGraphEncoder):
         **kwargs,
     ) -> BatchEncoding:
         """Encode one ``state -> successor`` transition."""
-        require_single_payload(TRANSITION_LANE_SPEC, successor)
+        require_single_successor(successor)
         _ = kwargs
-        validate_single_optional_payloads(
-            TRANSITION_LANE_SPEC,
+        validate_single_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        adv_state = _advanced_state(state)
-        adv_successor = _advanced_state(successor)
-        if goals is None:
-            goals = default_goals_from_state(state)
-        inputs = _split_goals(goals, subgoal_layers)
-        return self._engine.encode(adv_state, adv_successor, inputs)
+        return self._runtime.encode_one(
+            state,
+            successor,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+        )
+
+    def _encode_one_into_builder(
+        self,
+        state: StateInput,
+        builder: BatchBuilder,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        successor: StateInput | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        """Append one aligned transition through the selected runtime."""
+        require_single_successor(successor)
+        validate_single_unsupported_lanes(
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        self._runtime.append_into_builder(
+            state,
+            successor,
+            builder,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+        )
 
     def encode(
         self,
@@ -217,29 +258,18 @@ class _TransitionEncoderBase(HGraphEncoder):
         **kwargs,
     ) -> HeteroEncoding:
         """Encode many aligned ``states -> successors`` transitions."""
-        require_batch_payload(TRANSITION_LANE_SPEC, successors)
-        validate_batch_optional_payloads(
-            TRANSITION_LANE_SPEC,
+        require_batch_successors(successors)
+        validate_batch_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
         _ = kwargs
-        inputs = prepare_core_batch_inputs(
+        return self._runtime.encode_batch(
             states,
+            successors=successors,
             goals=goals,
             subgoal_layers=subgoal_layers,
-            successors=successors,
-        )
-        return self._engine.encode_batch(
-            self.__class__.__name__,
-            inputs.states,
-            inputs.successors,
-            inputs.goals,
-            None,
-            inputs.subgoal_layers,
-            None,
-            history_max_steps,
         )
 
     def stream(self) -> "_TransitionEncoderStream":
@@ -259,7 +289,7 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
 
     def __post_init__(self) -> None:
         """Initialize an empty hetero builder for streaming."""
-        self._stream = _TransitionStreamEncoder(self._encoder.engine)
+        self._stream = self._encoder._runtime.make_stream()
         self._reset_builder()
 
     def append(
@@ -271,13 +301,13 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
         """Append one transition graph to the stream."""
-        adv_current = _advanced_state(current)
-        adv_successor = _advanced_state(successor)
-        if goals is None:
-            goals = default_goals_from_state(current)
-        inputs = _split_goals(goals, subgoal_layers)
         return self._coerce_stream_id(
-            self._stream.append(adv_current, adv_successor, inputs)
+            self._stream.append(
+                current,
+                successor,
+                goals=goals,
+                subgoal_layers=subgoal_layers,
+            )
         )
 
     def remove(self, stream_id: int) -> None:
@@ -292,12 +322,13 @@ class _TransitionEncoderStream(StreamEncoderBase[HeteroData]):
         goals: GoalBatchInput = None,
         subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
-        adv_current = _advanced_state(current)
-        adv_successor = _advanced_state(successor)
-        if goals is None:
-            goals = default_goals_from_state(current)
-        inputs = _split_goals(goals, subgoal_layers)
-        self._stream.update(stream_id, adv_current, adv_successor, inputs)
+        self._stream.update(
+            stream_id,
+            current,
+            successor,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+        )
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
@@ -316,7 +347,7 @@ class TransitionHGraphEncoder(_TransitionEncoderBase):
     ) -> None:
         super().__init__(
             domain,
-            successor_mode=SuccessorEncoderMode.full,
+            successor_mode=_TRANSITION_MODE.full,
             successor_suffix=successor_suffix,
             **kwargs,
         )
@@ -337,7 +368,7 @@ class TransitionEffectsHGraphEncoder(_TransitionEncoderBase):
     ) -> None:
         super().__init__(
             domain,
-            successor_mode=SuccessorEncoderMode.delta,
+            successor_mode=_TRANSITION_MODE.delta,
             successor_suffix=successor_suffix,
             **kwargs,
         )

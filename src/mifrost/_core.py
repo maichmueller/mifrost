@@ -48,6 +48,8 @@ except ImportError as error:
     _pymimir_adapter = None
     ColorEncoderConfig = _neutral_core.SemanticColorEncoderConfig
     HGraphEncoderConfig = _neutral_core.SemanticHGraphEncoderConfig
+    SuccessorEncoderConfig = _neutral_core.SemanticSuccessorHGraphEncoderConfig
+    SuccessorEncoderMode = _neutral_core.SemanticSuccessorEncoderMode
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
@@ -80,5 +82,10 @@ __all__ += [
 if _pymimir_adapter is not None:
     __all__ += _public_names(_pymimir_adapter)
 else:
-    __all__ += ["ColorEncoderConfig", "HGraphEncoderConfig"]
+    __all__ += [
+        "ColorEncoderConfig",
+        "HGraphEncoderConfig",
+        "SuccessorEncoderConfig",
+        "SuccessorEncoderMode",
+    ]
 __all__ = list(dict.fromkeys(__all__))
