@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-15",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "python": "3.12.12",
+  "scenario": {
+    "domain": "blocks",
+    "problem": "smedium",
+    "batch_size": 32,
+    "state_pool_size": 22,
+    "warmup": 20,
+    "repeats": 100
+  },
+  "original_vs_refactored": {
+    "reference_commit": "a71f916",
+    "reference_worktree": "detached origin/dev",
+    "environment": "same isolated venv, wheel replaced between runs",
+    "path": "flat_batch_native with explicit goals",
+    "original_median_ms": 0.17762499919626862,
+    "refactored_median_ms": 0.17331249546259642,
+    "refactored_change_percent": -2.427869811786487,
+    "acceptance_threshold_percent": 5.0,
+    "accepted": true,
+    "original_max_rss_bytes": 479428608,
+    "refactored_max_rss_bytes": 490012672,
+    "max_rss_change_percent": 2.207641309548225,
+    "original_peak_footprint_bytes": 352355720,
+    "refactored_peak_footprint_bytes": 360695224,
+    "peak_footprint_change_percent": 2.366785474633426
+  },
+  "current_backend_comparison": [
+    {
+      "path": "batch_default",
+      "pymimir_median_ms": 0.17037499492289498,
+      "pytyr_median_ms": 0.2892085030907765,
+      "pytyr_change_percent": 69.74820936702648
+    },
+    {
+      "path": "batch_explicit_goals",
+      "pymimir_median_ms": 0.20895851048408076,
+      "pytyr_median_ms": 0.33145849738502875,
+      "pytyr_change_percent": 58.62407164807988
+    },
+    {
+      "path": "single_loop",
+      "pymimir_median_ms": 0.6231460065464489,
+      "pytyr_median_ms": 0.5368334968807176,
+      "pytyr_change_percent": -13.851089272654704
+    },
+    {
+      "path": "stream_end_to_end",
+      "pymimir_median_ms": 0.3503330081002787,
+      "pytyr_median_ms": 0.3003124948008917,
+      "pytyr_change_percent": -14.277990409932817
+    }
+  ]
+}
