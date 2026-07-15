@@ -8,6 +8,7 @@
 #include "mifrost/bindings.hpp"
 #include "mifrost/capsule_bridge.hpp"
 #include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
+#include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -75,6 +76,71 @@ void init_semantic_hgraph_encoder(nb::module_& m)
          "builder"_a
       )
       .def("encode_batch", &SemanticHGraphEncoderEngine::encode_batch, "inputs"_a);
+
+   nb::enum_< SemanticSuccessorMode >(m, "SemanticSuccessorEncoderMode")
+      .value("full", SemanticSuccessorMode::full)
+      .value("delta", SemanticSuccessorMode::delta);
+
+   nb::class_< SemanticSuccessorHGraphEncoderConfig, SemanticHGraphEncoderConfig >(
+      m, "SemanticSuccessorHGraphEncoderConfig"
+   )
+      .def(nb::init<>())
+      .def(
+         "__init__",
+         [](SemanticSuccessorHGraphEncoderConfig* self, const nb::kwargs& kwargs) {
+            new(self) SemanticSuccessorHGraphEncoderConfig();
+            apply_config_kwargs(*self, kwargs, "SemanticSuccessorHGraphEncoderConfig");
+         }
+      )
+      .def_rw("successor_mode", &SemanticSuccessorHGraphEncoderConfig::successor_mode)
+      .def_rw("successor_suffix", &SemanticSuccessorHGraphEncoderConfig::successor_suffix)
+      .def_rw(
+         "include_successor_goal_satisfaction",
+         &SemanticSuccessorHGraphEncoderConfig::include_successor_goal_satisfaction
+      );
+
+   nb::class_< SemanticSuccessorHGraphEncoderEngine >(m, "SemanticSuccessorHGraphEncoderEngine")
+      .def(
+         nb::init<
+            std::vector< SemanticPredicateSpec >,
+            std::vector< SemanticActionSpec >,
+            SemanticSuccessorHGraphEncoderConfig >(),
+         "predicates"_a,
+         "actions"_a,
+         "config"_a = SemanticSuccessorHGraphEncoderConfig{}
+      )
+      .def_prop_ro(
+         "config",
+         &SemanticSuccessorHGraphEncoderEngine::get_config,
+         nb::rv_policy::reference_internal
+      )
+      .def_prop_ro("predicates", &SemanticSuccessorHGraphEncoderEngine::get_predicates)
+      .def_prop_ro("actions", &SemanticSuccessorHGraphEncoderEngine::get_actions)
+      .def_prop_ro("relation_arities", &SemanticSuccessorHGraphEncoderEngine::get_relation_arities)
+      .def(
+         "encode",
+         nb::overload_cast< const SemanticFlatRelationInput&, const SemanticFlatRelationInput& >(
+            &SemanticSuccessorHGraphEncoderEngine::encode, nb::const_
+         ),
+         "current"_a,
+         "successor"_a
+      )
+      .def(
+         "encode",
+         nb::overload_cast<
+            const SemanticFlatRelationInput&,
+            const SemanticFlatRelationInput&,
+            BatchBuilder& >(&SemanticSuccessorHGraphEncoderEngine::encode, nb::const_),
+         "current"_a,
+         "successor"_a,
+         "builder"_a
+      )
+      .def(
+         "encode_batch",
+         &SemanticSuccessorHGraphEncoderEngine::encode_batch,
+         "currents"_a,
+         "successors"_a
+      );
 
    m.def(
       "_semantic_hgraph_config_capsule",

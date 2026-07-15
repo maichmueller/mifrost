@@ -8,6 +8,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "mifrost/core/api.hpp"
@@ -18,6 +19,8 @@
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 
 namespace mifrost {
+
+class SemanticSuccessorHGraphEncoderEngine;
 
 /** Runtime policy for `SemanticHGraphEncoderEngine`. */
 struct SemanticHGraphEncoderConfig {
@@ -100,6 +103,17 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    [[nodiscard]] const std::map< std::string, int >& get_relation_arities() const;
 
   private:
+   friend class SemanticSuccessorHGraphEncoderEngine;
+
+   void encode_successor(
+      const SemanticFlatRelationInput& current,
+      const SemanticFlatRelationInput& successor,
+      bool delta_mode,
+      std::string_view successor_suffix,
+      bool include_successor_goal_satisfaction,
+      BatchBuilder& builder
+   ) const;
+
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };

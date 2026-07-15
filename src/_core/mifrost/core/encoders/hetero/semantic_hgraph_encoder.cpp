@@ -48,11 +48,13 @@ std::string relation_name(
    std::string_view predicate,
    bool positive,
    std::optional< size_t > goal_level,
-   std::optional< GoalDerivation > derivation = std::nullopt
+   std::optional< GoalDerivation > derivation = std::nullopt,
+   std::string_view predicate_suffix = {}
 )
 {
    std::string result = positive ? "[+]" : "[-]";
    result += predicate;
+   result += predicate_suffix;
    if(goal_level) {
       result += kGoalSuffixes.at(*goal_level);
    }
@@ -65,10 +67,12 @@ std::string relation_name(
 std::string atom_name(
    const SemanticAtom& atom,
    const std::vector< SemanticPredicateSpec >& predicates,
-   const std::vector< std::string >& objects
+   const std::vector< std::string >& objects,
+   std::string_view predicate_suffix = {}
 )
 {
    std::string result = "(" + predicates.at(static_cast< size_t >(atom.predicate)).name;
+   result += predicate_suffix;
    for(const auto argument : atom.arguments) {
       result += " ";
       result += objects.at(static_cast< size_t >(argument));
@@ -82,11 +86,12 @@ std::string literal_name(
    const std::vector< SemanticPredicateSpec >& predicates,
    const std::vector< std::string >& objects,
    std::optional< size_t > goal_level,
-   std::optional< GoalDerivation > derivation = std::nullopt
+   std::optional< GoalDerivation > derivation = std::nullopt,
+   std::string_view predicate_suffix = {}
 )
 {
    std::string result = literal.positive ? "[+]" : "[-]";
-   result += atom_name(literal.atom, predicates, objects);
+   result += atom_name(literal.atom, predicates, objects, predicate_suffix);
    if(goal_level) {
       result += kGoalSuffixes.at(*goal_level);
    }
@@ -656,12 +661,46 @@ struct SemanticHGraphEncoderEngine::Impl {
       track(workspace, relation_ref(workspace, predicate.name, index), symbols);
    }
 
+   void encode_successor_fact(
+      Workspace& workspace,
+      const SemanticAtom& atom,
+      const SemanticFlatRelationInput& input,
+      BatchBuilder& builder,
+      std::string_view predicate_suffix,
+      std::optional< bool > polarity = std::nullopt
+   ) const
+   {
+      const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
+      if(atom.arguments.empty() and not config.add_nullary_predicates) {
+         return;
+      }
+      const auto type = polarity ? relation_name(
+                                      predicate.name,
+                                      *polarity,
+                                      std::nullopt,
+                                      std::nullopt,
+                                      predicate_suffix
+                                   )
+                                 : predicate.name + std::string(predicate_suffix);
+      auto formatted = atom_name(atom, predicates, input.objects, predicate_suffix);
+      if(polarity) {
+         formatted = (*polarity ? "[+]" : "[-]") + formatted;
+      }
+      const auto index = atom_node(
+         workspace, type, atom, config.export_node_names ? formatted : "", builder
+      );
+      const auto symbols = atom_symbols(workspace, atom, input, builder);
+      connect_symbols(workspace, builder, type, index, symbols);
+      track(workspace, relation_ref(workspace, type, index), symbols);
+   }
+
    void encode_goal(
       Workspace& workspace,
       const PreparedGoal& prepared,
       const SemanticFlatRelationInput& input,
       BatchBuilder& builder,
-      std::optional< GoalDerivation > derivation = std::nullopt
+      std::optional< GoalDerivation > derivation = std::nullopt,
+      std::string_view predicate_suffix = {}
    ) const
    {
       const auto& literal = prepared.literal;
@@ -669,10 +708,18 @@ struct SemanticHGraphEncoderEngine::Impl {
       if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
          return;
       }
-      const auto type = relation_name(predicate.name, literal.positive, prepared.level, derivation);
-      const auto formatted = literal_name(
-         literal, predicates, input.objects, prepared.level, derivation
+      const auto type = relation_name(
+         predicate.name, literal.positive, prepared.level, derivation, predicate_suffix
       );
+      const auto formatted = literal_name(
+         literal, predicates, input.objects, prepared.level, derivation, predicate_suffix
+      );
+      if(predicate_suffix.empty()) {
+         const auto arity = predicate.arity == 0 and config.add_nullary_predicates
+                               ? 1
+                               : predicate.arity;
+         builder.set_node_feature_dim(type, arity);
+      }
       const auto index = atom_node(
          workspace, type, literal.atom, config.export_node_names ? formatted : "", builder
       );
@@ -690,7 +737,7 @@ struct SemanticHGraphEncoderEngine::Impl {
             schema_key::kEdgeTypeSeparator,
             literal.positive ? 1 : 0,
             schema_key::kEdgeTypeSeparator,
-            atom_name(literal.atom, predicates, input.objects),
+            atom_name(literal.atom, predicates, input.objects, predicate_suffix),
             schema_key::kEdgeTypeSeparator,
             prepared.level
          );
@@ -1094,6 +1141,134 @@ struct SemanticHGraphEncoderEngine::Impl {
       add_lgan(workspace, builder);
       finalize(workspace, builder);
    }
+
+   void encode_successor(
+      const SemanticFlatRelationInput& current,
+      const SemanticFlatRelationInput& successor,
+      bool delta_mode,
+      std::string_view successor_suffix,
+      bool include_successor_goal_satisfaction,
+      BatchBuilder& builder
+   ) const
+   {
+      validate_input(current, predicates, actions, config);
+      validate_input(successor, predicates, actions, config);
+      if(current.objects != successor.objects) {
+         throw std::invalid_argument(
+            "current and successor semantic inputs require identical ordered object tables"
+         );
+      }
+
+      auto workspace = initialize_workspace(builder);
+      for(size_t object = 0; object < current.objects.size(); ++object) {
+         object_node(workspace, static_cast< int64_t >(object), current, builder);
+      }
+      if(config.add_nullary_predicates) {
+         special_node(workspace, config.nullary_object_name, config.nullary_object_name, builder);
+      }
+
+      for(const auto category : kCategoryOrder) {
+         if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
+            continue;
+         }
+         for(const auto& fact : current.state_facts) {
+            if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
+               encode_fact(workspace, fact, current, builder);
+            }
+         }
+      }
+
+      std::set< SemanticAtom > current_dynamic_facts;
+      std::set< SemanticAtom > successor_dynamic_facts;
+      for(const auto& fact : current.state_facts) {
+         if(predicates.at(static_cast< size_t >(fact.predicate)).category
+            != SemanticPredicateCategory::static_predicate) {
+            current_dynamic_facts.insert(fact);
+         }
+      }
+      for(const auto& fact : successor.state_facts) {
+         if(predicates.at(static_cast< size_t >(fact.predicate)).category
+            != SemanticPredicateCategory::static_predicate) {
+            successor_dynamic_facts.insert(fact);
+         }
+      }
+
+      if(delta_mode) {
+         for(const auto& fact : successor_dynamic_facts) {
+            if(not current_dynamic_facts.contains(fact)) {
+               encode_successor_fact(workspace, fact, successor, builder, successor_suffix, true);
+            }
+         }
+         for(const auto& fact : current_dynamic_facts) {
+            if(not successor_dynamic_facts.contains(fact)) {
+               encode_successor_fact(workspace, fact, current, builder, successor_suffix, false);
+            }
+         }
+      } else {
+         for(const auto category : {
+                SemanticPredicateCategory::fluent,
+                SemanticPredicateCategory::derived,
+             }) {
+            for(const auto& fact : successor.state_facts) {
+               if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
+                  encode_successor_fact(workspace, fact, successor, builder, successor_suffix);
+               }
+            }
+         }
+      }
+
+      const auto prepared = prepare_goals(current);
+      if(includes_plain_goal_derivation(config.goal_derivations)) {
+         for(const auto category : kCategoryOrder) {
+            for(const auto& goal : prepared) {
+               if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                  == category) {
+                  encode_goal(workspace, goal, current, builder);
+               }
+            }
+         }
+      }
+      encode_actions(workspace, current, builder);
+      encode_history(workspace, current, builder);
+
+      if(not delta_mode and has_non_plain_goal_derivations(config.goal_derivations)) {
+         const auto encode_satisfaction = [&](
+                                             const std::set< SemanticAtom >& facts,
+                                             std::string_view predicate_suffix
+                                          ) {
+            for(const auto category : kCategoryOrder) {
+               for(const auto& goal : prepared) {
+                  if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                     != category) {
+                     continue;
+                  }
+                  const bool present = facts.contains(goal.literal.atom);
+                  const auto derivation = present == goal.literal.positive
+                                             ? GoalDerivation::satisfied
+                                             : GoalDerivation::unsatisfied;
+                  if(config.goal_derivations.contains(derivation)) {
+                     encode_goal(workspace, goal, current, builder, derivation, predicate_suffix);
+                  }
+               }
+            }
+         };
+
+         std::set< SemanticAtom > current_facts;
+         for(const auto& fact : current.state_facts) {
+            const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
+            if(category != SemanticPredicateCategory::static_predicate or config.include_static) {
+               current_facts.insert(fact);
+            }
+         }
+         encode_satisfaction(current_facts, {});
+         if(include_successor_goal_satisfaction) {
+            encode_satisfaction(successor_dynamic_facts, successor_suffix);
+         }
+      }
+
+      add_lgan(workspace, builder);
+      finalize(workspace, builder);
+   }
 };
 
 SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
@@ -1128,6 +1303,20 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    impl_->encode(input, builder);
+}
+
+void SemanticHGraphEncoderEngine::encode_successor(
+   const SemanticFlatRelationInput& current,
+   const SemanticFlatRelationInput& successor,
+   bool delta_mode,
+   std::string_view successor_suffix,
+   bool include_successor_goal_satisfaction,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode_successor(
+      current, successor, delta_mode, successor_suffix, include_successor_goal_satisfaction, builder
+   );
 }
 
 BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
