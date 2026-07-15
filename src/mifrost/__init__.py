@@ -177,6 +177,9 @@ else:
 
         def __getattr__(name: str):
             if name in _encoder_exports:
+                if getattr(_core, "_pymimir_adapter_error", None) is not None:
+                    require_adapter = getattr(_core, "_require_pymimir_adapter")
+                    require_adapter()
                 raise ModuleNotFoundError(ENCODER_OPTIONAL_DEPENDENCY_MESSAGE) from (
                     _encoders_import_error
                 )

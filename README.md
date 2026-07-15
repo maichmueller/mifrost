@@ -42,7 +42,8 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 
 - Python `>= 3.12`
 - A working C++ toolchain
-- `pymimir>=0.13.60` available in the Python environment used for build/runtime
+- At least one optional planner for encoder use: `pymimir>=0.13.60` or
+  `pytyr>=0.0.30`
 - For Python-side graph assembly: `torch` and `torch-geometric`
 - For source builds: Conan (or `CONAN_COMMAND`/`CONAN_CMD` pointing to it)
 
@@ -54,14 +55,22 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 - `requirements/perf.txt`: performance-gate dependencies
 - `requirements/dev.txt`: convenience union of build + test + perf + quality tools
 - `requirements/constraints-ci.txt`: CI-only version constraints used by workflows
-- `pyproject.toml` extras: `.[test]`, `.[perf]`, `.[dev]`
+- `pyproject.toml` backend extras: `.[pymimir]`, `.[pytyr]`, `.[backends]`
+- Development extras: `.[test]`, `.[perf]`, `.[dev]`
 
 ## Installation
 
 ### From PyPI
 
 ```bash
-pip install mifrost
+pip install "mifrost[pymimir]"
+```
+
+For PyTyr instead, or to use both planners in the same process:
+
+```bash
+pip install "mifrost[pytyr]"
+pip install "mifrost[backends]"
 ```
 
 ### From source (wheel)
@@ -69,7 +78,15 @@ pip install mifrost
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-pip install .
+pip install ".[pymimir]"
+```
+
+Source builds contain both adapter modules by default. Set
+`MIFROST_BUILD_BACKENDS=core`, `pymimir`, `pytyr`, or `both` to build an
+explicit subset; for example:
+
+```bash
+MIFROST_BUILD_BACKENDS=pytyr pip install ".[pytyr]"
 ```
 
 If Conan is not on your `PATH`, set:

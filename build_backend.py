@@ -10,6 +10,10 @@ from typing import Any
 import scikit_build_core.build as _sbc
 
 _CONAN_PREPARED: set[tuple[str, str]] = set()
+_BACKEND_BUILD_REQUIREMENTS = {
+    "pymimir": "pymimir>=0.13.60",
+    "pytyr": "pytyr>=0.0.30",
+}
 
 
 def _first_setting(config_settings: dict[str, Any] | None, key: str) -> str | None:
@@ -111,6 +115,98 @@ def _as_bool(value: str | None, default: bool) -> bool:
     return default
 
 
+def _cmake_definition(name: str) -> str | None:
+    """Return the last value assigned to a definition in ``CMAKE_ARGS``."""
+    value: str | None = None
+    prefix = f"-D{name}"
+    for token in shlex.split(os.environ.get("CMAKE_ARGS", "")):
+        if not token.startswith(prefix):
+            continue
+        suffix = token[len(prefix) :]
+        if suffix.startswith(":"):
+            _, separator, candidate = suffix.partition("=")
+        elif suffix.startswith("="):
+            separator, candidate = "=", suffix[1:]
+        else:
+            continue
+        if separator:
+            value = candidate
+    return value
+
+
+def _parse_backend_selection(value: str) -> frozenset[str]:
+    normalized = value.strip().lower()
+    if normalized in {"", "none", "core", "neutral"}:
+        return frozenset()
+    if normalized in {"all", "both"}:
+        return frozenset(_BACKEND_BUILD_REQUIREMENTS)
+
+    requested = {
+        item.strip()
+        for item in normalized.replace("+", ",").split(",")
+        if item.strip()
+    }
+    unknown = requested.difference(_BACKEND_BUILD_REQUIREMENTS)
+    if unknown:
+        choices = "core, pymimir, pytyr, or both"
+        raise RuntimeError(
+            "Unsupported MIFROST_BUILD_BACKENDS value "
+            f"{value!r}: unknown backend(s) {sorted(unknown)!r}. Use {choices}."
+        )
+    return frozenset(requested)
+
+
+def _selected_backends() -> frozenset[str]:
+    """Resolve adapter selection without process-global runtime state.
+
+    Package builds contain both adapters by default. Explicit CMake definitions
+    remain authoritative for existing build invocations, while
+    ``MIFROST_BUILD_BACKENDS`` provides the concise packaging-facing control.
+    """
+    selection = os.environ.get("MIFROST_BUILD_BACKENDS")
+    if selection is not None:
+        return _parse_backend_selection(selection)
+
+    pymimir_value = _cmake_definition("MIFROST_BUILD_PYMIMIR_ADAPTER")
+    pytyr_value = _cmake_definition("MIFROST_BUILD_PYTYR_ADAPTER")
+    if pymimir_value is not None or pytyr_value is not None:
+        enabled: set[str] = set()
+        if _as_bool(pymimir_value, default=True):
+            enabled.add("pymimir")
+        if _as_bool(pytyr_value, default=False):
+            enabled.add("pytyr")
+        return frozenset(enabled)
+
+    return frozenset(_BACKEND_BUILD_REQUIREMENTS)
+
+
+def _with_backend_build_requirements(requirements: list[str]) -> list[str]:
+    result = list(requirements)
+    normalized = {requirement.lower() for requirement in result}
+    for backend in sorted(_selected_backends()):
+        requirement = _BACKEND_BUILD_REQUIREMENTS[backend]
+        if requirement.lower() not in normalized:
+            result.append(requirement)
+            normalized.add(requirement.lower())
+    return result
+
+
+def _exclude_unbuilt_adapter_stubs(backends: frozenset[str]) -> None:
+    excluded = {
+        item.strip()
+        for item in os.environ.get("SKBUILD_WHEEL_EXCLUDE", "").split(";")
+        if item.strip()
+    }
+    if "pymimir" not in backends:
+        excluded.update(
+            {"mifrost/_core.pyi", "mifrost/_pymimir_adapter.pyi"}
+        )
+    if "pytyr" not in backends:
+        excluded.add("mifrost/_pytyr_adapter.pyi")
+    if excluded:
+        os.environ["SKBUILD_WHEEL_EXCLUDE"] = ";".join(sorted(excluded))
+
+
 def _wheel_generate_stubs_enabled() -> bool:
     # Wheel builds include stubs by default. Workflows that pre-generate stubs can
     # set MIFROST_WHEEL_GENERATE_STUBS=0 to avoid duplicate stub work.
@@ -120,9 +216,18 @@ def _wheel_generate_stubs_enabled() -> bool:
 def _prepare_common_cmake_env() -> None:
     rpath_mode = os.environ.get("MIFROST_RPATH_MODE", "dev")
     _set_cmake_arg("MIFROST_RPATH_MODE", rpath_mode)
-    mimir_prefix = _get_mimir_prefix()
-    if mimir_prefix:
-        _set_env_prefix_path(mimir_prefix)
+    backends = _selected_backends()
+    _exclude_unbuilt_adapter_stubs(backends)
+    _set_cmake_arg(
+        "MIFROST_BUILD_PYMIMIR_ADAPTER", "ON" if "pymimir" in backends else "OFF"
+    )
+    _set_cmake_arg(
+        "MIFROST_BUILD_PYTYR_ADAPTER", "ON" if "pytyr" in backends else "OFF"
+    )
+    if "pymimir" in backends:
+        mimir_prefix = _get_mimir_prefix()
+        if mimir_prefix:
+            _set_env_prefix_path(mimir_prefix)
 
 
 def _get_conan_mode() -> str:
@@ -238,11 +343,15 @@ def _prepare_conan(config_settings: dict[str, Any] | None) -> None:
 
 
 def get_requires_for_build_wheel(config_settings: dict[str, Any] | None = None):
-    return _sbc.get_requires_for_build_wheel(config_settings)
+    return _with_backend_build_requirements(
+        list(_sbc.get_requires_for_build_wheel(config_settings))
+    )
 
 
 def get_requires_for_build_editable(config_settings: dict[str, Any] | None = None):
-    return _sbc.get_requires_for_build_editable(config_settings)
+    return _with_backend_build_requirements(
+        list(_sbc.get_requires_for_build_editable(config_settings))
+    )
 
 
 def prepare_metadata_for_build_wheel(

@@ -165,12 +165,11 @@ class SemanticFlatRelationEncoder:
             config = _neutral_core.FlatRelationEncoderConfig()
         try:
             native_module = importlib.import_module("mifrost._pytyr_adapter")
-        except ModuleNotFoundError as error:
-            if error.name != "mifrost._pytyr_adapter":
-                raise
+        except ImportError as error:
             raise ModuleNotFoundError(
-                "The native PyTyr adapter is unavailable. Install or rebuild "
-                "mifrost with MIFROST_BUILD_PYTYR_ADAPTER=ON."
+                "The native PyTyr adapter is unavailable. Install "
+                "mifrost[pytyr], or rebuild with MIFROST_BUILD_BACKENDS=pytyr "
+                "(or both)."
             ) from error
 
         config_capsule = _neutral_core._flat_relation_config_capsule(config)

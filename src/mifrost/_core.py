@@ -32,17 +32,28 @@ def _install_legacy_map_view_names() -> None:
 _install_legacy_map_view_names()
 
 
+_pymimir_adapter_error: ImportError | None = None
 try:
     _pymimir_adapter = importlib.import_module(f"{__package__}._pymimir_adapter")
-except ModuleNotFoundError as error:
-    if error.name != f"{__package__}._pymimir_adapter":
-        raise
+except ImportError as error:
+    _pymimir_adapter_error = error
     _pymimir_adapter = None
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
             continue
         globals()[_name] = getattr(_pymimir_adapter, _name)
+
+
+def _require_pymimir_adapter() -> object:
+    if _pymimir_adapter is None:
+        raise ModuleNotFoundError(
+            "The native Pymimir adapter is unavailable. Install "
+            "mifrost[pymimir], or rebuild with "
+            "MIFROST_BUILD_BACKENDS=pymimir (or both)."
+        ) from _pymimir_adapter_error
+    return _pymimir_adapter
+
 
 _set_batch_encoding_collate_spec = getattr(
     _neutral_core, "_set_batch_encoding_collate_spec"

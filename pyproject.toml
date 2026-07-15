@@ -4,7 +4,6 @@ requires = [
     "scikit-build-core>=0.10",
     "cmake>=3.24,<5",
     "conan>=2.4,<3",
-    "pymimir>=0.13.60",
     "ninja>=1.11,<2",
     "PyYAML>=6.0,<7",
 ]
@@ -17,9 +16,7 @@ version = "0.3.1"
 description = "STRIPS states to graph encoding C++ extension module."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "pymimir>=0.13.60",
-]
+dependencies = []
 authors = [
     { name = "Michael Aichmüller", email = "m.aichmueller@gmail.com" },
 ]
@@ -27,18 +24,32 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 
 [project.optional-dependencies]
+pymimir = [
+    "pymimir>=0.13.60",
+]
+pytyr = [
+    "pytyr>=0.0.30",
+]
+backends = [
+    "pymimir>=0.13.60",
+    "pytyr>=0.0.30",
+]
 torch = [
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
 ]
 test = [
+    "pymimir>=0.13.60",
+    "pytyr>=0.0.30",
     "pytest>=8.0,<9",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
 ]
 perf = [
+    "pymimir>=0.13.60",
+    "pytyr>=0.0.30",
     "torch>=2.2,<3",
     "numpy",
 ]
@@ -50,6 +61,8 @@ dev = [
     "ruff>=0.14.14,<0.15",
     "mypy>=1.14,<2",
     "PyYAML>=6.0,<7",
+    "pymimir>=0.13.60",
+    "pytyr>=0.0.30",
     "torch>=2.2,<3",
     "numpy",
 ]
@@ -125,7 +138,7 @@ build-verbosity = 1
 # Smoke-test that the built wheel can be imported in an isolated venv.
 # Full test coverage is provided by the separate CI test workflows, which install
 # heavy dependencies (torch, torch_geometric, etc.).
-test-command = "python -c \"import pymimir, mifrost; print('pymimir', getattr(pymimir, '__version__', 'unknown')); print('mifrost', mifrost.__file__)\""
+test-command = "python -c \"import mifrost; print('mifrost', mifrost.__file__)\""
 
 build = ["cp312-*", "cp313-*", "cp314-*"]
 test-skip = "cp314t-*"

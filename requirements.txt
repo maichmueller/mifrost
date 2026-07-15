@@ -1,4 +1,3 @@
-# Runtime dependencies for mifrost users.
-# This file mirrors [project.dependencies] in pyproject.toml.
-
-pymimir>=0.13.60
+# The backend-neutral runtime has no mandatory Python dependencies.
+# Install ``mifrost[pymimir]``, ``mifrost[pytyr]``, or
+# ``mifrost[backends]`` to add planning backends.

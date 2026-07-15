@@ -33,6 +33,25 @@ def find_mimir_prefix():
     return None
 
 
+def parse_backends(value: str | None):
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"core", "neutral", "none"}:
+        return frozenset()
+    if normalized in {"both", "all"}:
+        return frozenset({"pymimir", "pytyr"})
+    selected = frozenset(
+        item.strip() for item in normalized.replace("+", ",").split(",") if item.strip()
+    )
+    unknown = selected.difference({"pymimir", "pytyr"})
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown backend(s) {sorted(unknown)!r}; use core, pymimir, pytyr, or both"
+        )
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser(description="Configure Mifrost Build")
     parser.add_argument("--noconan", action="store_true", help="Disable Conan")
@@ -62,6 +81,12 @@ def main():
         "--with_benchmarks",
         action="store_true",
         help="Enable benchmark dependencies and CMake targets",
+    )
+    parser.add_argument(
+        "--backends",
+        type=parse_backends,
+        default=parse_backends(os.environ.get("MIFROST_BUILD_BACKENDS")),
+        help="Native adapters to build: core, pymimir, pytyr, or both",
     )
 
     args, extra_args = parser.parse_known_args()
@@ -165,21 +190,30 @@ def main():
     if with_benchmarks:
         cmake_args.append("-DMIFROST_BUILD_BENCHMARKS=ON")
 
+    if args.backends is not None:
+        cmake_args.extend(
+            [
+                "-DMIFROST_BUILD_PYMIMIR_ADAPTER="
+                + ("ON" if "pymimir" in args.backends else "OFF"),
+                "-DMIFROST_BUILD_PYTYR_ADAPTER="
+                + ("ON" if "pytyr" in args.backends else "OFF"),
+            ]
+        )
+
     if cmake_toolchain_file:
         cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain_file}")
 
     # Inject Mimir Prefix Path
-    mimir_prefix = find_mimir_prefix()
-    if mimir_prefix:
-        print(f"Found Mimir CMake at: {mimir_prefix}")
-        # Add to CMAKE_PREFIX_PATH
-        # We pass it as a define or env var.
-        # CMAKE_PREFIX_PATH can be passed as argument.
-        cmake_args.append(f"-DCMAKE_PREFIX_PATH={mimir_prefix}")
-    else:
-        print(
-            "Warning: Could not auto-detect specific Mimir CMake path. Relying on env CMAKE_PREFIX_PATH."
-        )
+    if args.backends is None or "pymimir" in args.backends:
+        mimir_prefix = find_mimir_prefix()
+        if mimir_prefix:
+            print(f"Found Mimir CMake at: {mimir_prefix}")
+            cmake_args.append(f"-DCMAKE_PREFIX_PATH={mimir_prefix}")
+        else:
+            print(
+                "Warning: Could not auto-detect specific Mimir CMake path. "
+                "Relying on env CMAKE_PREFIX_PATH."
+            )
 
     print(
         f"Running CMake: {args.cmake_cmd} {' '.join(cmake_args)} {' '.join(extra_args)}"

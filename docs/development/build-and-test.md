@@ -16,7 +16,7 @@ python -m pip install -e .[dev]
 If your environment does not provide extras, install the minimal tools directly:
 
 ```bash
-python -m pip install -e .
+MIFROST_BUILD_BACKENDS=pymimir python -m pip install -e .[pymimir]
 python -m pip install pytest mkdocs mkdocs-material
 ```
 
@@ -49,13 +49,24 @@ developer workflows.
 Install the package (this triggers a full native build):
 
 ```bash
-python -m pip install -v .
+python -m pip install -v ".[backends]"
 ```
 
 For editable development:
 
 ```bash
-python -m pip install -e .
+python -m pip install -e ".[backends]"
+```
+
+The Python build backend builds both native adapters by default. Set
+`MIFROST_BUILD_BACKENDS` to `core`, `pymimir`, `pytyr`, or `both` to exercise a
+specific installation variant. This controls native targets; the matching
+project extra controls runtime planner dependencies.
+
+The CMake helper exposes the same selection directly:
+
+```bash
+python configure.py --mode local-release --backends pytyr
 ```
 
 For explicit CMake-driven local builds, the blessed layout is:

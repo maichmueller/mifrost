@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mifrost
+import pytest
 
 
 def test_neutral_bindings_are_shared_with_compatibility_facade() -> None:
@@ -27,3 +28,18 @@ def test_neutral_module_excludes_pymimir_encoder_bindings() -> None:
     assert not hasattr(neutral, "HGraphEncoderEngine")
     assert not hasattr(neutral, "FlatRelationEncoderEngine")
     assert not hasattr(neutral, "TransitionDAG")
+
+
+def test_missing_pymimir_adapter_error_names_install_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compatibility = mifrost._core
+    monkeypatch.setattr(compatibility, "_pymimir_adapter", None)
+    monkeypatch.setattr(
+        compatibility,
+        "_pymimir_adapter_error",
+        ImportError("missing native planner runtime"),
+    )
+
+    with pytest.raises(ModuleNotFoundError, match=r"mifrost\[pymimir\]"):
+        compatibility._require_pymimir_adapter()

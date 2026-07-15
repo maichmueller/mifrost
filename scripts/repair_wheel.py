@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 import shutil
 import subprocess
@@ -100,9 +101,60 @@ def _iter_pymimir_lib_dirs() -> list[Path]:
     return out
 
 
+def _iter_pytyr_lib_dirs() -> list[Path]:
+    candidates = _split_path_list(os.environ.get("MIFROST_PYTYR_LIB_DIR"))
+    for package_name in ("pytyr", "pyyggdrasil", "pypddl"):
+        try:
+            module = importlib.import_module(package_name)
+        except Exception:
+            continue
+
+        native_prefix = getattr(module, "native_prefix", None)
+        if callable(native_prefix):
+            try:
+                prefix = Path(str(native_prefix())).resolve()
+                candidates.extend((prefix / "lib", prefix / "native" / "lib"))
+            except Exception:
+                pass
+
+        module_file = getattr(module, "__file__", None)
+        if not module_file:
+            continue
+        try:
+            package_dir = Path(str(module_file)).resolve().parent
+            site_dir = package_dir.parent
+            candidates.extend(
+                (
+                    package_dir / "lib",
+                    package_dir / "native" / "lib",
+                    package_dir / ".libs",
+                    package_dir / ".dylibs",
+                    site_dir / f"{package_name}.libs",
+                    site_dir / f"{package_name}.dylibs",
+                )
+            )
+            candidates.extend(site_dir.glob(f"{package_name}*.libs"))
+            candidates.extend(site_dir.glob(f"{package_name}*.dylibs"))
+        except Exception:
+            pass
+
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            continue
+        if resolved.is_dir() and resolved not in seen:
+            out.append(resolved)
+            seen.add(resolved)
+    return out
+
+
 def _iter_candidate_lib_dirs() -> list[Path]:
     candidates: list[Path] = []
     candidates.extend(_iter_pymimir_lib_dirs())
+    candidates.extend(_iter_pytyr_lib_dirs())
     candidates.extend(_iter_conan_lib_dirs())
     candidates.extend(_split_path_list(os.environ.get("DYLD_LIBRARY_PATH")))
     candidates.extend(_split_path_list(os.environ.get("LD_LIBRARY_PATH")))
@@ -135,6 +187,14 @@ def _iter_candidate_lib_dirs() -> list[Path]:
             pymimir_lib = prefix / "pymimir" / "lib"
             if pymimir_lib.is_dir():
                 candidates.append(pymimir_lib)
+            for relative in (
+                "pytyr/native/lib",
+                "pyyggdrasil/lib",
+                "pypddl/native/lib",
+            ):
+                planner_lib = prefix / relative
+                if planner_lib.is_dir():
+                    candidates.append(planner_lib)
 
     out: list[Path] = []
     seen: set[Path] = set()
@@ -238,7 +298,9 @@ def main() -> int:
     if not lib_dirs:
         raise RuntimeError(
             "Could not locate any runtime library directories. "
-            "Set CONAN_HOME and/or MIFROST_PYMIMIR_LIB_DIR, or install pymimir in the wheel build environment."
+            "Set CONAN_HOME, MIFROST_PYMIMIR_LIB_DIR, or "
+            "MIFROST_PYTYR_LIB_DIR; alternatively install the selected planner "
+            "packages in the wheel build environment."
         )
 
     print("Using library search dirs:")

@@ -260,8 +260,16 @@ jobs:
                     raise SystemExit(f"{wheel_path.name}: missing dist-info METADATA")
                 metadata = email.message_from_bytes(zf.read(metadata_name))
                 requires = metadata.get_all("Requires-Dist", [])
-                if not any(req.lower().startswith("pymimir") for req in requires):
-                    raise SystemExit(f"{wheel_path.name}: missing Requires-Dist for pymimir")
+                optional_backends = {
+                    req.split(";", 1)[0].strip().split(" ", 1)[0].split(">", 1)[0].lower()
+                    for req in requires
+                    if "extra ==" in req
+                }
+                if not {"pymimir", "pytyr"}.issubset(optional_backends):
+                    raise SystemExit(
+                        f"{wheel_path.name}: missing optional backend metadata: "
+                        f"{sorted(optional_backends)}"
+                    )
 
             print(f"validated: {wheel_path.name}")
         PY
