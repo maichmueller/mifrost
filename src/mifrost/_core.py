@@ -44,6 +44,7 @@ try:
 except ImportError as error:
     _pymimir_adapter_error = error
     _pymimir_adapter = None
+    ColorEncoderConfig = _neutral_core.SemanticColorEncoderConfig
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
@@ -73,4 +74,6 @@ __all__ += [
 ]
 if _pymimir_adapter is not None:
     __all__ += _public_names(_pymimir_adapter)
+else:
+    __all__.append("ColorEncoderConfig")
 __all__ = list(dict.fromkeys(__all__))

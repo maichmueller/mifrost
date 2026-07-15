@@ -161,8 +161,8 @@ class PyTyrSnapshotReader:
         )
 
 
-class SemanticFlatRelationEncoder:
-    """Native PyTyr conversion backed by the planner-neutral flat engine."""
+class SemanticPlanningTaskAdapter:
+    """Native PyTyr conversion to compact backend-neutral semantic inputs."""
 
     def __init__(self, planning_task: PlanningTask, config: Any | None = None) -> None:
         from mifrost import _neutral_core
@@ -182,26 +182,22 @@ class SemanticFlatRelationEncoder:
         self._native = native_module._NativeSemanticFlatRelationEncoder(
             planning_task, config_capsule
         )
-        self._engine = _neutral_core._consume_semantic_flat_engine_capsule(
-            self._native._make_engine_capsule()
-        )
-        category_map = {
-            _neutral_core.SemanticPredicateCategory.static: PredicateCategory.STATIC,
-            _neutral_core.SemanticPredicateCategory.fluent: PredicateCategory.FLUENT,
-            _neutral_core.SemanticPredicateCategory.derived: PredicateCategory.DERIVED,
-        }
+        domain = PyTyrSnapshotReader(planning_task).domain_snapshot()
         self._predicate_indices = {
-            PredicateKey(category_map[value.category], value.name, value.arity): index
-            for index, value in enumerate(self._engine.predicates)
+            predicate: index for index, predicate in enumerate(domain.predicates)
         }
         object_names = sorted(
             str(value.get_name()) for value in planning_task.get_task().get_objects()
         )
         self._object_indices = {name: index for index, name in enumerate(object_names)}
 
-    @property
-    def engine(self) -> Any:
-        return self._engine
+    def make_color_engine(self, config: Any) -> Any:
+        """Build a neutral Color engine from this task adapter's cached schema."""
+        from mifrost import _neutral_core
+
+        config_capsule = _neutral_core._semantic_color_config_capsule(config)
+        engine_capsule = self._native._make_color_engine_capsule(config_capsule)
+        return _neutral_core._consume_semantic_color_engine_capsule(engine_capsule)
 
     @staticmethod
     def _literal_key(value: object) -> LiteralKey:
@@ -324,6 +320,22 @@ class SemanticFlatRelationEncoder:
             history_max_steps,
         )
         return list(_neutral_core._consume_semantic_flat_inputs_capsule(capsule))
+
+
+class SemanticFlatRelationEncoder(SemanticPlanningTaskAdapter):
+    """Native PyTyr conversion backed by the planner-neutral flat engine."""
+
+    def __init__(self, planning_task: PlanningTask, config: Any | None = None) -> None:
+        from mifrost import _neutral_core
+
+        super().__init__(planning_task, config)
+        self._engine = _neutral_core._consume_semantic_flat_engine_capsule(
+            self._native._make_engine_capsule()
+        )
+
+    @property
+    def engine(self) -> Any:
+        return self._engine
 
     def encode(
         self,

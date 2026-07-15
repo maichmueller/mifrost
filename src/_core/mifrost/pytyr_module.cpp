@@ -13,6 +13,7 @@
 
 #include "mifrost/backends/pytyr/semantic_flat_encoder.hpp"
 #include "mifrost/capsule_bridge.hpp"
+#include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -239,15 +240,34 @@ NB_MODULE(_pytyr_adapter, m)
          "history"_a = std::vector< std::vector< CompactHistoryEntry > >{},
          "history_max_steps"_a = nb::none()
       )
-      .def("_make_engine_capsule", [owned_capsule](const Encoder& self) {
-         const auto& engine = self.get_engine();
-         return owned_capsule(
-            SemanticFlatRelationEncoderEngine(
-               engine.get_predicates(), engine.get_actions(), engine.get_config()
-            ),
-            capsule_bridge::engine_name
-         );
-      });
+      .def(
+         "_make_engine_capsule",
+         [owned_capsule](const Encoder& self) {
+            const auto& engine = self.get_engine();
+            return owned_capsule(
+               SemanticFlatRelationEncoderEngine(
+                  engine.get_predicates(), engine.get_actions(), engine.get_config()
+               ),
+               capsule_bridge::engine_name
+            );
+         }
+      )
+      .def(
+         "_make_color_engine_capsule",
+         [owned_capsule](const Encoder& self, nb::handle config_capsule) {
+            const auto* config = capsule_bridge::get< SemanticColorEncoderConfig >(
+               config_capsule.ptr(), capsule_bridge::color_config_name
+            );
+            if(config == nullptr) {
+               throw nb::python_error();
+            }
+            return owned_capsule(
+               SemanticColorEncoderEngine(self.get_engine().get_predicates(), *config),
+               capsule_bridge::color_engine_name
+            );
+         },
+         "config_capsule"_a
+      );
 }
 
 }  // namespace mifrost::pytyr

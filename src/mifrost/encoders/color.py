@@ -7,11 +7,8 @@ import networkx as nx
 import torch
 from torch_geometric.data import Data
 
-from .._core import (
-    ColorEncoderConfig,
-    ColorEncoderEngine,
-    ColorStreamEncoder as _ColorStreamEncoder,
-)
+from .. import _neutral_core
+from ..backends._color_runtime import ColorBackendName, create_color_runtime
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
@@ -24,19 +21,11 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import prepare_core_batch_inputs
-from .common import (
-    _advanced_domain,
-    _advanced_state,
-    _split_goals,
-)
-from ._lane_specs import prepare_optional_payloads
 from .types import (
-    HomoEncoding,
     DomainInput,
     GoalLiteralInput,
+    HomoEncoding,
     StateInput,
-    default_goals_from_state,
 )
 
 
@@ -48,7 +37,7 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
 
     def __post_init__(self) -> None:
         """Initialize an empty homo builder for streaming."""
-        self._stream = _ColorStreamEncoder(self._encoder.engine)
+        self._stream = self._encoder._runtime.make_stream()
         self._reset_builder()
 
     def append(
@@ -59,14 +48,9 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> int:
         """Append one state encoding to the color stream."""
-        adv_state = _advanced_state(state)
-        if goals is None and subgoal_layers is None:
-            return self._coerce_stream_id(self._stream.append(adv_state))
-        else:
-            if goals is None:
-                goals = default_goals_from_state(state)
-            inputs = _split_goals(goals, subgoal_layers)
-            return self._coerce_stream_id(self._stream.append(adv_state, inputs))
+        return self._coerce_stream_id(
+            self._stream.append(state, goals=goals, subgoal_layers=subgoal_layers)
+        )
 
     def remove(self, stream_id: int) -> None:
         self._stream.remove(stream_id)
@@ -79,14 +63,9 @@ class ColorEncoderStream(StreamEncoderBase[Data]):
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
-        adv_state = _advanced_state(state)
-        if goals is None and subgoal_layers is None:
-            self._stream.update(stream_id, adv_state)
-            return
-        if goals is None:
-            goals = default_goals_from_state(state)
-        inputs = _split_goals(goals, subgoal_layers)
-        self._stream.update(stream_id, adv_state, inputs)
+        self._stream.update(
+            stream_id, state, goals=goals, subgoal_layers=subgoal_layers
+        )
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
@@ -105,21 +84,31 @@ class ColorEncoder(EncoderBase[Data]):
         self,
         domain: DomainInput,
         *,
+        backend: ColorBackendName | str | None = None,
         edge_features: bool = False,
         enable_global_predicate_nodes: bool = False,
     ) -> None:
         """Create a color encoder for one domain."""
-        config = ColorEncoderConfig()
-        config.edge_features = edge_features
-        config.enable_global_predicate_nodes = enable_global_predicate_nodes
-        self._engine = ColorEncoderEngine(_advanced_domain(domain), config)
+        config = _neutral_core.SemanticColorEncoderConfig(
+            edge_features=edge_features,
+            enable_global_predicate_nodes=enable_global_predicate_nodes,
+        )
+        self._runtime = create_color_runtime(domain, config, backend=backend)
+        self._engine = self._runtime.engine
+        self._config = config
+        self.backend = self._runtime.backend_name
         self.edge_features = edge_features
         self.predicate_nodes_enabled = enable_global_predicate_nodes
 
     @property
-    def engine(self) -> ColorEncoderEngine:
+    def engine(self) -> Any:
         """Expose the underlying C++ color engine."""
         return self._engine
+
+    @property
+    def config(self) -> Any:
+        """Expose the backend-neutral resolved Color config."""
+        return self._config
 
     def _encode(
         self,
@@ -130,17 +119,12 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
-        adv_state = _advanced_state(state)
-        action_list = prepare_optional_payloads(
+        return self._runtime.encode_one(
+            state,
+            goals=goals,
             actions=actions,
-            history_subgoals=None,
-        ).actions
-        if goals is None and subgoal_layers is None and not action_list:
-            return self._engine.encode(adv_state)
-        if goals is None:
-            goals = default_goals_from_state(state)
-        inputs = _split_goals(goals, subgoal_layers)
-        return self._engine.encode(adv_state, inputs, action_list)
+            subgoal_layers=subgoal_layers,
+        )
 
     def encode(
         self,
@@ -171,17 +155,11 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersBatchParam = None,
     ) -> HomoEncoding:
         """Encode one or many states into homogeneous batch encoding_dict."""
-        inputs = prepare_core_batch_inputs(
+        return self._runtime.encode_batch(
             states,
             goals=goals,
             actions=actions,
             subgoal_layers=subgoal_layers,
-        )
-        return self._engine.encode_batch(
-            inputs.states,
-            goals=inputs.goals,
-            actions=inputs.actions,
-            subgoal_layers=inputs.subgoal_layers,
         )
 
     def encode_batch(
