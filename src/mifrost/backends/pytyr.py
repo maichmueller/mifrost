@@ -285,6 +285,46 @@ class SemanticFlatRelationEncoder:
         )
         return _neutral_core._consume_semantic_flat_input_capsule(capsule)
 
+    def make_inputs(
+        self,
+        states: Iterable[object],
+        actions: Iterable[Iterable[object]] = (),
+        *,
+        goals: Iterable[Iterable[object] | None] = (),
+        subgoal_layers: Iterable[Iterable[Iterable[object]]] = (),
+        history: Iterable[Iterable[tuple[int, Iterable[object]]]] = (),
+        history_max_steps: int | None = None,
+    ) -> list[Any]:
+        """Convert a homogeneous state batch through one owned capsule."""
+        from mifrost import _neutral_core
+
+        compact_goals = [
+            None
+            if values is None
+            else [self._compact_literal(value) for value in values]
+            for values in goals
+        ]
+        compact_subgoals = [
+            [[self._compact_literal(value) for value in layer] for layer in layers]
+            for layers in subgoal_layers
+        ]
+        compact_history = [
+            [
+                (int(delta), [self._compact_literal(value) for value in literals])
+                for delta, literals in entries
+            ]
+            for entries in history
+        ]
+        capsule = self._native._make_inputs_capsule(
+            list(states),
+            [list(values) for values in actions],
+            compact_goals,
+            compact_subgoals,
+            compact_history,
+            history_max_steps,
+        )
+        return list(_neutral_core._consume_semantic_flat_inputs_capsule(capsule))
+
     def encode(
         self,
         state: object,

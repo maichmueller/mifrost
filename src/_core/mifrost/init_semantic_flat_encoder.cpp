@@ -299,6 +299,15 @@ void init_semantic_flat_encoder(nb::module_& m)
       "capsule"_a
    );
    m.def(
+      "_consume_semantic_flat_inputs_capsule",
+      [](nb::handle capsule) {
+         return capsule_bridge::take< std::vector< SemanticFlatRelationInput > >(
+            capsule.ptr(), capsule_bridge::inputs_name
+         );
+      },
+      "capsule"_a
+   );
+   m.def(
       "_consume_semantic_flat_engine_capsule",
       [](nb::handle capsule) {
          return capsule_bridge::take< SemanticFlatRelationEncoderEngine >(

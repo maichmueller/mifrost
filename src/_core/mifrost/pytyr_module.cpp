@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -57,6 +59,49 @@ void apply_optional_lanes(
       input.history.push_back(SemanticHistoryEntry{dt, expand_literals(literals)});
    }
    input.history_max_steps = history_max_steps;
+}
+
+template < typename State >
+std::vector< SemanticFlatRelationInput > make_inputs(
+   const SemanticFlatRelationEncoder& encoder,
+   const std::vector< State >& states,
+   const std::vector< std::vector< tyr::formalism::planning::GroundActionView > >& actions,
+   const std::vector< std::optional< std::vector< CompactLiteral > > >& goals,
+   const std::vector< std::vector< std::vector< CompactLiteral > > >& subgoal_layers,
+   const std::vector< std::vector< CompactHistoryEntry > >& history,
+   std::optional< int64_t > history_max_steps
+)
+{
+   const auto validate_size = [&](size_t size, std::string_view lane) {
+      if(size != 0 and size != states.size()) {
+         throw std::invalid_argument(
+            "PyTyr semantic flat " + std::string(lane) + " batch length must match states"
+         );
+      }
+   };
+   validate_size(actions.size(), "actions");
+   validate_size(goals.size(), "goals");
+   validate_size(subgoal_layers.size(), "subgoal_layers");
+   validate_size(history.size(), "history");
+
+   std::vector< SemanticFlatRelationInput > inputs;
+   inputs.reserve(states.size());
+   const std::vector< tyr::formalism::planning::GroundActionView > no_actions;
+   const std::optional< std::vector< CompactLiteral > > no_goals;
+   const std::vector< std::vector< CompactLiteral > > no_subgoals;
+   const std::vector< CompactHistoryEntry > no_history;
+   for(size_t index = 0; index < states.size(); ++index) {
+      auto input = encoder.make_input(states[index], actions.empty() ? no_actions : actions[index]);
+      apply_optional_lanes(
+         input,
+         goals.empty() ? no_goals : goals[index],
+         subgoal_layers.empty() ? no_subgoals : subgoal_layers[index],
+         history.empty() ? no_history : history[index],
+         history_max_steps
+      );
+      inputs.push_back(std::move(input));
+   }
+   return inputs;
 }
 
 }  // namespace
@@ -142,6 +187,56 @@ NB_MODULE(_pytyr_adapter, m)
          "goals"_a = nb::none(),
          "subgoal_layers"_a = std::vector< std::vector< CompactLiteral > >{},
          "history"_a = std::vector< CompactHistoryEntry >{},
+         "history_max_steps"_a = nb::none()
+      )
+      .def(
+         "_make_inputs_capsule",
+         [owned_capsule](
+            const Encoder& self,
+            const std::vector< LiftedState >& states,
+            const std::vector< std::vector< GroundAction > >& actions,
+            const std::vector< std::optional< std::vector< CompactLiteral > > >& goals,
+            const std::vector< std::vector< std::vector< CompactLiteral > > >& subgoal_layers,
+            const std::vector< std::vector< CompactHistoryEntry > >& history,
+            std::optional< int64_t > history_max_steps
+         ) {
+            return owned_capsule(
+               make_inputs(
+                  self, states, actions, goals, subgoal_layers, history, history_max_steps
+               ),
+               capsule_bridge::inputs_name
+            );
+         },
+         "states"_a,
+         "actions"_a = std::vector< std::vector< GroundAction > >{},
+         "goals"_a = std::vector< std::optional< std::vector< CompactLiteral > > >{},
+         "subgoal_layers"_a = std::vector< std::vector< std::vector< CompactLiteral > > >{},
+         "history"_a = std::vector< std::vector< CompactHistoryEntry > >{},
+         "history_max_steps"_a = nb::none()
+      )
+      .def(
+         "_make_inputs_capsule",
+         [owned_capsule](
+            const Encoder& self,
+            const std::vector< GroundState >& states,
+            const std::vector< std::vector< GroundAction > >& actions,
+            const std::vector< std::optional< std::vector< CompactLiteral > > >& goals,
+            const std::vector< std::vector< std::vector< CompactLiteral > > >& subgoal_layers,
+            const std::vector< std::vector< CompactHistoryEntry > >& history,
+            std::optional< int64_t > history_max_steps
+         ) {
+            return owned_capsule(
+               make_inputs(
+                  self, states, actions, goals, subgoal_layers, history, history_max_steps
+               ),
+               capsule_bridge::inputs_name
+            );
+         },
+         "states"_a,
+         "actions"_a = std::vector< std::vector< GroundAction > >{},
+         "goals"_a = std::vector< std::optional< std::vector< CompactLiteral > > >{},
+         "subgoal_layers"_a = std::vector< std::vector< std::vector< CompactLiteral > > >{},
+         "history"_a = std::vector< std::vector< CompactHistoryEntry > >{},
          "history_max_steps"_a = nb::none()
       )
       .def("_make_engine_capsule", [owned_capsule](const Encoder& self) {

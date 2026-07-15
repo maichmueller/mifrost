@@ -245,17 +245,16 @@ class PyTyrFlatRuntime:
                 max_goal_level=int(self.engine.config.max_goal_level),
             )
         history_values = _history_values(history_subgoals, state_count=count)
-        inputs = [
-            self._input(
-                state,
-                goals=goal_values[index],
-                actions=action_values[index],
-                subgoal_layers=subgoal_values[index],
-                history_subgoals=history_values[index],
-                history_max_steps=history_max_steps,
-            )
-            for index, state in enumerate(state_values)
-        ]
+        inputs = self._adapter.make_inputs(
+            state_values,
+            [() if values is None else values for values in action_values],
+            goals=goal_values,
+            subgoal_layers=[
+                () if values is None else values for values in subgoal_values
+            ],
+            history=[() if values is None else values for values in history_values],
+            history_max_steps=history_max_steps,
+        )
         return self.engine.encode_batch(inputs)
 
     def append_into_builder(self, state: object, builder: Any, **kwargs: Any) -> None:

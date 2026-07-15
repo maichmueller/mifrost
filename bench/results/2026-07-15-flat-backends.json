@@ -31,27 +31,28 @@
   "current_backend_comparison": [
     {
       "path": "batch_default",
-      "pymimir_median_ms": 0.17037499492289498,
-      "pytyr_median_ms": 0.2892085030907765,
-      "pytyr_change_percent": 69.74820936702648
+      "pymimir_median_ms": 0.17479150119470432,
+      "pytyr_median_ms": 0.27079150459030643,
+      "pytyr_change_percent": 54.92258075446441
     },
     {
       "path": "batch_explicit_goals",
-      "pymimir_median_ms": 0.20895851048408076,
-      "pytyr_median_ms": 0.33145849738502875,
-      "pytyr_change_percent": 58.62407164807988
+      "pymimir_median_ms": 0.18581299809738994,
+      "pytyr_median_ms": 0.29535399517044425,
+      "pytyr_change_percent": 58.952279008834864
     },
     {
       "path": "single_loop",
-      "pymimir_median_ms": 0.6231460065464489,
-      "pytyr_median_ms": 0.5368334968807176,
-      "pytyr_change_percent": -13.851089272654704
+      "pymimir_median_ms": 0.6225414981599897,
+      "pytyr_median_ms": 0.5641669995384291,
+      "pytyr_change_percent": -9.376804404862138
     },
     {
       "path": "stream_end_to_end",
-      "pymimir_median_ms": 0.3503330081002787,
-      "pytyr_median_ms": 0.3003124948008917,
-      "pytyr_change_percent": -14.277990409932817
+      "pymimir_median_ms": 0.34945849620271474,
+      "pytyr_median_ms": 0.30537550628650934,
+      "pytyr_change_percent": -12.614656789066492
     }
-  ]
+  ],
+  "pytyr_batch_transfer": "one owned semantic-input vector capsule per batch"
 }

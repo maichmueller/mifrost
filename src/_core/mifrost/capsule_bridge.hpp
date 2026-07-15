@@ -10,6 +10,7 @@ namespace mifrost::capsule_bridge {
 
 inline constexpr char config_name[] = "mifrost.FlatRelationEncoderConfig.v1";
 inline constexpr char input_name[] = "mifrost.SemanticFlatRelationInput.v1";
+inline constexpr char inputs_name[] = "mifrost.SemanticFlatRelationInputs.v1";
 inline constexpr char engine_name[] = "mifrost.SemanticFlatRelationEncoderEngine.v1";
 inline constexpr char consumed_name[] = "mifrost.consumed.v1";
 
