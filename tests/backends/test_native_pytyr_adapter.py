@@ -171,6 +171,45 @@ def test_native_pytyr_matches_native_pymimir_by_semantic_names() -> None:
     _assert_semantically_equal(pytyr_encoding, pymimir_encoding)
 
 
+def test_native_pytyr_optional_literal_lanes_match_semantic_contract() -> None:
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    state = successor_generator.get_initial_node().get_state()
+    goals = reader.problem_snapshot().goals
+    config = _config()
+    config.max_goal_level = 1
+
+    native = SemanticFlatRelationEncoder(reader._planning_task, config)
+    semantic = FlatSemanticAdapter(reader, config)
+    actual = native.make_input(
+        state,
+        goals=goals,
+        subgoal_layers=[goals],
+        history=[(-2, goals)],
+        history_max_steps=4,
+    )
+    expected = semantic.make_input(
+        state,
+        goals=goals,
+        subgoal_layers=[goals],
+        history=[(-2, goals)],
+        history_max_steps=4,
+    )
+
+    assert _input_payload(actual) == _input_payload(expected)
+    _assert_payload_equal(
+        native.engine.encode(actual), semantic.engine.encode(expected)
+    )
+
+
+def test_native_pytyr_explicit_empty_goals_override_task_goals() -> None:
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    state = successor_generator.get_initial_node().get_state()
+    native = SemanticFlatRelationEncoder(reader._planning_task, _config())
+
+    assert native.make_input(state).goals
+    assert not native.make_input(state, goals=[]).goals
+
+
 def test_native_backends_remain_independent_when_interleaved() -> None:
     pytest.importorskip("pymimir")
     from .test_flat_semantic_adapter import _assert_semantically_equal

@@ -6,7 +6,13 @@ import importlib
 from collections.abc import Iterable
 from typing import Any
 
-from pytyr.formalism.planning import PlanningTask
+from pytyr.formalism.planning import (
+    DerivedGroundLiteral,
+    FluentFDRFact,
+    FluentGroundLiteral,
+    PlanningTask,
+    StaticGroundLiteral,
+)
 
 from .semantic import (
     ActionSchemaKey,
@@ -179,16 +185,123 @@ class SemanticFlatRelationEncoder:
         self._engine = _neutral_core._consume_semantic_flat_engine_capsule(
             self._native._make_engine_capsule()
         )
+        category_map = {
+            _neutral_core.SemanticPredicateCategory.static: PredicateCategory.STATIC,
+            _neutral_core.SemanticPredicateCategory.fluent: PredicateCategory.FLUENT,
+            _neutral_core.SemanticPredicateCategory.derived: PredicateCategory.DERIVED,
+        }
+        self._predicate_indices = {
+            PredicateKey(category_map[value.category], value.name, value.arity): index
+            for index, value in enumerate(self._engine.predicates)
+        }
+        object_names = sorted(
+            str(value.get_name()) for value in planning_task.get_task().get_objects()
+        )
+        self._object_indices = {name: index for index, name in enumerate(object_names)}
 
     @property
     def engine(self) -> Any:
         return self._engine
 
-    def make_input(self, state: object, actions: Iterable[object] = ()) -> Any:
+    @staticmethod
+    def _literal_key(value: object) -> LiteralKey:
+        if isinstance(value, LiteralKey):
+            return value
+        if isinstance(value, StaticGroundLiteral):
+            return _literal_key(value, PredicateCategory.STATIC)
+        if isinstance(value, FluentGroundLiteral):
+            return _literal_key(value, PredicateCategory.FLUENT)
+        if isinstance(value, DerivedGroundLiteral):
+            return _literal_key(value, PredicateCategory.DERIVED)
+        if (
+            isinstance(value, tuple)
+            and len(value) == 2
+            and isinstance(value[0], FluentFDRFact)
+            and isinstance(value[1], bool)
+        ):
+            fact, polarity = value
+            if not fact.has_value():
+                raise ValueError("a PyTyr FDR no-value fact cannot form a literal")
+            return LiteralKey(
+                _atom_key(fact.get_atom(), PredicateCategory.FLUENT), polarity
+            )
+        if isinstance(value, FluentFDRFact):
+            raise TypeError(
+                "PyTyr FluentFDRFact goal inputs require an explicit polarity: "
+                "pass (fact, True) or (fact, False)"
+            )
+        raise TypeError(
+            "PyTyr flat literal inputs must be a ground literal, LiteralKey, or "
+            f"(FluentFDRFact, polarity), got {type(value)!r}"
+        )
+
+    def _compact_literal(self, value: object) -> tuple[int, list[int], bool]:
+        literal = self._literal_key(value)
+        try:
+            predicate = self._predicate_indices[literal.atom.predicate]
+        except KeyError as error:
+            raise ValueError(
+                "literal predicate is outside the PyTyr adapter task: "
+                f"{literal.atom.predicate!r}"
+            ) from error
+        try:
+            arguments = [self._object_indices[name] for name in literal.atom.objects]
+        except KeyError as error:
+            raise ValueError(
+                f"literal object is outside the PyTyr adapter task: {error.args[0]!r}"
+            ) from error
+        return predicate, arguments, literal.polarity
+
+    def make_input(
+        self,
+        state: object,
+        actions: Iterable[object] = (),
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+        history: Iterable[tuple[int, Iterable[object]]] = (),
+        history_max_steps: int | None = None,
+    ) -> Any:
         from mifrost import _neutral_core
 
-        capsule = self._native._make_input_capsule(state, list(actions))
+        compact_goals = (
+            None if goals is None else [self._compact_literal(value) for value in goals]
+        )
+        compact_subgoals = [
+            [self._compact_literal(value) for value in layer]
+            for layer in subgoal_layers
+        ]
+        compact_history = [
+            (int(delta), [self._compact_literal(value) for value in literals])
+            for delta, literals in history
+        ]
+        capsule = self._native._make_input_capsule(
+            state,
+            list(actions),
+            compact_goals,
+            compact_subgoals,
+            compact_history,
+            history_max_steps,
+        )
         return _neutral_core._consume_semantic_flat_input_capsule(capsule)
 
-    def encode(self, state: object, actions: Iterable[object] = ()) -> Any:
-        return self._engine.encode(self.make_input(state, actions))
+    def encode(
+        self,
+        state: object,
+        actions: Iterable[object] = (),
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+        history: Iterable[tuple[int, Iterable[object]]] = (),
+        history_max_steps: int | None = None,
+    ) -> Any:
+        return self._engine.encode(
+            self.make_input(
+                state,
+                actions,
+                goals=goals,
+                subgoal_layers=subgoal_layers,
+                history=history,
+                history_max_steps=history_max_steps,
+            )
+        )
