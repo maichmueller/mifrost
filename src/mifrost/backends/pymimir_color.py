@@ -9,7 +9,29 @@ from .._core import ColorEncoderConfig, ColorEncoderEngine, ColorStreamEncoder
 from ..encoders._batch_contract import prepare_core_batch_inputs
 from ..encoders._lane_specs import prepare_optional_payloads
 from ..encoders.common import _advanced_domain, _advanced_state, _split_goals
-from ..encoders.types import default_goals_from_state
+from ..encoders.types import WRAPPER_STATE_TYPES, default_goals_from_state
+
+
+_PYMIMIR_WRAPPER_STATE_TYPE = WRAPPER_STATE_TYPES[0]
+
+
+def _unwrap_homogeneous_wrapper_state_list(states: object) -> list[Any] | None:
+    """Unwrap the common Pymimir batch shape in one allocation/pass.
+
+    The generic batch contract remains authoritative for every other shape.
+    Exact type checks are intentional: list subclasses, mixed/native values,
+    and custom registered adapters retain their established normalization and
+    error behavior.
+    """
+
+    if type(states) is not list:
+        return None
+    unwrapped: list[Any] = []
+    for state in cast(list[Any], states):
+        if type(state) is not _PYMIMIR_WRAPPER_STATE_TYPE:
+            return None
+        unwrapped.append(state._advanced_state)
+    return unwrapped
 
 
 class PymimirColorRuntime:
@@ -63,6 +85,11 @@ class PymimirColorRuntime:
         actions: object = None,
         subgoal_layers: object = None,
     ) -> Any:
+        if goals is None and actions is None and subgoal_layers is None:
+            native_states = _unwrap_homogeneous_wrapper_state_list(states)
+            if native_states is not None:
+                return self.engine.encode_batch(native_states)
+
         inputs = prepare_core_batch_inputs(
             states,
             goals=goals,
@@ -85,16 +112,46 @@ class _PymimirColorStream:
         self._runtime = runtime
         self._native = native
 
-    def append(self, state: object, **kwargs: Any) -> Any:
-        native_state, goals, actions = self._runtime._single_payload(state, **kwargs)
+    def append(
+        self,
+        state: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+    ) -> Any:
+        if goals is None and actions is None and subgoal_layers is None:
+            return self._native.append(_advanced_state(state))
+        native_state, goals, actions = self._runtime._single_payload(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+        )
         if actions:
             raise ValueError("ColorEncoderEngine does not support action encoding")
         if goals is None:
             return self._native.append(native_state)
         return self._native.append(native_state, goals)
 
-    def update(self, stream_id: int, state: object, **kwargs: Any) -> None:
-        native_state, goals, actions = self._runtime._single_payload(state, **kwargs)
+    def update(
+        self,
+        stream_id: int,
+        state: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+    ) -> None:
+        if goals is None and actions is None and subgoal_layers is None:
+            self._native.update(stream_id, _advanced_state(state))
+            return
+        native_state, goals, actions = self._runtime._single_payload(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+        )
         if actions:
             raise ValueError("ColorEncoderEngine does not support action encoding")
         if goals is None:

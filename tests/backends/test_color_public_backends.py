@@ -102,6 +102,90 @@ def test_public_color_backends_coexist_without_global_selection() -> None:
     assert len(retained) == 6
 
 
+def test_public_pymimir_color_default_batch_uses_narrow_wrapper_fast_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import mifrost.backends.pymimir_color as pymimir_color
+
+    _pymimir_reader, problem, _reader, _successor_generator = _backend_pair()
+    state = problem.get_initial_state()
+    advanced_state = state._advanced_state
+    encoder = mifrost.ColorEncoder(problem.get_domain())
+    original_prepare = pymimir_color.prepare_core_batch_inputs
+    prepared_shapes: list[tuple[Any, Any, Any, Any]] = []
+
+    def recording_prepare(
+        states: Any,
+        *,
+        goals: Any = None,
+        actions: Any = None,
+        subgoal_layers: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        prepared_shapes.append((states, goals, actions, subgoal_layers))
+        return original_prepare(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(pymimir_color, "prepare_core_batch_inputs", recording_prepare)
+
+    fast = encoder.encode_batch([state, state])
+    assert fast.num_graphs == 2
+    assert prepared_shapes == []
+
+    mixed = encoder.encode_batch([state, advanced_state])
+    assert mixed.num_graphs == 2
+    assert len(prepared_shapes) == 1
+
+    goals = list(problem.get_goal_condition().get_literals())
+    explicit = encoder.encode_batch([state, state], goals=goals)
+    assert explicit.num_graphs == 2
+    assert prepared_shapes[-1][1] is goals
+
+
+def test_public_pymimir_color_stream_default_bypasses_optional_payload_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _pymimir_reader, problem, _reader, _successor_generator = _backend_pair()
+    state = problem.get_initial_state()
+    encoder = mifrost.ColorEncoder(problem.get_domain())
+    runtime: Any = encoder._runtime
+    original_single_payload = runtime._single_payload
+    prepared_payloads: list[tuple[Any, Any, Any]] = []
+
+    def recording_single_payload(
+        state: Any,
+        *,
+        goals: Any = None,
+        actions: Any = None,
+        subgoal_layers: Any = None,
+    ) -> Any:
+        prepared_payloads.append((goals, actions, subgoal_layers))
+        return original_single_payload(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+        )
+
+    monkeypatch.setattr(runtime, "_single_payload", recording_single_payload)
+    stream = encoder.stream()
+
+    default_id = stream.append(state)
+    stream.update(default_id, state)
+    assert prepared_payloads == []
+
+    goals = list(problem.get_goal_condition().get_literals())
+    explicit_id = stream.append(state, goals=goals)
+    stream.update(explicit_id, state, subgoal_layers=[goals])
+    assert prepared_payloads == [(goals, None, None), (None, None, [goals])]
+    assert stream.flush().num_graphs == 2
+
+
 def test_public_color_rejects_mixed_or_explicit_wrong_backend() -> None:
     _pymimir_reader, problem, reader, successor_generator = _backend_pair()
     pytyr_state = successor_generator.get_initial_node().get_state()

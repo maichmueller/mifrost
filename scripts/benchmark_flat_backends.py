@@ -23,7 +23,6 @@ from pytyr.planning.lifted import (
 )
 
 import mifrost
-from mifrost.backends.pytyr import PyTyrSnapshotReader
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +107,8 @@ def _pymimir_inputs(
 def _pytyr_inputs(
     domain: str, problem: str, max_states: int
 ) -> tuple[Any, Any, list[Any]]:
+    from mifrost.backends.pytyr import PyTyrSnapshotReader
+
     directory = ROOT / "data" / "pddl" / domain
     options = ParserOptions()
     planning_task = Parser(str(directory / "domain.pddl"), options).parse_task(

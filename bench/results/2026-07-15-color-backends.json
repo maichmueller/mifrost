@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-15",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "python": "3.12.12",
+  "scenario": {
+    "domain": "blocks",
+    "problem": "smedium",
+    "batch_size": 32,
+    "state_pool_size": 22,
+    "warmup": 30,
+    "repeats_per_round": 200,
+    "rounds": 3
+  },
+  "methodology": {
+    "reference_commit": "a71f916",
+    "reference_worktree": "detached origin/dev",
+    "environment": "same isolated venv, wheel replaced between alternating rounds",
+    "wheel_order": [
+      "current",
+      "original",
+      "original",
+      "current",
+      "current",
+      "original"
+    ],
+    "aggregate": "median of three per-round medians",
+    "current_backend_comparison": "three same-process source-build rounds"
+  },
+  "original_vs_refactored": [
+    {
+      "path": "batch_default",
+      "original_round_medians_ms": [
+        0.1351664905087091,
+        0.14837549679214135,
+        0.13545900583267212
+      ],
+      "refactored_round_medians_ms": [
+        0.12499949662014842,
+        0.13533400488086045,
+        0.1272289955522865
+      ],
+      "original_median_ms": 0.13545900583267212,
+      "refactored_median_ms": 0.1272289955522865,
+      "refactored_change_percent": -6.075646450965289,
+      "acceptance_threshold_percent": 5.0,
+      "accepted": true
+    },
+    {
+      "path": "batch_explicit_goals",
+      "original_round_medians_ms": [
+        0.1475000026402995,
+        0.15304199769161642,
+        0.14739549806108698
+      ],
+      "refactored_round_medians_ms": [
+        0.1426874950993806,
+        0.15024949971120805,
+        0.14054100029170513
+      ],
+      "original_median_ms": 0.1475000026402995,
+      "refactored_median_ms": 0.1426874950993806,
+      "refactored_change_percent": -3.262716918490438,
+      "acceptance_threshold_percent": 5.0,
+      "accepted": true
+    },
+    {
+      "path": "single_loop",
+      "original_round_medians_ms": [
+        0.3192080039298162,
+        0.3122915077256039,
+        0.3129794931737706
+      ],
+      "refactored_round_medians_ms": [
+        0.33222899946849793,
+        0.3292084948043339,
+        0.3384584924788214
+      ],
+      "original_median_ms": 0.3129794931737706,
+      "refactored_median_ms": 0.33222899946849793,
+      "refactored_change_percent": 6.150404967279988,
+      "acceptance_threshold_percent": 10.0,
+      "accepted": true
+    },
+    {
+      "path": "stream_end_to_end",
+      "original_round_medians_ms": [
+        0.3233124953112565,
+        0.3362915085745044,
+        0.3503960033413023
+      ],
+      "refactored_round_medians_ms": [
+        0.34893750125775114,
+        0.3546880034264177,
+        0.339541002176702
+      ],
+      "original_median_ms": 0.3362915085745044,
+      "refactored_median_ms": 0.34893750125775114,
+      "refactored_change_percent": 3.760425809397172,
+      "acceptance_threshold_percent": 10.0,
+      "accepted": true
+    }
+  ],
+  "current_backend_comparison": [
+    {
+      "path": "batch_default",
+      "pymimir_round_medians_ms": [
+        0.13987500278744847,
+        0.12766649888362736,
+        0.1324580007349141
+      ],
+      "pytyr_round_medians_ms": [
+        0.24747949646553025,
+        0.2439164964016527,
+        0.24427050084341317
+      ],
+      "pymimir_median_ms": 0.1324580007349141,
+      "pytyr_median_ms": 0.24427050084341317,
+      "pytyr_change_percent": 84.41354956901961
+    },
+    {
+      "path": "batch_explicit_goals",
+      "pymimir_round_medians_ms": [
+        0.15106250066310167,
+        0.13939599739387631,
+        0.14881200331728905
+      ],
+      "pytyr_round_medians_ms": [
+        0.2579789943411015,
+        0.261708497419022,
+        0.27299999783281237
+      ],
+      "pymimir_median_ms": 0.14881200331728905,
+      "pytyr_median_ms": 0.261708497419022,
+      "pytyr_change_percent": 75.86517994856979
+    },
+    {
+      "path": "single_loop",
+      "pymimir_round_medians_ms": [
+        0.3482710017124191,
+        0.34216700441902503,
+        0.3349585022078827
+      ],
+      "pytyr_round_medians_ms": [
+        0.4233329964336008,
+        0.4285414979676716,
+        0.4322909953771159
+      ],
+      "pymimir_median_ms": 0.34216700441902503,
+      "pytyr_median_ms": 0.4285414979676716,
+      "pytyr_change_percent": 25.24337309943261
+    },
+    {
+      "path": "stream_end_to_end",
+      "pymimir_round_medians_ms": [
+        0.3620829957071692,
+        0.3608960032579489,
+        0.3317500013508834
+      ],
+      "pytyr_round_medians_ms": [
+        0.2626464993227273,
+        0.2726875027292408,
+        0.27689599664881825
+      ],
+      "pymimir_median_ms": 0.3608960032579489,
+      "pytyr_median_ms": 0.2726875027292408,
+      "pytyr_change_percent": -24.441528787355793
+    }
+  ],
+  "optimization": {
+    "pymimir_default_batch": "one-pass exact wrapper-state unwrap; all other shapes use the generic adapter contract",
+    "pymimir_default_stream": "direct native append/update for absent optional lanes; explicit lanes retain generic normalization",
+    "pytyr_batch_transfer": "one owned semantic-input vector capsule per batch",
+    "remaining_pytyr_gap": "native Tyr FDR/state traversal and owned semantic-input construction"
+  },
+  "memory": {
+    "status": "deferred to the all-family process/scoped-allocation matrix",
+    "reason": "process RSS is dominated by planner and PyTorch imports; the flat report already records the current split-module process delta"
+  }
+}
