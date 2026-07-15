@@ -112,9 +112,11 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    ~SemanticFlatRelationEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
+   void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
+   void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;

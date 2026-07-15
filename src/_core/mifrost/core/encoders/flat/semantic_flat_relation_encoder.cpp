@@ -972,10 +972,29 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
       auto encoding = builder.build();
+      finalize_batch_encoding(encoding);
+      return encoding;
+   }
+
+   void encode_one_into(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
+   {
+      prepare_builder(builder);
+      std::vector< std::string > target_names;
+      encode_into(input, builder, target_names);
+      if(not target_group_names.empty() and config.export_node_names) {
+         if(target_names.empty()) {
+            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+         } else {
+            builder.add_lazy_target_names(std::span{target_names});
+         }
+      }
+   }
+
+   void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
+   {
       if(config.pack_relation_args_relation_major) {
          pack_flat_relation_args_relation_major(encoding, std::span{metadata.relation_arities});
       }
-      return encoding;
    }
 };
 
@@ -1005,11 +1024,26 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
    return impl_->encode_many(std::span{&input, size_t{1}});
 }
 
+void SemanticFlatRelationEncoderEngine::encode(
+   const SemanticFlatRelationInput& input,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode_one_into(input, builder);
+}
+
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
    const std::vector< SemanticFlatRelationInput >& inputs
 ) const
 {
    return impl_->encode_many(std::span{inputs});
+}
+
+void SemanticFlatRelationEncoderEngine::finalize_batch_encoding(
+   BatchBuilder::BatchEncoding& encoding
+) const
+{
+   impl_->finalize_batch_encoding(encoding);
 }
 
 const SemanticFlatRelationEncoderEngine::Config&

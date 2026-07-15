@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
@@ -104,16 +103,6 @@ def _history_values(value: object, *, state_count: int) -> list[Any | None]:
     )
 
 
-@dataclass(slots=True)
-class _StreamItem:
-    state: object
-    goals: object
-    actions: object
-    subgoal_layers: object
-    history_subgoals: object
-    history_max_steps: int | None
-
-
 class _PyTyrFlatStream:
     def __init__(self, runtime: "PyTyrFlatRuntime", *, mutable: bool) -> None:
         self._runtime = runtime
@@ -122,14 +111,7 @@ class _PyTyrFlatStream:
         self.reset()
 
     def append(self, state: object, **kwargs: Any) -> int:
-        item = _StreamItem(
-            state=state,
-            goals=kwargs.get("goals"),
-            actions=kwargs.get("actions"),
-            subgoal_layers=kwargs.get("subgoal_layers"),
-            history_subgoals=kwargs.get("history_subgoals"),
-            history_max_steps=kwargs.get("history_max_steps"),
-        )
+        item = self._runtime._input(state, **kwargs)
         if self._reuse_removed and self._removed:
             stream_id = min(self._removed)
             self._removed.remove(stream_id)
@@ -145,14 +127,7 @@ class _PyTyrFlatStream:
             raise NotImplementedError("update is not implemented for this stream")
         if stream_id not in self._items:
             raise KeyError(stream_id)
-        self._items[stream_id] = _StreamItem(
-            state=state,
-            goals=kwargs.get("goals"),
-            actions=kwargs.get("actions"),
-            subgoal_layers=kwargs.get("subgoal_layers"),
-            history_subgoals=kwargs.get("history_subgoals"),
-            history_max_steps=kwargs.get("history_max_steps"),
-        )
+        self._items[stream_id] = self._runtime._input(state, **kwargs)
 
     def remove(self, stream_id: int) -> None:
         if not self._mutable:
@@ -167,30 +142,12 @@ class _PyTyrFlatStream:
 
     def flush(self) -> Any:
         values = [self._items[key] for key in sorted(self._items)]
-        if not values:
-            return self._runtime.engine.encode_batch([])
-        max_steps = {item.history_max_steps for item in values}
-        if len(max_steps) != 1:
-            raise ValueError("stream items must use one shared history_max_steps value")
-        return self._runtime.encode_batch(
-            [item.state for item in values],
-            goals=_Separate([item.goals for item in values]),
-            actions=_Separate([item.actions for item in values]),
-            subgoal_layers=_Separate([item.subgoal_layers for item in values]),
-            history_subgoals=_Separate([item.history_subgoals for item in values]),
-            history_max_steps=next(iter(max_steps)),
-        )
+        return self._runtime.engine.encode_batch(values)
 
     def reset(self) -> None:
-        self._items: dict[int, _StreamItem] = {}
+        self._items: dict[int, Any] = {}
         self._removed: set[int] = set()
         self._next_id = 0
-
-
-@dataclass(frozen=True, slots=True)
-class _Separate:
-    value: list[Any]
-    kind: str = "separate"
 
 
 class PyTyrFlatRuntime:
@@ -302,10 +259,7 @@ class PyTyrFlatRuntime:
         return self.engine.encode_batch(inputs)
 
     def append_into_builder(self, state: object, builder: Any, **kwargs: Any) -> None:
-        raise NotImplementedError(
-            "PyTyr semantic-flat encoding returns an owned BatchEncoding; "
-            "caller-owned BatchBuilder composition is not available yet"
-        )
+        self.engine.encode(self._input(state, **kwargs), builder)
 
     def make_stream(self, *, mutable: bool) -> Any:
         return _PyTyrFlatStream(self, mutable=mutable)

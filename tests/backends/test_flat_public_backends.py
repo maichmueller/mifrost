@@ -141,6 +141,30 @@ def test_public_flat_pytyr_streams_match_direct_batch() -> None:
     assert mutable.append(state) == removed
 
 
+def test_public_flat_pytyr_supports_caller_owned_batch_builder() -> None:
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    root = successor_generator.get_initial_node()
+    state = root.get_state()
+    actions = [
+        successor.label
+        for successor in successor_generator.get_labeled_successor_nodes(root)
+    ]
+    encoder = mifrost.FlatRelationEncoder(
+        reader._planning_task,
+        target_sources={"goal", "action"},
+        pack_relation_args_relation_major=True,
+    )
+    builder = mifrost.BatchBuilder()
+    builder.set_graph_kind("flat")
+
+    encoder._encode_one_into_builder(state, builder, actions=actions)
+    builder.next_graph()
+    actual = builder.build()
+    encoder.engine.finalize_batch_encoding(actual)
+
+    _assert_encoding_equal(actual, encoder.encode(state, actions=actions))
+
+
 def test_public_flat_rejects_mixed_backend_states() -> None:
     from .test_semantic_parity import _backend_pair
 
