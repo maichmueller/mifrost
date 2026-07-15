@@ -260,6 +260,7 @@ add_library(
         "_core/mifrost/core/encoders/flat/flat_relation_context.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_encoder.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
+        "_core/mifrost/core/encoders/flat/semantic_flat_relation_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/hgraph_stream_encoder.cpp"
         "_core/mifrost/core/encoders/common/target_metadata.cpp"
         "_core/mifrost/core/encoders/common/transition_dag.cpp"

@@ -9,6 +9,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 #include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
@@ -61,6 +62,101 @@ void init_flat_encoder(nb::module_& m)
          &FlatRelationEncoderEngine::Config::pack_relation_args_relation_major
       )
       .def_rw("goal_derivations", &FlatRelationEncoderEngine::Config::goal_derivations);
+
+   nb::enum_< SemanticPredicateCategory >(m, "SemanticPredicateCategory")
+      .value("static", SemanticPredicateCategory::static_predicate)
+      .value("fluent", SemanticPredicateCategory::fluent)
+      .value("derived", SemanticPredicateCategory::derived);
+
+   nb::class_< SemanticPredicateSpec >(m, "SemanticPredicateSpec")
+      .def(
+         nb::init< SemanticPredicateCategory, std::string, int64_t >(),
+         "category"_a,
+         "name"_a,
+         "arity"_a
+      )
+      .def_rw("category", &SemanticPredicateSpec::category)
+      .def_rw("name", &SemanticPredicateSpec::name)
+      .def_rw("arity", &SemanticPredicateSpec::arity);
+
+   nb::class_< SemanticActionSpec >(m, "SemanticActionSpec")
+      .def(nb::init< std::string, int64_t >(), "name"_a, "arity"_a)
+      .def_rw("name", &SemanticActionSpec::name)
+      .def_rw("arity", &SemanticActionSpec::arity);
+
+   nb::class_< SemanticAtom >(m, "SemanticAtom")
+      .def(nb::init< int64_t, std::vector< int64_t > >(), "predicate"_a, "arguments"_a)
+      .def_rw("predicate", &SemanticAtom::predicate)
+      .def_rw("arguments", &SemanticAtom::arguments);
+
+   nb::class_< SemanticLiteral >(m, "SemanticLiteral")
+      .def(nb::init< SemanticAtom, bool >(), "atom"_a, "positive"_a = true)
+      .def_rw("atom", &SemanticLiteral::atom)
+      .def_rw("positive", &SemanticLiteral::positive);
+
+   nb::class_< SemanticGroundAction >(m, "SemanticGroundAction")
+      .def(nb::init< int64_t, std::vector< int64_t > >(), "action"_a, "arguments"_a)
+      .def_rw("action", &SemanticGroundAction::action)
+      .def_rw("arguments", &SemanticGroundAction::arguments);
+
+   nb::class_< SemanticHistoryEntry >(m, "SemanticHistoryEntry")
+      .def(nb::init< int64_t, std::vector< SemanticLiteral > >(), "dt"_a, "literals"_a)
+      .def_rw("dt", &SemanticHistoryEntry::dt)
+      .def_rw("literals", &SemanticHistoryEntry::literals);
+
+   nb::class_< SemanticFlatRelationInput >(m, "SemanticFlatRelationInput")
+      .def(nb::init<>())
+      .def_rw("objects", &SemanticFlatRelationInput::objects)
+      .def_rw("state_facts", &SemanticFlatRelationInput::state_facts)
+      .def_rw("goals", &SemanticFlatRelationInput::goals)
+      .def_rw("actions", &SemanticFlatRelationInput::actions)
+      .def_rw("subgoal_layers", &SemanticFlatRelationInput::subgoal_layers)
+      .def_rw("history", &SemanticFlatRelationInput::history)
+      .def_prop_rw(
+         "history_max_steps",
+         [](const SemanticFlatRelationInput& self) { return self.history_max_steps; },
+         [](SemanticFlatRelationInput& self, const std::optional< int64_t >& value) {
+            self.history_max_steps = value;
+         },
+         nb::arg().none()
+      );
+
+   nb::class_< SemanticFlatRelationEncoderEngine >(m, "SemanticFlatRelationEncoderEngine")
+      .def(
+         nb::init<
+            std::vector< SemanticPredicateSpec >,
+            std::vector< SemanticActionSpec >,
+            FlatRelationEncoderConfig >(),
+         "predicates"_a,
+         "actions"_a,
+         "config"_a = FlatRelationEncoderConfig{}
+      )
+      .def_prop_ro(
+         "config", &SemanticFlatRelationEncoderEngine::get_config, nb::rv_policy::reference_internal
+      )
+      .def_prop_ro("predicates", &SemanticFlatRelationEncoderEngine::get_predicates)
+      .def_prop_ro("actions", &SemanticFlatRelationEncoderEngine::get_actions)
+      .def_prop_ro("relation_names", &SemanticFlatRelationEncoderEngine::get_relation_names)
+      .def_prop_ro("relation_arities", &SemanticFlatRelationEncoderEngine::get_relation_arities)
+      .def_prop_ro("relation_sources", &SemanticFlatRelationEncoderEngine::get_relation_sources)
+      .def_prop_ro(
+         "relation_logical_arities",
+         &SemanticFlatRelationEncoderEngine::get_relation_logical_arities
+      )
+      .def_prop_ro(
+         "relation_encoded_arities",
+         &SemanticFlatRelationEncoderEngine::get_relation_encoded_arities
+      )
+      .def_prop_ro(
+         "relation_slot_roles", &SemanticFlatRelationEncoderEngine::get_relation_slot_roles
+      )
+      .def_prop_ro(
+         "relation_slot_role_offsets",
+         &SemanticFlatRelationEncoderEngine::get_relation_slot_role_offsets
+      )
+      .def_prop_ro("slot_role_names", &SemanticFlatRelationEncoderEngine::get_slot_role_names)
+      .def("encode", &SemanticFlatRelationEncoderEngine::encode, "input"_a)
+      .def("encode_batch", &SemanticFlatRelationEncoderEngine::encode_batch, "inputs"_a);
 
    nb::class_< FlatRelationEncoderEngine >(m, "FlatRelationEncoderEngine")
       .def(nb::init< const mimir::formalism::DomainImpl& >())
