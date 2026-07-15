@@ -3,6 +3,7 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
@@ -23,6 +24,87 @@ namespace {
 void apply_flat_config_kwargs(FlatRelationEncoderEngine::Config& config, const nb::kwargs& kwargs)
 {
    apply_config_kwargs(config, kwargs, "FlatRelationEncoderConfig");
+}
+
+using CompactSemanticAtom = std::pair< int64_t, std::vector< int64_t > >;
+using CompactSemanticLiteral = std::tuple< int64_t, std::vector< int64_t >, bool >;
+
+SemanticAtom expand_compact_atom(CompactSemanticAtom value)
+{
+   return SemanticAtom{
+      .predicate = value.first,
+      .arguments = std::move(value.second),
+   };
+}
+
+SemanticLiteral expand_compact_literal(CompactSemanticLiteral value)
+{
+   auto [predicate, arguments, positive] = std::move(value);
+   return SemanticLiteral{
+      .atom =
+         SemanticAtom{
+            .predicate = predicate,
+            .arguments = std::move(arguments),
+         },
+      .positive = positive,
+   };
+}
+
+SemanticFlatRelationInput make_compact_semantic_input(
+   std::vector< std::string > objects,
+   std::vector< CompactSemanticAtom > state_facts,
+   std::vector< CompactSemanticLiteral > goals,
+   std::vector< CompactSemanticAtom > actions,
+   std::vector< std::vector< CompactSemanticLiteral > > subgoal_layers,
+   std::vector< std::pair< int64_t, std::vector< CompactSemanticLiteral > > > history,
+   std::optional< int64_t > history_max_steps
+)
+{
+   SemanticFlatRelationInput result;
+   result.objects = std::move(objects);
+   result.state_facts.reserve(state_facts.size());
+   for(auto& fact : state_facts) {
+      result.state_facts.push_back(expand_compact_atom(std::move(fact)));
+   }
+   result.goals.reserve(goals.size());
+   for(auto& goal : goals) {
+      result.goals.push_back(expand_compact_literal(std::move(goal)));
+   }
+   result.actions.reserve(actions.size());
+   for(auto& action : actions) {
+      auto expanded = expand_compact_atom(std::move(action));
+      result.actions.push_back(
+         SemanticGroundAction{
+            .action = expanded.predicate,
+            .arguments = std::move(expanded.arguments),
+         }
+      );
+   }
+   result.subgoal_layers.reserve(subgoal_layers.size());
+   for(auto& compact_layer : subgoal_layers) {
+      std::vector< SemanticLiteral > layer;
+      layer.reserve(compact_layer.size());
+      for(auto& literal : compact_layer) {
+         layer.push_back(expand_compact_literal(std::move(literal)));
+      }
+      result.subgoal_layers.push_back(std::move(layer));
+   }
+   result.history.reserve(history.size());
+   for(auto& [dt, compact_literals] : history) {
+      std::vector< SemanticLiteral > literals;
+      literals.reserve(compact_literals.size());
+      for(auto& literal : compact_literals) {
+         literals.push_back(expand_compact_literal(std::move(literal)));
+      }
+      result.history.push_back(
+         SemanticHistoryEntry{
+            .dt = dt,
+            .literals = std::move(literals),
+         }
+      );
+   }
+   result.history_max_steps = history_max_steps;
+   return result;
 }
 
 }  // namespace
@@ -106,6 +188,17 @@ void init_flat_encoder(nb::module_& m)
 
    nb::class_< SemanticFlatRelationInput >(m, "SemanticFlatRelationInput")
       .def(nb::init<>())
+      .def_static(
+         "from_compact",
+         &make_compact_semantic_input,
+         "objects"_a,
+         "state_facts"_a,
+         "goals"_a,
+         "actions"_a,
+         "subgoal_layers"_a,
+         "history"_a,
+         "history_max_steps"_a.none() = nb::none()
+      )
       .def_rw("objects", &SemanticFlatRelationInput::objects)
       .def_rw("state_facts", &SemanticFlatRelationInput::state_facts)
       .def_rw("goals", &SemanticFlatRelationInput::goals)

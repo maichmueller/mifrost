@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import torch
 
 import mifrost
 
@@ -155,3 +156,26 @@ def test_semantic_input_accepts_unbounded_history() -> None:
     value.history_max_steps = None
 
     assert value.history_max_steps is None
+
+
+def test_compact_semantic_input_factory_matches_bound_records() -> None:
+    predicates, actions = _schema()
+    engine = mifrost.SemanticFlatRelationEncoderEngine(predicates, actions, _config())
+    compact = mifrost.SemanticFlatRelationInput.from_compact(
+        objects=["a", "b"],
+        state_facts=[(0, [0]), (0, [1]), (1, []), (2, [0, 1]), (3, [0])],
+        goals=[(2, [1, 0], True), (1, [], False)],
+        actions=[(0, [0, 1]), (0, [0, 1])],
+        subgoal_layers=[[(3, [0], True)]],
+        history=[(-1, [(2, [0, 1], True), (2, [0, 1], True)])],
+        history_max_steps=None,
+    )
+
+    actual = engine.encode(compact).as_pyg().to_dict()
+    expected = engine.encode(_input()).as_pyg().to_dict()
+    assert actual.keys() == expected.keys()
+    for key in actual:
+        if torch.is_tensor(actual[key]):
+            assert torch.equal(actual[key], expected[key]), key
+        else:
+            assert actual[key] == expected[key], key
