@@ -11,9 +11,7 @@
 
    #include <algorithm>
    #include <array>
-   #include <mimir/search/formatter.hpp>
    #include <span>
-   #include <sstream>
    #include <stdexcept>
    #include <string_view>
 
@@ -96,14 +94,18 @@ bool key_has_ptr_suffix(std::string_view key)
           and key.substr(suffix_pos) == schema_key::kPtrAttr;
 }
 
-std::vector< std::string > format_target_name_states(std::span< const mimir::search::State > states)
+std::vector< std::string > materialize_target_name_batches(
+   const std::vector< std::shared_ptr< const DeferredStringBatch > >& batches
+)
 {
    std::vector< std::string > names;
-   names.reserve(states.size());
-   for(const auto& state : states) {
-      std::ostringstream stream;
-      stream << state;
-      names.push_back(stream.str());
+   for(const auto& batch : batches) {
+      auto batch_names = batch->materialize();
+      names.insert(
+         names.end(),
+         std::make_move_iterator(batch_names.begin()),
+         std::make_move_iterator(batch_names.end())
+      );
    }
    return names;
 }
@@ -131,13 +133,13 @@ void materialize_builder_lazy_target_names(BatchBuilder& builder)
       append_target_name_strings(builder, builder.lazy_target_name_strings);
       builder.lazy_target_name_strings.clear();
    }
-   if(builder.lazy_target_name_states.empty()) {
+   if(builder.lazy_target_name_batches.empty()) {
       return;
    }
    append_target_name_strings(
-      builder, format_target_name_states(std::span(builder.lazy_target_name_states))
+      builder, materialize_target_name_batches(builder.lazy_target_name_batches)
    );
-   builder.lazy_target_name_states.clear();
+   builder.lazy_target_name_batches.clear();
 }
 
 void set_graph_attrs_on_pyg_batch(

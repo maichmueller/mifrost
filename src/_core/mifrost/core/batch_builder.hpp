@@ -4,7 +4,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <mimir/search/state.hpp>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -18,6 +17,13 @@
 #include "schema.hpp"
 
 namespace mifrost {
+
+/** Backend-neutral provider for lazily materialized string metadata. */
+class MIFROST_API DeferredStringBatch {
+  public:
+   virtual ~DeferredStringBatch();
+   [[nodiscard]] virtual std::vector< std::string > materialize() const = 0;
+};
 
 /**
  * @brief Container for columnar graph data that grows dynamically.
@@ -82,8 +88,8 @@ class MIFROST_API BatchBuilder {
    hash_map< std::string, GraphAttrValue > graph_attrs;
    /// Deferred preformatted target names that can be exposed lazily on demand.
    std::vector< std::string > lazy_target_name_strings;
-   /// Deferred target-state names that can be formatted lazily on demand.
-   std::vector< mimir::search::State > lazy_target_name_states;
+   /// Backend-owned target-name providers materialized lazily on demand.
+   std::vector< std::shared_ptr< const DeferredStringBatch > > lazy_target_name_batches;
    /// Optional dynamic graph field store. Lazily allocated when used.
    std::unique_ptr< hash_map< std::string, GraphField > > graph_fields;
 
@@ -211,8 +217,8 @@ class MIFROST_API BatchBuilder {
    void set_graph_attr(const std::string& key, std::string value);
    /// Append preformatted target names used to lazily expose ``target_names`` later.
    void add_lazy_target_names(std::span< const std::string > names);
-   /// Append target-state handles used to lazily format ``target_names`` later.
-   void add_lazy_target_names(std::span< const mimir::search::State > states);
+   /// Append a backend-neutral deferred target-name batch.
+   void add_lazy_target_name_batch(std::shared_ptr< const DeferredStringBatch > names);
    /// Register one dynamic graph field with strict typed collation spec.
    void register_field(const std::string& key, const GraphFieldSpec& spec);
    /// Get dynamic field spec for one registered key.
@@ -270,7 +276,7 @@ struct BatchBuilder::BatchEncoding {
    hash_map< std::string, int > node_feature_dims;
    hash_map< std::string, GraphAttrValue > graph_attrs;
    std::vector< std::string > lazy_target_name_strings;
-   std::vector< mimir::search::State > lazy_target_name_states;
+   std::vector< std::shared_ptr< const DeferredStringBatch > > lazy_target_name_batches;
    hash_map< std::string, GraphField > graph_fields;
    hash_map< std::string, std::vector< int64_t > > ptrs;
    absl::btree_map< std::string, bool > schema_flags;

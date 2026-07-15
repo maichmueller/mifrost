@@ -26,6 +26,7 @@
 #include "flat_horizon_context.hpp"
 #include "flat_lgan.hpp"
 #include "flat_tuple_args.hpp"
+#include "mifrost/backends/pymimir/deferred_state_names.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
@@ -1324,7 +1325,9 @@ void FlatHorizonEncoderEngine::encode_impl(
             if(context.target_name_states.empty()) {
                builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
             } else {
-               builder.add_lazy_target_names(std::span(context.target_name_states));
+               pymimir_backend::add_deferred_state_names(
+                  builder, std::span(context.target_name_states)
+               );
             }
          }
       }
@@ -1490,7 +1493,7 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       if(batch_target_name_states.empty()) {
          builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
       } else {
-         builder.add_lazy_target_names(std::span(batch_target_name_states));
+         pymimir_backend::add_deferred_state_names(builder, std::span(batch_target_name_states));
       }
    }
    builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);

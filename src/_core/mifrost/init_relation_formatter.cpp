@@ -111,13 +111,6 @@ std::string format_literal_optional(
 
 void init_relation_formatter(nb::module_& m)
 {
-   nb::enum_< GoalDerivation >(m, "GoalDerivation")
-      .value("plain", GoalDerivation::plain)
-      .value("satisfied", GoalDerivation::satisfied)
-      .value("unsatisfied", GoalDerivation::unsatisfied)
-      .value("added_satisfied", GoalDerivation::added_satisfied)
-      .value("added_unsatisfied", GoalDerivation::added_unsatisfied);
-
    nb::class_< RelationFormatter >(m, "RelationFormatter")
       .def_static(
          "format_predicate",

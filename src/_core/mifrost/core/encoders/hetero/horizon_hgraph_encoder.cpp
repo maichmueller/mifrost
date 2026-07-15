@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mifrost/backends/pymimir/deferred_state_names.hpp"
+#include "mifrost/backends/pymimir/transition_target_metadata.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
@@ -1333,7 +1335,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
       }
 
       if(export_state_targets) {
-         const auto candidate_rows = collect_transition_dag_target_candidate_rows(
+         const auto candidate_rows = pymimir_backend::collect_transition_dag_target_candidate_rows(
             dag,
             target_positions_by_index,
             horizon_config_.root_policy,
@@ -1391,7 +1393,7 @@ void HorizonHGraphEncoderEngine::encode_impl(
          } else if(target_name_states.empty()) {
             builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
          } else {
-            builder.add_lazy_target_names(std::span(target_name_states));
+            pymimir_backend::add_deferred_state_names(builder, std::span(target_name_states));
          }
       }
    }
@@ -1473,7 +1475,7 @@ BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
       if(batch_target_name_states.empty()) {
          builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
       } else {
-         builder.add_lazy_target_names(std::span(batch_target_name_states));
+         pymimir_backend::add_deferred_state_names(builder, std::span(batch_target_name_states));
       }
    }
 

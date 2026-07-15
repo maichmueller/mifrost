@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "flat_entity_context.hpp"
+#include "mifrost/backends/pymimir/transition_target_metadata.hpp"
 
 namespace mifrost {
 
@@ -79,7 +80,7 @@ FlatHorizonEncoderEngine::EncodingContext build_flat_horizon_encoding_context(
       }
    }
 
-   const auto rows = collect_transition_dag_target_candidate_rows(
+   const auto rows = pymimir_backend::collect_transition_dag_target_candidate_rows(
       dag,
       target_positions_by_index,
       config.root_policy,

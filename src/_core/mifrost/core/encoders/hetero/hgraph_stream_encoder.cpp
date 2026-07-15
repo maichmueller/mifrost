@@ -79,7 +79,7 @@ void HGraphEncoderEngine::initialize_from_domain()
                                     or config_.include_lgan_edges)
                                       ? 1
                                       : 0;
-   relation_dict_ = RelationDict(
+   relation_dict_ = build_pymimir_relation_dict(
       domain_, actions, rel_config, predicate_arity_offset, action_arity_offset
    );
    rebuild_all_edge_types();

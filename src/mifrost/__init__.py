@@ -34,6 +34,23 @@ def _existing_library_dir() -> _Path | None:
     return None
 
 
+def _existing_cmake_dir() -> _Path | None:
+    for pkg_root in _package_roots():
+        for libdir in ("lib", "lib64"):
+            candidate = pkg_root / libdir / "cmake" / "mifrost"
+            if candidate.is_dir():
+                return candidate
+
+    # Editable builds keep native binaries in the source tree while installing
+    # the generated CMake package. Locate that installed package without
+    # assuming a particular site-packages spelling.
+    for entry in _sys.path:
+        candidate = _Path(entry) / "mifrost" / "lib" / "cmake" / "mifrost"
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
 def get_include_dir() -> str:
     pkg_root = _package_root()
     for candidate_root in _package_roots():
@@ -60,9 +77,9 @@ def get_library_dir() -> str:
 
 
 def get_cmake_dir() -> str:
-    library_dir = _existing_library_dir()
-    if library_dir is not None:
-        return str(library_dir / "cmake" / "mifrost")
+    cmake_dir = _existing_cmake_dir()
+    if cmake_dir is not None:
+        return str(cmake_dir)
     return str(_package_root() / "lib" / "cmake" / "mifrost")
 
 
@@ -78,11 +95,16 @@ if _in_stubgen:
         for finder in _sys.meta_path
         if finder.__class__.__name__ != "ScikitBuildRedirectingFinder"
     ]
+    # Editable installs can also extend this package's search path with the
+    # installed extension directory. Stub generation must inspect the freshly
+    # built source-tree module, not a stale installed binary.
+    __path__ = [str(_package_root())]
     __all__: list[str] = []
 else:
     from collections.abc import Mapping as _ABCMapping
 
-    from . import _core  # make _core cpp module explicitly available to re-export
+    from . import _core
+
     from .map_view import MapView, install_map_view_wrappers
     from .schema_keys import (
         BATCH_ATTR,
@@ -98,7 +120,8 @@ else:
     )
 
     install_map_view_wrappers(_core)
-    _ABCMapping.register(_core.RelationDict)
+    if hasattr(_core, "RelationDict"):
+        _ABCMapping.register(_core.RelationDict)
     from ._core import *  # noqa: F401,F403
     from ._encoder_public import (
         ENCODER_OPTIONAL_DEPENDENCY_MESSAGE,
@@ -123,7 +146,7 @@ else:
             out[str(key)] = CollateSpec.from_spec(spec).to_core_dict()
         return out
 
-    def batch_encodings(
+    def batch_encodings(  # type: ignore[misc]
         encodings,
         collate_spec: (
             _ABCMapping[str, CollateSpec | _ABCMapping[str, Any]] | None
@@ -159,11 +182,13 @@ else:
                 )
             raise AttributeError(name)
 
-    __all__ = [
-        name
-        for name in list(getattr(_core, "__all__", []))
-        if not name.startswith("MapView[")
-    ] + [
+    _native_exports = list(getattr(_core, "__all__", []))
+
+    __all__ = list(
+        dict.fromkeys(
+            name for name in _native_exports if not name.startswith("MapView[")
+        )
+    ) + [
         "Mode",
         "DType",
         "Inc",

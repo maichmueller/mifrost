@@ -353,16 +353,15 @@ inline void register_mapview_base_maybe(nb::module_& m)
 }
 
 template < MapLike MapT >
-const std::string& map_view_python_name()
+const std::string& map_view_python_identifier()
 {
    using Key = typename MapT::key_type;
    using Value = typename MapT::mapped_type;
    static const std::string name = [] {
-      std::string out = "MapView[";
+      std::string out = "_MapView_";
       out.append(map_view_python_type_token< Key >());
-      out.push_back(',');
+      out.push_back('_');
       out.append(map_view_python_type_token< Value >());
-      out.push_back(']');
       return out;
    }();
    return name;
@@ -376,7 +375,8 @@ void register_mapview_maybe(nb::module_& m)
    if(nb::type< ViewT >().is_valid()) {
       return;
    }
-   bind_map_view< MapT >(m, map_view_python_name< MapT >().c_str());
+   const auto& identifier = map_view_python_identifier< MapT >();
+   bind_map_view< MapT >(m, identifier.c_str());
 }
 
 }  // namespace mifrost

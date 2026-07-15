@@ -171,16 +171,14 @@ inline void sort_edge_pairs(EdgePairs& pairs)
    std::sort(pairs.begin(), pairs.end());
 }
 
-inline std::vector< std::string > materialize_target_name_states(
-   std::span< const mimir::search::State > states
+inline std::vector< std::string > materialize_target_name_batches(
+   const std::vector< std::shared_ptr< const mifrost::DeferredStringBatch > >& batches
 )
 {
    std::vector< std::string > names;
-   names.reserve(states.size());
-   for(const auto& state : states) {
-      std::ostringstream stream;
-      stream << state;
-      names.push_back(stream.str());
+   for(const auto& batch : batches) {
+      auto batch_names = batch->materialize();
+      names.insert(names.end(), batch_names.begin(), batch_names.end());
    }
    return names;
 }
@@ -211,8 +209,8 @@ inline std::vector< std::string > target_names_for(const EncodingLike& encoding)
          encoding.lazy_target_name_strings.end()
       );
    }
-   if(not encoding.lazy_target_name_states.empty()) {
-      auto lazy_names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
+   if(not encoding.lazy_target_name_batches.empty()) {
+      auto lazy_names = materialize_target_name_batches(encoding.lazy_target_name_batches);
       out.insert(
          out.end(),
          std::make_move_iterator(lazy_names.begin()),

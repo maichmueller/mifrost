@@ -76,7 +76,7 @@ TEST_P(HorizonHGraphEncoderTest, EmitsTargetGraphAttributesAndSymbols)
       ASSERT_EQ(positions.size(), indices.size());
       ASSERT_EQ(positions.size(), candidate_ids.size());
       ASSERT_EQ(positions.size(), depths.size());
-      ASSERT_EQ(builder.lazy_target_name_states.size(), positions.size());
+      ASSERT_FALSE(builder.lazy_target_name_batches.empty());
       ASSERT_EQ(positions.size(), names.size());
       const size_t expected_candidates = root_in_target_metadata(config.root_policy)
                                             ? dag.nodes().size()

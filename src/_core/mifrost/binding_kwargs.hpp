@@ -13,7 +13,7 @@
 #include <string_view>
 #include <type_traits>
 
-#include "mifrost/core/encoders/common/relation_formatter.hpp"
+#include "mifrost/core/encoders/common/goal_derivation.hpp"
 #include "mifrost/core/encoders/common/target_source.hpp"
 
 namespace mifrost {

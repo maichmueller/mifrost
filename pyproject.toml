@@ -69,7 +69,7 @@ wheel.packages = ["src/mifrost"]
 # nanobind generates the public stub in the source package. Git ignores the
 # file, but packaging still needs it, so include it in the sdist; the wheel
 # build path then carries the generated stub into the final wheel artifact.
-sdist.include = ["src/mifrost/_core.pyi"]
+sdist.include = ["src/mifrost/_core.pyi", "src/mifrost/_neutral_core.pyi", "src/mifrost/_pymimir_adapter.pyi", "src/mifrost/_pytyr_adapter.pyi"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -93,6 +93,7 @@ select = ["E4", "E7", "E9", "F"]
 [tool.mypy]
 python_version = "3.12"
 files = [
+    "src/mifrost/backends",
     "src/mifrost/encoders/_batch_contract.py",
     "src/mifrost/encoders/_visualization.py",
     "src/mifrost/encoders/base.py",
@@ -104,6 +105,18 @@ files = [
 ignore_missing_imports = true
 allow_redefinition = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mifrost._neutral_core",
+    "mifrost._pymimir_adapter",
+    "mifrost._pytyr_adapter",
+]
+# These stubs are generated from nanobind runtime signatures. They are valid
+# editor/API artifacts but contain third-party native annotations that are not
+# intended to be type-checked as part of the handwritten Python facade.
+follow_imports = "skip"
+ignore_errors = true
 
 [tool.cibuildwheel]
 # Necessary to see build output from the actual compilation

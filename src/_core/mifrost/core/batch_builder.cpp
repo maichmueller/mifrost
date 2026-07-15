@@ -23,14 +23,13 @@
    #include <nanobind/stl/string.h>
    #include <nanobind/stl/vector.h>
 
-   #include <mimir/search/formatter.hpp>
-   #include <sstream>
-
    #include "mifrost/common.hpp"
    #include "mifrost/core/dlpack_utils.hpp"
 #endif
 
 namespace mifrost {
+
+DeferredStringBatch::~DeferredStringBatch() = default;
 
 namespace {
 
@@ -377,8 +376,8 @@ void BatchBuilder::reset()
    graph_attrs.reserve(kSmallReserve);
    lazy_target_name_strings.clear();
    lazy_target_name_strings.reserve(kSmallReserve);
-   lazy_target_name_states.clear();
-   lazy_target_name_states.reserve(kSmallReserve);
+   lazy_target_name_batches.clear();
+   lazy_target_name_batches.reserve(kSmallReserve);
 
    if(graph_fields) {
       graph_fields->clear();
@@ -520,18 +519,17 @@ void BatchBuilder::add_lazy_target_names(std::span< const std::string > names)
    lazy_target_name_strings.insert(lazy_target_name_strings.end(), names.begin(), names.end());
 }
 
-void BatchBuilder::add_lazy_target_names(std::span< const mimir::search::State > states)
+void BatchBuilder::add_lazy_target_name_batch(std::shared_ptr< const DeferredStringBatch > names)
 {
-   if(states.empty()) {
-      return;
+   if(not names) {
+      throw std::invalid_argument("Deferred target-name batch must not be null");
    }
    if(const auto it = graph_attrs.find(std::string(kTargetNamesAttr)); it != graph_attrs.end()) {
       if(std::get_if< std::vector< std::string > >(&it->second) == nullptr) {
          throw std::invalid_argument("Graph attr 'target_names' must be a string vector");
       }
    }
-   lazy_target_name_states.reserve(lazy_target_name_states.size() + states.size());
-   lazy_target_name_states.insert(lazy_target_name_states.end(), states.begin(), states.end());
+   lazy_target_name_batches.push_back(std::move(names));
 }
 
 void BatchBuilder::register_field(const std::string& key, const GraphFieldSpec& spec)
@@ -1127,7 +1125,7 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
       .node_feature_dims = std::move(node_feature_dims),
       .graph_attrs = std::move(graph_attrs),
       .lazy_target_name_strings = std::move(lazy_target_name_strings),
-      .lazy_target_name_states = std::move(lazy_target_name_states),
+      .lazy_target_name_batches = std::move(lazy_target_name_batches),
       .graph_fields = std::move(built_graph_fields),
       .ptrs = std::move(ptrs),
       .schema_flags = std::move(schema_flags),
@@ -1191,8 +1189,12 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
       add_lazy_target_names(std::span(*names));
    } else if(not batch_encoding.lazy_target_name_strings.empty()) {
       add_lazy_target_names(std::span(batch_encoding.lazy_target_name_strings));
-   } else if(not batch_encoding.lazy_target_name_states.empty()) {
-      add_lazy_target_names(std::span(batch_encoding.lazy_target_name_states));
+   } else if(not batch_encoding.lazy_target_name_batches.empty()) {
+      lazy_target_name_batches.insert(
+         lazy_target_name_batches.end(),
+         batch_encoding.lazy_target_name_batches.begin(),
+         batch_encoding.lazy_target_name_batches.end()
+      );
    }
    for(const auto& [key, value] : batch_encoding.graph_attrs) {
       if(key == kTargetNamesAttr) {
@@ -1429,7 +1431,7 @@ void BatchBuilder::load_from_batch_encoding(const BatchEncoding& batch_encoding)
    node_feature_dims = batch_encoding.node_feature_dims;
    graph_attrs = batch_encoding.graph_attrs;
    lazy_target_name_strings = batch_encoding.lazy_target_name_strings;
-   lazy_target_name_states = batch_encoding.lazy_target_name_states;
+   lazy_target_name_batches = batch_encoding.lazy_target_name_batches;
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();
    } else {
@@ -1469,7 +1471,7 @@ void BatchBuilder::load_from_batch_encoding(BatchEncoding&& batch_encoding)
    node_feature_dims = std::move(batch_encoding.node_feature_dims);
    graph_attrs = std::move(batch_encoding.graph_attrs);
    lazy_target_name_strings = std::move(batch_encoding.lazy_target_name_strings);
-   lazy_target_name_states = std::move(batch_encoding.lazy_target_name_states);
+   lazy_target_name_batches = std::move(batch_encoding.lazy_target_name_batches);
    if(batch_encoding.graph_fields.empty()) {
       graph_fields.reset();
    } else {

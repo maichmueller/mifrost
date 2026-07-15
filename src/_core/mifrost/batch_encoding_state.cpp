@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
-#include <mimir/search/formatter.hpp>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -39,16 +37,18 @@ namespace {
 
 constexpr std::string_view kPythonTensorCacheAttr = "__mifrost_tensor_cache__";
 
-std::vector< std::string > materialize_target_name_states(
-   std::span< const mimir::search::State > states
+std::vector< std::string > materialize_target_name_batches(
+   const std::vector< std::shared_ptr< const DeferredStringBatch > >& batches
 )
 {
    std::vector< std::string > names;
-   names.reserve(states.size());
-   for(const auto& state : states) {
-      std::ostringstream stream;
-      stream << state;
-      names.push_back(stream.str());
+   for(const auto& batch : batches) {
+      auto batch_names = batch->materialize();
+      names.insert(
+         names.end(),
+         std::make_move_iterator(batch_names.begin()),
+         std::make_move_iterator(batch_names.end())
+      );
    }
    return names;
 }
@@ -142,8 +142,8 @@ void materialize_batch_encoding_lazy_graph_attrs(BatchBuilder::BatchEncoding& en
          encoding.lazy_target_name_strings.clear();
       }
    }
-   if(not encoding.lazy_target_name_states.empty()) {
-      auto names = materialize_target_name_states(std::span(encoding.lazy_target_name_states));
+   if(not encoding.lazy_target_name_batches.empty()) {
+      auto names = materialize_target_name_batches(encoding.lazy_target_name_batches);
       const auto graph_attr_it = encoding.graph_attrs.find(std::string(kTargetNamesAttr));
       if(graph_attr_it == encoding.graph_attrs.end()) {
          encoding.graph_attrs.emplace(std::string(kTargetNamesAttr), std::move(names));
@@ -160,7 +160,7 @@ void materialize_batch_encoding_lazy_graph_attrs(BatchBuilder::BatchEncoding& en
             std::make_move_iterator(names.end())
          );
       }
-      encoding.lazy_target_name_states.clear();
+      encoding.lazy_target_name_batches.clear();
    }
 }
 

@@ -16,7 +16,7 @@
 
 #include "flat_tuple_layout.hpp"
 #include "mifrost/core/common_types.hpp"
-#include "mifrost/core/encoders/common/relation_dict.hpp"
+#include "mifrost/core/encoders/common/relation_dict_types.hpp"
 
 namespace mifrost {
 

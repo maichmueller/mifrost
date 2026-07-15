@@ -22,8 +22,6 @@
 
 namespace mifrost {
 
-class TransitionDAG;
-
 inline constexpr std::string_view kTargetPositionsField = "target_positions";
 inline constexpr std::string_view kTargetIndicesField = "target_indices";
 inline constexpr std::string_view kTargetCandidateIdsField = "target_candidate_ids";
@@ -110,14 +108,6 @@ MIFROST_API void append_target_candidate_row(
    TargetColumns& columns,
    TargetCandidateRow row,
    const TargetCandidateAppendConfig& config
-);
-/// Derive target rows for transition-DAG nodes under a specific root policy.
-MIFROST_API std::vector< TargetCandidateRow > collect_transition_dag_target_candidate_rows(
-   const TransitionDAG& dag,
-   const hash_map< int64_t, int64_t >& positions_by_index,
-   RootPolicy root_policy,
-   std::optional< int64_t > group_id,
-   bool include_names = true
 );
 /// Register the graph fields and attrs required by one target metadata schema.
 MIFROST_API void

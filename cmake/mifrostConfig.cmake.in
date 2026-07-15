@@ -3,15 +3,20 @@
 include(CMakeFindDependencyMacro)
 
 set(_mifrost_public_dependency_packages
+    "Boost"
     "fmt"
-    "loki"
+    "phmap"
     "unordered_dense"
     "absl"
     "strong_type"
     "range-v3"
-    "valla"
-    "mimir"
 )
+
+set(mifrost_WITH_PYMIMIR_ADAPTER @MIFROST_BUILD_PYMIMIR_ADAPTER@)
+set(mifrost_WITH_PYTYR_ADAPTER @MIFROST_BUILD_PYTYR_ADAPTER@)
+if (mifrost_WITH_PYMIMIR_ADAPTER)
+    list(APPEND _mifrost_public_dependency_packages "loki" "valla" "mimir")
+endif ()
 
 macro(_mifrost_require_package _package _target)
     find_package(${_package} QUIET ${ARGN})
@@ -23,34 +28,98 @@ macro(_mifrost_require_package _package _target)
             "Expected imported target: ${_target}\n"
             "Expected dependency packages: ${_mifrost_dependency_list}\n"
             "Add the package roots for those dependencies to CMAKE_PREFIX_PATH before calling find_package(mifrost).\n"
-            "Typical inputs are your dependency manager's CMake package directory (for example a Conan CMakeDeps generators dir) and pymimir's mimir package config directory.\n"
+            "Typical input is your dependency manager's CMake package directory (for example a Conan CMakeDeps generators dir).\n"
             "Current CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}"
         )
     endif ()
 endmacro()
 
-set(_mifrost_pymimir_cmake_dir "${PACKAGE_PREFIX_DIR}/../pymimir/lib/cmake/mimir")
-if (EXISTS "${_mifrost_pymimir_cmake_dir}")
-    list(PREPEND CMAKE_PREFIX_PATH "${_mifrost_pymimir_cmake_dir}")
+if (mifrost_WITH_PYMIMIR_ADAPTER)
+    set(_mifrost_pymimir_cmake_dir "${PACKAGE_PREFIX_DIR}/pymimir/lib/cmake/mimir")
+    if (EXISTS "${_mifrost_pymimir_cmake_dir}")
+        list(PREPEND CMAKE_PREFIX_PATH "${_mifrost_pymimir_cmake_dir}")
+    endif ()
+endif ()
+if (mifrost_WITH_PYTYR_ADAPTER)
+    set(_mifrost_pytyr_native_prefix "${PACKAGE_PREFIX_DIR}/pytyr/native")
+    set(_mifrost_pyyggdrasil_prefix "${PACKAGE_PREFIX_DIR}/pyyggdrasil")
+    set(_mifrost_pypddl_native_prefix "${PACKAGE_PREFIX_DIR}/pypddl/native")
+    if (EXISTS "${_mifrost_pytyr_native_prefix}")
+        set(_mifrost_pytyr_library
+            "${_mifrost_pytyr_native_prefix}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}tyr_core${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        if (NOT EXISTS "${_mifrost_pytyr_library}")
+            message(FATAL_ERROR
+                "This mifrost installation includes the PyTyr adapter, but its native library is missing: ${_mifrost_pytyr_library}")
+        endif ()
+        if (NOT TARGET tyr::core)
+            add_library(tyr::core SHARED IMPORTED)
+            set_target_properties(tyr::core PROPERTIES
+                IMPORTED_LOCATION "${_mifrost_pytyr_library}"
+                INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_STATE_STORAGE_TREE"
+                INTERFACE_INCLUDE_DIRECTORIES "${_mifrost_pytyr_native_prefix}/include;${_mifrost_pyyggdrasil_prefix}/include;${_mifrost_pypddl_native_prefix}/include")
+        endif ()
+    else ()
+        message(FATAL_ERROR
+            "This mifrost installation includes the PyTyr adapter, but the sibling pytyr native runtime is missing: ${_mifrost_pytyr_native_prefix}")
+    endif ()
+    foreach (_mifrost_pytyr_include_prefix IN ITEMS
+        "${_mifrost_pytyr_native_prefix}"
+        "${_mifrost_pyyggdrasil_prefix}"
+        "${_mifrost_pypddl_native_prefix}"
+    )
+        if (NOT EXISTS "${_mifrost_pytyr_include_prefix}/include")
+            message(FATAL_ERROR
+                "This mifrost installation includes the PyTyr adapter, but a native include prefix is missing: ${_mifrost_pytyr_include_prefix}/include")
+        endif ()
+    endforeach ()
 endif ()
 
+_mifrost_require_package(Boost Boost::headers CONFIG)
 _mifrost_require_package(fmt fmt::fmt)
-_mifrost_require_package(loki loki::loki)
-if (TARGET loki::loki AND NOT TARGET loki::parsers)
-    add_library(loki::parsers INTERFACE IMPORTED)
-    set_property(TARGET loki::parsers PROPERTY INTERFACE_LINK_LIBRARIES loki::loki)
-endif ()
+_mifrost_require_package(phmap phmap CONFIG)
 _mifrost_require_package(unordered_dense unordered_dense::unordered_dense CONFIG)
 _mifrost_require_package(absl absl::btree CONFIG)
+# Some Conan Abseil recipes expose component targets without their package
+# include directory. Mirror the build-tree fallback for installed consumers.
+foreach (_mifrost_config IN ITEMS RELEASE DEBUG RELWITHDEBINFO MINSIZEREL)
+    if (DEFINED abseil_PACKAGE_FOLDER_${_mifrost_config} AND
+        EXISTS "${abseil_PACKAGE_FOLDER_${_mifrost_config}}/include")
+        set_property(TARGET absl::btree APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES
+            "$<$<CONFIG:${_mifrost_config}>:${abseil_PACKAGE_FOLDER_${_mifrost_config}}/include>"
+        )
+    endif ()
+endforeach ()
+if (DEFINED abseil_PACKAGE_FOLDER AND EXISTS "${abseil_PACKAGE_FOLDER}/include")
+    set_property(TARGET absl::btree APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES
+        "${abseil_PACKAGE_FOLDER}/include"
+    )
+endif ()
 _mifrost_require_package(strong_type rollbear::strong_type)
 _mifrost_require_package(range-v3 range-v3::range-v3)
-_mifrost_require_package(valla valla::valla)
-if (TARGET valla::valla AND NOT TARGET valla::core)
-    add_library(valla::core INTERFACE IMPORTED)
-    set_property(TARGET valla::core PROPERTY INTERFACE_LINK_LIBRARIES valla::valla)
+if (mifrost_WITH_PYMIMIR_ADAPTER)
+    _mifrost_require_package(loki loki::loki)
+    if (TARGET loki::loki AND NOT TARGET loki::parsers)
+        add_library(loki::parsers INTERFACE IMPORTED)
+        set_property(TARGET loki::parsers PROPERTY INTERFACE_LINK_LIBRARIES loki::loki)
+    endif ()
+    _mifrost_require_package(valla valla::valla)
+    if (TARGET valla::valla AND NOT TARGET valla::core)
+        add_library(valla::core INTERFACE IMPORTED)
+        set_property(TARGET valla::core PROPERTY INTERFACE_LINK_LIBRARIES valla::valla)
+    endif ()
+    _mifrost_require_package(mimir mimir::core)
 endif ()
-_mifrost_require_package(mimir mimir::core)
 
 include("${CMAKE_CURRENT_LIST_DIR}/mifrostTargets.cmake")
+
+if (mifrost_WITH_PYMIMIR_ADAPTER AND
+    TARGET mifrost::pymimir_adapter AND
+    NOT TARGET mifrost::core)
+    add_library(mifrost::core INTERFACE IMPORTED)
+    set_property(
+        TARGET mifrost::core
+        PROPERTY INTERFACE_LINK_LIBRARIES mifrost::pymimir_adapter
+    )
+endif ()
 
 check_required_components(mifrost)
