@@ -10,7 +10,6 @@
 
 #include <ankerl/unordered_dense.h>
 
-#include <boost/describe.hpp>
 #include <map>
 #include <memory>
 #include <mimir/formalism/domain.hpp>
@@ -25,6 +24,7 @@
 
 #include "flat_entity_context.hpp"
 #include "flat_goal_helpers.hpp"
+#include "flat_relation_config.hpp"
 #include "flat_relation_schema.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/common_types.hpp"
@@ -66,32 +66,8 @@ class MIFROST_API FlatRelationEncoderEngine {
   public:
    using HistorySubgoal = std::pair< int, std::vector< LiteralVariant > >;
 
-   /// Runtime configuration for the flat relation encoder.
-   struct Config {
-      size_t max_goal_level = 0;
-      bool support_literals = false;
-      bool include_static = true;
-      bool export_node_names = true;
-      bool ignore_zero_arity_relations = true;
-      bool use_predicate_virtual_nodes = false;
-      bool include_lgan_edges = false;
-      /// Extra rows that may anchor LGAN edges without becoming prediction targets.
-      std::set< TargetSource > lgan_anchor_sources = {};
-      /// Which sources should produce target metadata rows.
-      /// `Actions` = explicit grounded actions, `Goals` = root-goal literals,
-      /// `Subgoals` = layered goal literals, `History` = history literals.
-      /// `States` belongs to the horizon/transition flat encoders instead.
-      std::set< TargetSource > target_sources = {};
-      std::string target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
-      std::string lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
-      std::string lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
-      std::string lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
-      bool pack_relation_args_relation_major = false;
-      std::set< GoalDerivation > goal_derivations = {
-         GoalDerivation::plain,
-         GoalDerivation::satisfied,
-      };
-   };
+   /// Backward-compatible engine-local name for the shared semantic config.
+   using Config = FlatRelationEncoderConfig;
 
    explicit FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain);
    FlatRelationEncoderEngine(const mimir::formalism::DomainImpl& domain, Config config);
@@ -275,26 +251,6 @@ class MIFROST_API FlatRelationEncoderEngine {
    std::vector< std::string > target_metadata_group_names_;
    std::map< TargetSource, int64_t > target_metadata_group_ids_;
 };
-
-BOOST_DESCRIBE_STRUCT(
-   FlatRelationEncoderEngine::Config,
-   (),
-   (max_goal_level,
-    support_literals,
-    include_static,
-    export_node_names,
-    ignore_zero_arity_relations,
-    use_predicate_virtual_nodes,
-    include_lgan_edges,
-    lgan_anchor_sources,
-    target_sources,
-    target_symbol_prefix,
-    lgan_tn_edge_pos,
-    lgan_nn_edge_pos,
-    lgan_rr_edge_pos,
-    pack_relation_args_relation_major,
-    goal_derivations)
-)
 
 struct FlatRelationStepInput {
    const mimir::search::State* state = nullptr;
