@@ -375,6 +375,7 @@ add_library(
         "_core/mifrost/core/encoders/flat/semantic_flat_relation_encoder.cpp"
         "_core/mifrost/core/encoders/homo/semantic_color_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_hgraph_encoder.cpp"
+        "_core/mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/common/target_metadata.cpp"
         "_core/mifrost/core/semantic/semantic_transition_dag.cpp"
@@ -1010,6 +1011,7 @@ else ()
         "core/encoders/flat/semantic_flat_relation_encoder.hpp"
         "core/encoders/homo/semantic_color_encoder.hpp"
         "core/encoders/hetero/semantic_hgraph_encoder.hpp"
+        "core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
         "core/semantic/semantic_transition_dag.hpp"
     )

@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "mifrost/core/encoders/common/target_metadata.hpp"
+#include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 
 namespace mifrost {
@@ -368,6 +369,110 @@ struct SemanticHGraphEncoderEngine::Impl {
             relation_arities[action.name] = static_cast< int >(action.arity) + offset;
          }
       }
+      for(const auto& [type, arity] : relation_arities) {
+         const int effective = config.add_nullary_predicates and arity == 0 ? 1 : arity;
+         for(int position = 0; position < effective; ++position) {
+            const auto pos = std::to_string(position);
+            all_edge_types.emplace_back(config.symbol_type_id, pos, type);
+            all_edge_types.emplace_back(type, pos, config.symbol_type_id);
+         }
+         if(config.include_lgan_edges) {
+            all_edge_types.emplace_back(type, config.lgan_tn_edge_pos, config.symbol_type_id);
+            all_edge_types.emplace_back(type, config.lgan_nn_edge_pos, config.symbol_type_id);
+         }
+      }
+      std::ranges::sort(all_edge_types);
+      all_edge_types.erase(std::ranges::unique(all_edge_types).begin(), all_edge_types.end());
+   }
+
+   void configure_horizon(const SemanticHorizonHGraphEncoderConfig& horizon)
+   {
+      relation_arities.clear();
+      all_edge_types.clear();
+      const bool root_slot = root_in_state_relations(horizon.root_policy);
+      const bool split = horizon.transition_mode == SemanticHorizonMode::full
+                         and root_uses_split_state_relations(horizon.root_policy);
+      const std::set< std::string > top_types = {
+         "object", "number", config.symbol_type_id, "_action_"
+      };
+      std::vector< std::pair< std::string, int > > regular;
+
+      const auto root_relation = [&](const std::string& name, int arity) {
+         relation_arities[name] = arity + (root_slot ? 1 : 0);
+      };
+      const auto full_relation = [&](const std::string& name, int arity) {
+         root_relation(name, arity);
+         if(split) {
+            relation_arities[name + "[state]"] = arity + 1;
+         }
+      };
+      for(const auto category : kCategoryOrder) {
+         for(const auto& predicate : predicates) {
+            if(predicate.category != category) {
+               continue;
+            }
+            const auto arity = static_cast< int >(predicate.arity);
+            full_relation(predicate.name, arity);
+            if(not top_types.contains(predicate.name)) {
+               regular.emplace_back(predicate.name, arity);
+            }
+         }
+      }
+
+      for(const auto& [name, arity] : regular) {
+         if(includes_plain_goal_derivation(config.goal_derivations)) {
+            for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               for(const bool positive : {true, false}) {
+                  root_relation(relation_name(name, positive, level), arity);
+               }
+            }
+         }
+         if(config.support_literals) {
+            for(const bool positive : {true, false}) {
+               const auto type = relation_name(name, positive, std::nullopt);
+               if(horizon.transition_mode == SemanticHorizonMode::delta) {
+                  relation_arities[type] = arity + 1;
+               } else {
+                  root_relation(type, arity);
+               }
+            }
+         }
+         for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
+            if(derivation == GoalDerivation::satisfied
+               or derivation == GoalDerivation::unsatisfied) {
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  for(const bool positive : {true, false}) {
+                     const auto type = relation_name(name, positive, level, derivation);
+                     root_relation(type, arity);
+                     if(split) {
+                        relation_arities[type + "[state]"] = arity + 1;
+                     }
+                  }
+               }
+            } else if(horizon.transition_mode == SemanticHorizonMode::delta) {
+               for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  for(const bool positive : {true, false}) {
+                     relation_arities[relation_name(name, positive, level, derivation)] = arity + 1;
+                  }
+               }
+            }
+         }
+      }
+      if(not config.ignore_actions) {
+         for(const auto& action : actions) {
+            relation_arities[action.name] = static_cast< int >(action.arity) + 1;
+         }
+      }
+      if(horizon.enable_parent_relation) {
+         relation_arities[horizon.parent_relation] = 2;
+      }
+      if(horizon.enable_sibling_relation) {
+         relation_arities[horizon.sibling_relation] = 2;
+      }
+      if(horizon.enable_cousin_relation) {
+         relation_arities[horizon.cousin_relation] = 2;
+      }
+
       for(const auto& [type, arity] : relation_arities) {
          const int effective = config.add_nullary_predicates and arity == 0 ? 1 : arity;
          for(int position = 0; position < effective; ++position) {
@@ -1030,7 +1135,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
    }
 
-   void finalize(Workspace& workspace, BatchBuilder& builder) const
+   void finalize(
+      Workspace& workspace,
+      BatchBuilder& builder,
+      const std::vector< std::string >* object_names_override = nullptr
+   ) const
    {
       if(config.export_node_names) {
          for(const auto& [type, _] : relation_arities) {
@@ -1044,6 +1153,8 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(not workspace.node_names.contains(config.symbol_type_id)) {
             builder.set_node_names(config.symbol_type_id, {});
             builder.set_object_names({});
+         } else if(object_names_override != nullptr) {
+            builder.set_object_names(*object_names_override);
          } else {
             builder.set_object_names(workspace.node_names.at(config.symbol_type_id));
          }
@@ -1269,6 +1380,450 @@ struct SemanticHGraphEncoderEngine::Impl {
       add_lgan(workspace, builder);
       finalize(workspace, builder);
    }
+
+   void encode_horizon(
+      const SemanticTransitionDAG& dag,
+      const SemanticHorizonHGraphEncoderConfig& horizon,
+      BatchBuilder& builder
+   ) const
+   {
+      if(horizon.transition_mode == SemanticHorizonMode::action and config.ignore_actions) {
+         throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
+      }
+      const auto& nodes = dag.nodes();
+      const auto& root_input = nodes.front().state;
+      auto workspace = initialize_workspace(builder);
+      for(size_t object = 0; object < root_input.objects.size(); ++object) {
+         object_node(workspace, static_cast< int64_t >(object), root_input, builder);
+      }
+      if(config.add_nullary_predicates) {
+         special_node(workspace, config.nullary_object_name, config.nullary_object_name, builder);
+      }
+      const std::vector< std::string >
+         physical_object_names = config.export_node_names
+                                    ? workspace.node_names[config.symbol_type_id]
+                                    : std::vector< std::string >{};
+
+      const auto target_key = [&](int64_t index) {
+         return config.target_symbol_prefix + std::to_string(index);
+      };
+      const auto prefix_for = [&](int64_t index) {
+         return target_key(index) + std::string(1, schema_key::kEdgeTypeSeparator);
+      };
+      for(const auto& node : nodes) {
+         const auto key = target_key(node.index);
+         special_node(workspace, key, key, builder);
+         if(config.include_lgan_edges
+            and (node.index != 0 or root_in_target_metadata(horizon.root_policy))) {
+            workspace.lgan_target_symbol_ids.insert(special_symbol_id(workspace, key));
+         }
+      }
+
+      const auto relation_node =
+         [&](const std::string& type, const std::string& key, const std::string& name) {
+            auto& indices = workspace.node_indices[type];
+            auto [it, inserted] = indices.try_emplace(key, static_cast< int64_t >(indices.size()));
+            if(inserted) {
+               builder.add_nodes(type, it->second + 1);
+               if(config.export_node_names) {
+                  workspace.node_names[type].push_back(name);
+               }
+            }
+            return it->second;
+         };
+
+      const auto semantic_atom_key = [&](const SemanticAtom& atom) {
+         std::string key = std::to_string(atom.predicate);
+         for(const auto argument : atom.arguments) {
+            key += ":" + std::to_string(argument);
+         }
+         return key;
+      };
+      const auto encode_atom_relation = [&](
+                                           const SemanticAtom& atom,
+                                           const std::string& type,
+                                           const std::string& node_prefix,
+                                           const std::string& display,
+                                           const std::optional< std::string >& state_key
+                                        ) {
+         if(atom.arguments.empty() and not config.add_nullary_predicates) {
+            return;
+         }
+         const auto key = node_prefix + type + ":" + semantic_atom_key(atom);
+         const auto relation_index = relation_node(
+            type, key, config.export_node_names ? node_prefix + display : ""
+         );
+         std::vector< int64_t > symbols;
+         if(state_key.has_value()) {
+            special_node(workspace, *state_key, *state_key, builder);
+            symbols.push_back(special_symbol_id(workspace, *state_key));
+         }
+         if(atom.arguments.empty()) {
+            symbols.push_back(special_symbol_id(workspace, config.nullary_object_name));
+         } else {
+            for(const auto object : atom.arguments) {
+               object_node(workspace, object, root_input, builder);
+               symbols.push_back(object);
+            }
+         }
+         connect_symbols(workspace, builder, type, relation_index, symbols);
+         track(workspace, relation_ref(workspace, type, relation_index), symbols);
+      };
+      const auto encode_action_relation =
+         [&](const SemanticGroundAction& action, int64_t node_index) {
+            const auto& spec = actions.at(static_cast< size_t >(action.action));
+            const auto prefix = prefix_for(node_index);
+            const auto display = action_name(action, actions, root_input.objects);
+            const auto key = prefix + spec.name + ":" + display;
+            const auto relation_index = relation_node(
+               spec.name, key, config.export_node_names ? prefix + display : ""
+            );
+            std::vector< int64_t > symbols;
+            const auto state_key = target_key(node_index);
+            symbols.push_back(special_symbol_id(workspace, state_key));
+            for(const auto object : action.arguments) {
+               object_node(workspace, object, root_input, builder);
+               symbols.push_back(object);
+            }
+            connect_symbols(workspace, builder, spec.name, relation_index, symbols);
+            track(workspace, relation_ref(workspace, spec.name, relation_index), symbols);
+         };
+
+      const bool root_has_state_slot = root_in_state_relations(horizon.root_policy);
+      const bool split_state = horizon.transition_mode == SemanticHorizonMode::full
+                               and root_uses_split_state_relations(horizon.root_policy);
+      const std::string root_prefix = root_has_state_slot ? prefix_for(0) : "_root|";
+      const auto root_state_key = root_has_state_slot ? std::optional< std::string >(target_key(0))
+                                                      : std::nullopt;
+      std::set< SemanticAtom > root_encoded_facts;
+      for(const auto category : kCategoryOrder) {
+         if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
+            continue;
+         }
+         for(const auto& fact : root_input.state_facts) {
+            if(predicates.at(static_cast< size_t >(fact.predicate)).category != category) {
+               continue;
+            }
+            if(fact.arguments.empty() and not config.add_nullary_predicates) {
+               continue;
+            }
+            const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
+            encode_atom_relation(
+               fact,
+               predicate.name,
+               root_prefix,
+               atom_name(fact, predicates, root_input.objects),
+               root_state_key
+            );
+            root_encoded_facts.insert(fact);
+         }
+      }
+
+      const auto prepared_goals = prepare_goals(root_input);
+      const auto encode_prepared_goal = [&](
+                                           const PreparedGoal& goal,
+                                           int64_t node_index,
+                                           const std::string& node_prefix,
+                                           const std::optional< std::string >& state_key,
+                                           std::optional< GoalDerivation > derivation,
+                                           bool state_suffix
+                                        ) {
+         const auto& predicate = predicates.at(static_cast< size_t >(goal.literal.atom.predicate));
+         auto type = relation_name(predicate.name, goal.literal.positive, goal.level, derivation);
+         if(state_suffix) {
+            type += "[state]";
+         }
+         encode_atom_relation(
+            goal.literal.atom,
+            type,
+            node_prefix,
+            literal_name(goal.literal, predicates, root_input.objects, goal.level, derivation),
+            state_key
+         );
+      };
+      if(includes_plain_goal_derivation(config.goal_derivations)) {
+         for(const auto category : kCategoryOrder) {
+            for(const auto& goal : prepared_goals) {
+               if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                  == category) {
+                  encode_prepared_goal(goal, 0, root_prefix, root_state_key, std::nullopt, false);
+               }
+            }
+         }
+      }
+      if(has_non_plain_goal_derivations(config.goal_derivations)) {
+         for(const auto category : kCategoryOrder) {
+            for(const auto& goal : prepared_goals) {
+               if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                  != category) {
+                  continue;
+               }
+               const bool present = root_encoded_facts.contains(goal.literal.atom);
+               const auto derivation = present == goal.literal.positive
+                                          ? GoalDerivation::satisfied
+                                          : GoalDerivation::unsatisfied;
+               if(config.goal_derivations.contains(derivation)) {
+                  encode_prepared_goal(goal, 0, root_prefix, root_state_key, derivation, false);
+               }
+            }
+         }
+      }
+
+      std::set< SemanticAtom > root_dynamic;
+      for(const auto& fact : root_input.state_facts) {
+         if(predicates.at(static_cast< size_t >(fact.predicate)).category
+               != SemanticPredicateCategory::static_predicate
+            and (not fact.arguments.empty() or config.add_nullary_predicates)) {
+            root_dynamic.insert(fact);
+         }
+      }
+      for(const auto& node : nodes) {
+         if(node.index == 0) {
+            continue;
+         }
+         const auto prefix = prefix_for(node.index);
+         const auto state_key = std::optional< std::string >(target_key(node.index));
+         if(horizon.transition_mode == SemanticHorizonMode::full) {
+            std::set< SemanticAtom > successor_facts;
+            for(const auto category : {
+                   SemanticPredicateCategory::fluent,
+                   SemanticPredicateCategory::derived,
+                }) {
+               for(const auto& fact : node.state.state_facts) {
+                  if(predicates.at(static_cast< size_t >(fact.predicate)).category != category
+                     or (fact.arguments.empty() and not config.add_nullary_predicates)) {
+                     continue;
+                  }
+                  const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
+                  encode_atom_relation(
+                     fact,
+                     predicate.name + (split_state ? "[state]" : ""),
+                     prefix,
+                     atom_name(fact, predicates, root_input.objects),
+                     state_key
+                  );
+                  successor_facts.insert(fact);
+               }
+            }
+            if(not config.ignore_actions and node.incoming_action.has_value()) {
+               encode_action_relation(*node.incoming_action, node.index);
+            }
+            if(has_non_plain_goal_derivations(config.goal_derivations)) {
+               for(const auto category : kCategoryOrder) {
+                  for(const auto& goal : prepared_goals) {
+                     if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                        != category) {
+                        continue;
+                     }
+                     const bool present = successor_facts.contains(goal.literal.atom);
+                     const auto derivation = present == goal.literal.positive
+                                                ? GoalDerivation::satisfied
+                                                : GoalDerivation::unsatisfied;
+                     if(config.goal_derivations.contains(derivation)) {
+                        encode_prepared_goal(
+                           goal, node.index, prefix, state_key, derivation, split_state
+                        );
+                     }
+                  }
+               }
+            }
+         } else if(horizon.transition_mode == SemanticHorizonMode::delta) {
+            std::vector< SemanticLiteral > deltas;
+            if(node.delta_literals.has_value()) {
+               deltas = *node.delta_literals;
+            } else {
+               std::set< SemanticAtom > successor_dynamic;
+               for(const auto& fact : node.state.state_facts) {
+                  if(predicates.at(static_cast< size_t >(fact.predicate)).category
+                        != SemanticPredicateCategory::static_predicate
+                     and (not fact.arguments.empty() or config.add_nullary_predicates)) {
+                     successor_dynamic.insert(fact);
+                  }
+               }
+               for(const auto& fact : successor_dynamic) {
+                  if(not root_dynamic.contains(fact)) {
+                     deltas.push_back({fact, true});
+                  }
+               }
+               for(const auto& fact : root_dynamic) {
+                  if(not successor_dynamic.contains(fact)) {
+                     deltas.push_back({fact, false});
+                  }
+               }
+            }
+            std::set< SemanticAtom > added;
+            std::set< SemanticAtom > removed;
+            for(const auto& literal : deltas) {
+               const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
+               const auto type = relation_name(predicate.name, literal.positive, std::nullopt);
+               encode_atom_relation(
+                  literal.atom,
+                  type,
+                  prefix,
+                  literal_name(literal, predicates, root_input.objects, std::nullopt),
+                  state_key
+               );
+               if(predicate.category != SemanticPredicateCategory::static_predicate) {
+                  (literal.positive ? added : removed).insert(literal.atom);
+               }
+            }
+            if(not config.ignore_actions and node.incoming_action.has_value()) {
+               encode_action_relation(*node.incoming_action, node.index);
+            }
+            if(has_non_plain_goal_derivations(config.goal_derivations)) {
+               for(const auto& goal : prepared_goals) {
+                  const auto derivation = delta_goal_satisfaction_derivation(
+                     goal.literal.positive,
+                     added.contains(goal.literal.atom),
+                     removed.contains(goal.literal.atom)
+                  );
+                  if(derivation.has_value() and config.goal_derivations.contains(*derivation)) {
+                     encode_prepared_goal(goal, node.index, prefix, state_key, *derivation, false);
+                  }
+               }
+            }
+         } else if(node.incoming_action.has_value()) {
+            encode_action_relation(*node.incoming_action, node.index);
+         }
+      }
+
+      const bool exclude_root_topology = horizon.root_policy == RootPolicy::exclude;
+      const auto encode_topology = [&](const std::string& type, int64_t src, int64_t dst) {
+         const auto key = type + ":" + std::to_string(src) + ":" + std::to_string(dst);
+         const auto name = fmt::format("{}({}->{})", type, src, dst);
+         const auto relation_index = relation_node(type, key, config.export_node_names ? name : "");
+         const std::array< int64_t, 2 > symbols = {
+            special_symbol_id(workspace, target_key(src)),
+            special_symbol_id(workspace, target_key(dst)),
+         };
+         connect_symbols(workspace, builder, type, relation_index, symbols);
+         track(workspace, relation_ref(workspace, type, relation_index), symbols);
+      };
+      if(horizon.enable_parent_relation) {
+         for(const auto& [parent, child] : dag.edges()) {
+            if(not(exclude_root_topology and parent == 0)) {
+               encode_topology(horizon.parent_relation, parent, child);
+            }
+         }
+      }
+      std::map< int64_t, std::vector< int64_t > > parent_to_children;
+      if(horizon.enable_sibling_relation or horizon.enable_cousin_relation) {
+         for(const auto& [parent, child] : dag.edges()) {
+            if(not(exclude_root_topology and parent == 0)) {
+               parent_to_children[parent].push_back(child);
+            }
+         }
+      }
+      std::set< std::pair< int64_t, int64_t > > sibling_pairs;
+      if(horizon.enable_sibling_relation) {
+         for(auto& [_, children] : parent_to_children) {
+            std::ranges::sort(children);
+            for(size_t lhs = 0; lhs < children.size(); ++lhs) {
+               for(size_t rhs = lhs + 1; rhs < children.size(); ++rhs) {
+                  const auto pair = std::minmax(children[lhs], children[rhs]);
+                  if(sibling_pairs.emplace(pair.first, pair.second).second) {
+                     encode_topology(horizon.sibling_relation, pair.first, pair.second);
+                     encode_topology(horizon.sibling_relation, pair.second, pair.first);
+                  }
+               }
+            }
+         }
+      }
+      if(horizon.enable_cousin_relation) {
+         std::set< std::pair< int64_t, int64_t > > cousin_pairs;
+         for(const auto& [_, parents] : parent_to_children) {
+            for(size_t lhs = 0; lhs < parents.size(); ++lhs) {
+               for(size_t rhs = lhs + 1; rhs < parents.size(); ++rhs) {
+                  const auto left = parent_to_children.find(parents[lhs]);
+                  const auto right = parent_to_children.find(parents[rhs]);
+                  if(left == parent_to_children.end() or right == parent_to_children.end()) {
+                     continue;
+                  }
+                  for(const auto left_child : left->second) {
+                     for(const auto right_child : right->second) {
+                        if(left_child == right_child) {
+                           continue;
+                        }
+                        const auto pair = std::minmax(left_child, right_child);
+                        if(not sibling_pairs.contains(pair)
+                           and cousin_pairs.emplace(pair.first, pair.second).second) {
+                           encode_topology(horizon.cousin_relation, pair.first, pair.second);
+                           encode_topology(horizon.cousin_relation, pair.second, pair.first);
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+
+      add_lgan(workspace, builder);
+
+      if(has_target_source(TargetSource::states)) {
+         const bool include_root = root_in_target_metadata(horizon.root_policy);
+         dag.validate_candidate_ids(include_root);
+         const bool explicit_ids = dag.candidate_id_coverage(include_root)
+                                   == SemanticCandidateIdCoverage::complete;
+         TargetColumns columns;
+         std::vector< std::string > target_names;
+         const auto group_id = workspace.target_group_ids.at(TargetSource::states);
+         for(const auto& node : nodes) {
+            if(node.index == 0 and not include_root) {
+               continue;
+            }
+            if(config.export_node_names and not node.display_name.has_value()) {
+               throw std::invalid_argument(
+                  "Semantic Horizon requires display_name for every exported target node"
+               );
+            }
+            const auto id = special_symbol_id(workspace, target_key(node.index));
+            const auto position = workspace.symbol_indices.at(id);
+            append_target_candidate_row(
+               columns,
+               TargetCandidateRow{
+                  .position = position,
+                  .index = node.index,
+                  .candidate_id = explicit_ids ? node.candidate_id
+                                               : std::optional< int64_t >(node.index),
+                  .depth = node.depth,
+                  .group_id = group_id,
+                  .name = node.display_name.value_or(""),
+               },
+               TargetCandidateAppendConfig{
+                  .include_depth = true,
+                  .include_group = true,
+                  .missing_candidate_id_prefix = "missing candidate_id for target node index ",
+                  .duplicate_candidate_id_prefix = "duplicate candidate_id ",
+               }
+            );
+            if(config.export_node_names) {
+               target_names.push_back(*node.display_name);
+            }
+         }
+         emit_target_metadata(
+            builder,
+            columns,
+            TargetMetadataEmitConfig{
+               .position_node_type_id = config.symbol_type_id,
+               .symbol_prefix = config.target_symbol_prefix,
+               .include_depth = true,
+               .include_group = true,
+               .include_names = false,
+               .groups = workspace.target_groups,
+               .parent_relation = horizon.parent_relation,
+            }
+         );
+         if(config.export_node_names) {
+            if(target_names.empty()) {
+               builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+            } else {
+               builder.add_lazy_target_names(std::span(target_names));
+            }
+         }
+      }
+
+      finalize(workspace, builder, config.export_node_names ? &physical_object_names : nullptr);
+   }
 };
 
 SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
@@ -1317,6 +1872,22 @@ void SemanticHGraphEncoderEngine::encode_successor(
    impl_->encode_successor(
       current, successor, delta_mode, successor_suffix, include_successor_goal_satisfaction, builder
    );
+}
+
+void SemanticHGraphEncoderEngine::configure_horizon(
+   const SemanticHorizonHGraphEncoderConfig& config
+)
+{
+   impl_->configure_horizon(config);
+}
+
+void SemanticHGraphEncoderEngine::encode_horizon(
+   const SemanticTransitionDAG& dag,
+   const SemanticHorizonHGraphEncoderConfig& config,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode_horizon(dag, config, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(

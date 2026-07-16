@@ -8,6 +8,7 @@
 #include "mifrost/bindings.hpp"
 #include "mifrost/capsule_bridge.hpp"
 #include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
+#include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
 
 namespace nb = nanobind;
@@ -16,6 +17,11 @@ using namespace nb::literals;
 namespace mifrost {
 void init_semantic_hgraph_encoder(nb::module_& m)
 {
+   nb::enum_< RootPolicy >(m, "RootPolicy")
+      .value("include", RootPolicy::include)
+      .value("encode_only", RootPolicy::encode_only)
+      .value("exclude", RootPolicy::exclude);
+
    nb::class_< SemanticHGraphEncoderConfig >(m, "SemanticHGraphEncoderConfig")
       .def(nb::init<>())
       .def(
@@ -76,6 +82,68 @@ void init_semantic_hgraph_encoder(nb::module_& m)
          "builder"_a
       )
       .def("encode_batch", &SemanticHGraphEncoderEngine::encode_batch, "inputs"_a);
+
+   nb::enum_< SemanticHorizonMode >(m, "SemanticHorizonEncoderMode")
+      .value("full", SemanticHorizonMode::full)
+      .value("delta", SemanticHorizonMode::delta)
+      .value("action", SemanticHorizonMode::action);
+
+   nb::class_< SemanticHorizonHGraphEncoderConfig, SemanticHGraphEncoderConfig >(
+      m, "SemanticHorizonHGraphEncoderConfig"
+   )
+      .def(nb::init<>())
+      .def(
+         "__init__",
+         [](SemanticHorizonHGraphEncoderConfig* self, const nb::kwargs& kwargs) {
+            new(self) SemanticHorizonHGraphEncoderConfig();
+            apply_config_kwargs(*self, kwargs, "SemanticHorizonHGraphEncoderConfig");
+         }
+      )
+      .def_rw("transition_mode", &SemanticHorizonHGraphEncoderConfig::transition_mode)
+      .def_rw("parent_relation", &SemanticHorizonHGraphEncoderConfig::parent_relation)
+      .def_rw("sibling_relation", &SemanticHorizonHGraphEncoderConfig::sibling_relation)
+      .def_rw("cousin_relation", &SemanticHorizonHGraphEncoderConfig::cousin_relation)
+      .def_rw("enable_parent_relation", &SemanticHorizonHGraphEncoderConfig::enable_parent_relation)
+      .def_rw(
+         "enable_sibling_relation", &SemanticHorizonHGraphEncoderConfig::enable_sibling_relation
+      )
+      .def_rw("enable_cousin_relation", &SemanticHorizonHGraphEncoderConfig::enable_cousin_relation)
+      .def_rw("root_policy", &SemanticHorizonHGraphEncoderConfig::root_policy);
+
+   nb::class_< SemanticHorizonHGraphEncoderEngine >(m, "SemanticHorizonHGraphEncoderEngine")
+      .def(
+         nb::init<
+            std::vector< SemanticPredicateSpec >,
+            std::vector< SemanticActionSpec >,
+            SemanticHorizonHGraphEncoderConfig >(),
+         "predicates"_a,
+         "actions"_a,
+         "config"_a = SemanticHorizonHGraphEncoderConfig{}
+      )
+      .def_prop_ro(
+         "config",
+         &SemanticHorizonHGraphEncoderEngine::get_config,
+         nb::rv_policy::reference_internal
+      )
+      .def_prop_ro("predicates", &SemanticHorizonHGraphEncoderEngine::get_predicates)
+      .def_prop_ro("actions", &SemanticHorizonHGraphEncoderEngine::get_actions)
+      .def_prop_ro("relation_arities", &SemanticHorizonHGraphEncoderEngine::get_relation_arities)
+      .def(
+         "encode",
+         nb::overload_cast< const SemanticTransitionDAG& >(
+            &SemanticHorizonHGraphEncoderEngine::encode, nb::const_
+         ),
+         "dag"_a
+      )
+      .def(
+         "encode",
+         nb::overload_cast< const SemanticTransitionDAG&, BatchBuilder& >(
+            &SemanticHorizonHGraphEncoderEngine::encode, nb::const_
+         ),
+         "dag"_a,
+         "builder"_a
+      )
+      .def("encode_batch", &SemanticHorizonHGraphEncoderEngine::encode_batch, "dags"_a);
 
    nb::enum_< SemanticSuccessorMode >(m, "SemanticSuccessorEncoderMode")
       .value("full", SemanticSuccessorMode::full)

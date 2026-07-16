@@ -21,6 +21,9 @@
 namespace mifrost {
 
 class SemanticSuccessorHGraphEncoderEngine;
+class SemanticHorizonHGraphEncoderEngine;
+class SemanticTransitionDAG;
+struct SemanticHorizonHGraphEncoderConfig;
 
 /** Runtime policy for `SemanticHGraphEncoderEngine`. */
 struct SemanticHGraphEncoderConfig {
@@ -104,6 +107,14 @@ class MIFROST_API SemanticHGraphEncoderEngine {
 
   private:
    friend class SemanticSuccessorHGraphEncoderEngine;
+   friend class SemanticHorizonHGraphEncoderEngine;
+
+   void configure_horizon(const SemanticHorizonHGraphEncoderConfig& config);
+   void encode_horizon(
+      const SemanticTransitionDAG& dag,
+      const SemanticHorizonHGraphEncoderConfig& config,
+      BatchBuilder& builder
+   ) const;
 
    void encode_successor(
       const SemanticFlatRelationInput& current,

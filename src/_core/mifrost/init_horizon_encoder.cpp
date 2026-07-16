@@ -51,10 +51,6 @@ void apply_horizon_config_kwargs(
 
 void init_horizon_encoder(nb::module_& m)
 {
-   nb::enum_< RootPolicy >(m, "RootPolicy")
-      .value("include", RootPolicy::include)
-      .value("encode_only", RootPolicy::encode_only)
-      .value("exclude", RootPolicy::exclude);
    nb::enum_< HorizonHGraphEncoderEngine::Mode >(m, "HorizonEncoderMode")
       .value("full", HorizonHGraphEncoderEngine::Mode::full)
       .value("delta", HorizonHGraphEncoderEngine::Mode::delta)
