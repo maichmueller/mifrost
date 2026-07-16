@@ -1,7 +1,48 @@
 import importlib
 from pathlib import Path
+from typing import Any
 
 import mifrost
+
+
+def _assert_encoding(encoding: Any, backend: str) -> None:
+    if encoding.num_graphs != 1:
+        raise SystemExit(f"{backend} smoke produced {encoding.num_graphs} graphs")
+    if encoding.num_nodes <= 0:
+        raise SystemExit(f"{backend} smoke produced an empty encoding")
+
+
+def _smoke_pymimir(domain_path: Path, problem_path: Path) -> None:
+    import pymimir
+
+    domain = pymimir.Domain(domain_path)
+    problem = pymimir.Problem(domain, problem_path, mode="grounded")
+    encoder = mifrost.FlatRelationEncoder(domain, backend="pymimir")
+    _assert_encoding(encoder.encode(problem.get_initial_state()), "Pymimir")
+
+
+def _smoke_pytyr(domain_path: Path, problem_path: Path) -> None:
+    from pypddl.formalism import ParserOptions
+    from pytyr.formalism.planning import Parser
+    from pytyr.planning import ExecutionContext
+    from pytyr.planning.lifted import (
+        AxiomEvaluatorFactory,
+        StateRepositoryFactory,
+        SuccessorGeneratorFactory,
+        Task,
+    )
+
+    options = ParserOptions()
+    planning_task = Parser(str(domain_path), options).parse_task(
+        str(problem_path), options
+    )
+    task = Task(planning_task)
+    context = ExecutionContext(1)
+    evaluator = AxiomEvaluatorFactory().create(task, context)
+    repository = StateRepositoryFactory().create(task, evaluator)
+    generator = SuccessorGeneratorFactory().create(task, context, repository)
+    encoder = mifrost.FlatRelationEncoder(planning_task, backend="pytyr")
+    _assert_encoding(encoder.encode(generator.get_initial_node().get_state()), "PyTyr")
 
 
 def main() -> None:
@@ -103,6 +144,14 @@ def main() -> None:
         package_root.glob("_pytyr_adapter*.pyd")
     ):
         raise SystemExit("wheel unexpectedly contains the PyTyr extension")
+
+    fixture_dir = Path(__file__).resolve().parent.parent / "data" / "pddl" / "blocks"
+    domain_path = fixture_dir / "domain.pddl"
+    problem_path = fixture_dir / "small.pddl"
+    if with_pymimir:
+        _smoke_pymimir(domain_path, problem_path)
+    if with_pytyr:
+        _smoke_pytyr(domain_path, problem_path)
 
     print(
         "installed wheel smoke test passed "

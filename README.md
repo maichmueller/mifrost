@@ -51,6 +51,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 ### Python dependency files
 
 - `requirements.txt`: runtime Python dependency set
+- `requirements/base-build.txt`: planner-neutral PEP 517, CMake, and Conan tooling
 - `requirements/build.txt`: Python tooling for source builds (`conan`, `cmake`, `ninja`, etc.)
 - `requirements/test.txt`: test-only Python dependencies
 - `requirements/perf.txt`: performance-gate dependencies

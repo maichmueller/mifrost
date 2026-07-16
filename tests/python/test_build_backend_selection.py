@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import tomllib
 
@@ -52,14 +54,22 @@ def test_unknown_backend_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
         build_backend._selected_backends()
 
 
+@pytest.mark.parametrize(
+    ("selection", "expected"),
+    [
+        ("core", ["wheel"]),
+        ("pymimir", ["wheel", "pymimir>=0.13.60"]),
+        ("pytyr", ["wheel", "pytyr>=0.0.30"]),
+        ("both", ["wheel", "pymimir>=0.13.60", "pytyr>=0.0.30"]),
+    ],
+)
 def test_build_requirements_follow_backend_selection(
     monkeypatch: pytest.MonkeyPatch,
+    selection: str,
+    expected: list[str],
 ) -> None:
-    monkeypatch.setenv("MIFROST_BUILD_BACKENDS", "pytyr")
-    assert build_backend._with_backend_build_requirements(["wheel"]) == [
-        "wheel",
-        "pytyr>=0.0.30",
-    ]
+    monkeypatch.setenv("MIFROST_BUILD_BACKENDS", selection)
+    assert build_backend._with_backend_build_requirements(["wheel"]) == expected
 
 
 def test_cmake_environment_disables_unselected_adapter(
@@ -87,3 +97,24 @@ def test_project_metadata_keeps_planners_optional() -> None:
     assert extras["pymimir"] == ["pymimir>=0.13.60"]
     assert extras["pytyr"] == ["pytyr>=0.0.30"]
     assert set(extras["backends"]) == {"pymimir>=0.13.60", "pytyr>=0.0.30"}
+
+
+def test_wheel_rows_install_only_backend_neutral_build_tools() -> None:
+    base_requirements = Path("requirements/base-build.txt").read_text()
+    assert "pymimir" not in base_requirements.lower()
+    assert "pytyr" not in base_requirements.lower()
+
+    default_requirements = Path("requirements/build.txt").read_text()
+    assert "-r base-build.txt" in default_requirements
+    assert "pymimir==" in default_requirements
+    assert "pytyr==" in default_requirements
+
+    workflow = Path(".github/workflows/wheels.yml").read_text()
+    before_build_lines = [
+        line.strip()
+        for line in workflow.splitlines()
+        if line.strip().startswith("CIBW_BEFORE_BUILD_")
+    ]
+    assert len(before_build_lines) == 2
+    assert all("requirements/base-build.txt" in line for line in before_build_lines)
+    assert all("requirements/build.txt" not in line for line in before_build_lines)

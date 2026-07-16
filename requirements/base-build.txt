@@ -1,0 +1,5 @@
+scikit-build-core>=0.10
+conan>=2.4,<3
+cmake>=3.27,<4
+ninja>=1.11,<2
+PyYAML>=6.0,<7
