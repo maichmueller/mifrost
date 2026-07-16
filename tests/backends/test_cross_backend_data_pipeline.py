@@ -48,6 +48,7 @@ def _assert_mixed_batch_roundtrip(
         mifrost.FlatRelationEncoder,
         mifrost.ColorEncoder,
         mifrost.HGraphEncoder,
+        mifrost.ILGEncoder,
     ],
 )
 def test_state_encoder_outputs_batch_and_serialize_across_backends(
