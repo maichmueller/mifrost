@@ -284,7 +284,8 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
   - High-level `encode_batch(...)` accepts wrapper/native planning inputs and converts
     wrapper/adapter-backed values in Python before entering the C++ batch parser.
   - Low-level `_core._parse_*` helpers and C++ batch internals are strict advanced-only.
-  - Unsupported batch kwargs are ignored silently by encoder batch APIs.
+  - Unknown batch kwargs raise `TypeError`; family-specific unsupported lanes
+    raise a descriptive `ValueError` when they contain values.
   - Per-state argument length mismatches raise `ValueError`.
   - Example:
     - Shared goals/actions:
@@ -297,9 +298,11 @@ All methods **append into an existing `BatchBuilder`** (they do not clear it). C
     - Low-level `_core._parse_*` batch parser helpers no longer accept adapter-backed
       custom Python types.
       - High-level encoder `encode_batch(...)` now performs Python-side adapter conversion.
-    - `Transition*Encoder` requires aligned `successors`; unsupported kwargs are ignored.
-    - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers`; unsupported kwargs are ignored.
-    - `ColorEncoder` ignores `actions` in batch mode.
+    - `Transition*Encoder` requires aligned `successors` and rejects explicit
+      action/history lanes.
+    - `HorizonEncoder` accepts per-state `dags/goals/subgoal_layers` and rejects
+      explicit action/history lanes.
+    - `ColorEncoder` rejects action payloads.
 
 - `stream() -> HGraphEncoderStream`
   - Create an append-only stream encoder backed by the same C++ engine.
