@@ -28,7 +28,11 @@ jobs:
         path: src/mifrost
 
     - name: Validate stub file
-      run: python scripts/validate_generated_stub.py
+      run: |
+        python scripts/validate_generated_stub.py src/mifrost/_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_neutral_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pymimir_adapter.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pytyr_adapter.pyi
 
     - name: Build SDist
       run: pipx run build --sdist
@@ -78,20 +82,24 @@ jobs:
     - name: Configure build
       id: configure_stubs
       run: |
-        python configure.py --mode stubs
+        python configure.py --mode stubs --backends both
 
     - name: Generate nanobind stubs
       run: |
         python cbuild.py --mode stubs
 
     - name: Validate generated stubs
-      run: python scripts/validate_generated_stub.py
+      run: |
+        python scripts/validate_generated_stub.py src/mifrost/_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_neutral_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pymimir_adapter.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pytyr_adapter.pyi
 
     - name: Upload generated stubs
       uses: actions/upload-artifact@v6
       with:
         name: mifrost-stubs
-        path: src/mifrost/_core.pyi
+        path: src/mifrost/_*.pyi
         if-no-files-found: error
 
     - name: Save Conan cache
@@ -112,19 +120,88 @@ jobs:
         include:
           - os: ubuntu-latest
             flavor: manylinux
+            backend: both
+            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_manylinux
             cibw_build: "cp312-manylinux_* cp313-manylinux_* cp314-manylinux_*"
             cibw_skip: "cp314t-*"
           - os: ubuntu-latest
             flavor: musllinux
+            backend: both
+            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_musllinux
             cibw_build: "cp312-musllinux_* cp313-musllinux_* cp314-musllinux_*"
             cibw_skip: "cp314t-*"
           - os: macos-latest
             flavor: macos
+            backend: both
+            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_macos
             cibw_build: "cp312-* cp313-* cp314-*"
             cibw_skip: "cp314t-*"
+          - os: ubuntu-latest
+            flavor: manylinux-core
+            backend: core
+            test_requires: ""
+            conan_home_dir: .conan2_wheels_manylinux
+            cibw_build: "cp312-manylinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: manylinux-pymimir
+            backend: pymimir
+            test_requires: "pymimir>=0.13.60"
+            conan_home_dir: .conan2_wheels_manylinux
+            cibw_build: "cp312-manylinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: manylinux-pytyr
+            backend: pytyr
+            test_requires: "pytyr>=0.0.30"
+            conan_home_dir: .conan2_wheels_manylinux
+            cibw_build: "cp312-manylinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: musllinux-core
+            backend: core
+            test_requires: ""
+            conan_home_dir: .conan2_wheels_musllinux
+            cibw_build: "cp312-musllinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: musllinux-pymimir
+            backend: pymimir
+            test_requires: "pymimir>=0.13.60"
+            conan_home_dir: .conan2_wheels_musllinux
+            cibw_build: "cp312-musllinux_*"
+            cibw_skip: ""
+          - os: ubuntu-latest
+            flavor: musllinux-pytyr
+            backend: pytyr
+            test_requires: "pytyr>=0.0.30"
+            conan_home_dir: .conan2_wheels_musllinux
+            cibw_build: "cp312-musllinux_*"
+            cibw_skip: ""
+          - os: macos-latest
+            flavor: macos-core
+            backend: core
+            test_requires: ""
+            conan_home_dir: .conan2_wheels_macos
+            cibw_build: "cp312-*"
+            cibw_skip: ""
+          - os: macos-latest
+            flavor: macos-pymimir
+            backend: pymimir
+            test_requires: "pymimir>=0.13.60"
+            conan_home_dir: .conan2_wheels_macos
+            cibw_build: "cp312-*"
+            cibw_skip: ""
+          - os: macos-latest
+            flavor: macos-pytyr
+            backend: pytyr
+            test_requires: "pytyr>=0.0.30"
+            conan_home_dir: .conan2_wheels_macos
+            cibw_build: "cp312-*"
+            cibw_skip: ""
 
     steps:
     - uses: actions/checkout@v6
@@ -142,7 +219,11 @@ jobs:
         path: src/mifrost
 
     - name: Validate stub file
-      run: python scripts/validate_generated_stub.py
+      run: |
+        python scripts/validate_generated_stub.py src/mifrost/_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_neutral_core.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pymimir_adapter.pyi
+        python scripts/validate_generated_stub.py src/mifrost/_pytyr_adapter.pyi
 
     - name: Set cache dirs
       run: |
@@ -173,6 +254,7 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
         CIBW_SKIP: ${{ matrix.cibw_skip }}
+        CIBW_TEST_REQUIRES: ${{ matrix.test_requires }}
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
         CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -r /project/requirements/build.txt
@@ -180,7 +262,9 @@ jobs:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
-        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1
+        CIBW_ENVIRONMENT_PASS_LINUX: MIFROST_BUILD_BACKENDS
+        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1 MIFROST_BUILD_BACKENDS=${{ matrix.backend }}
+        MIFROST_BUILD_BACKENDS: ${{ matrix.backend }}
 
     - name: Verify clean directory
       run: git diff --exit-code -- . ':(exclude)src/mifrost/_core.pyi'
@@ -215,15 +299,15 @@ jobs:
             wheel_path = pathlib.Path(wheel)
             with zipfile.ZipFile(wheel_path) as zf:
                 names = set(zf.namelist())
-                has_core_ext = any(
-                    name.startswith("mifrost/_core")
+                has_neutral_ext = any(
+                    name.startswith("mifrost/_neutral_core")
                     and (name.endswith(".so") or name.endswith(".dylib"))
                     for name in names
                 )
-                if not has_core_ext:
-                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_core extension")
-                if "mifrost/_core.pyi" not in names:
-                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_core.pyi")
+                if not has_neutral_ext:
+                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_neutral_core extension")
+                if "mifrost/_neutral_core.pyi" not in names:
+                    raise SystemExit(f"{wheel_path.name}: missing mifrost/_neutral_core.pyi")
                 if "mifrost/include/mifrost/core/batch_builder.hpp" not in names:
                   raise SystemExit(f"{wheel_path.name}: missing mifrost SDK headers")
                 if "mifrost/lib/cmake/mifrost/mifrostConfig.cmake" not in names:
@@ -234,17 +318,37 @@ jobs:
                 if "mifrost/include/mifrost/core/map_view.hpp" in names:
                   raise SystemExit(f"{wheel_path.name}: still ships internal Python-only SDK headers")
 
-                has_core_sdk_lib = any(
+                has_neutral_sdk_lib = any(
                   name.startswith("mifrost/lib/")
-                  and pathlib.PurePosixPath(name).name.startswith("libmifrost_core")
+                  and pathlib.PurePosixPath(name).name.startswith("libmifrost_neutral_core")
                   for name in names
                 )
-                if not has_core_sdk_lib:
-                  raise SystemExit(f"{wheel_path.name}: missing reusable mifrost core library")
+                if not has_neutral_sdk_lib:
+                  raise SystemExit(f"{wheel_path.name}: missing reusable neutral core library")
 
                 config_text = zf.read("mifrost/lib/cmake/mifrost/mifrostConfig.cmake").decode()
+                with_pymimir = "set(mifrost_WITH_PYMIMIR_ADAPTER ON)" in config_text
+                with_pytyr = "set(mifrost_WITH_PYTYR_ADAPTER ON)" in config_text
                 if "find_dependency(nanobind" in config_text:
                   raise SystemExit(f"{wheel_path.name}: still exports nanobind as an SDK dependency")
+
+                def has_extension(stem):
+                    return any(
+                        name.startswith(f"mifrost/{stem}")
+                        and (name.endswith(".so") or name.endswith(".dylib"))
+                        for name in names
+                    )
+
+                if has_extension("_pymimir_adapter") != with_pymimir:
+                    raise SystemExit(f"{wheel_path.name}: Pymimir extension/config mismatch")
+                if has_extension("_pytyr_adapter") != with_pytyr:
+                    raise SystemExit(f"{wheel_path.name}: PyTyr extension/config mismatch")
+                if ("mifrost/_pymimir_adapter.pyi" in names) != with_pymimir:
+                    raise SystemExit(f"{wheel_path.name}: Pymimir stub/config mismatch")
+                if ("mifrost/_pytyr_adapter.pyi" in names) != with_pytyr:
+                    raise SystemExit(f"{wheel_path.name}: PyTyr stub/config mismatch")
+                if ("mifrost/_core.pyi" in names) != with_pymimir:
+                    raise SystemExit(f"{wheel_path.name}: compatibility stub/config mismatch")
 
                 targets_text = zf.read("mifrost/lib/cmake/mifrost/mifrostTargets.cmake").decode()
                 if "nanobind::nanobind" in targets_text:
@@ -275,6 +379,7 @@ jobs:
         PY
 
     - name: Upload wheels
+      if: matrix.backend == 'both'
       uses: actions/upload-artifact@v6
       with:
         path: wheelhouse/*.whl

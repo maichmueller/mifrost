@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 import mifrost
@@ -42,9 +43,10 @@ def main() -> None:
         raise SystemExit("installed wheel still ships internal Python-only SDK headers")
 
     if not any(
-        path.name.startswith("libmifrost_core") for path in library_dir.iterdir()
+        path.name.startswith("libmifrost_neutral_core")
+        for path in library_dir.iterdir()
     ):
-        raise SystemExit("installed wheel is missing the reusable mifrost core library")
+        raise SystemExit("installed wheel is missing the reusable neutral core library")
 
     config_path = cmake_dir / "mifrostConfig.cmake"
     targets_path = cmake_dir / "mifrostTargets.cmake"
@@ -56,6 +58,8 @@ def main() -> None:
         raise SystemExit("installed wheel is missing mifrostTargets.cmake")
 
     config_text = config_path.read_text()
+    with_pymimir = "set(mifrost_WITH_PYMIMIR_ADAPTER ON)" in config_text
+    with_pytyr = "set(mifrost_WITH_PYTYR_ADAPTER ON)" in config_text
     if "find_dependency(nanobind" in config_text:
         raise SystemExit(
             "installed wheel still requires nanobind in mifrostConfig.cmake"
@@ -72,7 +76,38 @@ def main() -> None:
             "installed wheel still leaks Conan build paths in mifrostTargets.cmake"
         )
 
-    print("installed wheel smoke test passed")
+    neutral_module = importlib.import_module("mifrost._neutral_core")
+    if not hasattr(neutral_module, "BatchEncoding"):
+        raise SystemExit("neutral extension is missing BatchEncoding")
+
+    if with_pymimir:
+        importlib.import_module("mifrost._pymimir_adapter")
+        if not any(
+            path.name.startswith("libmifrost_pymimir_adapter")
+            for path in library_dir.iterdir()
+        ):
+            raise SystemExit("Pymimir wheel is missing its reusable adapter library")
+    elif any(package_root.glob("_pymimir_adapter*.so")) or any(
+        package_root.glob("_pymimir_adapter*.pyd")
+    ):
+        raise SystemExit("wheel unexpectedly contains the Pymimir extension")
+
+    if with_pytyr:
+        importlib.import_module("mifrost._pytyr_adapter")
+        if not any(
+            path.name.startswith("libmifrost_pytyr_adapter")
+            for path in library_dir.iterdir()
+        ):
+            raise SystemExit("PyTyr wheel is missing its reusable adapter library")
+    elif any(package_root.glob("_pytyr_adapter*.so")) or any(
+        package_root.glob("_pytyr_adapter*.pyd")
+    ):
+        raise SystemExit("wheel unexpectedly contains the PyTyr extension")
+
+    print(
+        "installed wheel smoke test passed "
+        f"(pymimir={with_pymimir}, pytyr={with_pytyr})"
+    )
 
 
 if __name__ == "__main__":
