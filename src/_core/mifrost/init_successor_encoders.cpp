@@ -18,15 +18,15 @@
 #include <mimir/search/state_repository.hpp>
 #include <optional>
 
+#include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
+#include "mifrost/backends/pymimir/encoders/common/transition_dag.hpp"
+#include "mifrost/backends/pymimir/encoders/hetero/hgraph_stream_encoder.hpp"
+#include "mifrost/backends/pymimir/encoders/hetero/horizon_hgraph_encoder.hpp"
+#include "mifrost/backends/pymimir/encoders/hetero/successor_hgraph_encoder.hpp"
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/common/default_relations.hpp"
-#include "mifrost/core/encoders/common/goal_inputs.hpp"
-#include "mifrost/core/encoders/common/transition_dag.hpp"
-#include "mifrost/core/encoders/hetero/hgraph_stream_encoder.hpp"
-#include "mifrost/core/encoders/hetero/horizon_hgraph_encoder.hpp"
-#include "mifrost/core/encoders/hetero/successor_hgraph_encoder.hpp"
 #include "mifrost/core/nanobind_unordered_dense.hpp"
 #include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"

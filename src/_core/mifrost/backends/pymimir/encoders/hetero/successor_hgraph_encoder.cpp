@@ -1,6 +1,6 @@
 /**
  * @file successor_hgraph_encoder.cpp
- * @brief Heterogeneous immediate-successor encoder implementation.
+ * @brief Pymimir immediate-successor encoder implementation.
  */
 #include "successor_hgraph_encoder.hpp"
 

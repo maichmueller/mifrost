@@ -2,7 +2,7 @@
  * @file transition_dag.cpp
  * @brief Transition-DAG implementation shared by lookahead encoders.
  */
-#include "mifrost/core/encoders/common/transition_dag.hpp"
+#include "mifrost/backends/pymimir/encoders/common/transition_dag.hpp"
 
 #include <algorithm>
 #include <cstddef>

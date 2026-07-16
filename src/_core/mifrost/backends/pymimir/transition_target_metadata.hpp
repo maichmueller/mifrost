@@ -6,10 +6,10 @@
 
 #include <optional>
 
+#include "mifrost/backends/pymimir/encoders/common/transition_dag.hpp"
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/root_policy.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
-#include "mifrost/core/encoders/common/transition_dag.hpp"
 
 namespace mifrost::pymimir_backend {
 

@@ -1,6 +1,6 @@
 /**
  * @file flat_relation_encoder.cpp
- * @brief Main implementation file for the flat relation encoder.
+ * @brief Main implementation file for the Pymimir flat relation encoder.
  *
  * Tuple layout, schema setup, node-table helpers, and target metadata helpers
  * live in nearby files. This file keeps the relation encoder's own emit order
@@ -19,10 +19,10 @@
 #include <string_view>
 #include <utility>
 
-#include "flat_encoder_common.hpp"
-#include "flat_lgan.hpp"
 #include "flat_relation_context.hpp"
 #include "flat_tuple_args.hpp"
+#include "mifrost/core/encoders/flat/flat_encoder_common.hpp"
+#include "mifrost/core/encoders/flat/flat_lgan.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {

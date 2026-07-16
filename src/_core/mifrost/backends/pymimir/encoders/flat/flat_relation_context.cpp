@@ -1,6 +1,6 @@
 /**
  * @file flat_relation_context.cpp
- * @brief Per-graph setup for the flat relation encoder.
+ * @brief Per-graph setup for the Pymimir flat relation encoder.
  *
  * The relation encoder uses this file to fill all node rows and lookup maps
  * before tuple emission starts. Emission code assumes the returned context is complete.

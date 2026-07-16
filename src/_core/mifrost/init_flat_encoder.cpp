@@ -7,8 +7,8 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "mifrost/backends/pymimir/encoders/flat/flat_relation_encoder.hpp"
 #include "mifrost/bindings.hpp"
-#include "mifrost/core/encoders/flat/flat_relation_encoder.hpp"
 #include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 

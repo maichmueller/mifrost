@@ -1,4 +1,4 @@
-#include "flat_goal_helpers.hpp"
+#include "mifrost/backends/pymimir/encoders/flat/flat_goal_helpers.hpp"
 
 #include <fmt/format.h>
 

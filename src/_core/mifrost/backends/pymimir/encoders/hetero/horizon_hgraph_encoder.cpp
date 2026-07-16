@@ -1,6 +1,6 @@
 /**
  * @file horizon_hgraph_encoder.cpp
- * @brief Heterogeneous horizon encoder implementation.
+ * @brief Pymimir heterogeneous Horizon encoder implementation.
  *
  * This file adds transition-DAG topology, root handling, and state-target
  * export on top of the shared hetero base encoder.

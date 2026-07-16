@@ -1,6 +1,6 @@
 /**
  * @file flat_horizon_context.cpp
- * @brief Per-graph setup for the flat horizon encoder.
+ * @brief Per-graph setup for the Pymimir flat horizon encoder.
  *
  * This file prepares state rows, target metadata rows, and root-aware lookup
  * maps before flat horizon tuple emission starts.

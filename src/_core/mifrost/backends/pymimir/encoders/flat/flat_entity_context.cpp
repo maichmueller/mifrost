@@ -1,6 +1,6 @@
 /**
  * @file flat_entity_context.cpp
- * @brief Non-template helpers for flat entity-table bookkeeping.
+ * @brief Pymimir helpers for flat entity-table bookkeeping.
  */
 #include "flat_entity_context.hpp"
 

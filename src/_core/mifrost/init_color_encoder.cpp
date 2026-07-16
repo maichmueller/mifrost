@@ -6,10 +6,10 @@
 #include <mimir/formalism/problem.hpp>
 #include <mimir/search/state.hpp>
 
+#include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
+#include "mifrost/backends/pymimir/encoders/homo/color_encoder.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/encoders/common/goal_inputs.hpp"
-#include "mifrost/core/encoders/homo/color_encoder.hpp"
 #include "mifrost/init_batch_encoding.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 

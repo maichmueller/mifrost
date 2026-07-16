@@ -1,6 +1,6 @@
 /**
  * @file flat_horizon_encoder.cpp
- * @brief Main implementation file for the flat horizon encoder.
+ * @brief Main implementation file for the Pymimir flat horizon encoder.
  *
  * This file holds the horizon-specific emit flow on top of the shared flat
  * schema, node-table, and tuple helpers. Root handling differs from the plain
@@ -21,12 +21,12 @@
 #include <stdexcept>
 #include <string_view>
 
-#include "flat_encoder_common.hpp"
 #include "flat_goal_helpers.hpp"
 #include "flat_horizon_context.hpp"
-#include "flat_lgan.hpp"
 #include "flat_tuple_args.hpp"
 #include "mifrost/backends/pymimir/deferred_state_names.hpp"
+#include "mifrost/core/encoders/flat/flat_encoder_common.hpp"
+#include "mifrost/core/encoders/flat/flat_lgan.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {

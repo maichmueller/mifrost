@@ -1,6 +1,6 @@
 /**
  * @file color_encoder.cpp
- * @brief Homogeneous color encoder implementation.
+ * @brief Pymimir homogeneous color encoder implementation.
  */
 #include "color_encoder.hpp"
 

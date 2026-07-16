@@ -5,8 +5,8 @@
 #include <optional>
 #include <string_view>
 
+#include "mifrost/backends/pymimir/encoders/common/relation_formatter.hpp"
 #include "mifrost/bindings.hpp"
-#include "mifrost/core/encoders/common/relation_formatter.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;

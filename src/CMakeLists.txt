@@ -655,18 +655,18 @@ add_library(
     mifrost_pymimir_adapter
     SHARED
         "_core/mifrost/input_handling/batch_input_goal_inputs.cpp"
-        "_core/mifrost/core/encoders/homo/color_encoder.cpp"
-        "_core/mifrost/core/encoders/flat/flat_entity_context.cpp"
-        "_core/mifrost/core/encoders/flat/flat_goal_helpers.cpp"
-        "_core/mifrost/core/encoders/flat/flat_horizon_context.cpp"
-        "_core/mifrost/core/encoders/flat/flat_horizon_encoder.cpp"
-        "_core/mifrost/core/encoders/flat/flat_relation_context.cpp"
-        "_core/mifrost/core/encoders/flat/flat_relation_encoder.cpp"
-        "_core/mifrost/core/encoders/hetero/hgraph_stream_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/homo/color_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_entity_context.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_goal_helpers.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_horizon_context.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_horizon_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_relation_context.cpp"
+        "_core/mifrost/backends/pymimir/encoders/flat/flat_relation_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/hetero/hgraph_stream_encoder.cpp"
         "_core/mifrost/backends/pymimir/transition_target_metadata.cpp"
-        "_core/mifrost/core/encoders/common/transition_dag.cpp"
-        "_core/mifrost/core/encoders/hetero/horizon_hgraph_encoder.cpp"
-        "_core/mifrost/core/encoders/hetero/successor_hgraph_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/common/transition_dag.cpp"
+        "_core/mifrost/backends/pymimir/encoders/hetero/horizon_hgraph_encoder.cpp"
+        "_core/mifrost/backends/pymimir/encoders/hetero/successor_hgraph_encoder.cpp"
 )
 set_target_properties(
     mifrost_pymimir_adapter
@@ -987,6 +987,16 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER)
         PATTERN "map_view.hpp" EXCLUDE
         PATTERN "nanobind_unordered_dense.hpp" EXCLUDE
         PATTERN "nb_instance.hpp" EXCLUDE
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/backends/pymimir/"
+        DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost/backends/pymimir"
+        FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+    )
+    install(
+        FILES "${CMAKE_CURRENT_LIST_DIR}/_core/gtl/phmap.hpp"
+        DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/gtl"
     )
 else ()
     set(_mifrost_neutral_public_headers

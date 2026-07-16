@@ -1,6 +1,6 @@
 /**
  * @file hgraph_stream_encoder.cpp
- * @brief Shared implementation for hetero graph encoders.
+ * @brief Shared Pymimir implementation for compatibility hetero graph encoders.
  *
  * Horizon and successor encoders extend the schema and call back into this
  * file for shared object, fact, and target handling.
@@ -22,7 +22,7 @@
 #include <type_traits>
 #include <variant>
 
-#include "mifrost/core/encoders/common/state_fact_iteration.hpp"
+#include "mifrost/backends/pymimir/encoders/common/state_fact_iteration.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
