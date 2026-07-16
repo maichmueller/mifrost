@@ -151,15 +151,19 @@ def _iter_pytyr_lib_dirs() -> list[Path]:
     return out
 
 
-def _iter_candidate_lib_dirs() -> list[Path]:
-    candidates: list[Path] = []
-    candidates.extend(_iter_pymimir_lib_dirs())
-    candidates.extend(_iter_pytyr_lib_dirs())
-    candidates.extend(_iter_conan_lib_dirs())
-    candidates.extend(_split_path_list(os.environ.get("DYLD_LIBRARY_PATH")))
-    candidates.extend(_split_path_list(os.environ.get("LD_LIBRARY_PATH")))
+def _iter_python_runtime_lib_dirs(platform: str | None = None) -> list[Path]:
+    """Return generic interpreter library paths only where they are safe.
 
-    # Some wheels vendor runtime libraries into the Python installation itself.
+    On macOS, prepending a Conda ``lib`` directory can make dyld resolve the
+    system ``/usr/lib/libc++`` dependency to Conda's newer ``libc++``. Delocate
+    then vendors that unrelated runtime and raises the wheel's minimum macOS
+    version. Planner and Conan directories already cover Mifrost's non-system
+    dependencies, so generic interpreter paths must stay out of macOS repair.
+    """
+    if (platform or sys.platform) == "darwin":
+        return []
+
+    candidates: list[Path] = []
     for key in ("LIBDIR", "LIBPL"):
         try:
             libdir = sysconfig.get_config_var(key)
@@ -176,6 +180,18 @@ def _iter_candidate_lib_dirs() -> list[Path]:
                 candidates.append(libdir)
     except Exception:
         pass
+    return candidates
+
+
+def _iter_candidate_lib_dirs() -> list[Path]:
+    candidates: list[Path] = []
+    candidates.extend(_iter_pymimir_lib_dirs())
+    candidates.extend(_iter_pytyr_lib_dirs())
+    candidates.extend(_iter_conan_lib_dirs())
+    candidates.extend(_split_path_list(os.environ.get("DYLD_LIBRARY_PATH")))
+    candidates.extend(_split_path_list(os.environ.get("LD_LIBRARY_PATH")))
+
+    candidates.extend(_iter_python_runtime_lib_dirs())
 
     cmake_prefixes = _split_path_list(os.environ.get("CMAKE_PREFIX_PATH"))
     for prefix in cmake_prefixes:
@@ -251,7 +267,7 @@ def _repair_macos(wheel: Path, outdir: Path, lib_dirs: list[Path]) -> None:
         str(outdir),
         "-v",
         "--lib-sdir",
-        "mifrost/.dylibs",
+        ".dylibs",
         str(wheel),
     ]
     _run(cmd, env=env)

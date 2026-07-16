@@ -334,7 +334,7 @@ def test_public_transition_coexists_and_rejects_wrong_or_mixed_inputs() -> None:
 
 
 def test_public_transition_pytyr_only_source_blocker_encodes_actual_successor() -> None:
-    package_parent = Path(mifrost._neutral_core.__file__).resolve().parent.parent
+    package_parent = ROOT / "src"
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"

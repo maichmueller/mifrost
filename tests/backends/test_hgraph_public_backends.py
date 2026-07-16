@@ -273,7 +273,7 @@ def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> 
 
 
 def test_public_hgraph_pytyr_only_source_blocker_encodes() -> None:
-    package_parent = Path(mifrost._neutral_core.__file__).resolve().parent.parent
+    package_parent = ROOT / "src"
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"
