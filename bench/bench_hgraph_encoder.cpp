@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "mifrost/backends/pymimir/encoders/hetero/hgraph_stream_encoder.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/hgraph_stream_encoder.hpp"
 
 namespace {
 

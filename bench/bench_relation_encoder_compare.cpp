@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
+#include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
+#include "mifrost/backends/pymimir/encoders/common/relation_formatter.hpp"
+#include "mifrost/backends/pymimir/encoders/flat/flat_relation_encoder.hpp"
+#include "mifrost/backends/pymimir/encoders/hetero/hgraph_stream_encoder.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/flat_relation_encoder.hpp"
-#include "mifrost/core/goal_inputs.hpp"
-#include "mifrost/core/hgraph_stream_encoder.hpp"
-#include "mifrost/core/relation_formatter.hpp"
 
 namespace {
 

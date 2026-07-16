@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "mifrost/backends/pymimir/encoders/flat/flat_relation_encoder.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/flat_relation_encoder.hpp"
 
 namespace {
 
