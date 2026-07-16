@@ -10,9 +10,9 @@ from ..encoders._batch_contract import (
     parse_states_batch,
     prepare_core_batch_inputs,
 )
-from ..encoders._lane_specs import ensure_transition_dag, prepare_goal_inputs
 from ..encoders._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
-from ..encoders.common import _advanced_domain, _advanced_state
+from .pymimir_common import _advanced_domain, _advanced_state
+from .pymimir_lane_specs import ensure_transition_dag, prepare_goal_inputs
 
 if TYPE_CHECKING:
     from .._core import TransitionDAG

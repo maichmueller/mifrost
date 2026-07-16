@@ -6,8 +6,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any, Literal, cast
 
 from ..encoders._batch_contract import prepare_core_batch_inputs
-from ..encoders.common import _advanced_domain, _advanced_state, _split_goals
 from ..encoders.types import default_goals_from_state
+from .pymimir_common import _advanced_domain, _advanced_state, _split_goals
 
 
 class PymimirTransitionRuntime:

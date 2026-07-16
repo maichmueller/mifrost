@@ -102,8 +102,11 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     ) -> int:
         """Append one root/DAG encoding to the stream."""
         if self._legacy_engine:
-            from ._lane_specs import ensure_transition_dag, prepare_goal_inputs
-            from .common import _advanced_state
+            from ..backends.pymimir_common import _advanced_state
+            from ..backends.pymimir_lane_specs import (
+                ensure_transition_dag,
+                prepare_goal_inputs,
+            )
 
             return self._coerce_stream_id(
                 self._stream.append(
@@ -129,8 +132,11 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
         if self._legacy_engine:
-            from ._lane_specs import ensure_transition_dag, prepare_goal_inputs
-            from .common import _advanced_state
+            from ..backends.pymimir_common import _advanced_state
+            from ..backends.pymimir_lane_specs import (
+                ensure_transition_dag,
+                prepare_goal_inputs,
+            )
 
             self._stream.update(
                 stream_id,

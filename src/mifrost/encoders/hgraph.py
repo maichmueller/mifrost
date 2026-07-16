@@ -100,8 +100,8 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
                     history_max_steps=history_max_steps,
                 )
             )
-        from ._lane_specs import prepare_optional_payloads
-        from .common import _advanced_state, _split_goals
+        from ..backends.pymimir_common import _advanced_state, _split_goals
+        from ..backends.pymimir_lane_specs import prepare_optional_payloads
 
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
@@ -161,8 +161,8 @@ class HGraphMutableEncoderStream(StreamEncoderBase[HeteroData]):
                 history_max_steps=history_max_steps,
             )
             return
-        from ._lane_specs import prepare_optional_payloads
-        from .common import _advanced_state, _split_goals
+        from ..backends.pymimir_common import _advanced_state, _split_goals
+        from ..backends.pymimir_lane_specs import prepare_optional_payloads
 
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
@@ -240,8 +240,8 @@ class HGraphEncoderStream(StreamEncoderBase[HeteroData]):
                     history_max_steps=history_max_steps,
                 )
             )
-        from ._lane_specs import prepare_optional_payloads
-        from .common import _advanced_state, _split_goals
+        from ..backends.pymimir_common import _advanced_state, _split_goals
+        from ..backends.pymimir_lane_specs import prepare_optional_payloads
 
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(
@@ -299,7 +299,7 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         engine_cls: Any,
     ) -> None:
         """Initialize encoder runtime state from a prepared config object."""
-        from .common import _advanced_domain
+        from ..backends.pymimir_common import _advanced_domain
 
         self._runtime = None
         self._engine = engine_cls(_advanced_domain(domain), config)
@@ -447,8 +447,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
                 history_max_steps=history_max_steps,
             )
             return
-        from ._lane_specs import prepare_optional_payloads
-        from .common import _advanced_state, _split_goals
+        from ..backends.pymimir_common import _advanced_state, _split_goals
+        from ..backends.pymimir_lane_specs import prepare_optional_payloads
 
         adv_state = _advanced_state(state)
         payloads = prepare_optional_payloads(

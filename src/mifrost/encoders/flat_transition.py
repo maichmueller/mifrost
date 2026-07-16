@@ -48,7 +48,7 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         self, current: StateInput, successor: StateInput
     ) -> Any:
         if self.backend != "pytyr":
-            from ._lane_specs import single_transition_dag
+            from ..backends.pymimir_lane_specs import single_transition_dag
 
             return single_transition_dag(current, successor)
         import rustworkx as rx

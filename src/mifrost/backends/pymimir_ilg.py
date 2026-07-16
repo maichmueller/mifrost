@@ -7,7 +7,7 @@ from typing import Any, Literal, cast
 
 from .. import _core
 from ..encoders._batch_contract import prepare_core_batch_inputs
-from ..encoders.accessors import (
+from .pymimir_accessors import (
     action_objects,
     atom_objects,
     literal_atom,
@@ -17,7 +17,6 @@ from ..encoders.accessors import (
     predicate_arity,
     predicate_name,
 )
-from ..encoders.common import _advanced_action, _advanced_literal, _advanced_state
 from ..encoders.types import (
     ATOM_TYPES,
     WRAPPER_STATE_TYPES,
@@ -26,6 +25,7 @@ from ..encoders.types import (
     is_state_input,
 )
 from ._ilg_runtime import ILGAction, ILGAtom, ILGInput, ILGLiteral
+from .pymimir_common import _advanced_action, _advanced_literal, _advanced_state
 
 
 def _gather_objects(items: Iterable[Any]) -> list[Any]:
