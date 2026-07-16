@@ -3,24 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .. import _neutral_core
 from .._core import (
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_PARENT_RELATION,
-    TransitionDAG,
-    FlatHorizonEncoderConfig,
-    FlatHorizonEncoderEngine,
-    FlatHorizonEncoderMode,
-    FlatHorizonStreamEncoder as _FlatHorizonStreamEncoder,
     HorizonEncoderMode,
 )
-from ._batch_contract import (
-    parse_dags_batch_param,
-    parse_states_batch,
-    prepare_core_batch_inputs,
+from ..backends._flat_horizon_runtime import (
+    FlatHorizonBackendName,
+    create_flat_horizon_runtime,
 )
-from ._rustworkx_dag import RXStateDAG, _normalize_dag_batch_data
+from ._rustworkx_dag import RXStateDAG
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
@@ -34,21 +29,13 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from .common import (
-    _advanced_domain,
-    _advanced_state,
+from ._horizon_validation import (
+    validate_flat_batch_unsupported_lanes,
+    validate_flat_single_unsupported_lanes,
 )
-from ._lane_specs import (
-    FLAT_HORIZON_LANE_SPEC,
-    ensure_transition_dag,
-    prepare_goal_inputs,
-    validate_batch_optional_payloads,
-    validate_single_optional_payloads,
-)
-from ._root_policy import RootPolicy, normalize_root_policy
+from ._root_policy import normalize_root_policy
 from .flat import FlatRelationEncoder
 from ._flat_validation import (
-    validate_subgoal_layers_batch_payload as _validate_subgoal_layers_batch_payload,
     validate_subgoal_layers_state_payload as _validate_subgoal_layers_state_payload,
 )
 from .types import (
@@ -58,14 +45,18 @@ from .types import (
     StateInput,
 )
 
+TransitionDAG = Any
+
+
+FlatHorizonEncoderMode = _neutral_core.SemanticHorizonEncoderMode
+FlatHorizonEncoderConfig = _neutral_core.SemanticFlatHorizonEncoderConfig
+
 
 def _normalize_flat_horizon_mode(
-    mode: FlatHorizonEncoderMode | HorizonEncoderMode | str | None,
-) -> FlatHorizonEncoderMode | None:
+    mode: Any,
+) -> Any:
     if mode is None:
         return None
-    if isinstance(mode, FlatHorizonEncoderMode):
-        return mode
     if isinstance(mode, str):
         normalized = mode.strip().lower()
         mapping = {
@@ -79,8 +70,6 @@ def _normalize_flat_horizon_mode(
     name = getattr(mode, "name", None)
     if isinstance(name, str):
         return _normalize_flat_horizon_mode(name)
-    if isinstance(mode, HorizonEncoderMode):
-        return _normalize_flat_horizon_mode(mode.name)
     raise TypeError(
         "transition_mode must be a FlatHorizonEncoderMode, HorizonEncoderMode, "
         f"or str, got {type(mode)!r}"
@@ -88,7 +77,7 @@ def _normalize_flat_horizon_mode(
 
 
 @dataclass
-class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
+class FlatHorizonEncoderStream(StreamEncoderBase[Any]):
     """Append-only stream for flat horizon encodings.
 
     Each item is a root state plus an optional `TransitionDAG`. The flushed
@@ -98,7 +87,7 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
     _encoder: "FlatHorizonEncoder"
 
     def __post_init__(self) -> None:
-        self._stream = _FlatHorizonStreamEncoder(self._encoder.engine)
+        self._stream = self._encoder._runtime.make_stream()
         self._reset_builder()
 
     def append(
@@ -110,19 +99,19 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
         """Append one root/DAG input and return its stream id."""
-        adv_root = _advanced_state(root)
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
             state_index=0,
             max_goal_level=int(self._encoder.config.max_goal_level),
         )
-        normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
-        if dag is None:
-            return self._coerce_stream_id(self._stream.append(adv_root, inputs))
         return self._coerce_stream_id(
-            self._stream.append(adv_root, normalized_dag, inputs)
+            self._stream.append(
+                root,
+                dag,
+                goals=goals,
+                subgoal_layers=subgoal_layers_list,
+            )
         )
 
     def _reset_builder(self) -> None:
@@ -130,13 +119,13 @@ class FlatHorizonEncoderStream(StreamEncoderBase["FlatRelationData"]):
 
 
 @dataclass
-class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
+class FlatHorizonMutableEncoderStream(StreamEncoderBase[Any]):
     """Mutable stream for flat horizon encodings."""
 
     _encoder: "FlatHorizonEncoder"
 
     def __post_init__(self) -> None:
-        self._stream = _FlatHorizonStreamEncoder(self._encoder.engine)
+        self._stream = self._encoder._runtime.make_stream()
         self._reset_builder()
 
     def append(
@@ -148,19 +137,19 @@ class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
         """Append one root/DAG input and return its stream id."""
-        adv_root = _advanced_state(root)
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
             state_index=0,
             max_goal_level=int(self._encoder.config.max_goal_level),
         )
-        normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
-        if dag is None:
-            return self._coerce_stream_id(self._stream.append(adv_root, inputs))
         return self._coerce_stream_id(
-            self._stream.append(adv_root, normalized_dag, inputs)
+            self._stream.append(
+                root,
+                dag,
+                goals=goals,
+                subgoal_layers=subgoal_layers_list,
+            )
         )
 
     def remove(self, stream_id: int) -> None:
@@ -176,19 +165,19 @@ class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
         """Replace one root/DAG input in place."""
-        adv_root = _advanced_state(root)
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
             state_index=0,
             max_goal_level=int(self._encoder.config.max_goal_level),
         )
-        normalized_dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
-        if dag is None:
-            self._stream.update(stream_id, adv_root, inputs)
-            return
-        self._stream.update(stream_id, adv_root, normalized_dag, inputs)
+        self._stream.update(
+            stream_id,
+            root,
+            dag,
+            goals=goals,
+            subgoal_layers=subgoal_layers_list,
+        )
 
     def _reset_builder(self) -> None:
         self._stream.reset()
@@ -197,10 +186,13 @@ class FlatHorizonMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
 class FlatHorizonEncoder(FlatRelationEncoder):
     """Encode a root state plus lookahead candidates as packed flat relations."""
 
+    _runtime: Any
+
     def __init__(
         self,
         domain: DomainInput,
         *,
+        backend: FlatHorizonBackendName | str | None = None,
         transition_mode: (
             FlatHorizonEncoderMode | HorizonEncoderMode | str | None
         ) = None,
@@ -211,7 +203,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         enable_parent_relation: bool = False,
         enable_sibling_relation: bool = False,
         enable_cousin_relation: bool = False,
-        root_policy: RootPolicy | str = "exclude",
+        root_policy: Any = "exclude",
         max_goal_level: int = 0,
         support_literals: bool = False,
         include_static: bool = True,
@@ -269,8 +261,10 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         if goal_derivations is not None:
             config_kwargs["goal_derivations"] = goal_derivations
         config = FlatHorizonEncoderConfig(**config_kwargs)
-        self._engine = FlatHorizonEncoderEngine(_advanced_domain(domain), config)
-        self._config = config
+        self._runtime = create_flat_horizon_runtime(domain, config, backend=backend)
+        self._engine = self._runtime.engine
+        self._config = self._engine.config
+        self.backend = self._runtime.backend_name
         self.entity_node_type = "entity"
         self.use_predicate_virtual_nodes = bool(config.use_predicate_virtual_nodes)
         self.target_symbol_prefix = config.target_symbol_prefix
@@ -291,24 +285,55 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         }
 
     @property
-    def engine(self) -> FlatHorizonEncoderEngine:
+    def engine(self) -> Any:
         """Expose the native flat horizon engine."""
         return self._engine
 
     @property
-    def config(self) -> FlatHorizonEncoderConfig:
+    def config(self) -> Any:
         """Expose the resolved native config."""
         return self._config
 
     @property
     def relation_dict(self):
         """Expose the relation schema used by the native engine."""
-        return self._engine.relation_dict
+        return self._runtime.relation_dict
 
     def _accepted_kwargs(self) -> set[str]:
         return super()._accepted_kwargs() | {"dag", "dags"}
 
-    def _encode(
+    def _encode_one_into_builder(
+        self,
+        root: StateInput,
+        builder: Any,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        dag: TransitionDAG | RXStateDAG | None = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        validate_flat_single_unsupported_lanes(
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
+        _validate_subgoal_layers_state_payload(
+            subgoal_layers_list,
+            state_index=0,
+            max_goal_level=int(self._config.max_goal_level),
+        )
+        self._runtime.append_into_builder(
+            root,
+            builder,
+            dag=dag,
+            goals=goals,
+            subgoal_layers=subgoal_layers_list,
+        )
+
+    def _encode(  # type: ignore[override]
         self,
         root: StateInput,
         *,
@@ -319,24 +344,25 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ) -> FlatEncoding:
-        validate_single_optional_payloads(
-            FLAT_HORIZON_LANE_SPEC,
+        validate_flat_single_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        adv_root = _advanced_state(root)
         subgoal_layers_list = None if subgoal_layers is None else list(subgoal_layers)
         _validate_subgoal_layers_state_payload(
             subgoal_layers_list,
             state_index=0,
             max_goal_level=int(self._config.max_goal_level),
         )
-        dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers_list)
-        return self._engine.encode(adv_root, dag, inputs)
+        return self._runtime.encode_one(
+            root,
+            dag,
+            goals=goals,
+            subgoal_layers=subgoal_layers_list,
+        )
 
-    def encode(
+    def encode(  # type: ignore[override]
         self,
         root: StateInput,
         dag: TransitionDAG | RXStateDAG | None = None,
@@ -368,7 +394,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             **kwargs,
         )
 
-    def _encode_batch(
+    def _encode_batch(  # type: ignore[override]
         self,
         roots: StateBatchInput,
         dags: DagBatchParam = None,
@@ -379,44 +405,19 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ) -> FlatEncoding:
-        validate_batch_optional_payloads(
-            FLAT_HORIZON_LANE_SPEC,
+        validate_flat_batch_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        inputs = prepare_core_batch_inputs(
+        return self._runtime.encode_batch(
             roots,
+            dags=dags,
             goals=goals,
             subgoal_layers=subgoal_layers,
         )
-        dags_for_core = _normalize_dag_batch_data(dags)
-        parsed_roots = parse_states_batch(inputs.states)
-        _validate_subgoal_layers_batch_payload(
-            inputs.subgoal_layers,
-            state_count=len(parsed_roots),
-            max_goal_level=int(self._config.max_goal_level),
-        )
-        if dags_for_core is None:
-            parsed_dags = [None] * len(parsed_roots)
-        else:
-            parsed_dags = parse_dags_batch_param(
-                dags_for_core, state_count=len(parsed_roots)
-            )
-        for adv_root, dag in zip(parsed_roots, parsed_dags, strict=True):
-            if dag is not None and dag.root().get_index() != adv_root.get_index():
-                raise ValueError("dag root must match root state")
-        return self._engine.encode_batch(
-            parsed_roots,
-            dags=parsed_dags,
-            goals=inputs.goals,
-            actions=None,
-            subgoal_layers=inputs.subgoal_layers,
-            history_subgoals=None,
-            history_max_steps=None,
-        )
 
-    def encode_batch(
+    def encode_batch(  # type: ignore[override]
         self,
         roots: StateBatchInput,
         dags: DagBatchParam = None,
@@ -447,11 +448,13 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             **kwargs,
         )
 
-    def stream(self) -> FlatHorizonEncoderStream:
+    def stream(self) -> FlatHorizonEncoderStream:  # type: ignore[override]
         """Return an append-only stream for root/DAG horizon inputs."""
         return FlatHorizonEncoderStream(self)
 
-    def mutable_stream(self) -> FlatHorizonMutableEncoderStream:
+    def mutable_stream(  # type: ignore[override]
+        self,
+    ) -> FlatHorizonMutableEncoderStream:
         """Return a mutable stream with `append`, `update`, and `remove`."""
         return FlatHorizonMutableEncoderStream(self)
 

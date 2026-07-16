@@ -38,6 +38,7 @@ DEFAULT_LGAN_TN_EDGE_POS = "_lgan_tn_"
 DEFAULT_LGAN_NN_EDGE_POS = "_lgan_nn_"
 DEFAULT_LGAN_RR_EDGE_POS = "_lgan_rr_"
 DEFAULT_HISTORY_LINK_RELATION = "_history_link_"
+DEFAULT_PARENT_RELATION = "_parent_"
 
 
 _pymimir_adapter_error: ImportError | None = None
@@ -52,6 +53,8 @@ except ImportError as error:
     SuccessorEncoderMode = _neutral_core.SemanticSuccessorEncoderMode
     HorizonEncoderConfig = _neutral_core.SemanticHorizonHGraphEncoderConfig
     HorizonEncoderMode = _neutral_core.SemanticHorizonEncoderMode
+    FlatHorizonEncoderConfig = _neutral_core.SemanticFlatHorizonEncoderConfig
+    FlatHorizonEncoderMode = _neutral_core.SemanticHorizonEncoderMode
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
@@ -80,6 +83,7 @@ __all__ += [
     "DEFAULT_LGAN_NN_EDGE_POS",
     "DEFAULT_LGAN_RR_EDGE_POS",
     "DEFAULT_HISTORY_LINK_RELATION",
+    "DEFAULT_PARENT_RELATION",
 ]
 if _pymimir_adapter is not None:
     __all__ += _public_names(_pymimir_adapter)
@@ -91,5 +95,7 @@ else:
         "SuccessorEncoderMode",
         "HorizonEncoderConfig",
         "HorizonEncoderMode",
+        "FlatHorizonEncoderConfig",
+        "FlatHorizonEncoderMode",
     ]
 __all__ = list(dict.fromkeys(__all__))

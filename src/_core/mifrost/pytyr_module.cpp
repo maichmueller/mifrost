@@ -13,6 +13,7 @@
 
 #include "mifrost/backends/pytyr/semantic_flat_encoder.hpp"
 #include "mifrost/capsule_bridge.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
@@ -321,6 +322,24 @@ NB_MODULE(_pytyr_adapter, m)
                   self.get_engine().get_predicates(), self.get_engine().get_actions(), *config
                ),
                capsule_bridge::horizon_hgraph_engine_name
+            );
+         },
+         "config_capsule"_a
+      )
+      .def(
+         "_make_flat_horizon_engine_capsule",
+         [owned_capsule](const Encoder& self, nb::handle config_capsule) {
+            const auto* config = capsule_bridge::get< SemanticFlatHorizonEncoderConfig >(
+               config_capsule.ptr(), capsule_bridge::flat_horizon_config_name
+            );
+            if(config == nullptr) {
+               throw nb::python_error();
+            }
+            return owned_capsule(
+               SemanticFlatHorizonEncoderEngine(
+                  self.get_engine().get_predicates(), self.get_engine().get_actions(), *config
+               ),
+               capsule_bridge::flat_horizon_engine_name
             );
          },
          "config_capsule"_a

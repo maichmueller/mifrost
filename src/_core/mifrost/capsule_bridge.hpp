@@ -24,6 +24,8 @@ inline constexpr char
    horizon_hgraph_config_name[] = "mifrost.SemanticHorizonHGraphEncoderConfig.v1";
 inline constexpr char
    horizon_hgraph_engine_name[] = "mifrost.SemanticHorizonHGraphEncoderEngine.v1";
+inline constexpr char flat_horizon_config_name[] = "mifrost.SemanticFlatHorizonEncoderConfig.v1";
+inline constexpr char flat_horizon_engine_name[] = "mifrost.SemanticFlatHorizonEncoderEngine.v1";
 inline constexpr char consumed_name[] = "mifrost.consumed.v1";
 
 template < typename T >

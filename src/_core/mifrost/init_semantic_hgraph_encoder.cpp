@@ -7,6 +7,7 @@
 #include "mifrost/binding_kwargs.hpp"
 #include "mifrost/bindings.hpp"
 #include "mifrost/capsule_bridge.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
@@ -145,6 +146,81 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       )
       .def("encode_batch", &SemanticHorizonHGraphEncoderEngine::encode_batch, "dags"_a);
 
+   nb::class_< SemanticFlatHorizonEncoderConfig, FlatRelationEncoderConfig >(
+      m, "SemanticFlatHorizonEncoderConfig"
+   )
+      .def(nb::init<>())
+      .def(
+         "__init__",
+         [](SemanticFlatHorizonEncoderConfig* self, const nb::kwargs& kwargs) {
+            new(self) SemanticFlatHorizonEncoderConfig();
+            apply_config_kwargs(*self, kwargs, "SemanticFlatHorizonEncoderConfig");
+         }
+      )
+      .def_rw("ignore_actions", &SemanticFlatHorizonEncoderConfig::ignore_actions)
+      .def_rw("transition_mode", &SemanticFlatHorizonEncoderConfig::transition_mode)
+      .def_rw("parent_relation", &SemanticFlatHorizonEncoderConfig::parent_relation)
+      .def_rw("sibling_relation", &SemanticFlatHorizonEncoderConfig::sibling_relation)
+      .def_rw("cousin_relation", &SemanticFlatHorizonEncoderConfig::cousin_relation)
+      .def_rw("enable_parent_relation", &SemanticFlatHorizonEncoderConfig::enable_parent_relation)
+      .def_rw("enable_sibling_relation", &SemanticFlatHorizonEncoderConfig::enable_sibling_relation)
+      .def_rw("enable_cousin_relation", &SemanticFlatHorizonEncoderConfig::enable_cousin_relation)
+      .def_rw("root_policy", &SemanticFlatHorizonEncoderConfig::root_policy);
+
+   nb::class_< SemanticFlatHorizonEncoderEngine >(m, "SemanticFlatHorizonEncoderEngine")
+      .def(
+         nb::init<
+            std::vector< SemanticPredicateSpec >,
+            std::vector< SemanticActionSpec >,
+            SemanticFlatHorizonEncoderConfig >(),
+         "predicates"_a,
+         "actions"_a,
+         "config"_a = SemanticFlatHorizonEncoderConfig{}
+      )
+      .def_prop_ro(
+         "config", &SemanticFlatHorizonEncoderEngine::get_config, nb::rv_policy::reference_internal
+      )
+      .def_prop_ro("predicates", &SemanticFlatHorizonEncoderEngine::get_predicates)
+      .def_prop_ro("actions", &SemanticFlatHorizonEncoderEngine::get_actions)
+      .def_prop_ro("relation_names", &SemanticFlatHorizonEncoderEngine::get_relation_names)
+      .def_prop_ro("relation_arities", &SemanticFlatHorizonEncoderEngine::get_relation_arities)
+      .def_prop_ro("relation_sources", &SemanticFlatHorizonEncoderEngine::get_relation_sources)
+      .def_prop_ro(
+         "relation_logical_arities", &SemanticFlatHorizonEncoderEngine::get_relation_logical_arities
+      )
+      .def_prop_ro(
+         "relation_encoded_arities", &SemanticFlatHorizonEncoderEngine::get_relation_encoded_arities
+      )
+      .def_prop_ro(
+         "relation_slot_roles", &SemanticFlatHorizonEncoderEngine::get_relation_slot_roles
+      )
+      .def_prop_ro(
+         "relation_slot_role_offsets",
+         &SemanticFlatHorizonEncoderEngine::get_relation_slot_role_offsets
+      )
+      .def_prop_ro("slot_role_names", &SemanticFlatHorizonEncoderEngine::get_slot_role_names)
+      .def(
+         "encode",
+         nb::overload_cast< const SemanticTransitionDAG& >(
+            &SemanticFlatHorizonEncoderEngine::encode, nb::const_
+         ),
+         "dag"_a
+      )
+      .def(
+         "encode",
+         nb::overload_cast< const SemanticTransitionDAG&, BatchBuilder& >(
+            &SemanticFlatHorizonEncoderEngine::encode, nb::const_
+         ),
+         "dag"_a,
+         "builder"_a
+      )
+      .def("encode_batch", &SemanticFlatHorizonEncoderEngine::encode_batch, "dags"_a)
+      .def(
+         "finalize_batch_encoding",
+         &SemanticFlatHorizonEncoderEngine::finalize_batch_encoding,
+         "encoding"_a
+      );
+
    nb::enum_< SemanticSuccessorMode >(m, "SemanticSuccessorEncoderMode")
       .value("full", SemanticSuccessorMode::full)
       .value("delta", SemanticSuccessorMode::delta);
@@ -273,6 +349,28 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       [](nb::handle capsule) {
          return capsule_bridge::take< SemanticHorizonHGraphEncoderEngine >(
             capsule.ptr(), capsule_bridge::horizon_hgraph_engine_name
+         );
+      },
+      "capsule"_a
+   );
+   m.def(
+      "_semantic_flat_horizon_config_capsule",
+      [](const SemanticFlatHorizonEncoderConfig& config) {
+         auto* capsule = capsule_bridge::make_owned(
+            SemanticFlatHorizonEncoderConfig(config), capsule_bridge::flat_horizon_config_name
+         );
+         if(capsule == nullptr) {
+            throw nb::python_error();
+         }
+         return nb::steal< nb::object >(capsule);
+      },
+      "config"_a
+   );
+   m.def(
+      "_consume_semantic_flat_horizon_engine_capsule",
+      [](nb::handle capsule) {
+         return capsule_bridge::take< SemanticFlatHorizonEncoderEngine >(
+            capsule.ptr(), capsule_bridge::flat_horizon_engine_name
          );
       },
       "capsule"_a

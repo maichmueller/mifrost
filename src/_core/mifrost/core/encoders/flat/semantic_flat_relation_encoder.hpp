@@ -17,6 +17,10 @@
 
 namespace mifrost {
 
+class SemanticFlatHorizonEncoderEngine;
+class SemanticTransitionDAG;
+struct SemanticFlatHorizonEncoderConfig;
+
 /** Category of a predicate in the semantic input schema. */
 enum class SemanticPredicateCategory : int64_t {
    static_predicate = 0,
@@ -131,6 +135,23 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const;
 
   private:
+   friend class SemanticFlatHorizonEncoderEngine;
+
+   void configure_horizon(const SemanticFlatHorizonEncoderConfig& config);
+   void prepare_horizon_builder(
+      BatchBuilder& builder,
+      const SemanticFlatHorizonEncoderConfig& config
+   ) const;
+   void encode_horizon(
+      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonEncoderConfig& config,
+      BatchBuilder& builder
+   ) const;
+   void finalize_horizon_encoding(
+      BatchBuilder::BatchEncoding& encoding,
+      const SemanticFlatHorizonEncoderConfig& config
+   ) const;
+
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };

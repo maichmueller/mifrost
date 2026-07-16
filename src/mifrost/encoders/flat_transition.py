@@ -3,11 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from ._batch_contract import (
-    parse_states_batch,
-    parse_successors_batch_param,
-    prepare_core_batch_inputs,
-)
 from .base import (
     ActionBatchInput,
     ActionBatchParam,
@@ -22,13 +17,11 @@ from .base import (
     SuccessorBatchParam,
 )
 from .flat_horizon import FlatHorizonEncoder
-from ._lane_specs import (
-    TRANSITION_LANE_SPEC,
-    require_batch_payload,
-    require_single_payload,
-    single_transition_dag,
-    validate_batch_optional_payloads,
-    validate_single_optional_payloads,
+from ._horizon_validation import (
+    require_transition_successor,
+    require_transition_successors,
+    validate_transition_batch_unsupported_lanes,
+    validate_transition_single_unsupported_lanes,
 )
 from .types import (
     HistorySubgoalInput,
@@ -51,6 +44,21 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
             "history_max_steps",
         }
 
+    def _single_transition_payload(
+        self, current: StateInput, successor: StateInput
+    ) -> Any:
+        if self.backend != "pytyr":
+            from ._lane_specs import single_transition_dag
+
+            return single_transition_dag(current, successor)
+        import rustworkx as rx
+
+        dag = rx.PyDiGraph()
+        root_index = dag.add_node(current)
+        successor_index = dag.add_node(successor)
+        dag.add_edge(root_index, successor_index, None)
+        return dag
+
     def _encode(
         self,
         current: StateInput,
@@ -62,14 +70,13 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         history_subgoals: HistorySubgoalInput | None = None,
         history_max_steps: int | None = None,
     ):
-        require_single_payload(TRANSITION_LANE_SPEC, successor)
-        validate_single_optional_payloads(
-            TRANSITION_LANE_SPEC,
+        require_transition_successor(successor)
+        validate_transition_single_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        dag = single_transition_dag(current, successor)
+        dag = self._single_transition_payload(current, successor)
         return FlatHorizonEncoder._encode(
             self,
             current,
@@ -118,24 +125,15 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
         history_subgoals: HistorySubgoalsBatchParam = None,
         history_max_steps: int | None = None,
     ):
-        require_batch_payload(TRANSITION_LANE_SPEC, successors)
-        validate_batch_optional_payloads(
-            TRANSITION_LANE_SPEC,
+        require_transition_successors(successors)
+        validate_transition_batch_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        inputs = prepare_core_batch_inputs(
-            states,
-            successors=successors,
-        )
-        states_list = parse_states_batch(inputs.states)
-        successors_list = parse_successors_batch_param(
-            inputs.successors,
-            state_count=len(states_list),
-        )
+        states_list, successors_list = self._transition_batch_values(states, successors)
         dags = [
-            single_transition_dag(current, successor)
+            self._single_transition_payload(current, successor)
             for current, successor in zip(states_list, successors_list, strict=True)
         ]
         return FlatHorizonEncoder._encode_batch(
@@ -148,6 +146,47 @@ class _FlatTransitionEncoderBase(FlatHorizonEncoder):
             history_subgoals=None,
             history_max_steps=None,
         )
+
+    def _transition_batch_values(
+        self,
+        states: StateBatchInput,
+        successors: SuccessorBatchParam,
+    ) -> tuple[list[Any], list[Any]]:
+        if self.backend != "pytyr":
+            from ._batch_contract import (
+                parse_states_batch,
+                parse_successors_batch_param,
+                prepare_core_batch_inputs,
+            )
+
+            inputs = prepare_core_batch_inputs(states, successors=successors)
+            states_list = parse_states_batch(inputs.states)
+            successors_list = parse_successors_batch_param(
+                inputs.successors,
+                state_count=len(states_list),
+            )
+            return states_list, successors_list
+
+        from ..backends.pytyr_flat import _batch_param, _is_state, _sequence
+
+        states_list = (
+            [states] if _is_state(states) else _sequence(states, field="states")
+        )
+        kind, payload = _batch_param(successors)
+        if kind == "none" or payload is None:
+            raise ValueError(
+                "successors must be provided for transition batch encoding"
+            )
+        if kind == "shared" or _is_state(payload):
+            successors_list = [payload] * len(states_list)
+        else:
+            successors_list = _sequence(payload, field="successors")
+            if len(successors_list) != len(states_list):
+                raise ValueError("successors length must match states length")
+        for index, successor in enumerate(successors_list):
+            if not _is_state(successor):
+                raise TypeError(f"successors entry at index {index} has invalid type")
+        return states_list, successors_list
 
     def encode_batch(
         self,
@@ -203,7 +242,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> int:
         """Append one current/successor pair and return its stream id."""
-        dag = single_transition_dag(current, successor)
+        dag = self._encoder._single_transition_payload(current, successor)
         return self._coerce_stream_id(
             self._stream.append(
                 current,
@@ -226,7 +265,7 @@ class _FlatTransitionEncoderStream(StreamEncoderBase["FlatRelationData"]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> None:
         """Replace one current/successor pair in place."""
-        dag = single_transition_dag(current, successor)
+        dag = self._encoder._single_transition_payload(current, successor)
         self._stream.update(
             stream_id,
             current,

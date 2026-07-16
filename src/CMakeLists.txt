@@ -373,6 +373,7 @@ add_library(
         "_core/mifrost/core/encoders/flat/flat_lgan.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
         "_core/mifrost/core/encoders/flat/semantic_flat_relation_encoder.cpp"
+        "_core/mifrost/core/encoders/flat/semantic_flat_horizon_encoder.cpp"
         "_core/mifrost/core/encoders/homo/semantic_color_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.cpp"
