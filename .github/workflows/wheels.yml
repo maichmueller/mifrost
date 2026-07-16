@@ -123,88 +123,19 @@ jobs:
         include:
           - os: ubuntu-latest
             flavor: manylinux
-            backend: both
-            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_manylinux
             cibw_build: "cp312-manylinux_* cp313-manylinux_* cp314-manylinux_*"
             cibw_skip: "cp314t-*"
           - os: ubuntu-latest
             flavor: musllinux
-            backend: both
-            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_musllinux
             cibw_build: "cp312-musllinux_* cp313-musllinux_* cp314-musllinux_*"
             cibw_skip: "cp314t-*"
           - os: macos-latest
             flavor: macos
-            backend: both
-            test_requires: "pymimir>=0.13.60 pytyr>=0.0.30"
             conan_home_dir: .conan2_wheels_macos
             cibw_build: "cp312-* cp313-* cp314-*"
             cibw_skip: "cp314t-*"
-          - os: ubuntu-latest
-            flavor: manylinux-core
-            backend: core
-            test_requires: ""
-            conan_home_dir: .conan2_wheels_manylinux
-            cibw_build: "cp312-manylinux_*"
-            cibw_skip: ""
-          - os: ubuntu-latest
-            flavor: manylinux-pymimir
-            backend: pymimir
-            test_requires: "pymimir>=0.13.60"
-            conan_home_dir: .conan2_wheels_manylinux
-            cibw_build: "cp312-manylinux_*"
-            cibw_skip: ""
-          - os: ubuntu-latest
-            flavor: manylinux-pytyr
-            backend: pytyr
-            test_requires: "pytyr>=0.0.30"
-            conan_home_dir: .conan2_wheels_manylinux
-            cibw_build: "cp312-manylinux_*"
-            cibw_skip: ""
-          - os: ubuntu-latest
-            flavor: musllinux-core
-            backend: core
-            test_requires: ""
-            conan_home_dir: .conan2_wheels_musllinux
-            cibw_build: "cp312-musllinux_*"
-            cibw_skip: ""
-          - os: ubuntu-latest
-            flavor: musllinux-pymimir
-            backend: pymimir
-            test_requires: "pymimir>=0.13.60"
-            conan_home_dir: .conan2_wheels_musllinux
-            cibw_build: "cp312-musllinux_*"
-            cibw_skip: ""
-          - os: ubuntu-latest
-            flavor: musllinux-pytyr
-            backend: pytyr
-            test_requires: "pytyr>=0.0.30"
-            conan_home_dir: .conan2_wheels_musllinux
-            cibw_build: "cp312-musllinux_*"
-            cibw_skip: ""
-          - os: macos-latest
-            flavor: macos-core
-            backend: core
-            test_requires: ""
-            conan_home_dir: .conan2_wheels_macos
-            cibw_build: "cp312-*"
-            cibw_skip: ""
-          - os: macos-latest
-            flavor: macos-pymimir
-            backend: pymimir
-            test_requires: "pymimir>=0.13.60"
-            conan_home_dir: .conan2_wheels_macos
-            cibw_build: "cp312-*"
-            cibw_skip: ""
-          - os: macos-latest
-            flavor: macos-pytyr
-            backend: pytyr
-            test_requires: "pytyr>=0.0.30"
-            conan_home_dir: .conan2_wheels_macos
-            cibw_build: "cp312-*"
-            cibw_skip: ""
 
     steps:
     - uses: actions/checkout@v6
@@ -257,7 +188,7 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
         CIBW_SKIP: ${{ matrix.cibw_skip }}
-        CIBW_TEST_REQUIRES: ${{ matrix.test_requires }}
+        CIBW_TEST_REQUIRES: "pymimir>=0.13.60 pytyr>=0.0.30"
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
         CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -r /project/requirements/base-build.txt
@@ -266,8 +197,8 @@ jobs:
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
         CIBW_ENVIRONMENT_PASS_LINUX: MIFROST_BUILD_BACKENDS
-        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1 MIFROST_BUILD_BACKENDS=${{ matrix.backend }}
-        MIFROST_BUILD_BACKENDS: ${{ matrix.backend }}
+        CIBW_ENVIRONMENT_MACOS: CONAN_HOME=${{ env.CONAN_HOME }} MACOSX_DEPLOYMENT_TARGET=${{ env.MIFROST_MACOSX_DEPLOYMENT_TARGET }} CONAN_NON_INTERACTIVE=1 MIFROST_BUILD_BACKENDS=both
+        MIFROST_BUILD_BACKENDS: both
 
     - name: Verify clean directory
       run: git diff --exit-code -- . ':(exclude)src/mifrost/_core.pyi'
@@ -332,6 +263,10 @@ jobs:
                 config_text = zf.read("mifrost/lib/cmake/mifrost/mifrostConfig.cmake").decode()
                 with_pymimir = "set(mifrost_WITH_PYMIMIR_ADAPTER ON)" in config_text
                 with_pytyr = "set(mifrost_WITH_PYTYR_ADAPTER ON)" in config_text
+                if not with_pymimir or not with_pytyr:
+                    raise SystemExit(
+                        f"{wheel_path.name}: wheel must contain both backend adapters"
+                    )
                 if "find_dependency(nanobind" in config_text:
                   raise SystemExit(f"{wheel_path.name}: still exports nanobind as an SDK dependency")
 
@@ -382,7 +317,6 @@ jobs:
         PY
 
     - name: Upload wheels
-      if: matrix.backend == 'both'
       uses: actions/upload-artifact@v6
       with:
         path: wheelhouse/*.whl

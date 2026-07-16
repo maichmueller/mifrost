@@ -118,3 +118,8 @@ def test_wheel_rows_install_only_backend_neutral_build_tools() -> None:
     assert len(before_build_lines) == 2
     assert all("requirements/base-build.txt" in line for line in before_build_lines)
     assert all("requirements/build.txt" not in line for line in before_build_lines)
+    assert workflow.count("flavor:") == 3
+    assert "MIFROST_BUILD_BACKENDS: both" in workflow
+    assert "backend: core" not in workflow
+    assert "backend: pymimir" not in workflow
+    assert "backend: pytyr" not in workflow
