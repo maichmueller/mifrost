@@ -71,13 +71,15 @@
   - horizon encoder: `dags` accepts a shared DAG, an aligned iterable of
     `TransitionDAG | rustworkx.PyDiGraph | None`,
     `BatchParam.shared(...)`, or `BatchParam.separate([...])`
-- High-level encoder batch paths preprocess wrapper/adapter inputs in Python, then
-  dispatch to strict advanced-only C++ batch parsing.
-- Direct low-level `_core._parse_*` batch helpers stay advanced-only and reject
-  adapter-backed objects.
-- `mifrost.transition_dag_from_rustworkx(...)` is the explicit conversion helper when
-  you want to pre-normalize a `PyDiGraph` yourself. The integration is Python-level;
-  there is no raw/native graph handoff into the C++ core.
+- High-level encoder batch paths dispatch to the selected per-instance runtime.
+  Pymimir retains its compatibility parsers; PyTyr converts directly to owned
+  semantic input batches.
+- Direct low-level Pymimir `_core._parse_*` helpers remain adapter-internal and
+  advanced-only. They are not the cross-backend public contract.
+- `mifrost.transition_dag_from_rustworkx(...)` is the historical explicit
+  Pymimir conversion helper. To stay backend-neutral, pass a raw `PyDiGraph`
+  directly to a selected `HorizonEncoder` or `FlatHorizonEncoder`; the runtime
+  converts it to its owned native/semantic DAG.
 - `transition_dag_from_rustworkx(...)` reads per-node candidate identity from payload
   `candidate_id` (mapping key or attribute). If candidate IDs are only partially present,
   conversion fails by default; pass

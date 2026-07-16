@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from io import BytesIO
 import pickle
+from pathlib import Path
+import runpy
 from typing import Any
 
 import pytest
@@ -15,6 +17,9 @@ from .test_horizon_public_backends import (
 )
 from .test_semantic_parity import _backend_pair
 from .test_transition_public_backends import _aligned_transition
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _assert_mixed_batch_roundtrip(
@@ -157,3 +162,13 @@ def test_mixed_backend_hgraph_runs_one_learning_and_checkpoint_step() -> None:
     restored_model.load_state_dict(checkpoint["model"])
     assert checkpoint["schema_fingerprint"] == restored.schema_fingerprint()
     assert torch.equal(restored_model.weight, model.weight)
+
+
+def test_backend_interchangeability_learning_example(capsys: Any) -> None:
+    runpy.run_path(
+        str(ROOT / "examples" / "encoders" / "backend_interchangeability_example.py"),
+        run_name="__main__",
+    )
+    output = capsys.readouterr().out
+    assert "batched 2 graphs from pymimir and pytyr" in output
+    assert "learning step gradients: True" in output

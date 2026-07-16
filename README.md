@@ -33,6 +33,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
   - `HGraphEncoder`
   - `HorizonEncoder`
   - `TransitionHGraphEncoder` / `TransitionEffectsHGraphEncoder`
+  - `FlatRelationEncoder`, `FlatHorizonEncoder`, and both flat transition lanes
   - `ColorEncoder`
   - `ILGEncoder`
 - Returns native `BatchEncoding` objects, with explicit helpers for:
@@ -131,10 +132,10 @@ or pass `-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir
 ```python
 import mifrost
 
-# domain: pymimir wrapper or advanced domain
-encoder = mifrost.HGraphEncoder(domain)
+# Pymimir domains and PyTyr planning tasks select their backend per instance.
+encoder = mifrost.HGraphEncoder(domain_or_planning_task)
 
-# state: pymimir wrapper or advanced state
+# state: a matching Pymimir or PyTyr state
 encoding = encoder.encode(state)         # BatchEncoding
 data = encoding.as_pyg()                 # HeteroData
 
@@ -148,6 +149,30 @@ encoding_dict = batch_encoding.as_dict()      # dictionary form
 # note: encoding_dict["tensors"] entries are DLPack-exporting values
 # (consume with torch.utils.dlpack.from_dlpack(...) or mifrost.encoding_to_tensors(...))
 ```
+
+Every public encoder family supports `backend="pymimir"` or `backend="pytyr"`
+for explicit selection; omitting it infers the backend from the constructor
+input. Instances from both planners can safely coexist. Their compatible
+outputs are ordinary planner-free `BatchEncoding` values and can be batched
+together:
+
+```python
+pymimir_encoder = mifrost.HGraphEncoder(pymimir_domain)
+pytyr_encoder = mifrost.HGraphEncoder(pytyr_planning_task)
+
+mixed = mifrost.batch_encodings(
+    [
+        pymimir_encoder.encode(pymimir_state),
+        pytyr_encoder.encode(pytyr_state),
+    ],
+    fast_path=True,
+)
+assert mixed.num_graphs == 2
+```
+
+See `examples/encoders/backend_interchangeability_example.py` for a complete
+same-process example that parses both planners, creates one mixed PyG batch,
+and runs a Torch forward/backward step.
 
 Example output (trimmed):
 

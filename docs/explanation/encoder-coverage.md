@@ -13,6 +13,27 @@
 | `ColorEncoder` | Compact homogeneous baselines | Integer-style color/object/predicate/action features | `BatchEncoding` (homo) | `examples/encoders/color_encoder_example.py`, `tests/encoding/test_color_encoder.py` |
 | `ILGEncoder` | Python ILG feature construction | ILG atom/object/action topology and statuses | `BatchEncoding` (hetero) | `examples/encoders/ilg_hetero_encoder_example.py`, `tests/encoding/test_custom_python_encoder_example.py` |
 
+## Backend Support
+
+All encoders in the table accept Pymimir and PyTyr inputs through a per-instance
+runtime. Either planner can be installed independently, or both can coexist in
+one process. Compatible outputs from different backends share semantic schema
+fingerprints and can be passed together to `mifrost.batch_encodings`.
+
+| Capability | Pymimir | PyTyr |
+| --- | :---: | :---: |
+| Single and batch encoding | Yes | Yes |
+| Stream encoding | Yes | Yes |
+| Explicit or inferred selection | Yes | Yes |
+| Independent wheel/install | Yes | Yes |
+| Same-process coexistence | Yes | Yes |
+| Mixed compatible `BatchEncoding` / PyG / serialization | Yes | Yes |
+
+`transition_dag_from_rustworkx(...)` remains a Pymimir-returning standalone
+helper for backward compatibility. For either backend, passing the raw
+`rustworkx.PyDiGraph` directly to the selected `HorizonEncoder` or
+`FlatHorizonEncoder` uses that runtime's native conversion path.
+
 ## Streams and Dynamic Fields Coverage
 
 - Stream semantics/parity: `tests/encoding/test_stream_encoder.py`
