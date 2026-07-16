@@ -1923,4 +1923,38 @@ const std::map< std::string, int >& SemanticHGraphEncoderEngine::get_relation_ar
    return impl_->relation_arities;
 }
 
+void SemanticHGraphEncoderEngine::update_relations(std::map< std::string, int > relation_arities)
+{
+   for(const auto& [name, arity] : relation_arities) {
+      if(name.empty()) {
+         throw std::invalid_argument("relation name must not be empty");
+      }
+      if(arity < 0) {
+         throw std::invalid_argument("relation arity must be non-negative");
+      }
+   }
+   impl_->relation_arities = std::move(relation_arities);
+   impl_->all_edge_types.clear();
+   for(const auto& [type, arity] : impl_->relation_arities) {
+      const int effective = impl_->config.add_nullary_predicates and arity == 0 ? 1 : arity;
+      for(int position = 0; position < effective; ++position) {
+         const auto pos = std::to_string(position);
+         impl_->all_edge_types.emplace_back(impl_->config.symbol_type_id, pos, type);
+         impl_->all_edge_types.emplace_back(type, pos, impl_->config.symbol_type_id);
+      }
+      if(impl_->config.include_lgan_edges) {
+         impl_->all_edge_types.emplace_back(
+            type, impl_->config.lgan_tn_edge_pos, impl_->config.symbol_type_id
+         );
+         impl_->all_edge_types.emplace_back(
+            type, impl_->config.lgan_nn_edge_pos, impl_->config.symbol_type_id
+         );
+      }
+   }
+   std::ranges::sort(impl_->all_edge_types);
+   impl_->all_edge_types.erase(
+      std::ranges::unique(impl_->all_edge_types).begin(), impl_->all_edge_types.end()
+   );
+}
+
 }  // namespace mifrost

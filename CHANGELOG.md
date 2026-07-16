@@ -27,6 +27,8 @@ This project uses Git tags and GitHub releases for release notes.
   `rustworkx.PyDiGraph` is passed to a selected encoder. The standalone
   `transition_dag_from_rustworkx(...)` helper remains Pymimir-returning for
   backward compatibility.
+- Made `update_relations(...)` planner-neutral for HGraph, Horizon, and
+  transition encoders, including topology-relation preservation for Horizon.
 
 ### Migration notes and compatibility
 

@@ -145,6 +145,10 @@ def test_public_horizon_backends_match_topology_goals_subgoals_and_metadata() ->
     }
     pymimir_encoder = mifrost.HorizonEncoder(problem.get_domain(), **config)
     pytyr_encoder = mifrost.HorizonEncoder(reader._planning_task, **config)
+    shared_relations = dict(pymimir_encoder.relation_dict)
+    pymimir_encoder.update_relations(shared_relations)
+    pytyr_encoder.update_relations(shared_relations)
+    assert dict(pytyr_encoder.relation_dict) == shared_relations
 
     _assert_public_parity(
         pymimir_encoder,

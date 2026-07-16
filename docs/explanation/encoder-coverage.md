@@ -24,6 +24,7 @@ fingerprints and can be passed together to `mifrost.batch_encodings`.
 | --- | :---: | :---: |
 | Single and batch encoding | Yes | Yes |
 | Stream encoding | Yes | Yes |
+| HGraph relation-schema replacement | Yes | Yes |
 | Explicit or inferred selection | Yes | Yes |
 | Independent wheel/install | Yes | Yes |
 | Same-process coexistence | Yes | Yes |

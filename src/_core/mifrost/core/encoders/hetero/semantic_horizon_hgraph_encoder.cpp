@@ -115,4 +115,11 @@ const std::map< std::string, int >& SemanticHorizonHGraphEncoderEngine::get_rela
    return impl_->hgraph.get_relation_arities();
 }
 
+void SemanticHorizonHGraphEncoderEngine::update_relations(
+   std::map< std::string, int > relation_arities
+)
+{
+   impl_->hgraph.update_relations(std::move(relation_arities));
+}
+
 }  // namespace mifrost

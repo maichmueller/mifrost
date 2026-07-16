@@ -265,8 +265,8 @@ def test_public_transition_native_batch_parity_and_pymimir_engine_contract() -> 
     native_relations = dict(pymimir_encoder.relation_dict)
     pymimir_encoder.update_relations(native_relations)
     assert dict(pymimir_encoder.relation_dict) == native_relations
-    with pytest.raises(NotImplementedError, match="PyTyr transition backend"):
-        pytyr_encoder.update_relations(native_relations)
+    pytyr_encoder.update_relations(native_relations)
+    assert dict(pytyr_encoder.relation_dict) == native_relations
 
     pymimir_effects = mifrost.TransitionEffectsHGraphEncoder(problem.get_domain())
     assert isinstance(pymimir_effects.engine, mifrost.SuccessorHGraphEncoderEngine)

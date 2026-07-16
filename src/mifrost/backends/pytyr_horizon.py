@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 
 from pytyr.formalism.planning import GroundAction
 
+from ._relation_updates import relation_arities
 from .pytyr import SemanticPlanningTaskAdapter
 from .pytyr_flat import (
     _batch_param,
@@ -471,10 +472,16 @@ class PyTyrHorizonRuntime:
         return self.engine.encode_batch(semantic_dags)
 
     def update_relations(self, relation_dict: Any) -> None:
-        del relation_dict
-        raise NotImplementedError(
-            "update_relations is not implemented for the PyTyr Horizon backend"
-        )
+        relations = relation_arities(relation_dict)
+        config = self.engine.config
+        if config.enable_parent_relation:
+            relations[str(config.parent_relation)] = 2
+        if config.enable_sibling_relation:
+            relations[str(config.sibling_relation)] = 2
+        if config.enable_cousin_relation:
+            relations[str(config.cousin_relation)] = 2
+        self.engine.update_relations(relations)
+        self._relation_dict = MappingProxyType(dict(relations))
 
     def make_stream(self) -> Any:
         return _PyTyrHorizonStream(self)

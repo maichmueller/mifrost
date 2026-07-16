@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
+from ._relation_updates import relation_arities
 from .pytyr import SemanticPlanningTaskAdapter
 from .pytyr_flat import (
     _batch_param,
@@ -199,10 +200,9 @@ class PyTyrTransitionRuntime:
         return self.engine.encode_batch(current_inputs, successor_inputs)
 
     def update_relations(self, relation_dict: Any) -> None:
-        del relation_dict
-        raise NotImplementedError(
-            "update_relations is not implemented for the PyTyr transition backend"
-        )
+        relations = relation_arities(relation_dict)
+        self.engine.update_relations(relations)
+        self._relation_dict = MappingProxyType(dict(relations))
 
     def make_stream(self) -> Any:
         return _PyTyrTransitionStream(self)

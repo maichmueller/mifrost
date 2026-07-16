@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 
 from pytyr.formalism.planning import GroundAction
 
+from ._relation_updates import relation_arities
 from .pytyr import SemanticPlanningTaskAdapter
 from .pytyr_flat import (
     _history_values,
@@ -189,10 +190,9 @@ class PyTyrHGraphRuntime:
         return self.engine.encode_batch(inputs)
 
     def update_relations(self, relation_dict: Any) -> None:
-        del relation_dict
-        raise NotImplementedError(
-            "update_relations is not implemented for the PyTyr HGraph backend"
-        )
+        relations = relation_arities(relation_dict)
+        self.engine.update_relations(relations)
+        self._relation_dict = MappingProxyType(dict(relations))
 
     def make_stream(self, *, mutable: bool) -> Any:
         return _PyTyrHGraphStream(self, mutable=mutable)

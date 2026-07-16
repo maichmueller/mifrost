@@ -253,8 +253,8 @@ def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> 
     assert pymimir_relations == dict(pytyr_encoder.relation_dict)
     pymimir_encoder.update_relations(pymimir_relations)
     assert dict(pymimir_encoder.relation_dict) == pymimir_relations
-    with pytest.raises(NotImplementedError, match="PyTyr HGraph backend"):
-        pytyr_encoder.update_relations(pymimir_relations)
+    pytyr_encoder.update_relations(pymimir_relations)
+    assert dict(pytyr_encoder.relation_dict) == pymimir_relations
 
     retained = []
     for _ in range(2):

@@ -558,3 +558,19 @@ def test_semantic_hgraph_rejects_unsupported_levels_and_missing_lgan_anchor(
         _semantic_engine(adapter, include_lgan_edges=True).encode(
             adapter.make_input(state)
         )
+
+
+def test_semantic_hgraph_relation_schema_can_be_replaced(
+    small_blocks: tuple[Any, Any, Any],
+) -> None:
+    _space, _domain, problem = small_blocks
+    adapter = FlatSemanticAdapter(PymimirSnapshotReader(problem))
+    engine = _semantic_engine(adapter)
+
+    engine.update_relations({"custom_rel": 2})
+    assert dict(engine.relation_arities) == {"custom_rel": 2}
+
+    with pytest.raises(ValueError, match="name must not be empty"):
+        engine.update_relations({"": 1})
+    with pytest.raises(ValueError, match="arity must be non-negative"):
+        engine.update_relations({"bad": -1})

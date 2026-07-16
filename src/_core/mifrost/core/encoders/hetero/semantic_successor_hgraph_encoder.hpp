@@ -72,6 +72,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
    [[nodiscard]] const std::map< std::string, int >& get_relation_arities() const;
+   void update_relations(std::map< std::string, int > relation_arities);
 
   private:
    struct Impl;

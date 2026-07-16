@@ -122,4 +122,11 @@ SemanticSuccessorHGraphEncoderEngine::get_relation_arities() const
    return impl_->hgraph.get_relation_arities();
 }
 
+void SemanticSuccessorHGraphEncoderEngine::update_relations(
+   std::map< std::string, int > relation_arities
+)
+{
+   impl_->hgraph.update_relations(std::move(relation_arities));
+}
+
 }  // namespace mifrost

@@ -67,6 +67,7 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       .def_prop_ro("predicates", &SemanticHGraphEncoderEngine::get_predicates)
       .def_prop_ro("actions", &SemanticHGraphEncoderEngine::get_actions)
       .def_prop_ro("relation_arities", &SemanticHGraphEncoderEngine::get_relation_arities)
+      .def("update_relations", &SemanticHGraphEncoderEngine::update_relations, "relations"_a)
       .def(
          "encode",
          nb::overload_cast< const SemanticFlatRelationInput& >(
@@ -129,6 +130,7 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       .def_prop_ro("predicates", &SemanticHorizonHGraphEncoderEngine::get_predicates)
       .def_prop_ro("actions", &SemanticHorizonHGraphEncoderEngine::get_actions)
       .def_prop_ro("relation_arities", &SemanticHorizonHGraphEncoderEngine::get_relation_arities)
+      .def("update_relations", &SemanticHorizonHGraphEncoderEngine::update_relations, "relations"_a)
       .def(
          "encode",
          nb::overload_cast< const SemanticTransitionDAG& >(
@@ -261,6 +263,9 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       .def_prop_ro("predicates", &SemanticSuccessorHGraphEncoderEngine::get_predicates)
       .def_prop_ro("actions", &SemanticSuccessorHGraphEncoderEngine::get_actions)
       .def_prop_ro("relation_arities", &SemanticSuccessorHGraphEncoderEngine::get_relation_arities)
+      .def(
+         "update_relations", &SemanticSuccessorHGraphEncoderEngine::update_relations, "relations"_a
+      )
       .def(
          "encode",
          nb::overload_cast< const SemanticFlatRelationInput&, const SemanticFlatRelationInput& >(

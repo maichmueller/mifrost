@@ -382,7 +382,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         if not uses_public_base_runtime and backend is not None:
             raise ValueError(
                 "backend selection is supported only by the base HGraphEncoder; "
-                "derived Horizon/Successor/Transition encoders remain Pymimir-only"
+                "private custom-engine compatibility constructors do not select "
+                "a backend; use the public Horizon or Transition encoder"
             )
         config = self._make_config(
             _config_cls,
