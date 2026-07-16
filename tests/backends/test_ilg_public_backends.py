@@ -14,6 +14,7 @@ from mifrost.encoders.types import BatchParam
 
 from tests.encoding.test_semantic_hgraph_encoder import _named_edges
 
+from . import isolated_subprocess_package_parent
 from .test_semantic_parity import _backend_pair
 from .test_transition_public_backends import _aligned_transition
 
@@ -189,6 +190,7 @@ def test_public_ilg_selection_and_coexistence_errors() -> None:
 
 
 def test_public_ilg_pytyr_only_source_blocker_encodes() -> None:
+    package_parent = isolated_subprocess_package_parent(ROOT / "src")
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"
@@ -196,7 +198,7 @@ def test_public_ilg_pytyr_only_source_blocker_encodes() -> None:
 import importlib.abc
 import sys
 
-sys.path[:0] = {([str(ROOT / "src"), *dependency_paths])!r}
+sys.path[:0] = {([str(package_parent), *dependency_paths])!r}
 
 class BlockPymimir(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):

@@ -12,7 +12,7 @@ env:
 
 jobs:
   quality:
-    name: Quality (ruff, mypy)
+    name: Quality (ruff)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,16 +24,13 @@ jobs:
       - name: Install quality dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt "ruff>=0.14.14,<0.15" "mypy>=1.14,<2"
+          python -m pip install -r requirements.txt "ruff>=0.14.14,<0.15"
 
       - name: Run Ruff lint
         run: python -m ruff check .
 
       - name: Check Ruff format
         run: python -m ruff format --check .
-
-      - name: Run mypy
-        run: python -m mypy
 
   test:
     name: Tests (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -45,21 +42,27 @@ jobs:
         include:
           - os: macos-latest
             python-version: "3.12"
+            backends: both
             allow_failure: false
           - os: macos-latest
             python-version: "3.13"
+            backends: both
             allow_failure: false
           - os: macos-latest
             python-version: "3.14"
+            backends: pymimir
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.12"
+            backends: both
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.13"
+            backends: both
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.14"
+            backends: pymimir
             allow_failure: false
 
     steps:
@@ -86,20 +89,32 @@ jobs:
       - name: Install test dependency
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements/build.txt -r requirements/test.txt -r requirements.txt
+          python -m pip install -r requirements/base-build.txt -r requirements/test.txt -r requirements.txt pymimir==0.13.63
+          if [ "${{ matrix.backends }}" = "both" ]; then
+            python -m pip install pytyr==0.0.30
+          fi
 
       - name: Build and install
         id: build_install
+        env:
+          MIFROST_BUILD_BACKENDS: ${{ matrix.backends }}
         run: |
           python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 
       - name: Run Python tests
-        run: python -m pytest -q
+        run: |
+          if [ "${{ matrix.backends }}" = "both" ]; then
+            python -m pytest -q
+          else
+            python -m pytest -q --ignore=tests/backends --ignore=tests/encoding/test_semantic_color_encoder.py
+          fi
 
       - name: Build C++ tests
         id: build_cpp_tests
+        env:
+          MIFROST_BUILD_BACKENDS: ${{ matrix.backends }}
         run: |
-          python configure.py --mode ci
+          python configure.py --mode ci --backends "${{ matrix.backends }}"
           python cbuild.py --mode ci
 
       - name: Run C++ tests

@@ -127,3 +127,4 @@ def test_cbuild_mode_uses_mode_build_dir_and_target(monkeypatch) -> None:
     assert calls == [
         ["cmake", "--build", mode.build_dir, "--target", mode.default_target]
     ]
+    assert mode.default_target == "mifrost_module_stubs"

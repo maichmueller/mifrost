@@ -10,6 +10,7 @@ import pytest
 import mifrost
 from mifrost.encoders.types import BatchParam
 
+from . import isolated_subprocess_package_parent
 from .test_flat_semantic_adapter import _normalized_relations
 from .test_horizon_public_backends import (
     _aligned_horizon_transitions,
@@ -193,6 +194,7 @@ def test_public_flat_transition_wrappers_accept_pytyr(
 
 
 def test_public_flat_horizon_pytyr_only_source_blocker_encodes_real_dag() -> None:
+    package_parent = isolated_subprocess_package_parent(ROOT / "src")
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"
@@ -200,7 +202,7 @@ def test_public_flat_horizon_pytyr_only_source_blocker_encodes_real_dag() -> Non
 import importlib.abc
 import sys
 
-sys.path[:0] = {([str(ROOT / "src"), *dependency_paths])!r}
+sys.path[:0] = {([str(package_parent), *dependency_paths])!r}
 
 class BlockPymimir(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):

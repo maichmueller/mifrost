@@ -13,6 +13,7 @@ from mifrost.encoders.types import BatchParam
 from tests.encoding.test_semantic_hgraph_encoder import _assert_hgraph_parity
 from tests.encoding.test_utils import adv_action, adv_state
 
+from . import isolated_subprocess_package_parent
 from .test_semantic_parity import _backend_pair
 
 
@@ -315,7 +316,7 @@ def test_public_horizon_rejects_inconsistent_multi_parent_actions() -> None:
 
 
 def test_public_horizon_pytyr_only_source_blocker_encodes_real_dag() -> None:
-    package_parent = ROOT / "src"
+    package_parent = isolated_subprocess_package_parent(ROOT / "src")
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"

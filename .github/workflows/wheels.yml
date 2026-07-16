@@ -73,7 +73,7 @@ jobs:
     - name: Install build deps
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r requirements/build.txt -r requirements.txt
+        python -m pip install -r requirements/build.txt -r requirements.txt "mypy>=1.14,<2"
 
     - name: Initialize Conan profile
       run: |
@@ -94,6 +94,9 @@ jobs:
         python scripts/validate_generated_stub.py src/mifrost/_neutral_core.pyi
         python scripts/validate_generated_stub.py src/mifrost/_pymimir_adapter.pyi
         python scripts/validate_generated_stub.py src/mifrost/_pytyr_adapter.pyi
+
+    - name: Type-check against generated stubs
+      run: python -m mypy
 
     - name: Upload generated stubs
       uses: actions/upload-artifact@v6

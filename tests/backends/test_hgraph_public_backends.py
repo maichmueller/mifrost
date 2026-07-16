@@ -13,6 +13,7 @@ from mifrost.encoders.types import BatchParam
 from tests.conftest import problem_setup
 from tests.encoding.test_semantic_hgraph_encoder import _assert_hgraph_parity
 
+from . import isolated_subprocess_package_parent
 from .test_semantic_parity import _backend_pair
 
 
@@ -273,7 +274,7 @@ def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> 
 
 
 def test_public_hgraph_pytyr_only_source_blocker_encodes() -> None:
-    package_parent = ROOT / "src"
+    package_parent = isolated_subprocess_package_parent(ROOT / "src")
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"

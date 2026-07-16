@@ -15,6 +15,7 @@ from tests.encoding.test_semantic_successor_hgraph_encoder import (
     _assert_batch_hgraph_parity,
 )
 
+from . import isolated_subprocess_package_parent
 from .test_semantic_parity import _backend_pair
 
 
@@ -334,7 +335,7 @@ def test_public_transition_coexists_and_rejects_wrong_or_mixed_inputs() -> None:
 
 
 def test_public_transition_pytyr_only_source_blocker_encodes_actual_successor() -> None:
-    package_parent = ROOT / "src"
+    package_parent = isolated_subprocess_package_parent(ROOT / "src")
     dependency_paths = [path for path in sys.path if "site-packages" in path]
     domain = ROOT / "data" / "pddl" / "blocks" / "domain.pddl"
     problem = ROOT / "data" / "pddl" / "blocks" / "small.pddl"

@@ -21,21 +21,27 @@ jobs:
         include:
           - os: macos-latest
             python-version: "3.12"
+            backends: both
             allow_failure: false
           - os: macos-latest
             python-version: "3.13"
+            backends: both
             allow_failure: false
           - os: macos-latest
             python-version: "3.14"
+            backends: pymimir
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.12"
+            backends: both
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.13"
+            backends: both
             allow_failure: false
           - os: ubuntu-latest
             python-version: "3.14"
+            backends: pymimir
             allow_failure: false
 
     steps:
@@ -68,10 +74,15 @@ jobs:
     - name: Install build/runtime dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r requirements/build.txt -r requirements.txt
+        python -m pip install -r requirements/base-build.txt -r requirements.txt pymimir==0.13.63
+        if [ "${{ matrix.backends }}" = "both" ]; then
+          python -m pip install pytyr==0.0.30
+        fi
 
     - name: Build and install
       id: build_install
+      env:
+        MIFROST_BUILD_BACKENDS: ${{ matrix.backends }}
       run: |
         python -m pip install -c requirements/constraints-ci.txt --no-build-isolation --verbose .
 

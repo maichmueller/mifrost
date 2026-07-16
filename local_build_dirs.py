@@ -28,7 +28,7 @@ LOCAL_BUILD_MODES = (
     LocalBuildMode(
         name="stubs",
         build_dir="build/stubs",
-        default_target="mifrost_core_module_stubs",
+        default_target="mifrost_module_stubs",
         description="generated stub build",
     ),
     LocalBuildMode(

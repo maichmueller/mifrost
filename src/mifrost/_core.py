@@ -9,6 +9,7 @@ adapter bindings.
 from __future__ import annotations
 
 import importlib
+import sys
 
 from . import _neutral_core
 from ._neutral_core import *  # noqa: F401,F403
@@ -29,7 +30,9 @@ def _install_legacy_map_view_names() -> None:
         globals()[f"MapView[{key_type.__name__},{value_type.__name__}]"] = native_type
 
 
-_install_legacy_map_view_names()
+_in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in sys.argv)
+if not _in_stubgen:
+    _install_legacy_map_view_names()
 
 # These policy constants are planner-neutral even though the historical native
 # binding exported them from the Pymimir adapter module.

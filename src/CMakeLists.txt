@@ -1055,6 +1055,8 @@ install(FILES
     DESTINATION "${MIFROST_SDK_CMAKE_DIR}"
 )
 
+set(_mifrost_dev_stub_targets "")
+
 if (MIFROST_BUILD_PYTHON AND MIFROST_GENERATE_STUBS)
     set(_mifrost_neutral_stub_output "mifrost/_neutral_core.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
@@ -1067,6 +1069,7 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_GENERATE_STUBS)
             PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
             DEPENDS mifrost_neutral_core_module
         )
+        list(APPEND _mifrost_dev_stub_targets mifrost_neutral_core_module_stubs)
     else ()
         nanobind_add_stub(
             mifrost_neutral_core_module_stubs
@@ -1086,15 +1089,18 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_
         STRING(PREPEND _mifrost_stub_output "${CMAKE_SOURCE_DIR}/src/")
         nanobind_add_stub(
                 mifrost_pymimir_adapter_module_stubs
+                INCLUDE_PRIVATE
                 MODULE mifrost._pymimir_adapter
                 OUTPUT "${_mifrost_stub_output}"
                 PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
                 DEPENDS mifrost_pymimir_adapter_module
         )
+        list(APPEND _mifrost_dev_stub_targets mifrost_pymimir_adapter_module_stubs)
     else ()
         # Wheel/install mode: generate stubs at install time in the install prefix.
         nanobind_add_stub(
                 mifrost_pymimir_adapter_module_stubs
+                INCLUDE_PRIVATE
                 MODULE mifrost._pymimir_adapter
                 OUTPUT "${_mifrost_stub_output}"
                 DEPENDS mifrost_pymimir_adapter_module
@@ -1115,6 +1121,7 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYTYR_ADAPTER AND MIFROST_GENERATE_ST
             PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
             DEPENDS mifrost_pytyr_adapter_module
         )
+        list(APPEND _mifrost_dev_stub_targets mifrost_pytyr_adapter_module_stubs)
     else ()
         nanobind_add_stub(
             mifrost_pytyr_adapter_module_stubs
@@ -1125,6 +1132,41 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYTYR_ADAPTER AND MIFROST_GENERATE_ST
             INSTALL_TIME
         )
     endif ()
+endif ()
+
+# Generate the historical compatibility surface by introspecting the Python
+# facade after its split native modules are available. This keeps nanobind as
+# the source of truth instead of maintaining a merged compatibility stub.
+if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_STUBS)
+    set(_mifrost_compat_stub_output "mifrost/_core.pyi")
+    if (MIFROST_RPATH_MODE STREQUAL "dev")
+        string(PREPEND _mifrost_compat_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        nanobind_add_stub(
+            mifrost_core_module_stubs
+            INCLUDE_PRIVATE
+            MODULE mifrost._core
+            OUTPUT "${_mifrost_compat_stub_output}"
+            PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+            DEPENDS
+                mifrost_neutral_core_module
+                mifrost_pymimir_adapter_module
+                "${CMAKE_SOURCE_DIR}/src/mifrost/_core.py"
+        )
+        list(APPEND _mifrost_dev_stub_targets mifrost_core_module_stubs)
+    else ()
+        nanobind_add_stub(
+            mifrost_core_module_stubs
+            INCLUDE_PRIVATE
+            MODULE mifrost._core
+            OUTPUT "${_mifrost_compat_stub_output}"
+            DEPENDS mifrost_neutral_core_module mifrost_pymimir_adapter_module
+            INSTALL_TIME
+        )
+    endif ()
+endif ()
+
+if (_mifrost_dev_stub_targets)
+    add_custom_target(mifrost_module_stubs DEPENDS ${_mifrost_dev_stub_targets})
 endif ()
 
 if (MIFROST_BUILD_PYMIMIR_ADAPTER)
