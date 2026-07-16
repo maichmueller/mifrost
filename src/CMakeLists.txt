@@ -20,9 +20,9 @@ if (NOT _mifrost_package_version)
 endif ()
 
 option(MIFROST_BUILD_BENCHMARKS "Build C++ benchmarks (Google Benchmark)." OFF)
-option(MIFROST_BUILD_PYTHON "Build the backend-neutral Python extension." ON)
-option(MIFROST_BUILD_PYMIMIR_ADAPTER "Build the Pymimir compatibility adapter and Python extension." ON)
-option(MIFROST_BUILD_PYTYR_ADAPTER "Build the optional PyTyr adapter and Python extension." OFF)
+option(MIFROST_BUILD_PYTHON "Build Python extensions for the neutral core and selected adapters." ON)
+option(MIFROST_BUILD_PYMIMIR_ADAPTER "Build the Pymimir compatibility adapter." ON)
+option(MIFROST_BUILD_PYTYR_ADAPTER "Build the optional PyTyr adapter." OFF)
 option(MIFROST_GENERATE_STUBS "Generate nanobind .pyi stubs in dev mode." ON)
 option(MIFROST_EXPORT_LOCAL_CONAN_RECIPES "Export local Conan recipes before Conan provider install." ON)
 option(MIFROST_FREE_THREADED "Enable nanobind FREE_THREADED mode (requires backend-compatible Python extensions)." OFF)
@@ -151,10 +151,6 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER)
 endif ()
 
 if (MIFROST_BUILD_PYTYR_ADAPTER)
-    if (NOT MIFROST_BUILD_PYTHON)
-        message(FATAL_ERROR "MIFROST_BUILD_PYTYR_ADAPTER currently requires MIFROST_BUILD_PYTHON=ON")
-    endif ()
-
     # Resolve the native runtime directly from PyTyr. Importing Tyr's complete
     # CMake package also imports its Loki/Yggdrasil dependency graph, whose Loki
     # target name collides with Pymimir's independently versioned Loki package
@@ -563,89 +559,93 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
         INSTALL_RPATH_USE_LINK_PATH FALSE
     )
 
-    set(
-        _mifrost_pytyr_nanobind_library
-        "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}nanobind${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    )
-    set(
-        _mifrost_pytyr_nanobind_header
-        "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include/nanobind/nanobind.h"
-    )
-    if (NOT EXISTS "${_mifrost_pytyr_nanobind_library}" OR
-        NOT EXISTS "${_mifrost_pytyr_nanobind_header}")
-        message(FATAL_ERROR
-            "PyTyr adapter requires PyYggdrasil's bundled nanobind runtime and headers; "
-            "expected ${_mifrost_pytyr_nanobind_library} and ${_mifrost_pytyr_nanobind_header}."
+    if (MIFROST_BUILD_PYTHON)
+        set(
+            _mifrost_pytyr_nanobind_library
+            "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}nanobind${CMAKE_SHARED_LIBRARY_SUFFIX}"
         )
-    endif ()
-    add_library(mifrost_pytyr_nanobind SHARED IMPORTED)
-    set_target_properties(mifrost_pytyr_nanobind PROPERTIES
-        IMPORTED_LOCATION "${_mifrost_pytyr_nanobind_library}"
-        INTERFACE_INCLUDE_DIRECTORIES "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include"
-        INTERFACE_COMPILE_DEFINITIONS NB_SHARED
-    )
-    Python_add_library(
-        mifrost_pytyr_adapter_module MODULE WITH_SOABI
-        "_core/mifrost/pytyr_module.cpp"
-    )
-    set_target_properties(
-        mifrost_pytyr_adapter_module
-        PROPERTIES OUTPUT_NAME "_pytyr_adapter"
-    )
-    target_link_libraries(
-        mifrost_pytyr_adapter_module
-        PRIVATE
-            mifrost_pytyr_adapter
-            Python::Module
-            mifrost_pytyr_nanobind
-    )
-    target_compile_definitions(
-        mifrost_pytyr_adapter_module
-        PRIVATE MIFROST_ENABLE_PYTHON_API
-    )
+        set(
+            _mifrost_pytyr_nanobind_header
+            "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include/nanobind/nanobind.h"
+        )
+        if (NOT EXISTS "${_mifrost_pytyr_nanobind_library}" OR
+            NOT EXISTS "${_mifrost_pytyr_nanobind_header}")
+            message(FATAL_ERROR
+                "PyTyr adapter requires PyYggdrasil's bundled nanobind runtime and headers; "
+                "expected ${_mifrost_pytyr_nanobind_library} and ${_mifrost_pytyr_nanobind_header}."
+            )
+        endif ()
+        add_library(mifrost_pytyr_nanobind SHARED IMPORTED)
+        set_target_properties(mifrost_pytyr_nanobind PROPERTIES
+            IMPORTED_LOCATION "${_mifrost_pytyr_nanobind_library}"
+            INTERFACE_INCLUDE_DIRECTORIES "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include"
+            INTERFACE_COMPILE_DEFINITIONS NB_SHARED
+        )
+        Python_add_library(
+            mifrost_pytyr_adapter_module MODULE WITH_SOABI
+            "_core/mifrost/pytyr_module.cpp"
+        )
+        set_target_properties(
+            mifrost_pytyr_adapter_module
+            PROPERTIES OUTPUT_NAME "_pytyr_adapter"
+        )
+        target_link_libraries(
+            mifrost_pytyr_adapter_module
+            PRIVATE
+                mifrost_pytyr_adapter
+                Python::Module
+                mifrost_pytyr_nanobind
+        )
+        target_compile_definitions(
+            mifrost_pytyr_adapter_module
+            PRIVATE MIFROST_ENABLE_PYTHON_API
+        )
 
-    set(_mifrost_pytyr_module_rpaths "")
-    if (APPLE)
-        list(APPEND _mifrost_pytyr_module_rpaths
-            "@loader_path/../pyyggdrasil/lib"
-            "@loader_path/lib"
-            "@loader_path/../pytyr/native/lib"
+        set(_mifrost_pytyr_module_rpaths "")
+        if (APPLE)
+            list(APPEND _mifrost_pytyr_module_rpaths
+                "@loader_path/../pyyggdrasil/lib"
+                "@loader_path/lib"
+                "@loader_path/../pytyr/native/lib"
+            )
+        elseif (UNIX)
+            list(APPEND _mifrost_pytyr_module_rpaths
+                "$ORIGIN/../pyyggdrasil/lib"
+                "$ORIGIN/lib"
+                "$ORIGIN/../pytyr/native/lib"
+            )
+        endif ()
+        if (MIFROST_RPATH_MODE STREQUAL "dev")
+            list(PREPEND
+                _mifrost_pytyr_module_rpaths
+                "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/lib"
+            )
+            _mifrost_append_rpath_from_target(_mifrost_pytyr_module_rpaths tyr::core)
+        endif ()
+        list(REMOVE_DUPLICATES _mifrost_pytyr_module_rpaths)
+        set_target_properties(
+            mifrost_pytyr_adapter_module
+            PROPERTIES
+            BUILD_RPATH "${_mifrost_pytyr_module_rpaths}"
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "${_mifrost_pytyr_module_rpaths}"
+            INSTALL_RPATH_USE_LINK_PATH FALSE
         )
-    elseif (UNIX)
-        list(APPEND _mifrost_pytyr_module_rpaths
-            "$ORIGIN/../pyyggdrasil/lib"
-            "$ORIGIN/lib"
-            "$ORIGIN/../pytyr/native/lib"
-        )
-    endif ()
-    if (MIFROST_RPATH_MODE STREQUAL "dev")
-        list(PREPEND
-            _mifrost_pytyr_module_rpaths
-            "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/lib"
-        )
-        _mifrost_append_rpath_from_target(_mifrost_pytyr_module_rpaths tyr::core)
-    endif ()
-    list(REMOVE_DUPLICATES _mifrost_pytyr_module_rpaths)
-    set_target_properties(
-        mifrost_pytyr_adapter_module
-        PROPERTIES
-        BUILD_RPATH "${_mifrost_pytyr_module_rpaths}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "${_mifrost_pytyr_module_rpaths}"
-        INSTALL_RPATH_USE_LINK_PATH FALSE
-    )
 
+        if (MIFROST_RPATH_MODE STREQUAL "dev")
+            set_target_properties(mifrost_pytyr_adapter_module PROPERTIES
+                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
+            )
+        endif ()
+        unset(_mifrost_pytyr_nanobind_library)
+        unset(_mifrost_pytyr_nanobind_header)
+    endif ()
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         set_target_properties(mifrost_pytyr_adapter PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
         )
-        set_target_properties(mifrost_pytyr_adapter_module PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
-        )
     endif ()
-    unset(_mifrost_pytyr_nanobind_library)
-    unset(_mifrost_pytyr_nanobind_header)
 endif ()
 
 if (MIFROST_BUILD_PYMIMIR_ADAPTER)
@@ -718,41 +718,43 @@ target_link_libraries(
 conan_add_package_include_fallback(mifrost_pymimir_adapter abseil SCOPE PUBLIC)
 conan_add_package_include_fallback(mifrost_pymimir_adapter onetbb SCOPE PRIVATE)
 
-add_library(
-    mifrost_python_support
-    OBJECT
-        "_core/mifrost/common.cpp"
-        "_core/mifrost/core/batch_builder_python.cpp"
-        "_core/mifrost/input_handling/batch_input_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_color_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_flat_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_successor_parser.cpp"
-        "_core/mifrost/input_handling/batch_input_horizon_parser.cpp"
-)
-set_target_properties(mifrost_python_support PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions(
-    mifrost_python_support
-    PRIVATE
-    MIFROST_BUILD_SHARED
-    MIFROST_ENABLE_PYTHON_API
-    NB_DOMAIN=pymimir_abi_domain
-    MIFROST_EXPORTS
-)
-target_link_libraries(
-    mifrost_python_support
-    PRIVATE
-    mifrost_pymimir_adapter
-    Python::Module
-    nanobind::nanobind
-    dlpack::dlpack
-)
-target_include_directories(
-    mifrost_python_support
-    PRIVATE
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/_core>"
-)
-conan_add_package_include_fallback(mifrost_python_support abseil SCOPE PRIVATE)
+if (MIFROST_BUILD_PYTHON)
+    add_library(
+        mifrost_python_support
+        OBJECT
+            "_core/mifrost/common.cpp"
+            "_core/mifrost/core/batch_builder_python.cpp"
+            "_core/mifrost/input_handling/batch_input_parser.cpp"
+            "_core/mifrost/input_handling/batch_input_hgraph_parser.cpp"
+            "_core/mifrost/input_handling/batch_input_color_parser.cpp"
+            "_core/mifrost/input_handling/batch_input_flat_parser.cpp"
+            "_core/mifrost/input_handling/batch_input_successor_parser.cpp"
+            "_core/mifrost/input_handling/batch_input_horizon_parser.cpp"
+    )
+    set_target_properties(mifrost_python_support PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(
+        mifrost_python_support
+        PRIVATE
+        MIFROST_BUILD_SHARED
+        MIFROST_ENABLE_PYTHON_API
+        NB_DOMAIN=pymimir_abi_domain
+        MIFROST_EXPORTS
+    )
+    target_link_libraries(
+        mifrost_python_support
+        PRIVATE
+        mifrost_pymimir_adapter
+        Python::Module
+        nanobind::nanobind
+        dlpack::dlpack
+    )
+    target_include_directories(
+        mifrost_python_support
+        PRIVATE
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/_core>"
+    )
+    conan_add_package_include_fallback(mifrost_python_support abseil SCOPE PRIVATE)
+endif ()
 
 set(_mifrost_core_rpaths "")
 if (APPLE)
@@ -800,106 +802,110 @@ set_target_properties(
         INSTALL_RPATH_USE_LINK_PATH FALSE
 )
 
-nanobind_add_module(mifrost_pymimir_adapter_module
-        ${_mifrost_freethreading}
-        NB_DOMAIN pymimir_abi_domain
-        "_core/mifrost/mifrost.cpp"
-        "_core/mifrost/pyg_views.cpp"
-        "_core/mifrost/batch_encoding_attributes.cpp"
-        "_core/mifrost/batch_encoding_collection.cpp"
-        "_core/mifrost/batch_encoding_conversion.cpp"
-        "_core/mifrost/batch_encoding_graph_field_access.cpp"
-        "_core/mifrost/batch_encoding_graph_field_mutation.cpp"
-        "_core/mifrost/batch_encoding_graph_field_serialization.cpp"
-        "_core/mifrost/batch_encoding_python_collation.cpp"
-        "_core/mifrost/batch_encoding_repr.cpp"
-        "_core/mifrost/batch_encoding_schema.cpp"
-        "_core/mifrost/batch_encoding_state.cpp"
-        "_core/mifrost/batch_encoding_tensor_cache.cpp"
-        "_core/mifrost/init_common.cpp"
-        "_core/mifrost/init_relation_formatter.cpp"
-        "_core/mifrost/init_color_encoder.cpp"
-        "_core/mifrost/schema_bindings.cpp"
-        "_core/mifrost/init_hgraph_encoder.cpp"
-        "_core/mifrost/init_flat_encoder.cpp"
-        "_core/mifrost/init_horizon_encoder.cpp"
-        "_core/mifrost/init_successor_encoders.cpp"
-        "_core/mifrost/init_transition_dag.cpp"
-        $<TARGET_OBJECTS:mifrost_python_support>
-)
-set_target_properties(
-        mifrost_pymimir_adapter_module
-        PROPERTIES
-        OUTPUT_NAME "_pymimir_adapter"
-)
-target_link_libraries(
-        mifrost_pymimir_adapter_module
-        PRIVATE
-        dlpack::dlpack
-        mifrost_pymimir_adapter
-        Python::Module
-        nanobind::nanobind
-)
-target_compile_definitions(mifrost_pymimir_adapter_module PRIVATE MIFROST_ENABLE_PYTHON_API)
+if (MIFROST_BUILD_PYTHON)
+    nanobind_add_module(mifrost_pymimir_adapter_module
+            ${_mifrost_freethreading}
+            NB_DOMAIN pymimir_abi_domain
+            "_core/mifrost/mifrost.cpp"
+            "_core/mifrost/pyg_views.cpp"
+            "_core/mifrost/batch_encoding_attributes.cpp"
+            "_core/mifrost/batch_encoding_collection.cpp"
+            "_core/mifrost/batch_encoding_conversion.cpp"
+            "_core/mifrost/batch_encoding_graph_field_access.cpp"
+            "_core/mifrost/batch_encoding_graph_field_mutation.cpp"
+            "_core/mifrost/batch_encoding_graph_field_serialization.cpp"
+            "_core/mifrost/batch_encoding_python_collation.cpp"
+            "_core/mifrost/batch_encoding_repr.cpp"
+            "_core/mifrost/batch_encoding_schema.cpp"
+            "_core/mifrost/batch_encoding_state.cpp"
+            "_core/mifrost/batch_encoding_tensor_cache.cpp"
+            "_core/mifrost/init_common.cpp"
+            "_core/mifrost/init_relation_formatter.cpp"
+            "_core/mifrost/init_color_encoder.cpp"
+            "_core/mifrost/schema_bindings.cpp"
+            "_core/mifrost/init_hgraph_encoder.cpp"
+            "_core/mifrost/init_flat_encoder.cpp"
+            "_core/mifrost/init_horizon_encoder.cpp"
+            "_core/mifrost/init_successor_encoders.cpp"
+            "_core/mifrost/init_transition_dag.cpp"
+            $<TARGET_OBJECTS:mifrost_python_support>
+    )
+    set_target_properties(
+            mifrost_pymimir_adapter_module
+            PROPERTIES
+            OUTPUT_NAME "_pymimir_adapter"
+    )
+    target_link_libraries(
+            mifrost_pymimir_adapter_module
+            PRIVATE
+            dlpack::dlpack
+            mifrost_pymimir_adapter
+            Python::Module
+            nanobind::nanobind
+    )
+    target_compile_definitions(mifrost_pymimir_adapter_module PRIVATE MIFROST_ENABLE_PYTHON_API)
 
-set(_mifrost_rpaths "")
-if (APPLE)
-    list(APPEND _mifrost_rpaths "@loader_path" "@loader_path/lib")
-    # Keep a stable relative lookup for pymimir in both wheel and editable installs.
-    list(APPEND _mifrost_rpaths "@loader_path/../pymimir/lib")
-elseif (UNIX)
-    list(APPEND _mifrost_rpaths "$ORIGIN" "$ORIGIN/lib")
-    # Keep a stable relative lookup for pymimir in both wheel and editable installs.
-    list(APPEND _mifrost_rpaths "$ORIGIN/../pymimir/lib")
-endif ()
-if (MIFROST_RPATH_MODE STREQUAL "wheel")
-    # Wheel mode keeps this path as well; duplicates are removed below.
-endif ()
-if (MIFROST_RPATH_MODE STREQUAL "dev")
-    _mifrost_append_rpath_from_target(_mifrost_rpaths mimir::core)
-
-    # Fallback: if Conan is used to provide runtime libraries, bake the Conan cache
-    # lib dirs into the RPATH. This avoids relying on imported-target properties
-    # (which vary across CMake package configs) and makes CI source installs
-    # deterministic.
-    set(_mifrost_conan_home "")
-    if (DEFINED ENV{CONAN_HOME} AND NOT "$ENV{CONAN_HOME}" STREQUAL "")
-        set(_mifrost_conan_home "$ENV{CONAN_HOME}")
-    elseif (DEFINED ENV{HOME} AND EXISTS "$ENV{HOME}/.conan2")
-        set(_mifrost_conan_home "$ENV{HOME}/.conan2")
+    set(_mifrost_rpaths "")
+    if (APPLE)
+        list(APPEND _mifrost_rpaths "@loader_path" "@loader_path/lib")
+        # Keep a stable relative lookup for pymimir in both wheel and editable installs.
+        list(APPEND _mifrost_rpaths "@loader_path/../pymimir/lib")
+    elseif (UNIX)
+        list(APPEND _mifrost_rpaths "$ORIGIN" "$ORIGIN/lib")
+        # Keep a stable relative lookup for pymimir in both wheel and editable installs.
+        list(APPEND _mifrost_rpaths "$ORIGIN/../pymimir/lib")
     endif ()
-    if (NOT _mifrost_conan_home STREQUAL "" AND IS_DIRECTORY "${_mifrost_conan_home}")
-        file(GLOB _mifrost_conan_lib_dirs LIST_DIRECTORIES true
-                "${_mifrost_conan_home}/p/*/p/lib"
-                "${_mifrost_conan_home}/p/b/*/p/lib"
+    if (MIFROST_RPATH_MODE STREQUAL "wheel")
+        # Wheel mode keeps this path as well; duplicates are removed below.
+    endif ()
+    if (MIFROST_RPATH_MODE STREQUAL "dev")
+        _mifrost_append_rpath_from_target(_mifrost_rpaths mimir::core)
+
+        # Fallback: if Conan is used to provide runtime libraries, bake the Conan cache
+        # lib dirs into the RPATH. This avoids relying on imported-target properties
+        # (which vary across CMake package configs) and makes CI source installs
+        # deterministic.
+        set(_mifrost_conan_home "")
+        if (DEFINED ENV{CONAN_HOME} AND NOT "$ENV{CONAN_HOME}" STREQUAL "")
+            set(_mifrost_conan_home "$ENV{CONAN_HOME}")
+        elseif (DEFINED ENV{HOME} AND EXISTS "$ENV{HOME}/.conan2")
+            set(_mifrost_conan_home "$ENV{HOME}/.conan2")
+        endif ()
+        if (NOT _mifrost_conan_home STREQUAL "" AND IS_DIRECTORY "${_mifrost_conan_home}")
+            file(GLOB _mifrost_conan_lib_dirs LIST_DIRECTORIES true
+                    "${_mifrost_conan_home}/p/*/p/lib"
+                    "${_mifrost_conan_home}/p/b/*/p/lib"
+            )
+            foreach (_dir IN LISTS _mifrost_conan_lib_dirs)
+                if (IS_DIRECTORY "${_dir}")
+                    list(APPEND _mifrost_rpaths "${_dir}")
+                endif ()
+            endforeach ()
+            unset(_mifrost_conan_lib_dirs)
+        endif ()
+        unset(_mifrost_conan_home)
+    endif ()
+    list(REMOVE_DUPLICATES _mifrost_rpaths)
+
+    set_target_properties(
+            mifrost_pymimir_adapter_module
+            PROPERTIES
+            BUILD_RPATH "${_mifrost_rpaths}"
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "${_mifrost_rpaths}"
+            # Avoid embedding transient link directories (e.g. pip-build-env overlays).
+            INSTALL_RPATH_USE_LINK_PATH FALSE
+    )
+    if (MIFROST_RPATH_MODE STREQUAL "dev")
+        set_target_properties(mifrost_pymimir_adapter_module PROPERTIES
+                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
         )
-        foreach (_dir IN LISTS _mifrost_conan_lib_dirs)
-            if (IS_DIRECTORY "${_dir}")
-                list(APPEND _mifrost_rpaths "${_dir}")
-            endif ()
-        endforeach ()
-        unset(_mifrost_conan_lib_dirs)
     endif ()
-    unset(_mifrost_conan_home)
 endif ()
-list(REMOVE_DUPLICATES _mifrost_rpaths)
-
-set_target_properties(
-        mifrost_pymimir_adapter_module
-        PROPERTIES
-        BUILD_RPATH "${_mifrost_rpaths}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "${_mifrost_rpaths}"
-        # Avoid embedding transient link directories (e.g. pip-build-env overlays).
-        INSTALL_RPATH_USE_LINK_PATH FALSE
-)
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_pymimir_adapter PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-    )
-    set_target_properties(mifrost_pymimir_adapter_module PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
     )
 endif ()
 add_custom_command(
@@ -945,7 +951,9 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER)
         RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
         INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
     )
-    install(TARGETS mifrost_pymimir_adapter_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
+    if (MIFROST_BUILD_PYTHON)
+        install(TARGETS mifrost_pymimir_adapter_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
+    endif ()
     install(
         FILES "$<TARGET_FILE:mifrost_pymimir_adapter>"
         DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
@@ -960,7 +968,9 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
         RUNTIME DESTINATION "${MIFROST_SDK_LIBRARY_DIR}"
         INCLUDES DESTINATION "${MIFROST_SDK_INCLUDE_DIR}"
     )
-    install(TARGETS mifrost_pytyr_adapter_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
+    if (MIFROST_BUILD_PYTHON)
+        install(TARGETS mifrost_pytyr_adapter_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
+    endif ()
     install(
         FILES "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/backends/pytyr/semantic_flat_encoder.hpp"
         DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost/backends/pytyr"
@@ -1069,7 +1079,7 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_GENERATE_STUBS)
     endif ()
 endif ()
 
-if (MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_STUBS)
+if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_STUBS)
     set(_mifrost_stub_output "mifrost/_pymimir_adapter.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         # Dev mode: keep stubs in source tree so IDEs can pick them up directly.
@@ -1093,7 +1103,7 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_STUBS)
     endif ()
 endif ()
 
-if (MIFROST_BUILD_PYTYR_ADAPTER AND MIFROST_GENERATE_STUBS)
+if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYTYR_ADAPTER AND MIFROST_GENERATE_STUBS)
     set(_mifrost_pytyr_stub_output "mifrost/_pytyr_adapter.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         string(PREPEND _mifrost_pytyr_stub_output "${CMAKE_SOURCE_DIR}/src/")

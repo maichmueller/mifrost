@@ -111,3 +111,19 @@ python -c 'import mifrost; print(mifrost.get_library_dir())'
 
 For downstream CMake projects, either prepend `mifrost.get_cmake_dir()` to
 `CMAKE_PREFIX_PATH` or pass `-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir())')"`.
+
+For a C++-only SDK, disable Python independently of the selected adapters:
+
+```bash
+cmake -S . -B build/native -DMIFROST_BUILD_PYTHON=OFF \
+  -DMIFROST_BUILD_PYMIMIR_ADAPTER=OFF \
+  -DMIFROST_BUILD_PYTYR_ADAPTER=ON
+cmake --build build/native
+cmake --install build/native --prefix /path/to/mifrost-sdk
+```
+
+An installed PyTyr adapter first looks for planner libraries in the wheel-style
+sibling layout. Standalone SDK consumers can instead set
+`MIFROST_PYTYR_NATIVE_PREFIX`, `MIFROST_PYYGGDRASIL_NATIVE_PREFIX`, and
+`MIFROST_PYPDDL_NATIVE_PREFIX` in their CMake cache (or the corresponding
+environment variables without the `MIFROST_` prefix).
