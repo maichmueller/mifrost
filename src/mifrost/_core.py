@@ -50,6 +50,8 @@ except ImportError as error:
     HGraphEncoderConfig = _neutral_core.SemanticHGraphEncoderConfig
     SuccessorEncoderConfig = _neutral_core.SemanticSuccessorHGraphEncoderConfig
     SuccessorEncoderMode = _neutral_core.SemanticSuccessorEncoderMode
+    HorizonEncoderConfig = _neutral_core.SemanticHorizonHGraphEncoderConfig
+    HorizonEncoderMode = _neutral_core.SemanticHorizonEncoderMode
 else:
     for _name in dir(_pymimir_adapter):
         if _name.startswith("__"):
@@ -87,5 +89,7 @@ else:
         "HGraphEncoderConfig",
         "SuccessorEncoderConfig",
         "SuccessorEncoderMode",
+        "HorizonEncoderConfig",
+        "HorizonEncoderMode",
     ]
 __all__ = list(dict.fromkeys(__all__))

@@ -265,9 +265,10 @@ def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> 
     assert len(retained) == 4
 
     horizon = mifrost.HorizonEncoder(problem.get_domain())
-    assert not hasattr(horizon, "backend")
-    assert horizon._runtime is None
-    with pytest.raises(TypeError, match="unexpected keyword argument 'backend'"):
+    assert horizon.backend == "pymimir"
+    assert isinstance(horizon.engine, mifrost.HorizonHGraphEncoderEngine)
+    assert isinstance(horizon.config, mifrost.HorizonEncoderConfig)
+    with pytest.raises(TypeError, match="PlanningTask"):
         mifrost.HorizonEncoder(problem.get_domain(), backend="pytyr")
 
 

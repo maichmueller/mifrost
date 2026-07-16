@@ -20,6 +20,10 @@ inline constexpr char
    successor_hgraph_config_name[] = "mifrost.SemanticSuccessorHGraphEncoderConfig.v1";
 inline constexpr char
    successor_hgraph_engine_name[] = "mifrost.SemanticSuccessorHGraphEncoderEngine.v1";
+inline constexpr char
+   horizon_hgraph_config_name[] = "mifrost.SemanticHorizonHGraphEncoderConfig.v1";
+inline constexpr char
+   horizon_hgraph_engine_name[] = "mifrost.SemanticHorizonHGraphEncoderEngine.v1";
 inline constexpr char consumed_name[] = "mifrost.consumed.v1";
 
 template < typename T >

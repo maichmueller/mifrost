@@ -4,7 +4,7 @@ from collections.abc import Iterable as IterableABC
 from collections.abc import Sequence as SequenceABC
 from typing import TYPE_CHECKING, Any, TypeAlias, Optional
 
-from .._core import TransitionDAG
+from .. import _core
 from .types import BatchParam
 
 if TYPE_CHECKING:
@@ -13,8 +13,13 @@ if TYPE_CHECKING:
     from pymimir.pymimir.advanced.formalism import GroundAction
 
     RXStateDAG: TypeAlias = rx.PyDiGraph[State, Optional[GroundAction]]
+    from .._core import TransitionDAG
 else:
     RXStateDAG: TypeAlias = Any
+    TransitionDAG: TypeAlias = Any
+
+
+_TRANSITION_DAG_CLS = getattr(_core, "TransitionDAG", None)
 
 
 def _load_rustworkx():
@@ -35,7 +40,12 @@ def transition_dag_from_rustworkx(
     *,
     fallback_missing_candidate_id_to_node_index: bool = False,
 ) -> TransitionDAG:
-    return TransitionDAG.from_rustworkx(
+    if _TRANSITION_DAG_CLS is None:
+        raise ModuleNotFoundError(
+            "transition_dag_from_rustworkx requires the Pymimir adapter; "
+            "pass the rustworkx graph directly to a PyTyr HorizonEncoder"
+        )
+    return _TRANSITION_DAG_CLS.from_rustworkx(
         graph,
         fallback_missing_candidate_id_to_node_index=(
             fallback_missing_candidate_id_to_node_index
@@ -44,7 +54,9 @@ def transition_dag_from_rustworkx(
 
 
 def _normalize_dag_leaf(value: object) -> object:
-    if value is None or isinstance(value, TransitionDAG):
+    if value is None or (
+        _TRANSITION_DAG_CLS is not None and isinstance(value, _TRANSITION_DAG_CLS)
+    ):
         return value
     if _is_rustworkx_digraph(value):
         return transition_dag_from_rustworkx(value)

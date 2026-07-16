@@ -1,23 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 import networkx as nx
 from torch_geometric.data import HeteroData
 
+from .. import _neutral_core
 from .._core import (
     DEFAULT_HISTORY_LINK_RELATION,
     DEFAULT_LGAN_RR_EDGE_POS,
     DEFAULT_LGAN_TN_EDGE_POS,
     DEFAULT_LGAN_NN_EDGE_POS,
     DEFAULT_SYMBOL_TYPE_ID,
-    HorizonEncoderConfig,
-    HorizonHGraphEncoderEngine,
-    HorizonStreamEncoder as _HorizonStreamEncoder,
-    TransitionDAG,
     BatchEncoding,
     HorizonEncoderMode,
+)
+from ..backends._horizon_runtime import (
+    HorizonBackendName,
+    create_horizon_runtime,
 )
 from .base import (
     ActionBatchInput,
@@ -32,18 +33,9 @@ from .base import (
     SubgoalLayersInput,
     SubgoalLayersBatchParam,
 )
-from ._batch_contract import (
-    parse_dags_batch_param,
-    parse_states_batch,
-    prepare_core_batch_inputs,
-)
-from .common import _advanced_state
-from ._lane_specs import (
-    HORIZON_LANE_SPEC,
-    ensure_transition_dag,
-    prepare_goal_inputs,
-    validate_batch_optional_payloads,
-    validate_single_optional_payloads,
+from ._horizon_validation import (
+    validate_batch_unsupported_lanes,
+    validate_single_unsupported_lanes,
 )
 from ._root_policy import RootPolicy, normalize_root_policy
 from ._visualization import (
@@ -51,10 +43,7 @@ from ._visualization import (
     draw_horizon,
     horizon_to_networkx,
 )
-from ._rustworkx_dag import (
-    RXStateDAG,
-    _normalize_dag_batch_data,
-)
+from ._rustworkx_dag import RXStateDAG
 from .hgraph import HGraphEncoder, TargetSource
 from .types import (
     DomainInput,
@@ -63,16 +52,44 @@ from .types import (
     StateInput,
 )
 
+if TYPE_CHECKING:
+    from .._core import TransitionDAG
+else:
+    TransitionDAG = Any
+
+
+_HORIZON_CONFIG_CLS = _neutral_core.SemanticHorizonHGraphEncoderConfig
+_HORIZON_MODE = _neutral_core.SemanticHorizonEncoderMode
+
+
+def _normalize_horizon_mode(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        name = value.strip().lower()
+    else:
+        name = str(value).rsplit(".", 1)[-1].lower()
+    if name not in {"full", "delta", "action"}:
+        raise ValueError("transition_mode must be 'full', 'delta', or 'action'")
+    return getattr(_HORIZON_MODE, name)
+
 
 @dataclass
 class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
     """Streaming wrapper for ``HorizonHGraphEncoderEngine``."""
 
-    _engine: HorizonHGraphEncoderEngine
+    _owner: Any
 
     def __post_init__(self) -> None:
         """Initialize an empty hetero builder for streaming."""
-        self._stream = _HorizonStreamEncoder(self._engine)
+        runtime = getattr(self._owner, "_runtime", None)
+        self._legacy_engine = runtime is None
+        if self._legacy_engine:
+            from .._core import HorizonStreamEncoder as NativeHorizonStreamEncoder
+
+            self._stream = NativeHorizonStreamEncoder(self._owner)
+        else:
+            self._stream = runtime.make_stream()
         self._reset_builder()
 
     def append(
@@ -84,10 +101,20 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> int:
         """Append one root/DAG encoding to the stream."""
-        adv_root = _advanced_state(root)
-        dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
-        return self._coerce_stream_id(self._stream.append(adv_root, dag, inputs))
+        if self._legacy_engine:
+            from ._lane_specs import ensure_transition_dag, prepare_goal_inputs
+            from .common import _advanced_state
+
+            return self._coerce_stream_id(
+                self._stream.append(
+                    _advanced_state(root),
+                    ensure_transition_dag(root, dag),
+                    prepare_goal_inputs(root, goals, subgoal_layers),
+                )
+            )
+        return self._coerce_stream_id(
+            self._stream.append(root, dag, goals=goals, subgoal_layers=subgoal_layers)
+        )
 
     def remove(self, stream_id: int) -> None:
         self._stream.remove(stream_id)
@@ -101,10 +128,20 @@ class HorizonEncoderStream(StreamEncoderBase[HeteroData]):
         goals: Iterable[GoalLiteralInput] | None = None,
         subgoal_layers: Iterable[Iterable[GoalLiteralInput]] | None = None,
     ) -> None:
-        adv_root = _advanced_state(root)
-        dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
-        self._stream.update(stream_id, adv_root, dag, inputs)
+        if self._legacy_engine:
+            from ._lane_specs import ensure_transition_dag, prepare_goal_inputs
+            from .common import _advanced_state
+
+            self._stream.update(
+                stream_id,
+                _advanced_state(root),
+                ensure_transition_dag(root, dag),
+                prepare_goal_inputs(root, goals, subgoal_layers),
+            )
+            return
+        self._stream.update(
+            stream_id, root, dag, goals=goals, subgoal_layers=subgoal_layers
+        )
 
     def _reset_builder(self) -> None:
         """Reset stream accumulation state."""
@@ -123,6 +160,7 @@ class HorizonEncoder(HGraphEncoder):
         self,
         domain: DomainInput,
         *,
+        backend: HorizonBackendName | str | None = None,
         transition_mode: HorizonEncoderMode | str | None = None,
         target_symbol_prefix: str | None = None,
         target_sources: Iterable[TargetSource | str] | None = None,
@@ -170,9 +208,10 @@ class HorizonEncoder(HGraphEncoder):
         `lgan_anchor_sources` switch here.
         """
         normalized_root_policy = normalize_root_policy(root_policy)
-        super().__init__(
-            domain,
+        config = self._make_config(
+            _HORIZON_CONFIG_CLS,
             symbol_type_id=symbol_type_id,
+            target_symbol_prefix=target_symbol_prefix,
             ignore_actions=ignore_actions,
             add_nullary_predicates=add_nullary_predicates,
             include_lgan_edges=include_lgan_edges,
@@ -187,11 +226,12 @@ class HorizonEncoder(HGraphEncoder):
             lgan_nn_edge_pos=lgan_nn_edge_pos,
             lgan_rr_edge_pos=lgan_rr_edge_pos,
             history_link_relation=history_link_relation,
-            _config_cls=HorizonEncoderConfig,
-            _engine_cls=HorizonHGraphEncoderEngine,
-            transition_mode=transition_mode,
-            target_symbol_prefix=target_symbol_prefix,
-            target_sources=target_sources,
+            transition_mode=_normalize_horizon_mode(transition_mode),
+            target_sources=(
+                None
+                if target_sources is None
+                else self._normalize_horizon_target_sources(target_sources)
+            ),
             parent_relation=parent_relation,
             sibling_relation=sibling_relation,
             cousin_relation=cousin_relation,
@@ -200,14 +240,38 @@ class HorizonEncoder(HGraphEncoder):
             enable_cousin_relation=enable_cousin_relation,
             root_policy=normalized_root_policy,
         )
-        config = self.config
-        self.target_symbol_prefix = config.target_symbol_prefix
-        self.parent_relation = config.parent_relation
-        self.sibling_relation = config.sibling_relation
-        self.cousin_relation = config.cousin_relation
+        self._runtime = create_horizon_runtime(domain, config, backend=backend)
+        self._engine = self._runtime.engine
+        self._config = self._engine.config
+        self.backend = self._runtime.backend_name
+        self.symbol_type_id = self._config.symbol_type_id
+        self.target_symbol_prefix = self._config.target_symbol_prefix
+        self.parent_relation = self._config.parent_relation
+        self.sibling_relation = self._config.sibling_relation
+        self.cousin_relation = self._config.cousin_relation
+        self.lgan_tn_edge_pos = self._config.lgan_tn_edge_pos
+        self.lgan_nn_edge_pos = self._config.lgan_nn_edge_pos
+        self.lgan_rr_edge_pos = self._config.lgan_rr_edge_pos
+        self.include_lgan_edges = self._config.include_lgan_edges
+        self.lgan_anchor_sources = set(self._config.lgan_anchor_sources)
+        self._lgan_edge_positions = {
+            self.lgan_tn_edge_pos,
+            self.lgan_nn_edge_pos,
+            self.lgan_rr_edge_pos,
+        }
+
+    @staticmethod
+    def _normalize_horizon_target_sources(
+        target_sources: Iterable[TargetSource | str],
+    ) -> set[TargetSource]:
+        from ._target_sources import normalize_target_sources
+
+        normalized = normalize_target_sources(target_sources)
+        assert normalized is not None
+        return normalized
 
     @property
-    def engine(self) -> HorizonHGraphEncoderEngine:
+    def engine(self) -> Any:
         """Expose the underlying C++ horizon engine."""
         return self._engine
 
@@ -224,16 +288,40 @@ class HorizonEncoder(HGraphEncoder):
         **_,
     ) -> BatchEncoding:
         """Encode one root/DAG pair."""
-        validate_single_optional_payloads(
-            HORIZON_LANE_SPEC,
+        validate_single_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        adv_root = _advanced_state(root)
-        dag = ensure_transition_dag(root, dag)
-        inputs = prepare_goal_inputs(root, goals, subgoal_layers)
-        return self._engine.encode(adv_root, dag, inputs)
+        return self._runtime.encode_one(
+            root, dag, goals=goals, subgoal_layers=subgoal_layers
+        )
+
+    def _encode_one_into_builder(
+        self,
+        root: StateInput,
+        builder: Any,
+        *,
+        dag: TransitionDAG | RXStateDAG | None = None,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalInput | None = None,
+        history_max_steps: int | None = None,
+    ) -> None:
+        """Append one validated root/DAG graph into a caller-owned builder."""
+        validate_single_unsupported_lanes(
+            actions=actions,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+        self._runtime.append_into_builder(
+            root,
+            builder,
+            dag=dag,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+        )
 
     def encode(
         self,
@@ -307,43 +395,21 @@ class HorizonEncoder(HGraphEncoder):
         history_max_steps: int | None = None,
     ) -> BatchEncoding:
         """Encode one or many root/DAG pairs into one batch encoding."""
-        validate_batch_optional_payloads(
-            HORIZON_LANE_SPEC,
+        validate_batch_unsupported_lanes(
             actions=actions,
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        inputs = prepare_core_batch_inputs(
+        return self._runtime.encode_batch(
             roots,
+            dags=dags,
             goals=goals,
-            actions=actions,
             subgoal_layers=subgoal_layers,
-            history_subgoals=history_subgoals,
-        )
-        dags_for_core = _normalize_dag_batch_data(dags)
-        parsed_roots = parse_states_batch(inputs.states)
-        if dags_for_core is None:
-            parsed_dags = [None] * len(parsed_roots)
-        else:
-            parsed_dags = parse_dags_batch_param(
-                dags_for_core, state_count=len(parsed_roots)
-            )
-        for adv_root, dag in zip(parsed_roots, parsed_dags, strict=True):
-            if dag is not None and dag.root().get_index() != adv_root.get_index():
-                raise ValueError("dag root must match root state")
-        return self._engine.encode_batch(
-            parsed_roots,
-            dags=parsed_dags,
-            goals=inputs.goals,
-            actions=inputs.actions,
-            subgoal_layers=inputs.subgoal_layers,
-            history_subgoals=inputs.history_subgoals,
-            history_max_steps=history_max_steps,
         )
 
     def stream(self) -> HorizonEncoderStream:
         """Create a streaming encoder sharing this encoder's C++ engine."""
-        return HorizonEncoderStream(self._engine)
+        return HorizonEncoderStream(self)
 
     def _horizon_visualization_context(self) -> HorizonVisualizationContext:
         return HorizonVisualizationContext(
