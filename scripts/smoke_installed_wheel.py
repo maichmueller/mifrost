@@ -14,14 +14,18 @@ def _assert_encoding(encoding: Any, backend: str) -> None:
 
 def _smoke_pymimir(domain_path: Path, problem_path: Path) -> None:
     import pymimir
+    from mifrost import _pymimir_adapter
 
     domain = pymimir.Domain(domain_path)
     problem = pymimir.Problem(domain, problem_path, mode="grounded")
-    encoder = mifrost.FlatRelationEncoder(domain, backend="pymimir")
-    _assert_encoding(encoder.encode(problem.get_initial_state()), "Pymimir")
+    encoder = _pymimir_adapter.FlatRelationEncoderEngine(domain._advanced_domain)
+    _assert_encoding(
+        encoder.encode(problem.get_initial_state()._advanced_state), "Pymimir"
+    )
 
 
 def _smoke_pytyr(domain_path: Path, problem_path: Path) -> None:
+    from mifrost import _neutral_core, _pytyr_adapter
     from pypddl.formalism import ParserOptions
     from pytyr.formalism.planning import Parser
     from pytyr.planning import ExecutionContext
@@ -41,8 +45,19 @@ def _smoke_pytyr(domain_path: Path, problem_path: Path) -> None:
     evaluator = AxiomEvaluatorFactory().create(task, context)
     repository = StateRepositoryFactory().create(task, evaluator)
     generator = SuccessorGeneratorFactory().create(task, context, repository)
-    encoder = mifrost.FlatRelationEncoder(planning_task, backend="pytyr")
-    _assert_encoding(encoder.encode(generator.get_initial_node().get_state()), "PyTyr")
+    native = _pytyr_adapter._NativeSemanticFlatRelationEncoder(
+        planning_task,
+        _neutral_core._flat_relation_config_capsule(
+            _neutral_core.FlatRelationEncoderConfig()
+        ),
+    )
+    encoder = _neutral_core._consume_semantic_flat_engine_capsule(
+        native._make_engine_capsule()
+    )
+    state = _neutral_core._consume_semantic_flat_input_capsule(
+        native._make_input_capsule(generator.get_initial_node().get_state())
+    )
+    _assert_encoding(encoder.encode(state), "PyTyr")
 
 
 def main() -> None:

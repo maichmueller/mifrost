@@ -99,7 +99,7 @@ def test_project_metadata_keeps_planners_optional() -> None:
     assert set(extras["backends"]) == {"pymimir>=0.13.60", "pytyr>=0.0.30"}
 
 
-def test_wheel_rows_install_only_backend_neutral_build_tools() -> None:
+def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     base_requirements = Path("requirements/base-build.txt").read_text()
     assert "pymimir" not in base_requirements.lower()
     assert "pytyr" not in base_requirements.lower()
@@ -116,10 +116,33 @@ def test_wheel_rows_install_only_backend_neutral_build_tools() -> None:
         if line.strip().startswith("CIBW_BEFORE_BUILD_")
     ]
     assert len(before_build_lines) == 2
-    assert all("requirements/base-build.txt" in line for line in before_build_lines)
-    assert all("requirements/build.txt" not in line for line in before_build_lines)
+    assert all("requirements/build.txt" in line for line in before_build_lines)
+    assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
+    assert 'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30"' in workflow
     assert workflow.count("flavor:") == 3
     assert "MIFROST_BUILD_BACKENDS: both" in workflow
     assert "backend: core" not in workflow
     assert "backend: pymimir" not in workflow
     assert "backend: pytyr" not in workflow
+
+
+def test_wheel_build_requires_generated_stubs_and_disables_regeneration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        build_backend,
+        "_required_wheel_stubs",
+        lambda: (tmp_path / "_neutral_core.pyi",),
+    )
+    with pytest.raises(RuntimeError, match="pre-generated nanobind stubs"):
+        build_backend.build_wheel(str(tmp_path))
+
+    (tmp_path / "_neutral_core.pyi").write_text("# generated\n")
+    monkeypatch.setattr(build_backend, "_maybe_prepare_conan", lambda _settings: None)
+    monkeypatch.setattr(
+        build_backend._sbc,
+        "build_wheel",
+        lambda *args: "mifrost.whl",
+    )
+    assert build_backend.build_wheel(str(tmp_path)) == "mifrost.whl"
+    assert "-DMIFROST_GENERATE_STUBS=OFF" in build_backend.os.environ["CMAKE_ARGS"]

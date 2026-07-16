@@ -142,9 +142,7 @@ def _parse_backend_selection(value: str) -> frozenset[str]:
         return frozenset(_BACKEND_BUILD_REQUIREMENTS)
 
     requested = {
-        item.strip()
-        for item in normalized.replace("+", ",").split(",")
-        if item.strip()
+        item.strip() for item in normalized.replace("+", ",").split(",") if item.strip()
     }
     unknown = requested.difference(_BACKEND_BUILD_REQUIREMENTS)
     if unknown:
@@ -198,19 +196,34 @@ def _exclude_unbuilt_adapter_stubs(backends: frozenset[str]) -> None:
         if item.strip()
     }
     if "pymimir" not in backends:
-        excluded.update(
-            {"mifrost/_core.pyi", "mifrost/_pymimir_adapter.pyi"}
-        )
+        excluded.update({"mifrost/_core.pyi", "mifrost/_pymimir_adapter.pyi"})
     if "pytyr" not in backends:
         excluded.add("mifrost/_pytyr_adapter.pyi")
     if excluded:
         os.environ["SKBUILD_WHEEL_EXCLUDE"] = ";".join(sorted(excluded))
 
 
-def _wheel_generate_stubs_enabled() -> bool:
-    # Wheel builds include stubs by default. Workflows that pre-generate stubs can
-    # set MIFROST_WHEEL_GENERATE_STUBS=0 to avoid duplicate stub work.
-    return _as_bool(os.environ.get("MIFROST_WHEEL_GENERATE_STUBS"), default=True)
+def _required_wheel_stubs() -> tuple[Path, ...]:
+    package_dir = Path(__file__).resolve().parent / "src" / "mifrost"
+    names = ["_neutral_core.pyi"]
+    backends = _selected_backends()
+    if "pymimir" in backends:
+        names.extend(("_core.pyi", "_pymimir_adapter.pyi"))
+    if "pytyr" in backends:
+        names.append("_pytyr_adapter.pyi")
+    return tuple(package_dir / name for name in names)
+
+
+def _require_pre_generated_wheel_stubs() -> None:
+    missing = [path for path in _required_wheel_stubs() if not path.is_file()]
+    if not missing:
+        return
+    formatted = ", ".join(str(path) for path in missing)
+    raise RuntimeError(
+        "Wheel builds require pre-generated nanobind stubs; missing: "
+        f"{formatted}. Run `python configure.py --mode stubs --backends both` "
+        "and `python cbuild.py --mode stubs`, or build from the release sdist."
+    )
 
 
 def _prepare_common_cmake_env() -> None:
@@ -383,10 +396,11 @@ def build_wheel(
     _set_default_rpath_mode("wheel")
     _set_cmake_arg("BUILD_TESTING", "OFF")
     _set_cmake_arg("MIFROST_BUILD_BENCHMARKS", "OFF")
-    _set_cmake_arg(
-        "MIFROST_GENERATE_STUBS",
-        "ON" if _wheel_generate_stubs_enabled() else "OFF",
-    )
+    # Release sdists and CI carry nanobind-generated stubs as source artifacts.
+    # Regenerating them in CMake's temporary install prefix happens before wheel
+    # repair, where planner-owned shared libraries are intentionally unavailable.
+    _require_pre_generated_wheel_stubs()
+    _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
     _maybe_prepare_conan(config_settings)
     return _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
 
