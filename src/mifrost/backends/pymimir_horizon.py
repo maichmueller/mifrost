@@ -109,7 +109,7 @@ class PymimirHorizonRuntime:
         inputs = prepare_core_batch_inputs(
             roots, goals=goals, subgoal_layers=subgoal_layers
         )
-        parsed_roots = parse_states_batch(inputs.states)
+        parsed_roots = cast(list[Any], parse_states_batch(inputs.states))
         normalized_dags = _normalize_dag_batch_data(dags)
         parsed_dags = (
             [None] * len(parsed_roots)

@@ -239,6 +239,9 @@ class BlockPymimir(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockPymimir())
 import mifrost
 assert "pymimir" not in sys.modules
+from mifrost.encoders import types
+assert types.StateInput is object
+assert "pymimir" not in sys.modules
 encoder_type = mifrost.FlatRelationEncoder
 assert encoder_type.__name__ == "FlatRelationEncoder"
 assert "pymimir" not in sys.modules

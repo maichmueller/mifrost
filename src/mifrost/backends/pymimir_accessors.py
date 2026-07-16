@@ -5,7 +5,7 @@ from collections.abc import Iterable
 import pymimir.advanced.formalism as af
 import pymimir.wrapper_formalism as wf
 
-from ..encoders.types import (
+from .pymimir_types import (
     ATOM_TYPES,
     GROUND_ACTION_TYPES,
     GOAL_LITERAL_TYPES,

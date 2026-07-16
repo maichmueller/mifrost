@@ -5,7 +5,7 @@ from typing import Any, Iterable
 
 import pymimir.advanced.formalism as af
 
-from ..encoders.types import (
+from .pymimir_types import (
     DomainInput,
     GoalLiteralInput,
     GroundActionInput,

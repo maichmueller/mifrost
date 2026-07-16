@@ -105,7 +105,7 @@ class PymimirFlatHorizonRuntime:
         inputs = prepare_core_batch_inputs(
             roots, goals=goals, subgoal_layers=subgoal_layers
         )
-        parsed_roots = parse_states_batch(inputs.states)
+        parsed_roots = cast(list[Any], parse_states_batch(inputs.states))
         validate_subgoal_layers_batch_payload(
             subgoal_layers,
             state_count=len(parsed_roots),

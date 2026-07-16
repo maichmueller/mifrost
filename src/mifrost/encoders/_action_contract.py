@@ -85,7 +85,9 @@ def parse_actions_batch_plan(
                 raise TypeError(
                     "per-state action entries must be iterable action collections or None"
                 )
-            per_state.append(validate_no_nested_actions(entry))
+            per_state.append(
+                validate_no_nested_actions(cast(Iterable[GroundActionInput], entry))
+            )
         return BatchActionPlan(per_state_actions=per_state)
 
     return BatchActionPlan(shared_actions=validate_no_nested_actions(outer))

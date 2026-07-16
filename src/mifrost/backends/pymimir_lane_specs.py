@@ -14,8 +14,8 @@ from .pymimir_common import (
     _prepare_history_subgoals,
     _split_goals,
 )
-from ..encoders.types import (
-    BatchParam,
+from ..encoders.types import BatchParam
+from .pymimir_types import (
     AdvancedGroundLiteral,
     GoalLiteralInput,
     GroundActionInput,

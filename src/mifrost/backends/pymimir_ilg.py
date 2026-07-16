@@ -17,7 +17,7 @@ from .pymimir_accessors import (
     predicate_arity,
     predicate_name,
 )
-from ..encoders.types import (
+from .pymimir_types import (
     ATOM_TYPES,
     WRAPPER_STATE_TYPES,
     is_action_input,
