@@ -20,6 +20,7 @@ from mifrost.backends.flat import FlatSemanticAdapter
 from mifrost.backends.pytyr import (
     PyTyrSnapshotReader,
     SemanticFlatRelationEncoder,
+    SemanticPlanningTaskAdapter,
 )
 
 
@@ -127,8 +128,19 @@ def test_native_pytyr_conversion_matches_python_semantic_contract(
     native = SemanticFlatRelationEncoder(reader._planning_task, _config())
     semantic = FlatSemanticAdapter(reader, _config())
 
-    assert _input_payload(native.make_input(state, actions)) == _input_payload(
-        semantic.make_input(state, actions=actions)
+    native_input = native.make_input(state, actions)
+    semantic_input = semantic.make_input(state, actions=actions)
+    # The native path owns immutable task constants in its shared context, so
+    # a per-state transport carries dynamic facts/actions only.
+    assert native_input.objects == []
+    assert native_input.goals == []
+    assert len(native_input.state_facts) == len(semantic_input.state_facts) - len(
+        reader.state_snapshot(state).static_atoms
+    )
+    assert tuple(
+        (action.action, tuple(action.arguments)) for action in native_input.actions
+    ) == tuple(
+        (action.action, tuple(action.arguments)) for action in semantic_input.actions
     )
     _assert_payload_equal(
         native.encode(state, actions), semantic.encode(state, actions=actions)
@@ -195,7 +207,42 @@ def test_native_pytyr_optional_literal_lanes_match_semantic_contract() -> None:
         history_max_steps=4,
     )
 
-    assert _input_payload(actual) == _input_payload(expected)
+    assert _input_payload(actual)[2:] == _input_payload(expected)[2:]
+    _assert_payload_equal(
+        native.engine.encode(actual), semantic.engine.encode(expected)
+    )
+
+
+def test_native_pytyr_raw_literal_lanes_match_semantic_contract() -> None:
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    state = successor_generator.get_initial_node().get_state()
+    goal = reader._planning_task.get_task().get_goal()
+    raw_goals = [
+        *goal.get_static_facts(),
+        *((fact, True) for fact in goal.get_positive_facts() if fact.has_value()),
+        *((fact, False) for fact in goal.get_negative_facts() if fact.has_value()),
+        *goal.get_derived_facts(),
+    ]
+    semantic_goals = reader.problem_snapshot().goals
+    config = _config()
+    config.max_goal_level = 1
+    native = SemanticFlatRelationEncoder(reader._planning_task, config)
+    semantic = FlatSemanticAdapter(reader, config)
+
+    actual = native.make_input(
+        state,
+        goals=raw_goals,
+        subgoal_layers=[raw_goals],
+        history=[(-2, raw_goals)],
+    )
+    expected = semantic.make_input(
+        state,
+        goals=semantic_goals,
+        subgoal_layers=[semantic_goals],
+        history=[(-2, semantic_goals)],
+    )
+
+    assert _input_payload(actual)[2:] == _input_payload(expected)[2:]
     _assert_payload_equal(
         native.engine.encode(actual), semantic.engine.encode(expected)
     )
@@ -206,8 +253,26 @@ def test_native_pytyr_explicit_empty_goals_override_task_goals() -> None:
     state = successor_generator.get_initial_node().get_state()
     native = SemanticFlatRelationEncoder(reader._planning_task, _config())
 
-    assert native.make_input(state).goals
+    assert not native.make_input(state).goals
     assert not native.make_input(state, goals=[]).goals
+    assert native.encode(state).as_pyg().target_sizes.tolist()[0] > 0
+    assert native.encode(state, goals=[]).as_pyg().target_sizes.tolist() == [0]
+
+
+def test_native_pytyr_context_survives_adapter_and_omits_node_names() -> None:
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    state = successor_generator.get_initial_node().get_state()
+    config = _config()
+    config.export_node_names = False
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    engine = adapter.make_flat_engine(config)
+    input_value = adapter.make_input(state)
+    del adapter
+
+    payload = engine.encode(input_value).as_pyg().to_dict()
+    assert input_value.objects == []
+    assert input_value.goals == []
+    assert "node_names" not in payload
 
 
 def test_native_backends_remain_independent_when_interleaved() -> None:
