@@ -77,7 +77,7 @@ class MifrostRecipe(ConanFile):
 
     # Configure Boost options to match Mimir
     default_options.update({f"boost/*:without_{comp}": True for comp in BOOST_COMPS})
-    for comp in ("iostreams", "random", "regex", "system"):
+    for comp in ("container", "iostreams", "json", "random", "regex", "system"):
         default_options.update({f"boost/*:without_{comp}": False})
 
     def export_sources(self):

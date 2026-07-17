@@ -141,10 +141,28 @@ find_package(range-v3 REQUIRED)
 if (MIFROST_BUILD_PYTHON OR MIFROST_BUILD_PYMIMIR_ADAPTER)
     find_package(dlpack REQUIRED)
 endif ()
+if (MIFROST_BUILD_PYTYR_ADAPTER)
+    # PyYggdrasil's exported CMake target links Boost.JSON. Request the
+    # component before PyTyr/PyPDDL transitively import that target.
+    find_package(Boost CONFIG REQUIRED COMPONENTS json)
+endif ()
 if (MIFROST_BUILD_PYMIMIR_ADAPTER)
     find_package(Boost CONFIG REQUIRED COMPONENTS iostreams)
     find_package(ZLIB REQUIRED)
-    find_package(loki REQUIRED)
+    # Do not let PyTyr's PyPDDL prefix satisfy this lookup in a both-backend
+    # build. Mimir requires its Conan-built Loki variant; using PyPDDL's Loki
+    # injects PyYggdrasil's forward-only GTL declarations into Pymimir sources.
+    # Boost is resolved from the same CMakeDeps generator directory, so use it
+    # as the authoritative package root for the entire Pymimir dependency set.
+    if (NOT EXISTS "${Boost_DIR}/loki-config.cmake")
+        message(FATAL_ERROR
+            "The selected Conan CMakeDeps directory does not contain loki-config.cmake: ${Boost_DIR}"
+        )
+    endif ()
+    if (DEFINED loki_DIR AND NOT loki_DIR STREQUAL "${Boost_DIR}")
+        unset(loki_DIR CACHE)
+    endif ()
+    find_package(loki CONFIG REQUIRED NO_DEFAULT_PATH PATHS "${Boost_DIR}")
     find_package(nauty REQUIRED)
     find_package(TBB REQUIRED)
     find_package(valla CONFIG REQUIRED)
