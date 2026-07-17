@@ -83,6 +83,25 @@ def get_cmake_dir() -> str:
     return str(_package_root() / "lib" / "cmake" / "mifrost")
 
 
+# Editable-install redirectors can prepend an older site-package directory to
+# this source package's search path. Keep the directory containing this
+# ``__init__`` first so optional adapter modules always match the freshly built
+# neutral core during development; installed packages have only this one path.
+_source_package_path = str(_package_root())
+if _source_package_path in __path__:
+    __path__.remove(_source_package_path)
+__path__.insert(0, _source_package_path)
+# A pre-existing editable installation can redirect native submodule lookups
+# to its site-package build even after this source package was selected. That
+# mixes independently built nanobind modules and leaves optional adapters stale.
+# Remove only Mifrost's own redirector; other editable packages remain intact.
+_sys.meta_path = [
+    finder
+    for finder in _sys.meta_path
+    if finder.__class__.__module__ != "_mifrost_editable"
+]
+
+
 _in_stubgen = any("stubgen.py" in arg or "nanobind.stubgen" in arg for arg in _sys.argv)
 
 if _in_stubgen:
