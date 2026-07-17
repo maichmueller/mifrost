@@ -164,11 +164,8 @@ class PyTyrSnapshotReader:
 class SemanticPlanningTaskAdapter:
     """Native PyTyr conversion to compact backend-neutral semantic inputs."""
 
-    def __init__(self, planning_task: PlanningTask, config: Any | None = None) -> None:
-        from mifrost import _neutral_core
-
-        if config is None:
-            config = _neutral_core.FlatRelationEncoderConfig()
+    def __init__(self, planning_task: PlanningTask) -> None:
+        self._planning_task = planning_task
         try:
             native_module = importlib.import_module("mifrost._pytyr_adapter")
         except ImportError as error:
@@ -178,18 +175,22 @@ class SemanticPlanningTaskAdapter:
                 "(or both)."
             ) from error
 
+        self._native = native_module._NativeSemanticPlanningTaskAdapter(planning_task)
+        # Native literals and FDR facts use their stable repository indices all
+        # the way to the capsule. A semantic `LiteralKey` is a legacy/public
+        # compatibility input whose identity is names, so build its lookup only
+        # when that fallback is actually requested.
+        self._semantic_indices: (
+            tuple[dict[PredicateKey, int], dict[str, int]] | None
+        ) = None
+
+    def make_flat_engine(self, config: Any) -> Any:
+        """Build only the requested neutral Flat engine from the task context."""
+        from mifrost import _neutral_core
+
         config_capsule = _neutral_core._flat_relation_config_capsule(config)
-        self._native = native_module._NativeSemanticFlatRelationEncoder(
-            planning_task, config_capsule
-        )
-        domain = PyTyrSnapshotReader(planning_task).domain_snapshot()
-        self._predicate_indices = {
-            predicate: index for index, predicate in enumerate(domain.predicates)
-        }
-        object_names = sorted(
-            str(value.get_name()) for value in planning_task.get_task().get_objects()
-        )
-        self._object_indices = {name: index for index, name in enumerate(object_names)}
+        engine_capsule = self._native._make_engine_capsule(config_capsule)
+        return _neutral_core._consume_semantic_flat_engine_capsule(engine_capsule)
 
     def make_color_engine(self, config: Any) -> Any:
         """Build a neutral Color engine from this task adapter's cached schema."""
@@ -273,22 +274,86 @@ class SemanticPlanningTaskAdapter:
             f"(FluentFDRFact, polarity), got {type(value)!r}"
         )
 
-    def _compact_literal(self, value: object) -> tuple[int, list[int], bool]:
+    @staticmethod
+    def _raw_literal(
+        atom: Any, category: PredicateCategory, positive: bool
+    ) -> tuple[int, int, list[int], bool]:
+        category_id = {
+            PredicateCategory.STATIC: 0,
+            PredicateCategory.FLUENT: 1,
+            PredicateCategory.DERIVED: 2,
+        }[category]
+        return (
+            category_id,
+            int(atom.get_predicate().get_index()),
+            [int(object.get_index()) for object in atom.get_objects()],
+            positive,
+        )
+
+    def _compact_literal(
+        self, value: object
+    ) -> tuple[int, list[int], bool] | tuple[int, int, list[int], bool]:
+        if isinstance(value, StaticGroundLiteral):
+            return self._raw_literal(
+                value.get_atom(), PredicateCategory.STATIC, bool(value.get_polarity())
+            )
+        if isinstance(value, FluentGroundLiteral):
+            return self._raw_literal(
+                value.get_atom(), PredicateCategory.FLUENT, bool(value.get_polarity())
+            )
+        if isinstance(value, DerivedGroundLiteral):
+            return self._raw_literal(
+                value.get_atom(), PredicateCategory.DERIVED, bool(value.get_polarity())
+            )
+        if (
+            isinstance(value, tuple)
+            and len(value) == 2
+            and isinstance(value[0], FluentFDRFact)
+            and isinstance(value[1], bool)
+        ):
+            fact, polarity = value
+            if not fact.has_value():
+                raise ValueError("a PyTyr FDR no-value fact cannot form a literal")
+            return self._raw_literal(
+                fact.get_atom(), PredicateCategory.FLUENT, polarity
+            )
         literal = self._literal_key(value)
+        predicate_indices, object_indices = self._name_indices()
         try:
-            predicate = self._predicate_indices[literal.atom.predicate]
+            predicate = predicate_indices[literal.atom.predicate]
         except KeyError as error:
             raise ValueError(
                 "literal predicate is outside the PyTyr adapter task: "
                 f"{literal.atom.predicate!r}"
             ) from error
         try:
-            arguments = [self._object_indices[name] for name in literal.atom.objects]
+            arguments = [object_indices[name] for name in literal.atom.objects]
         except KeyError as error:
             raise ValueError(
                 f"literal object is outside the PyTyr adapter task: {error.args[0]!r}"
             ) from error
         return predicate, arguments, literal.polarity
+
+    def _name_indices(self) -> tuple[dict[PredicateKey, int], dict[str, int]]:
+        """Build the name-keyed compatibility map only for `LiteralKey` inputs.
+
+        The native state/action and native literal paths never call this method;
+        their compact Tyr indices are normalized in the adapter module.
+        """
+        if self._semantic_indices is None:
+            domain = PyTyrSnapshotReader(self._planning_task).domain_snapshot()
+            predicate_indices = {
+                predicate: index for index, predicate in enumerate(domain.predicates)
+            }
+            object_names = sorted(
+                str(value.get_name())
+                for value in self._planning_task.get_task().get_objects()
+            )
+            self._semantic_indices = (
+                predicate_indices,
+                {name: index for index, name in enumerate(object_names)},
+            )
+        return self._semantic_indices
 
     def make_input(
         self,
@@ -370,10 +435,10 @@ class SemanticFlatRelationEncoder(SemanticPlanningTaskAdapter):
     def __init__(self, planning_task: PlanningTask, config: Any | None = None) -> None:
         from mifrost import _neutral_core
 
-        super().__init__(planning_task, config)
-        self._engine = _neutral_core._consume_semantic_flat_engine_capsule(
-            self._native._make_engine_capsule()
-        )
+        if config is None:
+            config = _neutral_core.FlatRelationEncoderConfig()
+        super().__init__(planning_task)
+        self._engine = self.make_flat_engine(config)
 
     @property
     def engine(self) -> Any:

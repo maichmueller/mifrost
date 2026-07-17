@@ -24,6 +24,8 @@ void apply_color_config_kwargs(SemanticColorEncoderConfig& config, const nb::kwa
          config.edge_features = nb::cast< bool >(value_handle);
       } else if(key_view == "enable_global_predicate_nodes") {
          config.enable_global_predicate_nodes = nb::cast< bool >(value_handle);
+      } else if(key_view == "export_node_names") {
+         config.export_node_names = nb::cast< bool >(value_handle);
       } else {
          throw std::invalid_argument(
             "Unknown SemanticColorEncoderConfig kwarg '" + std::string(key_view) + "'"
@@ -48,7 +50,8 @@ void init_semantic_color_encoder(nb::module_& m)
       .def_rw("edge_features", &SemanticColorEncoderConfig::edge_features)
       .def_rw(
          "enable_global_predicate_nodes", &SemanticColorEncoderConfig::enable_global_predicate_nodes
-      );
+      )
+      .def_rw("export_node_names", &SemanticColorEncoderConfig::export_node_names);
 
    nb::class_< SemanticColorEncoderEngine >(m, "SemanticColorEncoderEngine")
       .def(

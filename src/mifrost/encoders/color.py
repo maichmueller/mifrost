@@ -87,11 +87,13 @@ class ColorEncoder(EncoderBase[Data]):
         backend: ColorBackendName | str | None = None,
         edge_features: bool = False,
         enable_global_predicate_nodes: bool = False,
+        export_node_names: bool = True,
     ) -> None:
         """Create a color encoder for one domain."""
         config = _neutral_core.SemanticColorEncoderConfig(
             edge_features=edge_features,
             enable_global_predicate_nodes=enable_global_predicate_nodes,
+            export_node_names=export_node_names,
         )
         self._runtime = create_color_runtime(domain, config, backend=backend)
         self._engine = self._runtime.engine
@@ -99,6 +101,7 @@ class ColorEncoder(EncoderBase[Data]):
         self.backend = self._runtime.backend_name
         self.edge_features = edge_features
         self.predicate_nodes_enabled = enable_global_predicate_nodes
+        self.export_node_names = export_node_names
 
     @property
     def engine(self) -> Any:

@@ -119,9 +119,20 @@ class PyTyrHorizonRuntime:
             )
 
     def _literal(self, value: object) -> Any:
-        predicate, arguments, positive = self._adapter._compact_literal(value)
+        # `delta_literals` is a diagnostic/display annotation on rustworkx DAG
+        # edges, not part of the normal state/action encoding hot path, so the
+        # name-keyed compatibility resolution is an acceptable, documented cost
+        # here. `_compact_literal` returns raw (category, predicate_index,
+        # object_indices, positive) tuples for native GroundLiteral/FDR inputs,
+        # whose indices are Tyr-repository-local and not directly usable as
+        # compact Mifrost IDs outside the native adapter, so route through the
+        # name-based literal key instead of unpacking that union shape here.
+        literal = self._adapter._literal_key(value)
+        predicate_indices, object_indices = self._adapter._name_indices()
+        predicate = predicate_indices[literal.atom.predicate]
+        arguments = [object_indices[name] for name in literal.atom.objects]
         return _neutral_core.SemanticLiteral(
-            _neutral_core.SemanticAtom(predicate, arguments), positive
+            _neutral_core.SemanticAtom(predicate, arguments), literal.polarity
         )
 
     def _state_input(

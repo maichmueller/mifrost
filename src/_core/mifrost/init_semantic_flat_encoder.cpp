@@ -27,7 +27,7 @@ SemanticAtom expand_compact_atom(CompactSemanticAtom value)
 {
    return SemanticAtom{
       .predicate = value.first,
-      .arguments = std::move(value.second),
+      .arguments = SemanticArguments(std::move(value.second)),
    };
 }
 
@@ -38,7 +38,7 @@ SemanticLiteral expand_compact_literal(CompactSemanticLiteral value)
       .atom =
          SemanticAtom{
             .predicate = predicate,
-            .arguments = std::move(arguments),
+            .arguments = SemanticArguments(std::move(arguments)),
          },
       .positive = positive,
    };
@@ -173,9 +173,24 @@ void init_semantic_flat_encoder(nb::module_& m)
       .def_rw("arity", &SemanticActionSpec::arity);
 
    nb::class_< SemanticAtom >(m, "SemanticAtom")
-      .def(nb::init< int64_t, std::vector< int64_t > >(), "predicate"_a, "arguments"_a)
+      .def(
+         "__init__",
+         [](SemanticAtom* self, int64_t predicate, std::vector< int64_t > arguments) {
+            new(self) SemanticAtom{predicate, SemanticArguments(std::move(arguments))};
+         },
+         "predicate"_a,
+         "arguments"_a
+      )
       .def_rw("predicate", &SemanticAtom::predicate)
-      .def_rw("arguments", &SemanticAtom::arguments);
+      .def_prop_rw(
+         "arguments",
+         [](const SemanticAtom& self) {
+            return std::vector< int64_t >(self.arguments.begin(), self.arguments.end());
+         },
+         [](SemanticAtom& self, std::vector< int64_t > arguments) {
+            self.arguments = SemanticArguments(std::move(arguments));
+         }
+      );
 
    nb::class_< SemanticLiteral >(m, "SemanticLiteral")
       .def(nb::init< SemanticAtom, bool >(), "atom"_a, "positive"_a = true)
@@ -183,9 +198,24 @@ void init_semantic_flat_encoder(nb::module_& m)
       .def_rw("positive", &SemanticLiteral::positive);
 
    nb::class_< SemanticGroundAction >(m, "SemanticGroundAction")
-      .def(nb::init< int64_t, std::vector< int64_t > >(), "action"_a, "arguments"_a)
+      .def(
+         "__init__",
+         [](SemanticGroundAction* self, int64_t action, std::vector< int64_t > arguments) {
+            new(self) SemanticGroundAction{action, SemanticArguments(std::move(arguments))};
+         },
+         "action"_a,
+         "arguments"_a
+      )
       .def_rw("action", &SemanticGroundAction::action)
-      .def_rw("arguments", &SemanticGroundAction::arguments);
+      .def_prop_rw(
+         "arguments",
+         [](const SemanticGroundAction& self) {
+            return std::vector< int64_t >(self.arguments.begin(), self.arguments.end());
+         },
+         [](SemanticGroundAction& self, std::vector< int64_t > arguments) {
+            self.arguments = SemanticArguments(std::move(arguments));
+         }
+      );
 
    nb::class_< SemanticHistoryEntry >(m, "SemanticHistoryEntry")
       .def(nb::init< int64_t, std::vector< SemanticLiteral > >(), "dt"_a, "literals"_a)
