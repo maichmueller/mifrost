@@ -42,6 +42,13 @@ struct SemanticFlatHorizonEncoderEngine::Impl {
    {
       flat.configure_horizon(config);
    }
+
+   Impl(std::shared_ptr< const SemanticTaskContext > task_context, Config encoder_config)
+       : config(normalize_config(std::move(encoder_config))),
+         flat(std::move(task_context), base_config(config))
+   {
+      flat.configure_horizon(config);
+   }
 };
 
 SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
@@ -50,6 +57,14 @@ SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
    Config config
 )
     : impl_(std::make_unique< Impl >(std::move(predicates), std::move(actions), std::move(config)))
+{
+}
+
+SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
+   std::shared_ptr< const SemanticTaskContext > task_context,
+   Config config
+)
+    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
 {
 }
 

@@ -4,10 +4,15 @@
  */
 #pragma once
 
+#include <algorithm>
+#include <boost/container/small_vector.hpp>
 #include <compare>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -45,10 +50,39 @@ struct SemanticActionSpec {
    auto operator<=>(const SemanticActionSpec&) const = default;
 };
 
+/**
+ * Inline argument storage for common PDDL arities.
+ *
+ * Four arguments cover the ordinary planning workloads while retaining an
+ * owning dynamically sized representation for arbitrary arities. The explicit
+ * vector constructor keeps the public compact-input ABI convenient for Python
+ * bindings and C++ callers.
+ */
+class SemanticArguments: public boost::container::small_vector< int64_t, 4 > {
+  public:
+   using Base = boost::container::small_vector< int64_t, 4 >;
+   using Base::Base;
+
+   SemanticArguments() = default;
+   SemanticArguments(const std::vector< int64_t >& values) : Base(values.begin(), values.end()) {}
+   SemanticArguments(std::vector< int64_t >&& values) : Base(values.begin(), values.end()) {}
+
+   [[nodiscard]] std::strong_ordering operator<=>(const SemanticArguments& other) const
+   {
+      return std::lexicographical_compare_three_way(
+         begin(), end(), other.begin(), other.end(), std::compare_three_way{}
+      );
+   }
+   [[nodiscard]] bool operator==(const SemanticArguments& other) const
+   {
+      return size() == other.size() and std::equal(begin(), end(), other.begin());
+   }
+};
+
 /** Ground atom using schema-local predicate and graph-local object indices. */
 struct SemanticAtom {
    int64_t predicate = -1;
-   std::vector< int64_t > arguments;
+   SemanticArguments arguments;
 
    auto operator<=>(const SemanticAtom&) const = default;
 };
@@ -64,7 +98,7 @@ struct SemanticLiteral {
 /** Ground action using schema-local action and graph-local object indices. */
 struct SemanticGroundAction {
    int64_t action = -1;
-   std::vector< int64_t > arguments;
+   SemanticArguments arguments;
 
    auto operator<=>(const SemanticGroundAction&) const = default;
 };
@@ -78,6 +112,19 @@ struct SemanticHistoryEntry {
 };
 
 /**
+ * Immutable schema/problem data shared by all semantic state inputs for one
+ * planning task. Backends translate their stable local identities into the
+ * compact IDs in this context once during adapter construction.
+ */
+struct SemanticTaskContext {
+   std::vector< SemanticPredicateSpec > predicates;
+   std::vector< SemanticActionSpec > actions;
+   std::vector< std::string > objects;
+   std::vector< SemanticAtom > static_facts;
+   std::vector< SemanticLiteral > default_goals;
+};
+
+/**
  * @brief Owned semantic input for one flat graph.
  *
  * All numeric indices are deliberately local to this value and its engine
@@ -85,14 +132,108 @@ struct SemanticHistoryEntry {
  * or cross-repository identities.
  */
 struct SemanticFlatRelationInput {
+   /** Shared immutable schema/problem data; absent for legacy standalone inputs. */
+   std::shared_ptr< const SemanticTaskContext > task_context;
+   /** Legacy object table when no task context is supplied. */
    std::vector< std::string > objects;
+   /** Dynamic state facts only when task_context is supplied. */
    std::vector< SemanticAtom > state_facts;
+   /** Explicit goal override; defaults come from task_context when requested. */
    std::vector< SemanticLiteral > goals;
+   bool use_default_goals = false;
    std::vector< SemanticGroundAction > actions;
    std::vector< std::vector< SemanticLiteral > > subgoal_layers;
    std::vector< SemanticHistoryEntry > history;
    std::optional< int64_t > history_max_steps = std::nullopt;
 };
+
+[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
+   const SemanticFlatRelationInput& input
+)
+{
+   return input.task_context ? input.task_context->objects : input.objects;
+}
+
+[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
+   const SemanticFlatRelationInput& input
+)
+{
+   return input.task_context and input.use_default_goals ? input.task_context->default_goals
+                                                         : input.goals;
+}
+
+[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
+   const SemanticFlatRelationInput& input
+)
+{
+   static const std::vector< SemanticAtom > empty;
+   return input.task_context ? input.task_context->static_facts : empty;
+}
+
+/** One sorted literal-to-effective-goal-level entry. */
+struct SemanticGoalLevel {
+   SemanticLiteral literal;
+   size_t level = 0;
+
+   auto operator<=>(const SemanticGoalLevel&) const = default;
+};
+
+/**
+ * Return a sorted compact lookup for effective goal levels.
+ *
+ * Later subgoal lanes intentionally override the same literal from an earlier
+ * lane, matching the historical map-assignment semantics without one tree node
+ * allocation per literal.
+ */
+[[nodiscard]] inline std::vector< SemanticGoalLevel > semantic_goal_levels(
+   const SemanticFlatRelationInput& input
+)
+{
+   const auto& goals = semantic_goals(input);
+   size_t count = goals.size();
+   for(const auto& layer : input.subgoal_layers) {
+      count += layer.size();
+   }
+   std::vector< SemanticGoalLevel > levels;
+   levels.reserve(count);
+   for(const auto& literal : goals) {
+      levels.push_back({literal, 0});
+   }
+   for(size_t index = 0; index < input.subgoal_layers.size(); ++index) {
+      for(const auto& literal : input.subgoal_layers[index]) {
+         levels.push_back({literal, index + 1});
+      }
+   }
+   std::ranges::sort(levels);
+   return levels;
+}
+
+[[nodiscard]] inline size_t
+semantic_goal_level(const std::vector< SemanticGoalLevel >& levels, const SemanticLiteral& literal)
+{
+   const auto first = std::lower_bound(
+      levels.begin(), levels.end(), literal, [](const SemanticGoalLevel& entry, const auto& value) {
+         return entry.literal < value;
+      }
+   );
+   if(first == levels.end() or first->literal != literal) {
+      throw std::invalid_argument("semantic goal literal is not present in its goal-level lookup");
+   }
+   const auto past = std::upper_bound(
+      first, levels.end(), literal, [](const auto& value, const SemanticGoalLevel& entry) {
+         return value < entry.literal;
+      }
+   );
+   return std::prev(past)->level;
+}
+
+[[nodiscard]] inline bool semantic_inputs_share_task(
+   const SemanticFlatRelationInput& lhs,
+   const SemanticFlatRelationInput& rhs
+)
+{
+   return lhs.task_context and lhs.task_context == rhs.task_context;
+}
 
 /**
  * @brief Encode owned semantic values directly to native BatchEncoding.
@@ -109,6 +250,10 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       std::vector< SemanticActionSpec > actions,
       Config config = {}
    );
+   SemanticFlatRelationEncoderEngine(
+      std::shared_ptr< const SemanticTaskContext > task_context,
+      Config config = {}
+   );
    SemanticFlatRelationEncoderEngine(const SemanticFlatRelationEncoderEngine&) = delete;
    SemanticFlatRelationEncoderEngine& operator=(const SemanticFlatRelationEncoderEngine&) = delete;
    SemanticFlatRelationEncoderEngine(SemanticFlatRelationEncoderEngine&&) noexcept;
@@ -123,6 +268,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
    [[nodiscard]] const std::vector< std::string >& get_relation_names() const;

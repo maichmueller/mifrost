@@ -53,6 +53,10 @@ class MIFROST_API SemanticFlatHorizonEncoderEngine {
       std::vector< SemanticActionSpec > actions,
       Config config = {}
    );
+   SemanticFlatHorizonEncoderEngine(
+      std::shared_ptr< const SemanticTaskContext > task_context,
+      Config config = {}
+   );
    SemanticFlatHorizonEncoderEngine(const SemanticFlatHorizonEncoderEngine&) = delete;
    SemanticFlatHorizonEncoderEngine& operator=(const SemanticFlatHorizonEncoderEngine&) = delete;
    SemanticFlatHorizonEncoderEngine(SemanticFlatHorizonEncoderEngine&&) noexcept;

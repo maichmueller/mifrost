@@ -22,11 +22,12 @@ void FlatRelationSink::emit(int relation_id, std::span< const int64_t > args)
    }
    relation_counts_[static_cast< size_t >(relation_id)] += 1;
    auto& bucket = relation_args_by_relation_[static_cast< size_t >(relation_id)];
+   const auto offset = bucket.size();
    bucket.insert(bucket.end(), args.begin(), args.end());
    relation_args_dirty_ = true;
    if(track_relation_instances_) {
-      relation_instances_by_relation_[static_cast< size_t >(relation_id)].emplace_back(
-         args.begin(), args.end()
+      relation_instances_by_relation_[static_cast< size_t >(relation_id)].push_back(
+         RelationInstance{.offset = offset, .size = args.size()}
       );
    }
 }
@@ -63,7 +64,7 @@ bool FlatRelationSink::tracks_relation_instances() const
    return track_relation_instances_;
 }
 
-const std::vector< std::vector< std::vector< int64_t > > >&
+const std::vector< std::vector< FlatRelationSink::RelationInstance > >&
 FlatRelationSink::relation_instances_by_relation() const
 {
    if(not track_relation_instances_) {
@@ -72,6 +73,21 @@ FlatRelationSink::relation_instances_by_relation() const
       );
    }
    return relation_instances_by_relation_;
+}
+
+std::span< const int64_t >
+FlatRelationSink::relation_instance_args(size_t relation_id, RelationInstance instance) const
+{
+   if(not track_relation_instances_ or relation_id >= relation_args_by_relation_.size()) {
+      throw std::logic_error(
+         "FlatRelationSink relation_instance_args requires valid instance tracking"
+      );
+   }
+   const auto& bucket = relation_args_by_relation_[relation_id];
+   if(instance.offset > bucket.size() or instance.size > bucket.size() - instance.offset) {
+      throw std::logic_error("FlatRelationSink relation instance range is invalid");
+   }
+   return std::span{bucket}.subspan(instance.offset, instance.size);
 }
 
 namespace {
@@ -126,7 +142,9 @@ build_flat_lgan(const FlatRelationSink& sink, std::span< const int64_t > anchor_
       for(size_t instance_idx = 0; instance_idx < instances.size(); ++instance_idx) {
          const int64_t global_relation_index = relation_offset
                                                + static_cast< int64_t >(instance_idx);
-         auto unique_entities = sorted_unique(std::span{instances[instance_idx]});
+         auto unique_entities = sorted_unique(
+            sink.relation_instance_args(relation_id, instances[instance_idx])
+         );
          entities_by_instance[static_cast< size_t >(global_relation_index)] = unique_entities;
          for(const auto entity_index : unique_entities) {
             relation_indices_by_entity[entity_index].insert(global_relation_index);

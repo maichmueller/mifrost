@@ -12,6 +12,11 @@ namespace mifrost {
 
 class FlatRelationSink {
   public:
+   struct RelationInstance {
+      size_t offset = 0;
+      size_t size = 0;
+   };
+
    explicit FlatRelationSink(size_t relation_count, bool track_relation_instances = false);
 
    void emit(int relation_id, std::span< const int64_t > args);
@@ -20,13 +25,15 @@ class FlatRelationSink {
    [[nodiscard]] const std::vector< int64_t >& relation_args() const;
    [[nodiscard]] int64_t relation_instance_count() const;
    [[nodiscard]] bool tracks_relation_instances() const;
-   [[nodiscard]] const std::vector< std::vector< std::vector< int64_t > > >&
+   [[nodiscard]] const std::vector< std::vector< RelationInstance > >&
    relation_instances_by_relation() const;
+   [[nodiscard]] std::span< const int64_t >
+   relation_instance_args(size_t relation_id, RelationInstance instance) const;
 
   private:
    std::vector< int64_t > relation_counts_;
    mutable std::vector< std::vector< int64_t > > relation_args_by_relation_;
-   std::vector< std::vector< std::vector< int64_t > > > relation_instances_by_relation_;
+   std::vector< std::vector< RelationInstance > > relation_instances_by_relation_;
    mutable std::vector< int64_t > relation_args_;
    mutable bool relation_args_dirty_ = false;
    bool track_relation_instances_ = false;

@@ -94,25 +94,31 @@ void validate_state(
    const std::vector< SemanticActionSpec >& actions
 )
 {
-   std::set< std::string, std::less<> > objects;
-   for(const auto& object : state.objects) {
+   const auto& objects = semantic_objects(state);
+   const auto& goals = semantic_goals(state);
+   const auto& static_facts = semantic_static_facts(state);
+   std::set< std::string, std::less<> > object_names;
+   for(const auto& object : objects) {
       if(object.empty()) {
          throw std::invalid_argument("SemanticTransitionDAG object name must not be empty");
       }
-      if(not objects.emplace(object).second) {
+      if(not object_names.emplace(object).second) {
          throw std::invalid_argument("SemanticTransitionDAG object names must be unique");
       }
    }
 
    for(const auto& atom : state.state_facts) {
-      validate_atom(atom, predicates, state.objects.size(), "state fact");
+      validate_atom(atom, predicates, objects.size(), "state fact");
    }
-   for(const auto& literal : state.goals) {
-      validate_atom(literal.atom, predicates, state.objects.size(), "goal literal");
+   for(const auto& atom : static_facts) {
+      validate_atom(atom, predicates, objects.size(), "static fact");
+   }
+   for(const auto& literal : goals) {
+      validate_atom(literal.atom, predicates, objects.size(), "goal literal");
    }
    for(const auto& layer : state.subgoal_layers) {
       for(const auto& literal : layer) {
-         validate_atom(literal.atom, predicates, state.objects.size(), "subgoal literal");
+         validate_atom(literal.atom, predicates, objects.size(), "subgoal literal");
       }
    }
    for(const auto& entry : state.history) {
@@ -120,14 +126,14 @@ void validate_state(
          throw std::invalid_argument("SemanticTransitionDAG history requires negative dt values");
       }
       for(const auto& literal : entry.literals) {
-         validate_atom(literal.atom, predicates, state.objects.size(), "history literal");
+         validate_atom(literal.atom, predicates, objects.size(), "history literal");
       }
    }
    if(state.history_max_steps.has_value() and *state.history_max_steps < 0) {
       throw std::invalid_argument("SemanticTransitionDAG history_max_steps must be non-negative");
    }
    for(const auto& action : state.actions) {
-      validate_action(action, actions, state.objects.size(), "state action");
+      validate_action(action, actions, objects.size(), "state action");
    }
 }
 
@@ -166,7 +172,8 @@ SemanticTransitionDAG::SemanticTransitionDAG(
       throw std::invalid_argument("SemanticTransitionDAG requires a nonempty node list");
    }
 
-   const auto& object_table = nodes_.front().state.objects;
+   const auto& root_state = nodes_.front().state;
+   const auto& object_table = semantic_objects(root_state);
    for(size_t index = 0; index < nodes_.size(); ++index) {
       const auto& node = nodes_[index];
       if(node.index != static_cast< int64_t >(index)) {
@@ -177,9 +184,19 @@ SemanticTransitionDAG::SemanticTransitionDAG(
       if(node.depth < 0) {
          throw std::invalid_argument("SemanticTransitionDAG node depth must be non-negative");
       }
-      if(node.state.objects != object_table) {
+      if(semantic_objects(node.state) != object_table) {
          throw std::invalid_argument(
             "SemanticTransitionDAG nodes require identical ordered object tables"
+         );
+      }
+      if(root_state.task_context and node.state.task_context != root_state.task_context) {
+         throw std::invalid_argument(
+            "SemanticTransitionDAG context-backed nodes must share one task context"
+         );
+      }
+      if(not root_state.task_context and node.state.task_context) {
+         throw std::invalid_argument(
+            "SemanticTransitionDAG cannot mix legacy and context-backed state inputs"
          );
       }
       if(node.display_name.has_value() and node.display_name->empty()) {

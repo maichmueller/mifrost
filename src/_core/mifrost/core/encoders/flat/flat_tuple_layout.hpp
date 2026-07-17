@@ -9,6 +9,7 @@
 #pragma once
 
 #include <array>
+#include <boost/container/small_vector.hpp>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
@@ -20,6 +21,9 @@
 #include "mifrost/core/encoders/common/target_source.hpp"
 
 namespace mifrost {
+
+/** Inline tuple storage for the common low-arity PDDL relation case. */
+using FlatTupleArguments = boost::container::small_vector< int64_t, 8 >;
 
 constexpr std::string_view kEntityRoleIdsField = "entity_role_ids";
 constexpr std::string_view kEntityRoleNamesAttr = "entity_role_names";
@@ -173,13 +177,13 @@ inline FlatTupleLayout make_nonpredicate_tuple_layout(
  * the optional predicate virtual node, followed by the original logical object
  * arguments in unchanged order.
  */
-inline std::vector< int64_t > build_flat_tuple_args(
+inline FlatTupleArguments build_flat_tuple_args(
    std::span< const int64_t > logical_args,
    std::span< const int64_t > auxiliary_args,
    std::optional< int64_t > predicate_virtual_index
 )
 {
-   std::vector< int64_t > out;
+   FlatTupleArguments out;
    out.reserve(
       auxiliary_args.size() + logical_args.size() + (predicate_virtual_index.has_value() ? 1U : 0U)
    );

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <functional>
 #include <map>
 #include <numeric>
 #include <ranges>
@@ -28,6 +29,17 @@
 namespace mifrost {
 
 namespace {
+
+const std::shared_ptr< const SemanticTaskContext >& require_task_context(
+   const std::shared_ptr< const SemanticTaskContext >& task_context,
+   std::string_view encoder_name
+)
+{
+   if(not task_context) {
+      throw std::invalid_argument(std::string(encoder_name) + " task context must not be null");
+   }
+   return task_context;
+}
 
 constexpr std::array< SemanticPredicateCategory, 3 > kCategoryOrder = {
    SemanticPredicateCategory::static_predicate,
@@ -204,12 +216,70 @@ struct GoalEntityKey {
    auto operator<=>(const GoalEntityKey&) const = default;
 };
 
+inline void mix_semantic_hash(size_t& value, int64_t part)
+{
+   value ^= std::hash< int64_t >{}(part) + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
+}
+
+struct SemanticAtomHash {
+   size_t operator()(const SemanticAtom& atom) const noexcept
+   {
+      size_t value = 0;
+      mix_semantic_hash(value, atom.predicate);
+      for(const auto argument : atom.arguments) {
+         mix_semantic_hash(value, argument);
+      }
+      return value;
+   }
+};
+
+struct SemanticLiteralHash {
+   size_t operator()(const SemanticLiteral& literal) const noexcept
+   {
+      size_t value = SemanticAtomHash{}(literal.atom);
+      mix_semantic_hash(value, literal.positive ? 1 : 0);
+      return value;
+   }
+};
+
+struct SemanticGroundActionHash {
+   size_t operator()(const SemanticGroundAction& action) const noexcept
+   {
+      size_t value = 0;
+      mix_semantic_hash(value, action.action);
+      for(const auto argument : action.arguments) {
+         mix_semantic_hash(value, argument);
+      }
+      return value;
+   }
+};
+
+struct GoalEntityKeyHash {
+   size_t operator()(const GoalEntityKey& key) const noexcept
+   {
+      size_t value = SemanticLiteralHash{}(key.literal);
+      mix_semantic_hash(value, static_cast< int64_t >(key.source));
+      mix_semantic_hash(value, static_cast< int64_t >(key.level));
+      return value;
+   }
+};
+
 struct HistoryEntityKey {
    int64_t dt = 0;
    size_t entry_index = 0;
    SemanticLiteral literal;
 
    auto operator<=>(const HistoryEntityKey&) const = default;
+};
+
+struct HistoryEntityKeyHash {
+   size_t operator()(const HistoryEntityKey& key) const noexcept
+   {
+      size_t value = SemanticLiteralHash{}(key.literal);
+      mix_semantic_hash(value, key.dt);
+      mix_semantic_hash(value, static_cast< int64_t >(key.entry_index));
+      return value;
+   }
 };
 
 struct PreparedHistoryEntry {
@@ -220,18 +290,19 @@ struct PreparedHistoryEntry {
 };
 
 struct SemanticEncodingContext {
+   int64_t entity_count = 0;
    std::vector< std::string > entity_names;
    std::vector< int64_t > entity_role_ids;
    std::vector< int64_t > object_indices;
-   std::map< int64_t, int64_t > predicate_entity_indices;
-   std::map< int64_t, int64_t > state_entity_indices;
+   std::vector< int64_t > predicate_entity_indices;
+   std::vector< int64_t > state_entity_indices;
    std::vector< int64_t > history_entity_indices;
    std::vector< int64_t > history_entity_dt;
    std::vector< int64_t > target_entity_indices;
    std::vector< int64_t > target_entity_group_ids;
-   std::map< GoalEntityKey, int64_t > goal_entity_indices;
-   std::map< SemanticGroundAction, int64_t > action_entity_indices;
-   std::map< HistoryEntityKey, int64_t > history_target_entity_indices;
+   hash_map< GoalEntityKey, int64_t, GoalEntityKeyHash > goal_entity_indices;
+   hash_map< SemanticGroundAction, int64_t, SemanticGroundActionHash > action_entity_indices;
+   hash_map< HistoryEntityKey, int64_t, HistoryEntityKeyHash > history_target_entity_indices;
    std::vector< SemanticGroundAction > unique_actions;
    std::vector< PreparedHistoryEntry > history_entries;
    TargetColumns target_columns;
@@ -253,29 +324,170 @@ bool split_full_state_relations(const SemanticFlatHorizonEncoderConfig& config)
 }  // namespace
 
 struct SemanticFlatRelationEncoderEngine::Impl {
+   struct GoalRelationIds {
+      std::array< std::array< int, 3 >, 2 > by_polarity = {
+         std::array< int, 3 >{-1, -1, -1},
+         std::array< int, 3 >{-1, -1, -1},
+      };
+   };
+   struct HorizonGoalRelationIds {
+      std::array< std::array< int, 5 >, 2 > root = {
+         std::array< int, 5 >{-1, -1, -1, -1, -1},
+         std::array< int, 5 >{-1, -1, -1, -1, -1},
+      };
+      std::array< std::array< int, 5 >, 2 > candidate = {
+         std::array< int, 5 >{-1, -1, -1, -1, -1},
+         std::array< int, 5 >{-1, -1, -1, -1, -1},
+      };
+   };
+
    Config config;
-   std::vector< SemanticPredicateSpec > predicates;
-   std::vector< SemanticActionSpec > actions;
+   std::shared_ptr< const SemanticTaskContext > task_context;
+   const std::vector< SemanticPredicateSpec >& predicates;
+   const std::vector< SemanticActionSpec >& actions;
    FlatRelationSchemaMetadata metadata;
    std::vector< std::string > target_entity_group_names;
    std::map< TargetSource, int64_t > target_entity_group_ids;
    std::vector< std::string > target_group_names;
    std::map< TargetSource, int64_t > target_group_ids;
+   std::vector< int > state_relation_ids;
+   std::vector< int > action_relation_ids;
+   std::vector< std::array< int, 2 > > history_relation_ids;
+   std::vector< std::vector< GoalRelationIds > > goal_relation_ids;
+   std::vector< int > horizon_state_relation_ids;
+   std::vector< int > horizon_state_anchored_relation_ids;
+   std::vector< int > horizon_action_relation_ids;
+   std::vector< std::array< int, 2 > > horizon_literal_relation_ids;
+   std::vector< std::vector< HorizonGoalRelationIds > > horizon_goal_relation_ids;
+   int horizon_parent_relation_id = -1;
+   int horizon_sibling_relation_id = -1;
+   int horizon_cousin_relation_id = -1;
 
    Impl(
       std::vector< SemanticPredicateSpec > predicate_specs,
       std::vector< SemanticActionSpec > action_specs,
       Config encoder_config
    )
+       : Impl(
+            std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+               .predicates = std::move(predicate_specs),
+               .actions = std::move(action_specs),
+            }),
+            std::move(encoder_config)
+         )
+   {
+   }
+
+   Impl(std::shared_ptr< const SemanticTaskContext > context, Config encoder_config)
        : config(std::move(encoder_config)),
-         predicates(std::move(predicate_specs)),
-         actions(std::move(action_specs))
+         task_context(require_task_context(context, "Semantic flat")),
+         predicates(task_context->predicates),
+         actions(task_context->actions)
    {
       validate_config();
       validate_unique_names(predicates, "predicate");
       validate_unique_names(actions, "action");
       build_groups();
       build_schema();
+      build_relation_ids();
+   }
+
+   static size_t goal_derivation_index(std::optional< GoalDerivation > derivation)
+   {
+      if(not derivation.has_value() or *derivation == GoalDerivation::plain) {
+         return 0;
+      }
+      if(*derivation == GoalDerivation::satisfied) {
+         return 1;
+      }
+      if(*derivation == GoalDerivation::unsatisfied) {
+         return 2;
+      }
+      throw std::invalid_argument("unsupported semantic Flat goal derivation");
+   }
+
+   static size_t horizon_goal_derivation_index(std::optional< GoalDerivation > derivation)
+   {
+      if(not derivation.has_value() or *derivation == GoalDerivation::plain) {
+         return 0;
+      }
+      switch(*derivation) {
+         case GoalDerivation::satisfied: return 1;
+         case GoalDerivation::unsatisfied: return 2;
+         case GoalDerivation::added_satisfied: return 3;
+         case GoalDerivation::added_unsatisfied: return 4;
+         case GoalDerivation::plain: break;
+      }
+      throw std::invalid_argument("unsupported semantic Flat Horizon goal derivation");
+   }
+
+   int relation_id_at_construction(std::string_view name) const
+   {
+      const auto it = metadata.relation_name_to_id.find(std::string(name));
+      if(it == metadata.relation_name_to_id.end()) {
+         throw std::invalid_argument("missing precomputed semantic Flat relation");
+      }
+      return it->second;
+   }
+
+   int optional_relation_id_at_construction(std::string_view name) const
+   {
+      const auto it = metadata.relation_name_to_id.find(std::string(name));
+      return it == metadata.relation_name_to_id.end() ? -1 : it->second;
+   }
+
+   int required_relation_id(int id) const
+   {
+      if(id < 0) {
+         throw std::invalid_argument("semantic Flat input requires a disabled relation");
+      }
+      return id;
+   }
+
+   void build_relation_ids()
+   {
+      state_relation_ids.assign(predicates.size(), -1);
+      history_relation_ids.assign(predicates.size(), std::array< int, 2 >{-1, -1});
+      goal_relation_ids.assign(
+         predicates.size(), std::vector< GoalRelationIds >(config.max_goal_level + 1)
+      );
+      for(size_t predicate_index = 0; predicate_index < predicates.size(); ++predicate_index) {
+         const auto& predicate = predicates[predicate_index];
+         if(config.ignore_zero_arity_relations and predicate.arity == 0) {
+            continue;
+         }
+         state_relation_ids[predicate_index] = relation_id_at_construction(predicate.name);
+         for(const bool positive : {false, true}) {
+            const auto polarity_index = positive ? size_t{1} : size_t{0};
+            history_relation_ids[predicate_index][polarity_index] = relation_id_at_construction(
+               goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt, "[hist]")
+            );
+            if(kTopTypePredicates.contains(predicate.name)) {
+               continue;
+            }
+            for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               for(const auto derivation : {
+                      std::optional< GoalDerivation >{},
+                      std::optional< GoalDerivation >{GoalDerivation::satisfied},
+                      std::optional< GoalDerivation >{GoalDerivation::unsatisfied},
+                   }) {
+                  const auto slot = goal_derivation_index(derivation);
+                  const auto name = goal_relation_name(predicate.name, positive, level, derivation);
+                  const auto it = metadata.relation_name_to_id.find(name);
+                  if(it != metadata.relation_name_to_id.end()) {
+                     goal_relation_ids[predicate_index][level]
+                        .by_polarity[polarity_index][slot] = it->second;
+                  }
+               }
+            }
+         }
+      }
+      action_relation_ids.resize(actions.size());
+      for(size_t action_index = 0; action_index < actions.size(); ++action_index) {
+         action_relation_ids[action_index] = relation_id_at_construction(
+            actions[action_index].name
+         );
+      }
    }
 
    void validate_config() const
@@ -587,6 +799,83 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          horizon.goal_derivations,
          "SemanticFlatHorizonEncoderEngine requires at least one relation"
       );
+      build_horizon_relation_ids(horizon);
+   }
+
+   void build_horizon_relation_ids(const SemanticFlatHorizonEncoderConfig& horizon)
+   {
+      const bool split_candidates = split_full_state_relations(horizon);
+      horizon_state_relation_ids.assign(predicates.size(), -1);
+      horizon_state_anchored_relation_ids.assign(predicates.size(), -1);
+      horizon_literal_relation_ids.assign(predicates.size(), std::array< int, 2 >{-1, -1});
+      horizon_goal_relation_ids.assign(
+         predicates.size(), std::vector< HorizonGoalRelationIds >(horizon.max_goal_level + 1)
+      );
+
+      for(size_t predicate_index = 0; predicate_index < predicates.size(); ++predicate_index) {
+         const auto& predicate = predicates[predicate_index];
+         const int state_id = relation_id_at_construction(predicate.name);
+         horizon_state_relation_ids[predicate_index] = state_id;
+         horizon_state_anchored_relation_ids
+            [predicate_index] = split_candidates ? relation_id_at_construction(
+                                                      state_anchored_relation_name(predicate.name)
+                                                   )
+                                                 : state_id;
+         if(kTopTypePredicates.contains(predicate.name)) {
+            continue;
+         }
+         for(const bool positive : {false, true}) {
+            const auto polarity = positive ? size_t{1} : size_t{0};
+            if(horizon.support_literals) {
+               horizon_literal_relation_ids
+                  [predicate_index][polarity] = optional_relation_id_at_construction(
+                     goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt)
+                  );
+            }
+            for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
+               auto& ids = horizon_goal_relation_ids[predicate_index][level];
+               for(const auto derivation : {
+                      std::optional< GoalDerivation >{},
+                      std::optional< GoalDerivation >{GoalDerivation::satisfied},
+                      std::optional< GoalDerivation >{GoalDerivation::unsatisfied},
+                      std::optional< GoalDerivation >{GoalDerivation::added_satisfied},
+                      std::optional< GoalDerivation >{GoalDerivation::added_unsatisfied},
+                   }) {
+                  const auto slot = horizon_goal_derivation_index(derivation);
+                  const auto relation = goal_relation_name(
+                     predicate.name, positive, level, derivation
+                  );
+                  const int root = optional_relation_id_at_construction(relation);
+                  ids.root[polarity][slot] = root;
+                  ids.candidate[polarity][slot] = root;
+                  if(split_candidates
+                     and (derivation == GoalDerivation::satisfied or derivation == GoalDerivation::unsatisfied)) {
+                     ids.candidate[polarity][slot] = optional_relation_id_at_construction(
+                        state_anchored_relation_name(relation)
+                     );
+                  }
+               }
+            }
+         }
+      }
+
+      horizon_action_relation_ids.assign(actions.size(), -1);
+      if(not horizon.ignore_actions) {
+         for(size_t action_index = 0; action_index < actions.size(); ++action_index) {
+            horizon_action_relation_ids[action_index] = relation_id_at_construction(
+               actions[action_index].name
+            );
+         }
+      }
+      horizon_parent_relation_id = horizon.enable_parent_relation
+                                      ? relation_id_at_construction(horizon.parent_relation)
+                                      : -1;
+      horizon_sibling_relation_id = horizon.enable_sibling_relation
+                                       ? relation_id_at_construction(horizon.sibling_relation)
+                                       : -1;
+      horizon_cousin_relation_id = horizon.enable_cousin_relation
+                                      ? relation_id_at_construction(horizon.cousin_relation)
+                                      : -1;
    }
 
    void prepare_horizon_builder(
@@ -715,25 +1004,31 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    void validate_input(const SemanticFlatRelationInput& input) const
    {
+      const auto& objects = semantic_objects(input);
+      const auto& goals = semantic_goals(input);
+      const auto& static_facts = semantic_static_facts(input);
       std::set< std::string, std::less<> > object_names;
-      for(const auto& object : input.objects) {
+      for(const auto& object : objects) {
          validate_name(object, "object");
          if(not object_names.emplace(object).second) {
             throw std::invalid_argument("Semantic flat object names must be unique");
          }
       }
       for(const auto& fact : input.state_facts) {
-         validate_atom(fact, input.objects.size(), "state fact");
+         validate_atom(fact, objects.size(), "state fact");
       }
-      for(const auto& goal : input.goals) {
-         validate_atom(goal.atom, input.objects.size(), "goal");
+      for(const auto& fact : static_facts) {
+         validate_atom(fact, objects.size(), "static fact");
+      }
+      for(const auto& goal : goals) {
+         validate_atom(goal.atom, objects.size(), "goal");
       }
       if(input.subgoal_layers.size() > config.max_goal_level) {
          throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
       }
       for(const auto& layer : input.subgoal_layers) {
          for(const auto& goal : layer) {
-            validate_atom(goal.atom, input.objects.size(), "subgoal");
+            validate_atom(goal.atom, objects.size(), "subgoal");
          }
       }
       for(const auto& action : input.actions) {
@@ -745,7 +1040,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             throw std::invalid_argument("Semantic flat ground action arity mismatch");
          }
          for(const int64_t object : action.arguments) {
-            if(object < 0 or static_cast< size_t >(object) >= input.objects.size()) {
+            if(object < 0 or static_cast< size_t >(object) >= objects.size()) {
                throw std::invalid_argument("Semantic flat action object index out of range");
             }
          }
@@ -755,36 +1050,32 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             throw std::invalid_argument("Semantic flat history requires negative dt values");
          }
          for(const auto& literal : entry.literals) {
-            validate_atom(literal.atom, input.objects.size(), "history literal");
+            validate_atom(literal.atom, objects.size(), "history literal");
          }
       }
    }
 
-   int relation_id(std::string_view name) const
-   {
-      const auto it = metadata.relation_name_to_id.find(std::string(name));
-      if(it == metadata.relation_name_to_id.end()) {
-         throw std::invalid_argument("Unknown semantic flat relation '" + std::string(name) + "'");
-      }
-      return it->second;
-   }
-
    int64_t ensure_predicate_entity(SemanticEncodingContext& context, int64_t predicate) const
    {
-      if(const auto it = context.predicate_entity_indices.find(predicate);
-         it != context.predicate_entity_indices.end()) {
-         return it->second;
+      if(predicate < 0 or static_cast< size_t >(predicate) >= predicates.size()) {
+         throw std::invalid_argument("semantic Flat predicate entity index out of range");
       }
-      const int64_t index = static_cast< int64_t >(context.entity_names.size());
-      context.predicate_entity_indices.emplace(predicate, index);
-      context.entity_names.emplace_back(
-         "predicate:" + predicates.at(static_cast< size_t >(predicate)).name
-      );
+      auto& existing = context.predicate_entity_indices[static_cast< size_t >(predicate)];
+      if(existing >= 0) {
+         return existing;
+      }
+      const int64_t index = context.entity_count++;
+      existing = index;
+      if(config.export_node_names) {
+         context.entity_names.emplace_back(
+            "predicate:" + predicates.at(static_cast< size_t >(predicate)).name
+         );
+      }
       context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::predicate_virtual));
       return index;
    }
 
-   std::vector< int64_t > tuple_args(
+   FlatTupleArguments tuple_args(
       SemanticEncodingContext& context,
       const SemanticAtom& atom,
       std::span< const int64_t > auxiliary = {}
@@ -816,7 +1107,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             .name = std::move(display_name),
          },
          false,
-         true
+         true,
+         config.export_node_names
       );
    }
 
@@ -836,9 +1128,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          return it->second;
       }
       inserted = true;
-      const int64_t index = static_cast< int64_t >(context.entity_names.size());
+      const int64_t index = context.entity_count++;
       indices.emplace(std::move(key), index);
-      context.entity_names.push_back(display_name);
+      if(config.export_node_names) {
+         context.entity_names.push_back(display_name);
+      }
       context.entity_role_ids.push_back(static_cast< int64_t >(role));
       context.target_entity_indices.push_back(index);
       context.target_entity_group_ids.push_back(target_entity_group_ids.at(source));
@@ -848,16 +1142,21 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    SemanticEncodingContext make_context(
       const SemanticFlatRelationInput& input,
       const std::vector< SemanticLiteral >& grouped_goals,
-      const std::map< SemanticLiteral, size_t >& goal_levels
+      const std::vector< SemanticGoalLevel >& goal_levels
    ) const
    {
       SemanticEncodingContext context;
-      context.entity_names = input.objects;
+      const auto& objects = semantic_objects(input);
+      context.entity_count = static_cast< int64_t >(objects.size());
+      if(config.export_node_names) {
+         context.entity_names = objects;
+      }
       context.entity_role_ids.assign(
-         input.objects.size(), static_cast< int64_t >(FlatEntityRole::object)
+         objects.size(), static_cast< int64_t >(FlatEntityRole::object)
       );
-      context.object_indices.resize(input.objects.size());
+      context.object_indices.resize(objects.size());
       std::iota(context.object_indices.begin(), context.object_indices.end(), int64_t{0});
+      context.predicate_entity_indices.assign(predicates.size(), -1);
 
       for(const auto source : {TargetSource::goals, TargetSource::subgoals}) {
          if(not has_anchor_entity_source(config, source)) {
@@ -868,12 +1167,14 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             if(config.ignore_zero_arity_relations and predicate.arity == 0) {
                continue;
             }
-            const size_t level = goal_levels.at(literal);
+            const size_t level = semantic_goal_level(goal_levels, literal);
             if((source == TargetSource::goals and level > 0)
                or (source == TargetSource::subgoals and level == 0)) {
                continue;
             }
-            const auto display = goal_display_name(literal, level, predicates, input.objects);
+            const auto display = config.export_node_names
+                                    ? goal_display_name(literal, level, predicates, objects)
+                                    : std::string{};
             bool inserted = false;
             const auto key = GoalEntityKey{source, literal, level};
             const int64_t position = ensure_target_entity(
@@ -892,7 +1193,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
 
       for(const auto& action : input.actions) {
-         const auto display = action_display_name(action, actions, input.objects);
+         const auto display = config.export_node_names
+                                 ? action_display_name(action, actions, objects)
+                                 : std::string{};
          bool inserted = false;
          const int64_t position = ensure_target_entity(
             context,
@@ -928,10 +1231,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       for(size_t idx = 0; idx < context.history_entries.size(); ++idx) {
          auto& entry = context.history_entries[idx];
          entry.entry_index = idx;
-         entry.entity_index = static_cast< int64_t >(context.entity_names.size());
-         context.entity_names.push_back(
-            "history:" + std::to_string(entry.dt) + "#" + std::to_string(idx)
-         );
+         entry.entity_index = context.entity_count++;
+         if(config.export_node_names) {
+            context.entity_names.push_back(
+               "history:" + std::to_string(entry.dt) + "#" + std::to_string(idx)
+            );
+         }
          context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::history));
          context.history_entity_indices.push_back(entry.entity_index);
          context.history_entity_dt.push_back(entry.dt);
@@ -944,10 +1249,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                if(config.ignore_zero_arity_relations and predicate.arity == 0) {
                   continue;
                }
-               const auto display = "history:" + std::to_string(entry.dt) + "#"
-                                    + std::to_string(entry.entry_index) + ":"
-                                    + std::string(literal.positive ? "[+]" : "[-]")
-                                    + atom_display_name(literal.atom, predicates, input.objects);
+               const auto display = config.export_node_names
+                                       ? "history:" + std::to_string(entry.dt) + "#"
+                                            + std::to_string(entry.entry_index) + ":"
+                                            + std::string(literal.positive ? "[+]" : "[-]")
+                                            + atom_display_name(literal.atom, predicates, objects)
+                                       : std::string{};
                const auto key = HistoryEntityKey{entry.dt, entry.entry_index, literal};
                bool inserted = false;
                const int64_t position = ensure_target_entity(
@@ -975,16 +1282,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    ) const
    {
       validate_input(input);
+      const auto& objects = semantic_objects(input);
+      const auto& goals = semantic_goals(input);
+      const auto& static_facts = semantic_static_facts(input);
 
-      std::map< SemanticLiteral, size_t > goal_levels;
-      for(const auto& literal : input.goals) {
-         goal_levels[literal] = 0;
-      }
-      for(size_t layer = 0; layer < input.subgoal_layers.size(); ++layer) {
-         for(const auto& literal : input.subgoal_layers[layer]) {
-            goal_levels[literal] = layer + 1;
-         }
-      }
+      const auto goal_levels = semantic_goal_levels(input);
       std::vector< SemanticLiteral > grouped_goals;
       for(const auto category : kCategoryOrder) {
          auto append_category = [&](const std::vector< SemanticLiteral >& literals) {
@@ -995,7 +1297,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                }
             }
          };
-         append_category(input.goals);
+         append_category(goals);
          for(const auto& layer : input.subgoal_layers) {
             append_category(layer);
          }
@@ -1003,28 +1305,29 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       auto context = make_context(input, grouped_goals, goal_levels);
       FlatRelationSink sink(metadata.relation_names.size(), config.include_lgan_edges);
-      auto emit = [&](
-                     std::string_view name,
-                     const SemanticAtom& atom,
-                     std::span< const int64_t > auxiliary = {}
-                  ) {
-         const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
-         if(config.ignore_zero_arity_relations and predicate.arity == 0) {
-            return;
-         }
-         const auto args = tuple_args(context, atom, auxiliary);
-         sink.emit(relation_id(name), args);
-      };
+      auto emit =
+         [&](int relation_id, const SemanticAtom& atom, std::span< const int64_t > auxiliary = {}) {
+            const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
+            if(config.ignore_zero_arity_relations and predicate.arity == 0) {
+               return;
+            }
+            const auto args = tuple_args(context, atom, auxiliary);
+            sink.emit(required_relation_id(relation_id), args);
+         };
 
       std::set< SemanticAtom > fact_keys;
-      for(const auto& fact : input.state_facts) {
-         const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
-         if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
-            continue;
+      const auto append_facts = [&](const std::vector< SemanticAtom >& facts, bool emit_facts) {
+         for(const auto& fact : facts) {
+            const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
+            if(emit_facts
+               and (category != SemanticPredicateCategory::static_predicate or config.include_static)) {
+               emit(state_relation_ids.at(static_cast< size_t >(fact.predicate)), fact);
+            }
+            fact_keys.emplace(fact);
          }
-         emit(predicates.at(static_cast< size_t >(fact.predicate)).name, fact);
-         fact_keys.emplace(fact);
-      }
+      };
+      append_facts(static_facts, config.include_static);
+      append_facts(input.state_facts, true);
 
       for(const auto& literal : grouped_goals) {
          const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
@@ -1032,7 +1335,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
             continue;
          }
-         const size_t level = goal_levels.at(literal);
+         const size_t level = semantic_goal_level(goal_levels, literal);
          if(config.goal_derivations.contains(GoalDerivation::plain)) {
             std::array< int64_t, 1 > auxiliary{};
             std::span< const int64_t > auxiliary_span;
@@ -1043,7 +1346,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                auxiliary_span = std::span{auxiliary};
             }
             emit(
-               goal_relation_name(predicate.name, literal.positive, level, std::nullopt),
+               goal_relation_ids.at(static_cast< size_t >(literal.atom.predicate))
+                  .at(level)
+                  .by_polarity[literal.positive ? 1 : 0][goal_derivation_index(std::nullopt)],
                literal.atom,
                auxiliary_span
             );
@@ -1053,17 +1358,22 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                                            : GoalDerivation::unsatisfied;
          if(config.goal_derivations.contains(derivation)) {
             emit(
-               goal_relation_name(predicate.name, literal.positive, level, derivation), literal.atom
+               goal_relation_ids.at(static_cast< size_t >(literal.atom.predicate))
+                  .at(level)
+                  .by_polarity[literal.positive ? 1 : 0][goal_derivation_index(derivation)],
+               literal.atom
             );
          }
       }
 
       for(const auto& action : context.unique_actions) {
-         std::vector< int64_t > args;
+         FlatTupleArguments args;
          args.reserve(action.arguments.size() + 1);
          args.push_back(context.action_entity_indices.at(action));
          args.insert(args.end(), action.arguments.begin(), action.arguments.end());
-         sink.emit(relation_id(actions.at(static_cast< size_t >(action.action)).name), args);
+         sink.emit(
+            required_relation_id(action_relation_ids.at(static_cast< size_t >(action.action))), args
+         );
       }
 
       for(const auto& entry : context.history_entries) {
@@ -1085,23 +1395,23 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                auxiliary_span = std::span{auxiliary}.first(1);
             }
             emit(
-               goal_relation_name(
-                  predicate.name, literal.positive, std::nullopt, std::nullopt, "[hist]"
-               ),
+               history_relation_ids.at(
+                  static_cast< size_t >(literal.atom.predicate)
+               )[literal.positive ? 1 : 0],
                literal.atom,
                auxiliary_span
             );
          }
       }
 
-      std::vector< float > zeros(context.entity_names.size(), 0.0F);
+      std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
       builder.add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
       if(config.export_node_names) {
          builder.set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
-         builder.set_object_names(input.objects);
+         builder.set_object_names(objects);
       }
 
-      const int64_t node_size = static_cast< int64_t >(context.entity_names.size());
+      const int64_t node_size = context.entity_count;
       const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
       const int64_t history_size = static_cast< int64_t >(context.history_entity_indices.size());
       const int64_t target_entity_size = static_cast< int64_t >(
@@ -1202,6 +1512,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          );
       }
       const auto& root = dag.root().state;
+      const auto& root_objects = semantic_objects(root);
+      const auto& root_goals = semantic_goals(root);
       if(root.subgoal_layers.size() > horizon.max_goal_level) {
          throw std::invalid_argument(
             "Semantic flat Horizon subgoal layer count exceeds max_goal_level"
@@ -1209,21 +1521,29 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
 
       SemanticEncodingContext context;
-      context.entity_names = root.objects;
+      context.entity_count = static_cast< int64_t >(root_objects.size());
+      if(horizon.export_node_names) {
+         context.entity_names = root_objects;
+      }
       context.entity_role_ids.assign(
-         root.objects.size(), static_cast< int64_t >(FlatEntityRole::object)
+         root_objects.size(), static_cast< int64_t >(FlatEntityRole::object)
       );
-      context.object_indices.resize(root.objects.size());
+      context.object_indices.resize(root_objects.size());
       std::iota(context.object_indices.begin(), context.object_indices.end(), int64_t{0});
+      context.predicate_entity_indices.assign(predicates.size(), -1);
+      context.state_entity_indices.assign(dag.nodes().size(), -1);
 
       std::vector< TargetCandidateRow > target_rows;
       for(const auto& node : dag.nodes()) {
-         const int64_t position = static_cast< int64_t >(context.entity_names.size());
-         context.state_entity_indices.emplace(node.index, position);
+         const int64_t position = context.entity_count++;
+         context.state_entity_indices.at(static_cast< size_t >(node.index)) = position;
          const bool public_root = root_in_public_carrier(horizon.root_policy) or node.index != 0;
-         context.entity_names.push_back(
-            public_root ? horizon.target_symbol_prefix + std::to_string(node.index) : "_root_state_"
-         );
+         if(horizon.export_node_names) {
+            context.entity_names.push_back(
+               public_root ? horizon.target_symbol_prefix + std::to_string(node.index)
+                           : "_root_state_"
+            );
+         }
          context.entity_role_ids.push_back(static_cast< int64_t >(FlatEntityRole::state));
          if(not root_in_target_metadata(horizon.root_policy) and node.index == 0) {
             continue;
@@ -1237,7 +1557,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                .candidate_id = node.candidate_id,
                .depth = node.depth,
                .group_id = int64_t{0},
-               .name = node.display_name.value_or("state:" + std::to_string(node.index)),
+               .name = horizon.export_node_names
+                          ? node.display_name.value_or("state:" + std::to_string(node.index))
+                          : std::string{},
             }
          );
       }
@@ -1247,20 +1569,13 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          TargetCandidateAppendConfig{
             .include_depth = true,
             .include_group = true,
+            .include_names = horizon.export_node_names,
             .missing_candidate_id_prefix = "missing candidate_id for target node index ",
             .duplicate_candidate_id_prefix = "duplicate candidate_id ",
          }
       );
 
-      std::map< SemanticLiteral, size_t > goal_levels;
-      for(const auto& literal : root.goals) {
-         goal_levels[literal] = 0;
-      }
-      for(size_t layer = 0; layer < root.subgoal_layers.size(); ++layer) {
-         for(const auto& literal : root.subgoal_layers[layer]) {
-            goal_levels[literal] = layer + 1;
-         }
-      }
+      const auto goal_levels = semantic_goal_levels(root);
       std::vector< SemanticLiteral > goals;
       for(const auto category : kCategoryOrder) {
          auto append_category = [&](const std::vector< SemanticLiteral >& literals) {
@@ -1271,7 +1586,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                }
             }
          };
-         append_category(root.goals);
+         append_category(root_goals);
          for(const auto& layer : root.subgoal_layers) {
             append_category(layer);
          }
@@ -1279,17 +1594,18 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       FlatRelationSink sink(metadata.relation_names.size(), horizon.include_lgan_edges);
       auto state_position = [&](int64_t node_index) {
-         const auto it = context.state_entity_indices.find(node_index);
-         if(it == context.state_entity_indices.end()) {
+         if(node_index < 0
+            or static_cast< size_t >(node_index) >= context.state_entity_indices.size()
+            or context.state_entity_indices[static_cast< size_t >(node_index)] < 0) {
             throw std::invalid_argument(
                "Semantic flat Horizon encountered missing state carrier for node index "
                + std::to_string(node_index)
             );
          }
-         return it->second;
+         return context.state_entity_indices[static_cast< size_t >(node_index)];
       };
       auto emit_atom = [&](
-                          std::string relation,
+                          int relation_id,
                           const SemanticAtom& atom,
                           std::optional< int64_t > state_anchor = std::nullopt
                        ) {
@@ -1299,7 +1615,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
          const std::array< int64_t, 1 > auxiliary = {state_anchor.value_or(0)};
          sink.emit(
-            relation_id(relation),
+            required_relation_id(relation_id),
             tuple_args(
                context,
                atom,
@@ -1316,22 +1632,28 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          std::set< SemanticAtom > facts;
          const auto anchor = include_anchor ? std::optional(state_position(node_index))
                                             : std::nullopt;
-         for(const auto& atom : input.state_facts) {
-            const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
-            if(predicate.category == SemanticPredicateCategory::static_predicate
-               and not include_static) {
-               continue;
+         const auto append_facts = [&](const std::vector< SemanticAtom >& atoms) {
+            for(const auto& atom : atoms) {
+               const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
+               if(predicate.category == SemanticPredicateCategory::static_predicate
+                  and not include_static) {
+                  continue;
+               }
+               if(horizon.ignore_zero_arity_relations and predicate.arity == 0) {
+                  continue;
+               }
+               const auto predicate_index = static_cast< size_t >(atom.predicate);
+               emit_atom(
+                  anchor.has_value() ? horizon_state_anchored_relation_ids.at(predicate_index)
+                                     : horizon_state_relation_ids.at(predicate_index),
+                  atom,
+                  anchor
+               );
+               facts.insert(atom);
             }
-            if(horizon.ignore_zero_arity_relations and predicate.arity == 0) {
-               continue;
-            }
-            auto relation = predicate.name;
-            if(anchor.has_value() and split_full_state_relations(horizon)) {
-               relation = state_anchored_relation_name(relation);
-            }
-            emit_atom(std::move(relation), atom, anchor);
-            facts.insert(atom);
-         }
+         };
+         append_facts(semantic_static_facts(input));
+         append_facts(input.state_facts);
          return facts;
       };
       auto emit_goal = [&](
@@ -1346,19 +1668,20 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             or (horizon.ignore_zero_arity_relations and predicate.arity == 0)) {
             return;
          }
-         auto relation = goal_relation_name(predicate.name, literal.positive, level, derivation);
          const auto anchor = include_anchor ? std::optional(state_position(node_index))
                                             : std::nullopt;
-         if(anchor.has_value() and split_full_state_relations(horizon)) {
-            relation = state_anchored_relation_name(relation);
-         }
-         emit_atom(std::move(relation), literal.atom, anchor);
+         const auto& ids = horizon_goal_relation_ids
+                              .at(static_cast< size_t >(literal.atom.predicate))
+                              .at(level);
+         const auto relation_id = (anchor.has_value() ? ids.candidate : ids.root)
+            [literal.positive ? 1 : 0][horizon_goal_derivation_index(derivation)];
+         emit_atom(relation_id, literal.atom, anchor);
       };
 
       const bool root_anchor = root_in_state_relations(horizon.root_policy);
       const auto root_facts = emit_state(root, 0, horizon.include_static, root_anchor);
       for(const auto& literal : goals) {
-         const size_t level = goal_levels.at(literal);
+         const size_t level = semantic_goal_level(goal_levels, literal);
          if(horizon.goal_derivations.contains(GoalDerivation::plain)) {
             emit_goal(literal, level, 0, root_anchor, std::nullopt);
          }
@@ -1371,22 +1694,29 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
 
       auto emit_action = [&](const SemanticGroundAction& action, int64_t node_index) {
-         const auto& spec = actions.at(static_cast< size_t >(action.action));
-         std::vector< int64_t > args;
+         FlatTupleArguments args;
          args.reserve(action.arguments.size() + 1);
          args.push_back(state_position(node_index));
          args.insert(args.end(), action.arguments.begin(), action.arguments.end());
-         sink.emit(relation_id(spec.name), args);
+         sink.emit(
+            required_relation_id(
+               horizon_action_relation_ids.at(static_cast< size_t >(action.action))
+            ),
+            args
+         );
       };
       auto emit_delta = [&](const SemanticLiteral& literal, int64_t node_index) {
          const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
          if(horizon.ignore_zero_arity_relations and predicate.arity == 0) {
             return;
          }
-         auto relation = goal_relation_name(
-            predicate.name, literal.positive, std::nullopt, std::nullopt
+         emit_atom(
+            horizon_literal_relation_ids.at(
+               static_cast< size_t >(literal.atom.predicate)
+            )[literal.positive ? 1 : 0],
+            literal.atom,
+            state_position(node_index)
          );
-         emit_atom(std::move(relation), literal.atom, state_position(node_index));
       };
       auto emit_delta_satisfaction = [&](
                                         const SemanticLiteral& goal,
@@ -1431,7 +1761,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                const auto derivation = satisfied ? GoalDerivation::satisfied
                                                  : GoalDerivation::unsatisfied;
                if(horizon.goal_derivations.contains(derivation)) {
-                  emit_goal(goal, goal_levels.at(goal), node.index, true, derivation);
+                  emit_goal(
+                     goal, semantic_goal_level(goal_levels, goal), node.index, true, derivation
+                  );
                }
             }
             continue;
@@ -1505,11 +1837,19 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                                      .category;
             if(category == SemanticPredicateCategory::fluent) {
                emit_delta_satisfaction(
-                  goal, goal_levels.at(goal), added_fluent, removed_fluent, node.index
+                  goal,
+                  semantic_goal_level(goal_levels, goal),
+                  added_fluent,
+                  removed_fluent,
+                  node.index
                );
             } else if(category == SemanticPredicateCategory::derived) {
                emit_delta_satisfaction(
-                  goal, goal_levels.at(goal), added_derived, removed_derived, node.index
+                  goal,
+                  semantic_goal_level(goal_levels, goal),
+                  added_derived,
+                  removed_derived,
+                  node.index
                );
             }
          }
@@ -1522,56 +1862,58 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                continue;
             }
             const std::array< int64_t, 2 > args = {state_position(parent), state_position(child)};
-            sink.emit(relation_id(horizon.parent_relation), args);
+            sink.emit(required_relation_id(horizon_parent_relation_id), args);
          }
       }
-      std::map< int64_t, std::vector< int64_t > > children;
+      std::vector< std::vector< int64_t > > children(dag.nodes().size());
       for(const auto& [parent, child] : dag.edges()) {
          if(not exclude_root_topology or parent != 0) {
-            children[parent].push_back(child);
+            children[static_cast< size_t >(parent)].push_back(child);
          }
       }
-      auto emit_pair = [&](const std::string& relation, int64_t source, int64_t target) {
+      auto emit_pair = [&](int relation_id, int64_t source, int64_t target) {
          const std::array< int64_t, 2 > args = {state_position(source), state_position(target)};
-         sink.emit(relation_id(relation), args);
+         sink.emit(required_relation_id(relation_id), args);
       };
-      std::set< std::pair< int64_t, int64_t > > siblings;
+      struct PairHash {
+         size_t operator()(const std::pair< int64_t, int64_t >& value) const noexcept
+         {
+            return std::hash< int64_t >{}(value.first)
+                   ^ (std::hash< int64_t >{}(value.second) << 1);
+         }
+      };
+      hash_set< std::pair< int64_t, int64_t >, PairHash > siblings;
       if(horizon.enable_sibling_relation) {
-         for(auto& [parent, values] : children) {
-            (void) parent;
+         for(auto& values : children) {
             std::ranges::sort(values);
             for(size_t lhs = 0; lhs < values.size(); ++lhs) {
                for(size_t rhs = lhs + 1; rhs < values.size(); ++rhs) {
                   if(siblings.emplace(values[lhs], values[rhs]).second) {
-                     emit_pair(horizon.sibling_relation, values[lhs], values[rhs]);
-                     emit_pair(horizon.sibling_relation, values[rhs], values[lhs]);
+                     emit_pair(horizon_sibling_relation_id, values[lhs], values[rhs]);
+                     emit_pair(horizon_sibling_relation_id, values[rhs], values[lhs]);
                   }
                }
             }
          }
       }
       if(horizon.enable_cousin_relation) {
-         std::set< std::pair< int64_t, int64_t > > cousins;
-         for(const auto& [ancestor, parents] : children) {
-            (void) ancestor;
+         hash_set< std::pair< int64_t, int64_t >, PairHash > cousins;
+         for(const auto& parents : children) {
             for(size_t lhs = 0; lhs < parents.size(); ++lhs) {
                for(size_t rhs = lhs + 1; rhs < parents.size(); ++rhs) {
-                  const auto left = children.find(parents[lhs]);
-                  const auto right = children.find(parents[rhs]);
-                  if(left == children.end() or right == children.end()) {
-                     continue;
-                  }
-                  for(const auto u : left->second) {
-                     for(const auto v : right->second) {
+                  const auto& left = children.at(static_cast< size_t >(parents[lhs]));
+                  const auto& right = children.at(static_cast< size_t >(parents[rhs]));
+                  for(const auto u : left) {
+                     for(const auto v : right) {
                         if(u == v) {
                            continue;
                         }
                         const auto pair = std::minmax(u, v);
-                        if(siblings.contains(pair) or not cousins.insert(pair).second) {
+                        if(siblings.contains(pair) or not cousins.emplace(pair).second) {
                            continue;
                         }
-                        emit_pair(horizon.cousin_relation, u, v);
-                        emit_pair(horizon.cousin_relation, v, u);
+                        emit_pair(horizon_cousin_relation_id, u, v);
+                        emit_pair(horizon_cousin_relation_id, v, u);
                      }
                   }
                }
@@ -1579,13 +1921,13 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
 
-      std::vector< float > zeros(context.entity_names.size(), 0.0F);
+      std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
       builder.add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
       if(horizon.export_node_names) {
          builder.set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
-         builder.set_object_names(root.objects);
+         builder.set_object_names(root_objects);
       }
-      const int64_t node_size = static_cast< int64_t >(context.entity_names.size());
+      const int64_t node_size = context.entity_count;
       const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
       const int64_t target_entity_size = static_cast< int64_t >(
          context.target_entity_indices.size()
@@ -1734,6 +2076,14 @@ SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
 }
 
 SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
+   std::shared_ptr< const SemanticTaskContext > task_context,
+   Config config
+)
+    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
+{
+}
+
+SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
    SemanticFlatRelationEncoderEngine&&
 ) noexcept = default;
 
@@ -1776,6 +2126,12 @@ const SemanticFlatRelationEncoderEngine::Config&
 SemanticFlatRelationEncoderEngine::get_config() const
 {
    return impl_->config;
+}
+
+const std::shared_ptr< const SemanticTaskContext >&
+SemanticFlatRelationEncoderEngine::get_task_context() const
+{
+   return impl_->task_context;
 }
 
 const std::vector< SemanticPredicateSpec >&
