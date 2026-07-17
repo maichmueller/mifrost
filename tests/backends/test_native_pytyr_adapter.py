@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -273,6 +274,85 @@ def test_native_pytyr_context_survives_adapter_and_omits_node_names() -> None:
     assert input_value.objects == []
     assert input_value.goals == []
     assert "node_names" not in payload
+
+
+def test_native_pytyr_adapter_converts_successor_states_lazily() -> None:
+    """Regression test for the adapter's ground-atom cache.
+
+    The adapter's static/fluent atom cache is seeded once, at construction,
+    from the task-owned atom enumeration reachable from the initial state and
+    goal. Lifted successor generation grounds further fluent atoms lazily as
+    new states are discovered, so a state several transitions away from the
+    root can contain atoms the adapter has never seen. Those atoms must
+    convert via a cache-miss-computes-and-memoizes path, not raise "outside
+    the adapter task context" (see semantic_flat_encoder.cpp cached_atom).
+    """
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    root = successor_generator.get_initial_node()
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    config = _config()
+    engine = adapter.make_flat_engine(config)
+
+    # Build the adapter and encode the root before any successor exists, so
+    # its atom cache only contains what's reachable from the initial state
+    # and goal, matching the construction-time enumeration exactly.
+    assert engine.encode(adapter.make_input(root.get_state())).num_graphs == 1
+
+    frontier = [root]
+    visited_states = 0
+    for _ in range(3):
+        next_frontier = []
+        for node in frontier:
+            for labeled in successor_generator.get_labeled_successor_nodes(node):
+                state = labeled.node.get_state()
+                # Previously raised ValueError("... outside the adapter task
+                # context") for fluent atoms first grounded by this
+                # successor, since the adapter's cache was immutable after
+                # construction.
+                input_value = adapter.make_input(state, [labeled.label])
+                assert engine.encode(input_value).num_graphs == 1
+                visited_states += 1
+                next_frontier.append(labeled.node)
+        frontier = next_frontier
+        if not frontier:
+            break
+    assert visited_states > 0
+
+
+def test_native_pytyr_adapter_atom_cache_survives_concurrent_python_calls() -> None:
+    """One adapter's lazily-grown atom cache must not corrupt under threads.
+
+    cached_atom() in semantic_flat_encoder.cpp mutates a per-adapter dense
+    cache on a first sighting of a ground atom (see
+    test_native_pytyr_adapter_converts_successor_states_lazily). That
+    mutation is unsynchronized and only safe because pytyr_module.cpp never
+    releases the GIL around adapter calls, so concurrent Python threads
+    calling into one adapter are already serialized. This drives many
+    threads through make_input for a set of successor states that all miss
+    the cache on first use, so a future binding change that adds
+    gil_scoped_release here without adding synchronization would show up as
+    a crash, a wrong/torn SemanticAtom, or a mismatched encoding below.
+    """
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    root = successor_generator.get_initial_node()
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    engine = adapter.make_flat_engine(_config())
+
+    successors = [
+        (labeled.label, labeled.node.get_state())
+        for labeled in successor_generator.get_labeled_successor_nodes(root)
+    ]
+    assert successors
+
+    def convert(pair: tuple[Any, Any]) -> int:
+        action, state = pair
+        input_value = adapter.make_input(state, [action])
+        return engine.encode(input_value).num_graphs
+
+    states = successors * 8
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(convert, states))
+    assert results == [1] * len(states)
 
 
 def test_native_backends_remain_independent_when_interleaved() -> None:
