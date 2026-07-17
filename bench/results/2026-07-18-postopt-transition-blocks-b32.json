@@ -1,0 +1,536 @@
+{
+  "created_at": "2026-07-17T23:18:29.425925+00:00",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "python": "3.12.12",
+  "mifrost_version": "unknown",
+  "modules": {
+    "mifrost": "/Users/maichmueller/GitHub/bifrost/src/mifrost/__init__.py",
+    "neutral_core": "/Users/maichmueller/GitHub/bifrost/src/mifrost/_neutral_core.cpython-312-darwin.so",
+    "pymimir_adapter": "/Users/maichmueller/GitHub/bifrost/src/mifrost/_pymimir_adapter.cpython-312-darwin.so",
+    "pytyr_adapter": "/Users/maichmueller/GitHub/bifrost/src/mifrost/_pytyr_adapter.cpython-312-darwin.so"
+  },
+  "process": {
+    "pid": 96767,
+    "maximum_resident_set_size": 493436928
+  },
+  "domain": "blocks",
+  "problem": "smedium",
+  "batch_size": 32,
+  "max_states": 64,
+  "warmup": 5,
+  "repeats": 20,
+  "round_count": 3,
+  "transition_pool_sizes": {
+    "pymimir": 42,
+    "pytyr": 42
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "backend_order": [
+        "pymimir",
+        "pytyr"
+      ],
+      "results": [
+        {
+          "backend": "pymimir",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9530000097583979,
+          "mean_ms": 0.9487748437095433,
+          "min_ms": 0.8269579848274589,
+          "max_ms": 1.2610830017365515,
+          "stdev_ms": 0.09632939935660356
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 0.8482084958814085,
+          "mean_ms": 0.8492563472827896,
+          "min_ms": 0.8210000232793391,
+          "max_ms": 0.8931669872254133,
+          "stdev_ms": 0.015876628639902416
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 4.447874991456047,
+          "mean_ms": 4.46406465198379,
+          "min_ms": 4.063875006977469,
+          "max_ms": 4.864124988671392,
+          "stdev_ms": 0.14182209506355428
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 5.0471875292714685,
+          "mean_ms": 5.043137350003235,
+          "min_ms": 4.895333026070148,
+          "max_ms": 5.172042001504451,
+          "stdev_ms": 0.06994616428998819
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.1221670138183981,
+          "mean_ms": 1.1263896012678742,
+          "min_ms": 1.0400000028312206,
+          "max_ms": 1.2435829848982394,
+          "stdev_ms": 0.048524473637799874
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.1237915023230016,
+          "mean_ms": 1.1164397437823936,
+          "min_ms": 1.008374965749681,
+          "max_ms": 1.203833962790668,
+          "stdev_ms": 0.052228335124163076
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 5.834229465108365,
+          "mean_ms": 5.879516896675341,
+          "min_ms": 5.452291981782764,
+          "max_ms": 6.4272499876096845,
+          "stdev_ms": 0.22001752660338672
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 6.696729484247044,
+          "mean_ms": 6.73121259897016,
+          "min_ms": 6.468165956903249,
+          "max_ms": 7.496417034417391,
+          "stdev_ms": 0.2128522365052504
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9713960171211511,
+          "mean_ms": 0.966110301669687,
+          "min_ms": 0.9327500010840595,
+          "max_ms": 1.0020000045187771,
+          "stdev_ms": 0.020047451603451106
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.0288539924658835,
+          "mean_ms": 1.0331625904655084,
+          "min_ms": 0.9889170178212225,
+          "max_ms": 1.0932919685728848,
+          "stdev_ms": 0.026997060834058437
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 3.341187519254163,
+          "mean_ms": 3.38320845621638,
+          "min_ms": 3.1191660091280937,
+          "max_ms": 3.809541987720877,
+          "stdev_ms": 0.16583655647992268
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 1.0073335142806172,
+          "mean_ms": 0.9954376029781997,
+          "min_ms": 0.9101249743252993,
+          "max_ms": 1.0658340179361403,
+          "stdev_ms": 0.04768010205671795
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.1888330045621842,
+          "mean_ms": 1.193139556562528,
+          "min_ms": 1.1462079710327089,
+          "max_ms": 1.2344159767962992,
+          "stdev_ms": 0.022353823613986495
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.1780835047829896,
+          "mean_ms": 1.1870166985318065,
+          "min_ms": 1.0965419933199883,
+          "max_ms": 1.333083026111126,
+          "stdev_ms": 0.06517181091978717
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 4.744437988847494,
+          "mean_ms": 4.719229249167256,
+          "min_ms": 4.1795840370468795,
+          "max_ms": 4.887332965154201,
+          "stdev_ms": 0.1441383921812428
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 1.2099585146643221,
+          "mean_ms": 1.2040460074786097,
+          "min_ms": 1.1502080014906824,
+          "max_ms": 1.2466670013964176,
+          "stdev_ms": 0.0276836369476111
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "backend_order": [
+        "pytyr",
+        "pymimir"
+      ],
+      "results": [
+        {
+          "backend": "pytyr",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 1.193625503219664,
+          "mean_ms": 1.1919124925043434,
+          "min_ms": 1.0813329718075693,
+          "max_ms": 1.2836660025641322,
+          "stdev_ms": 0.056155726192192924
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 4.671916511142626,
+          "mean_ms": 4.644849899341352,
+          "min_ms": 4.208958009257913,
+          "max_ms": 4.8086660099215806,
+          "stdev_ms": 0.12601887500501266
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.2276880152057856,
+          "mean_ms": 1.2083648500265554,
+          "min_ms": 1.0958749917335808,
+          "max_ms": 1.2679590145125985,
+          "stdev_ms": 0.054907541306166985
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.1359790223650634,
+          "mean_ms": 1.1323541490128264,
+          "min_ms": 1.0385829955339432,
+          "max_ms": 1.2354159844107926,
+          "stdev_ms": 0.05681599975147999
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 1.010917010717094,
+          "mean_ms": 1.0186208499362692,
+          "min_ms": 0.9686670382507145,
+          "max_ms": 1.1141670402139425,
+          "stdev_ms": 0.03316820178978726
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 3.309791994979605,
+          "mean_ms": 3.298956493381411,
+          "min_ms": 3.0008340254426003,
+          "max_ms": 3.4582919906824827,
+          "stdev_ms": 0.10884103682621901
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 0.9480419976171106,
+          "mean_ms": 0.9505376539891586,
+          "min_ms": 0.916041957680136,
+          "max_ms": 1.044958014972508,
+          "stdev_ms": 0.03489384054179255
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9522704931441694,
+          "mean_ms": 0.950908352388069,
+          "min_ms": 0.8966670138761401,
+          "max_ms": 1.0024590301327407,
+          "stdev_ms": 0.025562179260768814
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 6.808250007452443,
+          "mean_ms": 6.814816742553376,
+          "min_ms": 6.648042006418109,
+          "max_ms": 7.064542034640908,
+          "stdev_ms": 0.09839155872159719
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 5.871375498827547,
+          "mean_ms": 5.898873196565546,
+          "min_ms": 5.489915958605707,
+          "max_ms": 6.246124976314604,
+          "stdev_ms": 0.15615964998402942
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.0941459913738072,
+          "mean_ms": 1.0985165979946032,
+          "min_ms": 1.052499981597066,
+          "max_ms": 1.1888750013895333,
+          "stdev_ms": 0.0357849704414927
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.1381875083316118,
+          "mean_ms": 1.1334376031300053,
+          "min_ms": 0.9974169661290944,
+          "max_ms": 1.2086250353604555,
+          "stdev_ms": 0.05192520027286519
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 5.0986869900953025,
+          "mean_ms": 5.148735310649499,
+          "min_ms": 4.917708050925285,
+          "max_ms": 5.53487497381866,
+          "stdev_ms": 0.19380747807213683
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 4.532978520728648,
+          "mean_ms": 4.549537401180714,
+          "min_ms": 4.313292040023953,
+          "max_ms": 4.766124999150634,
+          "stdev_ms": 0.12224923912524824
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 0.8459170057903975,
+          "mean_ms": 0.855737499659881,
+          "min_ms": 0.8099999977275729,
+          "max_ms": 0.9745830320753157,
+          "stdev_ms": 0.03624112321188086
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9124790085479617,
+          "mean_ms": 0.9124311996856704,
+          "min_ms": 0.8417499484494328,
+          "max_ms": 1.0615420178510249,
+          "stdev_ms": 0.05772544100122562
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "backend_order": [
+        "pymimir",
+        "pytyr"
+      ],
+      "results": [
+        {
+          "backend": "pymimir",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9515209821984172,
+          "mean_ms": 0.9479105472564697,
+          "min_ms": 0.8473750203847885,
+          "max_ms": 1.077833992894739,
+          "stdev_ms": 0.07202675809413489
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 0.9152085112873465,
+          "mean_ms": 0.9147521486738697,
+          "min_ms": 0.8732919814065099,
+          "max_ms": 0.9691670420579612,
+          "stdev_ms": 0.02540221668644405
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 4.565542010823265,
+          "mean_ms": 4.570406340644695,
+          "min_ms": 4.366000008303672,
+          "max_ms": 4.769416991621256,
+          "stdev_ms": 0.1162869242538661
+        },
+        {
+          "backend": "pymimir",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 5.024395999498665,
+          "mean_ms": 5.0897020497359335,
+          "min_ms": 4.898749990388751,
+          "max_ms": 5.53412496810779,
+          "stdev_ms": 0.17895717718813067
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.0707504989113659,
+          "mean_ms": 1.0769084969069809,
+          "min_ms": 1.007292012218386,
+          "max_ms": 1.2476249830797315,
+          "stdev_ms": 0.04904635774654906
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.1101249838247895,
+          "mean_ms": 1.1306416534353048,
+          "min_ms": 1.0592920007184148,
+          "max_ms": 1.3709159684367478,
+          "stdev_ms": 0.0729440872064501
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 5.776937527116388,
+          "mean_ms": 5.788014599238522,
+          "min_ms": 5.520459031686187,
+          "max_ms": 6.020708999130875,
+          "stdev_ms": 0.1209108381034291
+        },
+        {
+          "backend": "pymimir",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 6.640520965447649,
+          "mean_ms": 6.654431292554364,
+          "min_ms": 6.388708017766476,
+          "max_ms": 7.100833987351507,
+          "stdev_ms": 0.14643366577099157
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_default",
+          "n_items": 32,
+          "median_ms": 0.9873959934338927,
+          "mean_ms": 0.9899666940327734,
+          "min_ms": 0.9257909841835499,
+          "max_ms": 1.0860409820452332,
+          "stdev_ms": 0.03740968414607497
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.0053955193143338,
+          "mean_ms": 0.9949352941475809,
+          "min_ms": 0.8975000237114727,
+          "max_ms": 1.0929999989457428,
+          "stdev_ms": 0.05266821535752988
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.single_loop",
+          "n_items": 32,
+          "median_ms": 3.370041522430256,
+          "mean_ms": 3.35552905453369,
+          "min_ms": 3.0368329607881606,
+          "max_ms": 3.481874999124557,
+          "stdev_ms": 0.10278532836905471
+        },
+        {
+          "backend": "pytyr",
+          "path": "full.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 0.987458013696596,
+          "mean_ms": 0.9877875447273254,
+          "min_ms": 0.8933329954743385,
+          "max_ms": 1.0620419634506106,
+          "stdev_ms": 0.043655168104055286
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_default",
+          "n_items": 32,
+          "median_ms": 1.1990210332442075,
+          "mean_ms": 1.195341706625186,
+          "min_ms": 1.1128750047646463,
+          "max_ms": 1.255250012036413,
+          "stdev_ms": 0.03923428636780205
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.batch_explicit_goals",
+          "n_items": 32,
+          "median_ms": 1.217187469592318,
+          "mean_ms": 1.1946959042688832,
+          "min_ms": 1.0792500106617808,
+          "max_ms": 1.2753329938277602,
+          "stdev_ms": 0.060970485154118646
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.single_loop",
+          "n_items": 32,
+          "median_ms": 4.898790968582034,
+          "mean_ms": 4.878379145520739,
+          "min_ms": 4.342458967585117,
+          "max_ms": 5.407083022873849,
+          "stdev_ms": 0.21843940658177086
+        },
+        {
+          "backend": "pytyr",
+          "path": "delta.stream_end_to_end",
+          "n_items": 32,
+          "median_ms": 1.2340414978098124,
+          "mean_ms": 1.2365397007670254,
+          "min_ms": 1.186459034215659,
+          "max_ms": 1.2907080235891044,
+          "stdev_ms": 0.0295636114986693
+        }
+      ]
+    }
+  ]
+}
