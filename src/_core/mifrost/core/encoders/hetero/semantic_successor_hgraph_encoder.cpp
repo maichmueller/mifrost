@@ -36,6 +36,12 @@ struct SemanticSuccessorHGraphEncoderEngine::Impl {
          hgraph(std::move(predicates), std::move(actions), base_config(config))
    {
    }
+
+   Impl(std::shared_ptr< const SemanticTaskContext > task_context, Config encoder_config)
+       : config(normalize_successor_config(std::move(encoder_config))),
+         hgraph(std::move(task_context), base_config(config))
+   {
+   }
 };
 
 SemanticSuccessorHGraphEncoderEngine::SemanticSuccessorHGraphEncoderEngine(
@@ -44,6 +50,14 @@ SemanticSuccessorHGraphEncoderEngine::SemanticSuccessorHGraphEncoderEngine(
    Config config
 )
     : impl_(std::make_unique< Impl >(std::move(predicates), std::move(actions), std::move(config)))
+{
+}
+
+SemanticSuccessorHGraphEncoderEngine::SemanticSuccessorHGraphEncoderEngine(
+   std::shared_ptr< const SemanticTaskContext > task_context,
+   Config config
+)
+    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
 {
 }
 

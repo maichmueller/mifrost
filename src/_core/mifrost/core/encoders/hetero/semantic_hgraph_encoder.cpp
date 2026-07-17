@@ -21,6 +21,16 @@
 namespace mifrost {
 namespace {
 
+const std::shared_ptr< const SemanticTaskContext >& require_task_context(
+   const std::shared_ptr< const SemanticTaskContext >& task_context
+)
+{
+   if(not task_context) {
+      throw std::invalid_argument("Semantic HGraph task context must not be null");
+   }
+   return task_context;
+}
+
 constexpr std::array< SemanticPredicateCategory, 3 > kCategoryOrder = {
    SemanticPredicateCategory::static_predicate,
    SemanticPredicateCategory::fluent,
@@ -119,6 +129,15 @@ std::string action_name(
    return result;
 }
 
+std::string semantic_atom_key(const SemanticAtom& atom)
+{
+   std::string key = std::to_string(atom.predicate);
+   for(const auto argument : atom.arguments) {
+      key += ":" + std::to_string(argument);
+   }
+   return key;
+}
+
 void validate_schema(
    const std::vector< SemanticPredicateSpec >& predicates,
    const std::vector< SemanticActionSpec >& actions
@@ -177,11 +196,14 @@ void validate_input(
    const SemanticHGraphEncoderConfig& config
 )
 {
+   const auto& objects = semantic_objects(input);
+   const auto& goals = semantic_goals(input);
+   const auto& static_facts = semantic_static_facts(input);
    if(input.subgoal_layers.size() > config.max_goal_level) {
       throw std::invalid_argument("subgoal layer exceeds max_goal_level");
    }
    std::set< std::string > object_names;
-   for(const auto& object : input.objects) {
+   for(const auto& object : objects) {
       if(object.empty()) {
          throw std::invalid_argument("object name must not be empty");
       }
@@ -190,12 +212,15 @@ void validate_input(
       }
    }
    for(const auto& fact : input.state_facts) {
-      validate_atom(fact, predicates, input.objects.size());
+      validate_atom(fact, predicates, objects.size());
+   }
+   for(const auto& fact : static_facts) {
+      validate_atom(fact, predicates, objects.size());
    }
    const auto validate_literal = [&](const SemanticLiteral& literal) {
-      validate_atom(literal.atom, predicates, input.objects.size());
+      validate_atom(literal.atom, predicates, objects.size());
    };
-   for(const auto& goal : input.goals) {
+   for(const auto& goal : goals) {
       validate_literal(goal);
    }
    for(const auto& layer : input.subgoal_layers) {
@@ -220,7 +245,7 @@ void validate_input(
          throw std::invalid_argument("action argument count does not match schema arity");
       }
       for(const auto argument : action.arguments) {
-         if(argument < 0 or static_cast< size_t >(argument) >= input.objects.size()) {
+         if(argument < 0 or static_cast< size_t >(argument) >= objects.size()) {
             throw std::invalid_argument("object index out of range");
          }
       }
@@ -234,23 +259,22 @@ struct PreparedGoal {
 
 std::vector< PreparedGoal > prepare_goals(const SemanticFlatRelationInput& input)
 {
-   std::map< SemanticLiteral, size_t > levels;
+   const auto& goals = semantic_goals(input);
+   const auto levels = semantic_goal_levels(input);
    std::vector< SemanticLiteral > ordered;
-   ordered.reserve(input.goals.size());
-   for(const auto& goal : input.goals) {
+   ordered.reserve(goals.size());
+   for(const auto& goal : goals) {
       ordered.push_back(goal);
-      levels[goal] = 0;
    }
    for(size_t layer = 0; layer < input.subgoal_layers.size(); ++layer) {
       for(const auto& goal : input.subgoal_layers[layer]) {
          ordered.push_back(goal);
-         levels[goal] = layer + 1;
       }
    }
    std::vector< PreparedGoal > result;
    result.reserve(ordered.size());
    for(const auto& goal : ordered) {
-      result.push_back({goal, levels.at(goal)});
+      result.push_back({goal, semantic_goal_level(levels, goal)});
    }
    return result;
 }
@@ -282,8 +306,9 @@ struct SemanticHGraphEncoderEngine::Impl {
       int64_t next_target_index = 0;
    };
 
-   std::vector< SemanticPredicateSpec > predicates;
-   std::vector< SemanticActionSpec > actions;
+   std::shared_ptr< const SemanticTaskContext > task_context;
+   const std::vector< SemanticPredicateSpec >& predicates;
+   const std::vector< SemanticActionSpec >& actions;
    Config config;
    std::map< std::string, int > relation_arities;
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types;
@@ -293,8 +318,20 @@ struct SemanticHGraphEncoderEngine::Impl {
       std::vector< SemanticActionSpec > action_specs,
       Config encoder_config
    )
-       : predicates(std::move(predicate_specs)),
-         actions(std::move(action_specs)),
+       : Impl(
+            std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+               .predicates = std::move(predicate_specs),
+               .actions = std::move(action_specs),
+            }),
+            std::move(encoder_config)
+         )
+   {
+   }
+
+   Impl(std::shared_ptr< const SemanticTaskContext > context, Config encoder_config)
+       : task_context(require_task_context(context)),
+         predicates(task_context->predicates),
+         actions(task_context->actions),
          config(std::move(encoder_config))
    {
       validate_schema(predicates, actions);
@@ -561,7 +598,7 @@ struct SemanticHGraphEncoderEngine::Impl {
       BatchBuilder& builder
    ) const
    {
-      const auto& name = input.objects.at(static_cast< size_t >(object));
+      const auto& name = semantic_objects(input).at(static_cast< size_t >(object));
       return symbol_node(workspace, object, name, name, builder);
    }
 
@@ -758,7 +795,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          workspace,
          predicate.name,
          atom,
-         config.export_node_names ? atom_name(atom, predicates, input.objects) : "",
+         config.export_node_names ? atom_name(atom, predicates, semantic_objects(input)) : "",
          builder
       );
       const auto symbols = atom_symbols(workspace, atom, input, builder);
@@ -787,7 +824,9 @@ struct SemanticHGraphEncoderEngine::Impl {
                                       predicate_suffix
                                    )
                                  : predicate.name + std::string(predicate_suffix);
-      auto formatted = atom_name(atom, predicates, input.objects, predicate_suffix);
+      auto formatted = config.export_node_names
+                          ? atom_name(atom, predicates, semantic_objects(input), predicate_suffix)
+                          : std::string{};
       if(polarity) {
          formatted = (*polarity ? "[+]" : "[-]") + formatted;
       }
@@ -816,9 +855,15 @@ struct SemanticHGraphEncoderEngine::Impl {
       const auto type = relation_name(
          predicate.name, literal.positive, prepared.level, derivation, predicate_suffix
       );
-      const auto formatted = literal_name(
-         literal, predicates, input.objects, prepared.level, derivation, predicate_suffix
-      );
+      const auto formatted = config.export_node_names ? literal_name(
+                                                           literal,
+                                                           predicates,
+                                                           semantic_objects(input),
+                                                           prepared.level,
+                                                           derivation,
+                                                           predicate_suffix
+                                                        )
+                                                      : std::string{};
       if(predicate_suffix.empty()) {
          const auto arity = predicate.arity == 0 and config.add_nullary_predicates
                                ? 1
@@ -842,7 +887,7 @@ struct SemanticHGraphEncoderEngine::Impl {
             schema_key::kEdgeTypeSeparator,
             literal.positive ? 1 : 0,
             schema_key::kEdgeTypeSeparator,
-            atom_name(literal.atom, predicates, input.objects, predicate_suffix),
+            semantic_atom_key(literal.atom),
             schema_key::kEdgeTypeSeparator,
             prepared.level
          );
@@ -884,7 +929,9 @@ struct SemanticHGraphEncoderEngine::Impl {
       const bool target_symbol = target_actions or config.include_lgan_edges;
       for(const auto& action : input.actions) {
          const auto& spec = actions.at(static_cast< size_t >(action.action));
-         const auto formatted = action_name(action, actions, input.objects);
+         const auto formatted = config.export_node_names
+                                   ? action_name(action, actions, semantic_objects(input))
+                                   : std::string{};
          const auto index = action_node(
             workspace, spec.name, action, config.export_node_names ? formatted : "", builder
          );
@@ -958,7 +1005,13 @@ struct SemanticHGraphEncoderEngine::Impl {
             }
             const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
             const auto type = relation_name(predicate.name, literal.positive, std::nullopt);
-            const auto formatted = literal_name(literal, predicates, input.objects, std::nullopt);
+            const auto formatted = config.export_node_names ? literal_name(
+                                                                 literal,
+                                                                 predicates,
+                                                                 semantic_objects(input),
+                                                                 std::nullopt
+                                                              )
+                                                            : std::string{};
             auto& indices = workspace.atom_indices[type];
             const bool is_new = not indices.contains(literal.atom);
             const auto relation_index = atom_node(
@@ -983,7 +1036,7 @@ struct SemanticHGraphEncoderEngine::Impl {
                   schema_key::kEdgeTypeSeparator,
                   literal.positive ? 1 : 0,
                   schema_key::kEdgeTypeSeparator,
-                  atom_name(literal.atom, predicates, input.objects)
+                  semantic_atom_key(literal.atom)
                );
                const auto target_symbol_name = config.export_node_names
                                                   ? fmt::format(
@@ -1195,8 +1248,10 @@ struct SemanticHGraphEncoderEngine::Impl {
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
    {
       validate_input(input, predicates, actions, config);
+      const auto& objects = semantic_objects(input);
+      const auto& static_facts = semantic_static_facts(input);
       auto workspace = initialize_workspace(builder);
-      for(size_t object = 0; object < input.objects.size(); ++object) {
+      for(size_t object = 0; object < objects.size(); ++object) {
          object_node(workspace, static_cast< int64_t >(object), input, builder);
       }
       if(config.add_nullary_predicates) {
@@ -1206,11 +1261,15 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
          }
-         for(const auto& fact : input.state_facts) {
-            if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
-               encode_fact(workspace, fact, input, builder);
+         const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+            for(const auto& fact : facts) {
+               if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
+                  encode_fact(workspace, fact, input, builder);
+               }
             }
-         }
+         };
+         encode_facts(static_facts);
+         encode_facts(input.state_facts);
       }
       const auto prepared = prepare_goals(input);
       if(includes_plain_goal_derivation(config.goal_derivations)) {
@@ -1227,11 +1286,12 @@ struct SemanticHGraphEncoderEngine::Impl {
       encode_history(workspace, input, builder);
       if(has_non_plain_goal_derivations(config.goal_derivations)) {
          std::set< std::pair< SemanticPredicateCategory, SemanticAtom > > facts;
+         for(const auto& fact : static_facts) {
+            facts.emplace(SemanticPredicateCategory::static_predicate, fact);
+         }
          for(const auto& fact : input.state_facts) {
             const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
-            if(category != SemanticPredicateCategory::static_predicate or config.include_static) {
-               facts.emplace(category, fact);
-            }
+            facts.emplace(category, fact);
          }
          for(const auto category : kCategoryOrder) {
             for(const auto& goal : prepared) {
@@ -1264,14 +1324,14 @@ struct SemanticHGraphEncoderEngine::Impl {
    {
       validate_input(current, predicates, actions, config);
       validate_input(successor, predicates, actions, config);
-      if(current.objects != successor.objects) {
+      if(semantic_objects(current) != semantic_objects(successor)) {
          throw std::invalid_argument(
             "current and successor semantic inputs require identical ordered object tables"
          );
       }
 
       auto workspace = initialize_workspace(builder);
-      for(size_t object = 0; object < current.objects.size(); ++object) {
+      for(size_t object = 0; object < semantic_objects(current).size(); ++object) {
          object_node(workspace, static_cast< int64_t >(object), current, builder);
       }
       if(config.add_nullary_predicates) {
@@ -1282,11 +1342,15 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
          }
-         for(const auto& fact : current.state_facts) {
-            if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
-               encode_fact(workspace, fact, current, builder);
+         const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+            for(const auto& fact : facts) {
+               if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
+                  encode_fact(workspace, fact, current, builder);
+               }
             }
-         }
+         };
+         encode_facts(semantic_static_facts(current));
+         encode_facts(current.state_facts);
       }
 
       std::set< SemanticAtom > current_dynamic_facts;
@@ -1365,11 +1429,12 @@ struct SemanticHGraphEncoderEngine::Impl {
          };
 
          std::set< SemanticAtom > current_facts;
+         current_facts.insert(
+            semantic_static_facts(current).begin(), semantic_static_facts(current).end()
+         );
          for(const auto& fact : current.state_facts) {
             const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
-            if(category != SemanticPredicateCategory::static_predicate or config.include_static) {
-               current_facts.insert(fact);
-            }
+            current_facts.insert(fact);
          }
          encode_satisfaction(current_facts, {});
          if(include_successor_goal_satisfaction) {
@@ -1392,8 +1457,10 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
       const auto& nodes = dag.nodes();
       const auto& root_input = nodes.front().state;
+      const auto& root_objects = semantic_objects(root_input);
+      const auto& root_static_facts = semantic_static_facts(root_input);
       auto workspace = initialize_workspace(builder);
-      for(size_t object = 0; object < root_input.objects.size(); ++object) {
+      for(size_t object = 0; object < root_objects.size(); ++object) {
          object_node(workspace, static_cast< int64_t >(object), root_input, builder);
       }
       if(config.add_nullary_predicates) {
@@ -1432,13 +1499,6 @@ struct SemanticHGraphEncoderEngine::Impl {
             return it->second;
          };
 
-      const auto semantic_atom_key = [&](const SemanticAtom& atom) {
-         std::string key = std::to_string(atom.predicate);
-         for(const auto argument : atom.arguments) {
-            key += ":" + std::to_string(argument);
-         }
-         return key;
-      };
       const auto encode_atom_relation = [&](
                                            const SemanticAtom& atom,
                                            const std::string& type,
@@ -1473,8 +1533,11 @@ struct SemanticHGraphEncoderEngine::Impl {
          [&](const SemanticGroundAction& action, int64_t node_index) {
             const auto& spec = actions.at(static_cast< size_t >(action.action));
             const auto prefix = prefix_for(node_index);
-            const auto display = action_name(action, actions, root_input.objects);
-            const auto key = prefix + spec.name + ":" + display;
+            const auto display = config.export_node_names
+                                    ? action_name(action, actions, root_objects)
+                                    : std::string{};
+            const auto key = prefix + spec.name + ":" + std::to_string(action.action) + ":"
+                             + std::to_string(action_symbol_id(workspace, action));
             const auto relation_index = relation_node(
                spec.name, key, config.export_node_names ? prefix + display : ""
             );
@@ -1500,23 +1563,27 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
          }
-         for(const auto& fact : root_input.state_facts) {
-            if(predicates.at(static_cast< size_t >(fact.predicate)).category != category) {
-               continue;
+         const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+            for(const auto& fact : facts) {
+               if(predicates.at(static_cast< size_t >(fact.predicate)).category != category) {
+                  continue;
+               }
+               if(fact.arguments.empty() and not config.add_nullary_predicates) {
+                  continue;
+               }
+               const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
+               encode_atom_relation(
+                  fact,
+                  predicate.name,
+                  root_prefix,
+                  config.export_node_names ? atom_name(fact, predicates, root_objects) : "",
+                  root_state_key
+               );
+               root_encoded_facts.insert(fact);
             }
-            if(fact.arguments.empty() and not config.add_nullary_predicates) {
-               continue;
-            }
-            const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
-            encode_atom_relation(
-               fact,
-               predicate.name,
-               root_prefix,
-               atom_name(fact, predicates, root_input.objects),
-               root_state_key
-            );
-            root_encoded_facts.insert(fact);
-         }
+         };
+         encode_facts(root_static_facts);
+         encode_facts(root_input.state_facts);
       }
 
       const auto prepared_goals = prepare_goals(root_input);
@@ -1537,7 +1604,9 @@ struct SemanticHGraphEncoderEngine::Impl {
             goal.literal.atom,
             type,
             node_prefix,
-            literal_name(goal.literal, predicates, root_input.objects, goal.level, derivation),
+            config.export_node_names
+               ? literal_name(goal.literal, predicates, root_objects, goal.level, derivation)
+               : "",
             state_key
          );
       };
@@ -1599,7 +1668,7 @@ struct SemanticHGraphEncoderEngine::Impl {
                      fact,
                      predicate.name + (split_state ? "[state]" : ""),
                      prefix,
-                     atom_name(fact, predicates, root_input.objects),
+                     config.export_node_names ? atom_name(fact, predicates, root_objects) : "",
                      state_key
                   );
                   successor_facts.insert(fact);
@@ -1660,7 +1729,9 @@ struct SemanticHGraphEncoderEngine::Impl {
                   literal.atom,
                   type,
                   prefix,
-                  literal_name(literal, predicates, root_input.objects, std::nullopt),
+                  config.export_node_names
+                     ? literal_name(literal, predicates, root_objects, std::nullopt)
+                     : "",
                   state_key
                );
                if(predicate.category != SemanticPredicateCategory::static_predicate) {
@@ -1832,6 +1903,14 @@ SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
    Config config
 )
     : impl_(std::make_unique< Impl >(std::move(predicates), std::move(actions), std::move(config)))
+{
+}
+
+SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
+   std::shared_ptr< const SemanticTaskContext > task_context,
+   Config config
+)
+    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
 {
 }
 

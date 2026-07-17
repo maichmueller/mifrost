@@ -59,6 +59,10 @@ class MIFROST_API SemanticHorizonHGraphEncoderEngine {
       std::vector< SemanticActionSpec > actions,
       Config config = {}
    );
+   SemanticHorizonHGraphEncoderEngine(
+      std::shared_ptr< const SemanticTaskContext > task_context,
+      Config config = {}
+   );
    SemanticHorizonHGraphEncoderEngine(const SemanticHorizonHGraphEncoderEngine&) = delete;
    SemanticHorizonHGraphEncoderEngine& operator=(const SemanticHorizonHGraphEncoderEngine&) =
       delete;

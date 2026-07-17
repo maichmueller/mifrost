@@ -88,6 +88,10 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       std::vector< SemanticActionSpec > actions,
       Config config = {}
    );
+   SemanticHGraphEncoderEngine(
+      std::shared_ptr< const SemanticTaskContext > task_context,
+      Config config = {}
+   );
    SemanticHGraphEncoderEngine(const SemanticHGraphEncoderEngine&) = delete;
    SemanticHGraphEncoderEngine& operator=(const SemanticHGraphEncoderEngine&) = delete;
    SemanticHGraphEncoderEngine(SemanticHGraphEncoderEngine&&) noexcept;

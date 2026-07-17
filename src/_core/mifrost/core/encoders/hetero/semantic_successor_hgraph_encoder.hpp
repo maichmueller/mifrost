@@ -47,6 +47,10 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       std::vector< SemanticActionSpec > actions,
       Config config = {}
    );
+   SemanticSuccessorHGraphEncoderEngine(
+      std::shared_ptr< const SemanticTaskContext > task_context,
+      Config config = {}
+   );
    SemanticSuccessorHGraphEncoderEngine(const SemanticSuccessorHGraphEncoderEngine&) = delete;
    SemanticSuccessorHGraphEncoderEngine& operator=(const SemanticSuccessorHGraphEncoderEngine&) =
       delete;
