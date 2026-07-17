@@ -23,12 +23,19 @@ void TargetColumns::clear()
    names.clear();
 }
 
-void TargetColumns::reserve(size_t count, bool include_depth, bool include_group)
+void TargetColumns::reserve(
+   size_t count,
+   bool include_depth,
+   bool include_group,
+   bool include_names
+)
 {
    positions.reserve(positions.size() + count);
    indices.reserve(indices.size() + count);
    candidate_ids.reserve(candidate_ids.size() + count);
-   names.reserve(names.size() + count);
+   if(include_names) {
+      names.reserve(names.size() + count);
+   }
    if(include_depth) {
       depths.reserve(depths.size() + count);
    }
@@ -37,7 +44,12 @@ void TargetColumns::reserve(size_t count, bool include_depth, bool include_group
    }
 }
 
-void TargetColumns::append(TargetRecord record, bool include_depth, bool include_group)
+void TargetColumns::append(
+   TargetRecord record,
+   bool include_depth,
+   bool include_group,
+   bool include_names
+)
 {
    positions.push_back(record.position);
    indices.push_back(record.index);
@@ -57,10 +69,12 @@ void TargetColumns::append(TargetRecord record, bool include_depth, bool include
       }
       group_ids.push_back(*record.group_id);
    }
-   names.push_back(std::move(record.name));
+   if(include_names) {
+      names.push_back(std::move(record.name));
+   }
 }
 
-void TargetColumns::validate(bool include_depth, bool include_group) const
+void TargetColumns::validate(bool include_depth, bool include_group, bool include_names) const
 {
    const size_t rows = positions.size();
    if(indices.size() != rows) {
@@ -69,8 +83,11 @@ void TargetColumns::validate(bool include_depth, bool include_group) const
    if(candidate_ids.size() != rows) {
       throw std::invalid_argument("target metadata has mismatched positions/candidate_ids lengths");
    }
-   if(names.size() != rows) {
+   if(include_names and names.size() != rows) {
       throw std::invalid_argument("target metadata has mismatched positions/names lengths");
+   }
+   if(not include_names and not names.empty() and names.size() != rows) {
+      throw std::invalid_argument("target metadata has mismatched optional names length");
    }
    if(include_depth) {
       if(depths.size() != rows) {
@@ -109,7 +126,7 @@ void append_target_candidate_rows(
       );
    }
 
-   columns.reserve(rows.size(), config.include_depth, config.include_group);
+   columns.reserve(rows.size(), config.include_depth, config.include_group, config.include_names);
    hash_set< int64_t > seen_candidate_ids;
    seen_candidate_ids.reserve(rows.size());
    for(const auto& row : rows) {
@@ -129,7 +146,8 @@ void append_target_candidate_rows(
             .name = row.name,
          },
          config.include_depth,
-         config.include_group
+         config.include_group,
+         config.include_names
       );
    }
 }
@@ -141,7 +159,7 @@ void append_target_candidate_row(
 )
 {
    const int64_t candidate_id = row.candidate_id.value_or(row.index);
-   columns.reserve(1, config.include_depth, config.include_group);
+   columns.reserve(1, config.include_depth, config.include_group, config.include_names);
    columns.append(
       TargetRecord{
          .position = row.position,
@@ -152,7 +170,8 @@ void append_target_candidate_row(
          .name = std::move(row.name),
       },
       config.include_depth,
-      config.include_group
+      config.include_group,
+      config.include_names
    );
 }
 
@@ -247,7 +266,7 @@ void set_target_graph_attrs(
    const TargetMetadataEmitConfig& config
 )
 {
-   columns.validate(config.include_depth, config.include_group);
+   columns.validate(config.include_depth, config.include_group, config.include_names);
    if(config.include_names) {
       builder.set_graph_attr(std::string(kTargetNamesAttr), columns.names);
    }

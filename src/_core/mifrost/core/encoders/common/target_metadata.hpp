@@ -73,16 +73,18 @@ struct TargetColumns {
    std::vector< std::string > names;
 
    void clear();
-   void reserve(size_t count, bool include_depth, bool include_group);
-   void append(TargetRecord record, bool include_depth, bool include_group);
+   void reserve(size_t count, bool include_depth, bool include_group, bool include_names = true);
+   void
+   append(TargetRecord record, bool include_depth, bool include_group, bool include_names = true);
    [[nodiscard]] bool empty() const { return positions.empty(); }
    [[nodiscard]] size_t size() const { return positions.size(); }
-   void validate(bool include_depth, bool include_group) const;
+   void validate(bool include_depth, bool include_group, bool include_names = false) const;
 };
 
 struct TargetCandidateAppendConfig {
    bool include_depth = false;
    bool include_group = false;
+   bool include_names = true;
    std::string missing_candidate_id_prefix = "missing candidate_id for target index ";
    std::string duplicate_candidate_id_prefix = "duplicate candidate_id ";
 };
