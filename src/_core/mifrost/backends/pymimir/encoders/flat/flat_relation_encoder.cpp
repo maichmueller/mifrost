@@ -41,7 +41,7 @@ FlatRelationConfigView relation_config_view(const FlatRelationEncoderEngine::Con
 }
 
 template < typename AtomTag >
-std::vector< int64_t > local_arg_rows_for_atom(
+FlatTupleArguments local_arg_rows_for_atom(
    const FlatRelationEncoderEngine& engine,
    FlatRelationEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
@@ -108,7 +108,7 @@ int64_t lookup_history_target_entity_index(
    );
 }
 
-std::vector< int64_t > local_arg_rows_for_action(
+FlatTupleArguments local_arg_rows_for_action(
    const FlatRelationEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAction& action
 )
@@ -131,7 +131,7 @@ std::vector< int64_t > local_arg_rows_for_action(
 }
 
 template < typename GoalTag >
-std::vector< int64_t > local_arg_rows_for_goal_literal(
+FlatTupleArguments local_arg_rows_for_goal_literal(
    const FlatRelationEncoderEngine& engine,
    FlatRelationEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundLiteral< GoalTag >& literal,
@@ -153,7 +153,7 @@ std::vector< int64_t > local_arg_rows_for_goal_literal(
 }
 
 template < typename HistoryTag >
-std::vector< int64_t > local_arg_rows_for_history_literal(
+FlatTupleArguments local_arg_rows_for_history_literal(
    const FlatRelationEncoderEngine& engine,
    FlatRelationEncoderEngine::EncodingContext& context,
    int64_t history_entity_index,

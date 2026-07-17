@@ -17,13 +17,13 @@ namespace mifrost {
 /// Template implementations
 
 template < typename Context, typename AtomTag >
-std::vector< int64_t > flat_logical_arg_rows_for_atom(
+FlatTupleArguments flat_logical_arg_rows_for_atom(
    const Context& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
    std::string_view missing_object_prefix
 )
 {
-   std::vector< int64_t > args;
+   FlatTupleArguments args;
    args.reserve(atom->get_objects().size());
    for(const auto& obj : atom->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(
@@ -40,7 +40,7 @@ std::vector< int64_t > flat_logical_arg_rows_for_atom(
 }
 
 template < typename Context, typename AtomTag >
-std::vector< int64_t > build_flat_atom_tuple_args(
+FlatTupleArguments build_flat_atom_tuple_args(
    Context& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
    std::span< const int64_t > auxiliary_args,
@@ -57,14 +57,14 @@ std::vector< int64_t > build_flat_atom_tuple_args(
 }
 
 template < typename Context >
-std::vector< int64_t > build_flat_action_tuple_args(
+FlatTupleArguments build_flat_action_tuple_args(
    const Context& context,
    const mimir::formalism::GroundAction& action,
    std::span< const int64_t > auxiliary_args,
    std::string_view missing_object_prefix
 )
 {
-   std::vector< int64_t > logical_args;
+   FlatTupleArguments logical_args;
    logical_args.reserve(action->get_objects().size());
    for(const auto& obj : action->get_objects()) {
       const auto it = context.entity_index_by_object_id.find(

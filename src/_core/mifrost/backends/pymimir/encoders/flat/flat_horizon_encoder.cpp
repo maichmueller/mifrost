@@ -168,7 +168,7 @@ FlatHorizonEncoderEngine::Config normalize_config(FlatHorizonEncoderEngine::Conf
 }
 
 template < typename AtomTag >
-std::vector< int64_t > logical_arg_rows_for_atom(
+FlatTupleArguments logical_arg_rows_for_atom(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
    std::optional< int64_t >
@@ -180,14 +180,14 @@ std::vector< int64_t > logical_arg_rows_for_atom(
 }
 
 template < typename AtomTag >
-std::vector< int64_t > local_arg_rows_for_atom(
+FlatTupleArguments local_arg_rows_for_atom(
    const FlatHorizonEncoderEngine& engine,
    FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAtom< AtomTag >& atom,
    std::optional< int64_t > state_entity_index
 )
 {
-   std::vector< int64_t > auxiliary_args;
+   FlatTupleArguments auxiliary_args;
    if(state_entity_index.has_value()) {
       auxiliary_args.push_back(*state_entity_index);
    }
@@ -200,13 +200,13 @@ std::vector< int64_t > local_arg_rows_for_atom(
    );
 }
 
-std::vector< int64_t > local_arg_rows_for_action(
+FlatTupleArguments local_arg_rows_for_action(
    const FlatHorizonEncoderEngine::EncodingContext& context,
    const mimir::formalism::GroundAction& action,
    std::optional< int64_t > state_entity_index
 )
 {
-   std::vector< int64_t > auxiliary_args;
+   FlatTupleArguments auxiliary_args;
    if(state_entity_index.has_value()) {
       auxiliary_args.push_back(*state_entity_index);
    }
