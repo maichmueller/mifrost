@@ -14,6 +14,7 @@
 #include <tuple>
 #include <utility>
 
+#include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
@@ -312,6 +313,69 @@ struct SemanticHGraphEncoderEngine::Impl {
    Config config;
    std::map< std::string, int > relation_arities;
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types;
+
+   // `relation_name(...)` builds the PyG hetero node/edge type key (not a
+   // display name; it is always required, independent of
+   // config.export_node_names), and the same (predicate, polarity, level,
+   // derivation, suffix) combination recurs for every atom of every state
+   // that shares it. Memoize it in a dense-indexed cache instead of
+   // re-deriving the string per atom/literal. The key is an exact bijective
+   // packing (not a hash) of small bounded fields, so there is no collision
+   // risk. `predicate_suffix` is always empty or one of a handful of values
+   // fixed by this engine's config for its whole lifetime (e.g.
+   // successor_suffix, "[state]"), so interning first-seen suffixes into a
+   // small vector keeps the packed key exact without hashing string bytes.
+   // Mutating these on encode() is safe only because init_semantic_hgraph_encoder.cpp
+   // (unlike the legacy Pymimir-only init_hgraph_encoder.cpp bindings) never
+   // releases the GIL around SemanticHGraphEncoderEngine calls, so concurrent
+   // Python access to one engine is already serialized.
+   mutable std::vector< std::string > relation_name_suffixes_;
+   mutable hash_map< uint64_t, std::string > relation_name_cache_;
+
+   size_t suffix_index(std::string_view suffix) const
+   {
+      for(size_t index = 0; index < relation_name_suffixes_.size(); ++index) {
+         if(relation_name_suffixes_[index] == suffix) {
+            return index;
+         }
+      }
+      if(relation_name_suffixes_.size() >= 255) {
+         throw std::invalid_argument("Semantic HGraph exceeded the cached predicate-suffix budget");
+      }
+      relation_name_suffixes_.emplace_back(suffix);
+      return relation_name_suffixes_.size() - 1;
+   }
+
+   const std::string& cached_relation_name(
+      int64_t predicate_index,
+      bool positive,
+      std::optional< size_t > level,
+      std::optional< GoalDerivation > derivation = std::nullopt,
+      std::string_view predicate_suffix = {}
+   ) const
+   {
+      const auto level_code = static_cast< uint64_t >(level ? *level + 1 : 0);
+      const auto derivation_code = static_cast< uint64_t >(
+         derivation ? static_cast< int >(*derivation) + 1 : 0
+      );
+      const auto suffix_code = static_cast< uint64_t >(suffix_index(predicate_suffix));
+      const auto key = static_cast< uint64_t >(predicate_index) | (uint64_t{positive} << 24)
+                       | (level_code << 25) | (derivation_code << 28) | (suffix_code << 31);
+      if(const auto it = relation_name_cache_.find(key); it != relation_name_cache_.end()) {
+         return it->second;
+      }
+      const auto [emplaced_it, _] = relation_name_cache_.emplace(
+         key,
+         relation_name(
+            predicates.at(static_cast< size_t >(predicate_index)).name,
+            positive,
+            level,
+            derivation,
+            predicate_suffix
+         )
+      );
+      return emplaced_it->second;
+   }
 
    Impl(
       std::vector< SemanticPredicateSpec > predicate_specs,
@@ -816,8 +880,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       if(atom.arguments.empty() and not config.add_nullary_predicates) {
          return;
       }
-      const auto type = polarity ? relation_name(
-                                      predicate.name,
+      const auto type = polarity ? cached_relation_name(
+                                      atom.predicate,
                                       *polarity,
                                       std::nullopt,
                                       std::nullopt,
@@ -852,8 +916,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
          return;
       }
-      const auto type = relation_name(
-         predicate.name, literal.positive, prepared.level, derivation, predicate_suffix
+      const auto type = cached_relation_name(
+         literal.atom.predicate, literal.positive, prepared.level, derivation, predicate_suffix
       );
       const auto formatted = config.export_node_names ? literal_name(
                                                            literal,
@@ -1003,8 +1067,9 @@ struct SemanticHGraphEncoderEngine::Impl {
             if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
                continue;
             }
-            const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
-            const auto type = relation_name(predicate.name, literal.positive, std::nullopt);
+            const auto type = cached_relation_name(
+               literal.atom.predicate, literal.positive, std::nullopt
+            );
             const auto formatted = config.export_node_names ? literal_name(
                                                                  literal,
                                                                  predicates,
@@ -1407,9 +1472,13 @@ struct SemanticHGraphEncoderEngine::Impl {
       encode_history(workspace, current, builder);
 
       if(not delta_mode and has_non_plain_goal_derivations(config.goal_derivations)) {
+         // Accepts either a hash_set (pure membership test, `current_facts`
+         // below) or a std::set (`successor_dynamic_facts`, whose sorted
+         // iteration elsewhere in encode_successor determines deterministic
+         // delta emission order and so must stay a std::set); this closure
+         // only ever calls .contains() on it.
          const auto encode_satisfaction = [&](
-                                             const std::set< SemanticAtom >& facts,
-                                             std::string_view predicate_suffix
+                                             const auto& facts, std::string_view predicate_suffix
                                           ) {
             for(const auto category : kCategoryOrder) {
                for(const auto& goal : prepared) {
@@ -1428,7 +1497,7 @@ struct SemanticHGraphEncoderEngine::Impl {
             }
          };
 
-         std::set< SemanticAtom > current_facts;
+         hash_set< SemanticAtom, SemanticAtomHash > current_facts;
          current_facts.insert(
             semantic_static_facts(current).begin(), semantic_static_facts(current).end()
          );
@@ -1558,7 +1627,7 @@ struct SemanticHGraphEncoderEngine::Impl {
       const std::string root_prefix = root_has_state_slot ? prefix_for(0) : "_root|";
       const auto root_state_key = root_has_state_slot ? std::optional< std::string >(target_key(0))
                                                       : std::nullopt;
-      std::set< SemanticAtom > root_encoded_facts;
+      hash_set< SemanticAtom, SemanticAtomHash > root_encoded_facts;
       for(const auto category : kCategoryOrder) {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
@@ -1595,8 +1664,9 @@ struct SemanticHGraphEncoderEngine::Impl {
                                            std::optional< GoalDerivation > derivation,
                                            bool state_suffix
                                         ) {
-         const auto& predicate = predicates.at(static_cast< size_t >(goal.literal.atom.predicate));
-         auto type = relation_name(predicate.name, goal.literal.positive, goal.level, derivation);
+         auto type = cached_relation_name(
+            goal.literal.atom.predicate, goal.literal.positive, goal.level, derivation
+         );
          if(state_suffix) {
             type += "[state]";
          }
@@ -1653,7 +1723,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          const auto prefix = prefix_for(node.index);
          const auto state_key = std::optional< std::string >(target_key(node.index));
          if(horizon.transition_mode == SemanticHorizonMode::full) {
-            std::set< SemanticAtom > successor_facts;
+            hash_set< SemanticAtom, SemanticAtomHash > successor_facts;
             for(const auto category : {
                    SemanticPredicateCategory::fluent,
                    SemanticPredicateCategory::derived,
@@ -1724,7 +1794,9 @@ struct SemanticHGraphEncoderEngine::Impl {
             std::set< SemanticAtom > removed;
             for(const auto& literal : deltas) {
                const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
-               const auto type = relation_name(predicate.name, literal.positive, std::nullopt);
+               const auto type = cached_relation_name(
+                  literal.atom.predicate, literal.positive, std::nullopt
+               );
                encode_atom_relation(
                   literal.atom,
                   type,

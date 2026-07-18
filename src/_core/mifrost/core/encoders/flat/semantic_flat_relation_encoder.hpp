@@ -8,6 +8,7 @@
 #include <boost/container/small_vector.hpp>
 #include <compare>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -85,6 +86,36 @@ struct SemanticAtom {
    SemanticArguments arguments;
 
    auto operator<=>(const SemanticAtom&) const = default;
+};
+
+/** Boost-style hash-combine mixer shared by every semantic-record hash functor. */
+inline void mix_semantic_hash(size_t& value, int64_t part)
+{
+   value ^= std::hash< int64_t >{}(part) + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
+}
+
+/**
+ * Hash functor for `SemanticAtom`, for use as `hash_set<SemanticAtom,
+ * SemanticAtomHash>`/`hash_map<SemanticAtom, T, SemanticAtomHash>` where a
+ * per-state membership set never needs `std::set`'s sorted iteration order
+ * (see per-state goal-satisfaction and static/fluent membership tests in
+ * semantic_flat_relation_encoder.cpp and semantic_hgraph_encoder.cpp). Do
+ * not use this for a set/map whose iteration order is read back to
+ * determine emission order (e.g. Horizon/Transition added/removed-fact
+ * delta computation): those rely on `SemanticAtom::operator<=>` and
+ * `std::set`'s sorted iteration for deterministic output and must stay
+ * `std::set`.
+ */
+struct SemanticAtomHash {
+   [[nodiscard]] size_t operator()(const SemanticAtom& atom) const noexcept
+   {
+      size_t value = 0;
+      mix_semantic_hash(value, atom.predicate);
+      for(const auto argument : atom.arguments) {
+         mix_semantic_hash(value, argument);
+      }
+      return value;
+   }
 };
 
 /** Polarized ground literal. Its category is defined by the predicate schema. */

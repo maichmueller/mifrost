@@ -22,6 +22,7 @@
 #include "flat_lgan.hpp"
 #include "flat_relation_schema.hpp"
 #include "flat_tuple_layout.hpp"
+#include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/semantic/semantic_transition_dag.hpp"
@@ -214,23 +215,6 @@ struct GoalEntityKey {
    size_t level = 0;
 
    auto operator<=>(const GoalEntityKey&) const = default;
-};
-
-inline void mix_semantic_hash(size_t& value, int64_t part)
-{
-   value ^= std::hash< int64_t >{}(part) + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
-}
-
-struct SemanticAtomHash {
-   size_t operator()(const SemanticAtom& atom) const noexcept
-   {
-      size_t value = 0;
-      mix_semantic_hash(value, atom.predicate);
-      for(const auto argument : atom.arguments) {
-         mix_semantic_hash(value, argument);
-      }
-      return value;
-   }
 };
 
 struct SemanticLiteralHash {
@@ -1315,7 +1299,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             sink.emit(required_relation_id(relation_id), args);
          };
 
-      std::set< SemanticAtom > fact_keys;
+      hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
       const auto append_facts = [&](const std::vector< SemanticAtom >& facts, bool emit_facts) {
          for(const auto& fact : facts) {
             const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
@@ -1629,7 +1613,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                            bool include_static,
                            bool include_anchor
                         ) {
-         std::set< SemanticAtom > facts;
+         hash_set< SemanticAtom, SemanticAtomHash > facts;
          const auto anchor = include_anchor ? std::optional(state_position(node_index))
                                             : std::nullopt;
          const auto append_facts = [&](const std::vector< SemanticAtom >& atoms) {
