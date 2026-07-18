@@ -126,9 +126,10 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert "backend: pytyr" not in workflow
 
 
-def test_wheel_build_requires_generated_stubs_and_disables_regeneration(
+def test_cibuildwheel_build_requires_generated_stubs_and_disables_regeneration(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setenv("CIBUILDWHEEL", "1")
     monkeypatch.setattr(
         build_backend,
         "_required_wheel_stubs",
@@ -146,3 +147,25 @@ def test_wheel_build_requires_generated_stubs_and_disables_regeneration(
     )
     assert build_backend.build_wheel(str(tmp_path)) == "mifrost.whl"
     assert "-DMIFROST_GENERATE_STUBS=OFF" in build_backend.os.environ["CMAKE_ARGS"]
+
+
+def test_plain_wheel_build_generates_stubs_without_a_pre_generated_requirement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("CIBUILDWHEEL", raising=False)
+    monkeypatch.setattr(
+        build_backend,
+        "_required_wheel_stubs",
+        lambda: (tmp_path / "_neutral_core.pyi",),
+    )
+    monkeypatch.setattr(build_backend, "_maybe_prepare_conan", lambda _settings: None)
+    monkeypatch.setattr(
+        build_backend._sbc,
+        "build_wheel",
+        lambda *args: "mifrost.whl",
+    )
+    # No stub files exist on disk; a plain (non-cibuildwheel) build must not
+    # raise and must let CMake generate them inline, like any other dev
+    # install or CI's tests.yml `pip install .`.
+    assert build_backend.build_wheel(str(tmp_path)) == "mifrost.whl"
+    assert "-DMIFROST_GENERATE_STUBS=ON" in build_backend.os.environ["CMAKE_ARGS"]

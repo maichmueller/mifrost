@@ -214,13 +214,27 @@ def _required_wheel_stubs() -> tuple[Path, ...]:
     return tuple(package_dir / name for name in names)
 
 
+def _in_cibuildwheel_repair_pipeline() -> bool:
+    # cibuildwheel sets CIBUILDWHEEL=1 for the whole build it drives, including
+    # the "pip install --no-build-isolation" invocation that reaches this hook.
+    # That is the only context where generating stubs during build_wheel() is
+    # unsafe: repair (auditwheel/delocate) relocates the extension's planner
+    # shared libraries after this hook returns, so importing the extension to
+    # introspect it here -- which stub generation requires -- would see
+    # libraries that are not yet resolvable. A plain "pip install ." (local
+    # dev, editable installs, tests.yml CI) never goes through repair, so it
+    # keeps the default nanobind/CMake behavior: stubs are generated inline,
+    # like any other build output, with no separate manual step.
+    return _as_bool(os.environ.get("CIBUILDWHEEL"), default=False)
+
+
 def _require_pre_generated_wheel_stubs() -> None:
     missing = [path for path in _required_wheel_stubs() if not path.is_file()]
     if not missing:
         return
     formatted = ", ".join(str(path) for path in missing)
     raise RuntimeError(
-        "Wheel builds require pre-generated nanobind stubs; missing: "
+        "cibuildwheel builds require pre-generated nanobind stubs; missing: "
         f"{formatted}. Run `python configure.py --mode stubs --backends both` "
         "and `python cbuild.py --mode stubs`, or build from the release sdist."
     )
@@ -396,11 +410,14 @@ def build_wheel(
     _set_default_rpath_mode("wheel")
     _set_cmake_arg("BUILD_TESTING", "OFF")
     _set_cmake_arg("MIFROST_BUILD_BENCHMARKS", "OFF")
-    # Release sdists and CI carry nanobind-generated stubs as source artifacts.
-    # Regenerating them in CMake's temporary install prefix happens before wheel
-    # repair, where planner-owned shared libraries are intentionally unavailable.
-    _require_pre_generated_wheel_stubs()
-    _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
+    if _in_cibuildwheel_repair_pipeline():
+        # cibuildwheel's wheels.yml workflow carries nanobind-generated stubs
+        # as pre-built artifacts (see the generate_stubs job) and reuses them
+        # across every repaired wheel instead of regenerating them here.
+        _require_pre_generated_wheel_stubs()
+        _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
+    else:
+        _set_cmake_arg("MIFROST_GENERATE_STUBS", "ON")
     _maybe_prepare_conan(config_settings)
     return _sbc.build_wheel(wheel_directory, config_settings, metadata_directory)
 
