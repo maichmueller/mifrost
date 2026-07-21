@@ -119,7 +119,7 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert all("requirements/build.txt" in line for line in before_build_lines)
     assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
     assert 'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30"' in workflow
-    assert workflow.count("flavor:") == 3
+    assert workflow.count("flavor:") == 2
     assert "MIFROST_BUILD_BACKENDS: both" in workflow
     assert "backend: core" not in workflow
     assert "backend: pymimir" not in workflow
