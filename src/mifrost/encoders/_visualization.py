@@ -6,11 +6,13 @@ import numbers
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import networkx as nx
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx as pyg_to_networkx
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ class HorizonVisualizationContext:
 
 def hgraph_to_networkx(data: HeteroData) -> nx.MultiDiGraph:
     """Convert heterogeneous PyG data to a graph with stable display names."""
+    import networkx as nx
+
     graph = pyg_to_networkx(
         data, node_attrs=["node_names"], edge_attrs=[], to_multi=True
     )
@@ -89,6 +93,8 @@ def horizon_to_networkx(
     data: HeteroData, context: HorizonVisualizationContext
 ) -> nx.MultiGraph:
     """Convert encoded horizon data while retaining target-tree metadata."""
+    import networkx as nx
+
     graph = nx.MultiGraph()
     symbol_type = context.hgraph.symbol_type_id
     parent_type = getattr(data, "parent_relation", context.parent_relation)
@@ -221,6 +227,7 @@ def draw_hgraph(
     non_symbol_linestyle: str | None = "--",
 ):
     import matplotlib.pyplot as plt
+    import networkx as nx
 
     node_kwargs = node_kwargs or {}
     edge_kwargs = edge_kwargs or {}

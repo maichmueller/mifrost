@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
-import networkx as nx
 import torch
 from torch_geometric.data import Data
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 from .. import _neutral_core
 from ..backends._color_runtime import ColorBackendName, create_color_runtime
@@ -195,6 +197,8 @@ class ColorEncoder(EncoderBase[Data]):
 
     def to_networkx(self, data: Data) -> nx.Graph:
         """Convert a color-encoded PyG graph into a NetworkX graph."""
+        import networkx as nx
+
         graph = nx.Graph()
         node_names = getattr(data, "node_names", None)
         if not node_names:
@@ -244,6 +248,8 @@ class ColorEncoder(EncoderBase[Data]):
         font_size: int = 8,
     ) -> Any:
         """Render a color-encoded graph with matplotlib and return the axis."""
+        import networkx as nx
+
         try:
             import matplotlib.pyplot as plt
         except ModuleNotFoundError as exc:

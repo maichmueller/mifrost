@@ -3,9 +3,10 @@ from __future__ import annotations
 import colorsys
 from dataclasses import dataclass
 import hashlib
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
 
 from .._core import (
     BatchBuilder,
@@ -45,6 +46,8 @@ def _default_flat_debug_layout(
     graph: nx.Graph,
 ) -> dict[Any, tuple[float, float]]:
     """Lay out flat debug graphs in stable columns to avoid edge collapse."""
+    import networkx as nx
+
     if graph.number_of_nodes() == 0:
         return {}
 
@@ -564,6 +567,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         instance into a synthetic node and can overlay LGAN edges when they are
         present in `data`.
         """
+        import networkx as nx
+
         if mode != "star":
             raise ValueError(f"Unsupported flat visualization mode: {mode!r}")
 
@@ -770,6 +775,8 @@ class FlatRelationEncoder(EncoderBase[FlatRelationData]):
         :meth:`to_networkx`. LGAN edges are shown as dashed overlays when they
         exist.
         """
+        import networkx as nx
+
         try:
             import matplotlib.pyplot as plt
         except ModuleNotFoundError as exc:

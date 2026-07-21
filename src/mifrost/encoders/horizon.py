@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
-import networkx as nx
 from torch_geometric.data import HeteroData
 
 from .. import _neutral_core
@@ -53,6 +52,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
+    import networkx as nx
+
     from .._core import TransitionDAG
 else:
     TransitionDAG = Any

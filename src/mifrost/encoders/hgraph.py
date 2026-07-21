@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
-import networkx as nx
 from torch_geometric.data import HeteroData
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 from .. import _core, _neutral_core
 from .._core import (
@@ -678,6 +680,8 @@ class HGraphEncoder(EncoderBase[HeteroData]):
         symbol_node_scale: float = 1.5,
         non_symbol_linestyle: str | None = "--",
     ):
+        import networkx as nx
+
         graph = data if isinstance(data, nx.Graph) else self.to_networkx(data)
         return draw_hgraph(
             graph,
