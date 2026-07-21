@@ -14,7 +14,6 @@ from typing import (
     TypeVar,
 )
 
-from .conversion import _encoding_dict_to_pyg, to_pyg
 from ..graph_fields import CollateSpec
 from .types import (
     BatchEncodingInput,
@@ -113,6 +112,8 @@ class _EncodingConversionMixin(Generic[PygDataT]):
         as_batch: bool,
         include_metadata: bool = True,
     ) -> PygDataT:
+        from .conversion import _encoding_dict_to_pyg
+
         return _encoding_dict_to_pyg(
             encoding_dict, as_batch=as_batch, include_metadata=include_metadata
         )
@@ -133,6 +134,8 @@ class _EncodingConversionMixin(Generic[PygDataT]):
                 type(self)._dict_to_pyg is _EncodingConversionMixin._dict_to_pyg
             )
             if uses_default_converter:
+                from .conversion import to_pyg
+
                 return to_pyg(
                     encoding, as_batch=as_batch, include_metadata=include_metadata
                 )
