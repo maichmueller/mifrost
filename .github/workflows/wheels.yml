@@ -126,11 +126,6 @@ jobs:
             conan_home_dir: .conan2_wheels_manylinux
             cibw_build: "cp312-manylinux_* cp313-manylinux_* cp314-manylinux_*"
             cibw_skip: "cp314t-*"
-          - os: ubuntu-latest
-            flavor: musllinux
-            conan_home_dir: .conan2_wheels_musllinux
-            cibw_build: "cp312-musllinux_* cp313-musllinux_* cp314-musllinux_*"
-            cibw_skip: "cp314t-*"
           - os: macos-latest
             flavor: macos
             conan_home_dir: .conan2_wheels_macos

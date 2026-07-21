@@ -15,7 +15,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 | --- | --- | --- |
 | Unit & C++ Tests | macOS, Ubuntu | 3.12-3.14 |
 | Install Smoke | macOS, Ubuntu | 3.12-3.14 |
-| Wheel Builds | macOS, manylinux, musllinux | cibuildwheel `cp3.(12-14)` |
+| Wheel Builds | macOS, manylinux | cibuildwheel `cp3.(12-14)` |
 | Docs Check | Ubuntu | 3.12 |
 
 ## Documentation
