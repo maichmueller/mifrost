@@ -26,13 +26,22 @@ license-files = ["LICENSE"]
 [project.optional-dependencies]
 pymimir = [
     "pymimir>=0.13.60",
+    "torch>=2.2,<3",
+    "torch-geometric>=2.7",
+    "numpy",
 ]
 pytyr = [
     "pytyr>=0.0.30",
+    "torch>=2.2,<3",
+    "torch-geometric>=2.7",
+    "numpy",
 ]
 backends = [
     "pymimir>=0.13.60",
     "pytyr>=0.0.30",
+    "torch>=2.2,<3",
+    "torch-geometric>=2.7",
+    "numpy",
 ]
 torch = [
     "torch>=2.2,<3",

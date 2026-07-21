@@ -183,7 +183,7 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
         CIBW_SKIP: ${{ matrix.cibw_skip }}
-        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30"
+        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 torch>=2.2,<3 torch-geometric>=2.7 numpy"
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py

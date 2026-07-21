@@ -94,9 +94,13 @@ def test_project_metadata_keeps_planners_optional() -> None:
     assert not any("pymimir" in requirement for requirement in build_requirements)
     assert not any("pytyr" in requirement for requirement in build_requirements)
     extras = project["project"]["optional-dependencies"]
-    assert extras["pymimir"] == ["pymimir>=0.13.60"]
-    assert extras["pytyr"] == ["pytyr>=0.0.30"]
-    assert set(extras["backends"]) == {"pymimir>=0.13.60", "pytyr>=0.0.30"}
+    torch_requirements = {"torch>=2.2,<3", "torch-geometric>=2.7", "numpy"}
+    assert set(extras["pymimir"]) == {"pymimir>=0.13.60"} | torch_requirements
+    assert set(extras["pytyr"]) == {"pytyr>=0.0.30"} | torch_requirements
+    assert (
+        set(extras["backends"])
+        == {"pymimir>=0.13.60", "pytyr>=0.0.30"} | torch_requirements
+    )
 
 
 def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
@@ -118,7 +122,10 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert len(before_build_lines) == 2
     assert all("requirements/build.txt" in line for line in before_build_lines)
     assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
-    assert 'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30"' in workflow
+    assert (
+        'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 '
+        'torch>=2.2,<3 torch-geometric>=2.7 numpy"' in workflow
+    )
     assert workflow.count("flavor:") == 2
     assert "MIFROST_BUILD_BACKENDS: both" in workflow
     assert "backend: core" not in workflow
