@@ -228,16 +228,51 @@ def _in_cibuildwheel_repair_pipeline() -> bool:
     return _as_bool(os.environ.get("CIBUILDWHEEL"), default=False)
 
 
-def _require_pre_generated_wheel_stubs() -> None:
+def _generate_wheel_stubs() -> None:
+    """Generate nanobind stubs via a clean dev-mode CMake build.
+
+    Mirrors the CI ``generate_stubs`` job so a bare local ``cibuildwheel``
+    invocation is self-contained. The stub build lives in its own
+    ``build/stubs`` tree, which defaults to the CMake cache's "dev" RPATH
+    mode, so the freshly compiled extension resolves its planner libraries
+    directly -- unlike the "wheel"-mode extension this same process is
+    building, which only resolves them after repair (see
+    ``_in_cibuildwheel_repair_pipeline``).
+    """
+    repo_root = Path(__file__).resolve().parent
+    backends = "+".join(sorted(_selected_backends())) or "core"
+    subprocess.check_call(
+        [
+            sys.executable,
+            str(repo_root / "configure.py"),
+            "--mode",
+            "stubs",
+            "--backends",
+            backends,
+        ],
+        cwd=str(repo_root),
+    )
+    subprocess.check_call(
+        [sys.executable, str(repo_root / "cbuild.py"), "--mode", "stubs"],
+        cwd=str(repo_root),
+    )
+
+
+def _ensure_wheel_stubs_generated() -> None:
     missing = [path for path in _required_wheel_stubs() if not path.is_file()]
     if not missing:
         return
-    formatted = ", ".join(str(path) for path in missing)
-    raise RuntimeError(
-        "cibuildwheel builds require pre-generated nanobind stubs; missing: "
-        f"{formatted}. Run `python configure.py --mode stubs --backends both` "
-        "and `python cbuild.py --mode stubs`, or build from the release sdist."
-    )
+    _generate_wheel_stubs()
+    missing = [path for path in _required_wheel_stubs() if not path.is_file()]
+    if missing:
+        formatted = ", ".join(str(path) for path in missing)
+        raise RuntimeError(
+            "cibuildwheel builds require nanobind stubs, and automatic "
+            f"generation did not produce: {formatted}. Run `python configure.py "
+            "--mode stubs --backends both` and `python cbuild.py --mode stubs` "
+            "manually to see the underlying error, or build from the release "
+            "sdist."
+        )
 
 
 def _prepare_common_cmake_env() -> None:
@@ -411,10 +446,12 @@ def build_wheel(
     _set_cmake_arg("BUILD_TESTING", "OFF")
     _set_cmake_arg("MIFROST_BUILD_BENCHMARKS", "OFF")
     if _in_cibuildwheel_repair_pipeline():
-        # cibuildwheel's wheels.yml workflow carries nanobind-generated stubs
-        # as pre-built artifacts (see the generate_stubs job) and reuses them
-        # across every repaired wheel instead of regenerating them here.
-        _require_pre_generated_wheel_stubs()
+        # CI's generate_stubs job pre-stages nanobind stubs as a shared
+        # artifact so every matrix leg skips regenerating them. A bare local
+        # cibuildwheel run has no such job, so this call self-heals by
+        # running the same stub build (_generate_wheel_stubs) the first time
+        # it finds stubs missing.
+        _ensure_wheel_stubs_generated()
         _set_cmake_arg("MIFROST_GENERATE_STUBS", "OFF")
     else:
         _set_cmake_arg("MIFROST_GENERATE_STUBS", "ON")

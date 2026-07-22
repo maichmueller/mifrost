@@ -124,12 +124,12 @@ jobs:
           - os: ubuntu-latest
             flavor: manylinux
             conan_home_dir: .conan2_wheels_manylinux
-            cibw_build: "cp312-manylinux_* cp313-manylinux_* cp314-manylinux_*"
+            cibw_build: "cp312-manylinux_* cp313-manylinux_*"
             cibw_skip: "cp314t-*"
           - os: macos-latest
             flavor: macos
             conan_home_dir: .conan2_wheels_macos
-            cibw_build: "cp312-* cp313-* cp314-*"
+            cibw_build: "cp312-* cp313-*"
             cibw_skip: "cp314t-*"
 
     steps:

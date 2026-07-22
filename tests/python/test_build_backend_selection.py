@@ -133,7 +133,7 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert "backend: pytyr" not in workflow
 
 
-def test_cibuildwheel_build_requires_generated_stubs_and_disables_regeneration(
+def test_cibuildwheel_build_raises_when_auto_generation_leaves_stubs_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("CIBUILDWHEEL", "1")
@@ -142,7 +142,8 @@ def test_cibuildwheel_build_requires_generated_stubs_and_disables_regeneration(
         "_required_wheel_stubs",
         lambda: (tmp_path / "_neutral_core.pyi",),
     )
-    with pytest.raises(RuntimeError, match="pre-generated nanobind stubs"):
+    monkeypatch.setattr(build_backend, "_generate_wheel_stubs", lambda: None)
+    with pytest.raises(RuntimeError, match="automatic generation did not produce"):
         build_backend.build_wheel(str(tmp_path))
 
     (tmp_path / "_neutral_core.pyi").write_text("# generated\n")
@@ -154,6 +155,50 @@ def test_cibuildwheel_build_requires_generated_stubs_and_disables_regeneration(
     )
     assert build_backend.build_wheel(str(tmp_path)) == "mifrost.whl"
     assert "-DMIFROST_GENERATE_STUBS=OFF" in build_backend.os.environ["CMAKE_ARGS"]
+
+
+def test_cibuildwheel_build_auto_generates_missing_stubs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("CIBUILDWHEEL", "1")
+    stub_path = tmp_path / "_neutral_core.pyi"
+    monkeypatch.setattr(build_backend, "_required_wheel_stubs", lambda: (stub_path,))
+
+    def _fake_generate() -> None:
+        stub_path.write_text("# generated\n")
+
+    monkeypatch.setattr(build_backend, "_generate_wheel_stubs", _fake_generate)
+    monkeypatch.setattr(build_backend, "_maybe_prepare_conan", lambda _settings: None)
+    monkeypatch.setattr(
+        build_backend._sbc,
+        "build_wheel",
+        lambda *args: "mifrost.whl",
+    )
+    assert build_backend.build_wheel(str(tmp_path)) == "mifrost.whl"
+    assert "-DMIFROST_GENERATE_STUBS=OFF" in build_backend.os.environ["CMAKE_ARGS"]
+
+
+def test_generate_wheel_stubs_invokes_configure_and_cbuild(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MIFROST_BUILD_BACKENDS", "pytyr")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        build_backend.subprocess,
+        "check_call",
+        lambda cmd, **kwargs: calls.append(cmd),
+    )
+
+    build_backend._generate_wheel_stubs()
+
+    assert len(calls) == 2
+    configure_cmd, build_cmd = calls
+    assert configure_cmd[0] == build_backend.sys.executable
+    assert configure_cmd[1].endswith("configure.py")
+    assert configure_cmd[2:] == ["--mode", "stubs", "--backends", "pytyr"]
+    assert build_cmd[0] == build_backend.sys.executable
+    assert build_cmd[1].endswith("cbuild.py")
+    assert build_cmd[2:] == ["--mode", "stubs"]
 
 
 def test_plain_wheel_build_generates_stubs_without_a_pre_generated_requirement(

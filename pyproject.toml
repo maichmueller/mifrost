@@ -149,7 +149,7 @@ build-verbosity = 1
 # heavy dependencies (torch, torch_geometric, etc.).
 test-command = "python -c \"import mifrost; print('mifrost', mifrost.__file__)\""
 
-build = ["cp312-*", "cp313-*", "cp314-*"]
+build = ["cp312-*", "cp313-*"]
 test-skip = "cp314t-*"
 
 [tool.cibuildwheel.linux.environment]
