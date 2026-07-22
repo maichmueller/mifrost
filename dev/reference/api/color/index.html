@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -27,7 +27,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -540,6 +540,8 @@
       
         
       
+        
+      
     
     
     
@@ -607,6 +609,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1044,7 +1074,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1108,6 +1138,17 @@
     <span class="md-ellipsis">
       
         engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.color.ColorEncoder.config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config
       
     </span>
   </a>
@@ -1235,7 +1276,34 @@ attributes suitable for color-based graph models.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">104</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
 <span class="normal">105</span>
 <span class="normal">106</span>
 <span class="normal">107</span>
@@ -1419,40 +1487,7 @@ attributes suitable for color-based graph models.</p>
 <span class="normal">285</span>
 <span class="normal">286</span>
 <span class="normal">287</span>
-<span class="normal">288</span>
-<span class="normal">289</span>
-<span class="normal">290</span>
-<span class="normal">291</span>
-<span class="normal">292</span>
-<span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span>
-<span class="normal">300</span>
-<span class="normal">301</span>
-<span class="normal">302</span>
-<span class="normal">303</span>
-<span class="normal">304</span>
-<span class="normal">305</span>
-<span class="normal">306</span>
-<span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
-<span class="normal">311</span>
-<span class="normal">312</span>
-<span class="normal">313</span>
-<span class="normal">314</span>
-<span class="normal">315</span>
-<span class="normal">316</span>
-<span class="normal">317</span>
-<span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span>
-<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ColorEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">Data</span><span class="p">]):</span>
+<span class="normal">288</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ColorEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">Data</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Homogeneous color encoder backed by ``ColorEncoderEngine``.</span>
 
@@ -1464,21 +1499,34 @@ attributes suitable for color-based graph models.</p>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">ColorBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">edge_features</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">enable_global_predicate_nodes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a color encoder for one domain.&quot;&quot;&quot;</span>
-        <span class="n">config</span> <span class="o">=</span> <span class="n">ColorEncoderConfig</span><span class="p">()</span>
-        <span class="n">config</span><span class="o">.</span><span class="n">edge_features</span> <span class="o">=</span> <span class="n">edge_features</span>
-        <span class="n">config</span><span class="o">.</span><span class="n">enable_global_predicate_nodes</span> <span class="o">=</span> <span class="n">enable_global_predicate_nodes</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="n">ColorEncoderEngine</span><span class="p">(</span><span class="n">_advanced_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">),</span> <span class="n">config</span><span class="p">)</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticColorEncoderConfig</span><span class="p">(</span>
+            <span class="n">edge_features</span><span class="o">=</span><span class="n">edge_features</span><span class="p">,</span>
+            <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="n">enable_global_predicate_nodes</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_color_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">engine</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">edge_features</span> <span class="o">=</span> <span class="n">edge_features</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">predicate_nodes_enabled</span> <span class="o">=</span> <span class="n">enable_global_predicate_nodes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
 
     <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColorEncoderEngine</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the underlying C++ color engine.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the backend-neutral resolved Color config.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1489,15 +1537,12 @@ attributes suitable for color-based graph models.</p>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one state into homogeneous encoding dictionary.&quot;&quot;&quot;</span>
-        <span class="n">adv_state</span> <span class="o">=</span> <span class="n">_advanced_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-        <span class="n">action_inputs</span> <span class="o">=</span> <span class="n">parse_flat_actions</span><span class="p">(</span><span class="n">actions</span><span class="p">)</span>
-        <span class="n">action_list</span> <span class="o">=</span> <span class="n">_prepare_actions</span><span class="p">(</span><span class="n">action_inputs</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">subgoal_layers</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">action_list</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adv_state</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">goals</span> <span class="o">=</span> <span class="n">default_goals_from_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-        <span class="n">inputs</span> <span class="o">=</span> <span class="n">_split_goals</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adv_state</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">action_list</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode_one</span><span class="p">(</span>
+            <span class="n">state</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1528,31 +1573,11 @@ attributes suitable for color-based graph models.</p>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many states into homogeneous batch encoding_dict.&quot;&quot;&quot;</span>
-        <span class="n">states_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
             <span class="n">states</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_state_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_state</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">goals_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">goals</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">actions_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">actions</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_action_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_action</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">subgoal_layers_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">subgoal_layers</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
-            <span class="n">states_for_core</span><span class="p">,</span>
-            <span class="n">goals</span><span class="o">=</span><span class="n">goals_for_core</span><span class="p">,</span>
-            <span class="n">actions</span><span class="o">=</span><span class="n">actions_for_core</span><span class="p">,</span>
-            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_for_core</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
@@ -1585,6 +1610,8 @@ attributes suitable for color-based graph models.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a color-encoded PyG graph into a NetworkX graph.&quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
+
         <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
         <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;node_names&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">node_names</span><span class="p">:</span>
@@ -1634,6 +1661,8 @@ attributes suitable for color-based graph models.</p>
         <span class="n">font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Render a color-encoded graph with matplotlib and return the axis.&quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
+
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
         <span class="k">except</span> <span class="ne">ModuleNotFoundError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -1705,6 +1734,28 @@ attributes suitable for color-based graph models.</p>
 
 </div>
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="mifrost.encoders.color.ColorEncoder.config" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">config</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Expose the backend-neutral resolved Color config.</p>
+
+    </div>
+
+</div>
+
 
 
 
@@ -1712,7 +1763,7 @@ attributes suitable for color-based graph models.</p>
 
 
 <h3 id="mifrost.encoders.color.ColorEncoder.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">edge_features</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">edge_features</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 </h3>
 
@@ -1724,33 +1775,49 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
-<span class="normal">115</span>
-<span class="normal">116</span>
-<span class="normal">117</span>
-<span class="normal">118</span>
-<span class="normal">119</span>
-<span class="normal">120</span>
-<span class="normal">121</span>
-<span class="normal">122</span>
-<span class="normal">123</span>
-<span class="normal">124</span>
-<span class="normal">125</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">ColorBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">edge_features</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">enable_global_predicate_nodes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a color encoder for one domain.&quot;&quot;&quot;</span>
-    <span class="n">config</span> <span class="o">=</span> <span class="n">ColorEncoderConfig</span><span class="p">()</span>
-    <span class="n">config</span><span class="o">.</span><span class="n">edge_features</span> <span class="o">=</span> <span class="n">edge_features</span>
-    <span class="n">config</span><span class="o">.</span><span class="n">enable_global_predicate_nodes</span> <span class="o">=</span> <span class="n">enable_global_predicate_nodes</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="n">ColorEncoderEngine</span><span class="p">(</span><span class="n">_advanced_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">),</span> <span class="n">config</span><span class="p">)</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticColorEncoderConfig</span><span class="p">(</span>
+        <span class="n">edge_features</span><span class="o">=</span><span class="n">edge_features</span><span class="p">,</span>
+        <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="n">enable_global_predicate_nodes</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_color_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">engine</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">config</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">edge_features</span> <span class="o">=</span> <span class="n">edge_features</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">predicate_nodes_enabled</span> <span class="o">=</span> <span class="n">enable_global_predicate_nodes</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1773,25 +1840,25 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
-<span class="normal">159</span>
-<span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">state</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
@@ -1832,29 +1899,29 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">207</span>
-<span class="normal">208</span>
-<span class="normal">209</span>
-<span class="normal">210</span>
-<span class="normal">211</span>
-<span class="normal">212</span>
-<span class="normal">213</span>
-<span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">states</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
@@ -1899,9 +1966,9 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColorEncoderStream</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColorEncoderStream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ColorEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -1926,46 +1993,50 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">235</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
 <span class="normal">236</span>
 <span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span>
-<span class="normal">248</span>
-<span class="normal">249</span>
-<span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
-<span class="normal">269</span>
-<span class="normal">270</span>
-<span class="normal">271</span>
-<span class="normal">272</span>
-<span class="normal">273</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
+<span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a color-encoded PyG graph into a NetworkX graph.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
+
     <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
     <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;node_names&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">node_names</span><span class="p">:</span>
@@ -2025,7 +2096,42 @@ attributes suitable for color-based graph models.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/color.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">275</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
 <span class="normal">276</span>
 <span class="normal">277</span>
 <span class="normal">278</span>
@@ -2038,40 +2144,7 @@ attributes suitable for color-based graph models.</p>
 <span class="normal">285</span>
 <span class="normal">286</span>
 <span class="normal">287</span>
-<span class="normal">288</span>
-<span class="normal">289</span>
-<span class="normal">290</span>
-<span class="normal">291</span>
-<span class="normal">292</span>
-<span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span>
-<span class="normal">300</span>
-<span class="normal">301</span>
-<span class="normal">302</span>
-<span class="normal">303</span>
-<span class="normal">304</span>
-<span class="normal">305</span>
-<span class="normal">306</span>
-<span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
-<span class="normal">311</span>
-<span class="normal">312</span>
-<span class="normal">313</span>
-<span class="normal">314</span>
-<span class="normal">315</span>
-<span class="normal">316</span>
-<span class="normal">317</span>
-<span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span>
-<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">draw</span><span class="p">(</span>
+<span class="normal">288</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">draw</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
@@ -2082,6 +2155,8 @@ attributes suitable for color-based graph models.</p>
     <span class="n">font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a color-encoded graph with matplotlib and return the axis.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
+
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
     <span class="k">except</span> <span class="ne">ModuleNotFoundError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -2191,7 +2266,7 @@ attributes suitable for color-based graph models.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

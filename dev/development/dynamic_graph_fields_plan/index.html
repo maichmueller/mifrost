@@ -10,25 +10,27 @@
       
       
       
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/development/dynamic_graph_fields_plan/">
+      
       
       
       
         
       
       
-      <link rel="icon" href="/mifrost/dev/assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>mifrost</title>
+        <title>Dynamic Attr Collation Design (Current) - mifrost</title>
       
     
     
-      <link rel="stylesheet" href="/mifrost/dev/assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="/mifrost/dev/assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,11 +49,11 @@
       
     
     
-      <link rel="stylesheet" href="/mifrost/dev/assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="/mifrost/dev/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("/mifrost/dev",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -75,6 +77,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#dynamic-attr-collation-design-current" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -89,7 +96,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/mifrost/dev/." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
+    <a href="../.." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -109,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              Dynamic Attr Collation Design (Current)
             
           </span>
         </div>
@@ -208,7 +215,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -227,7 +234,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/tutorials/installation/" class="md-tabs__link">
+      <a href="../../tutorials/installation/" class="md-tabs__link">
         
   
   
@@ -246,7 +253,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/how-to/choose-an-encoder/" class="md-tabs__link">
+      <a href="../../how-to/choose-an-encoder/" class="md-tabs__link">
         
   
   
@@ -265,7 +272,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/reference/native/" class="md-tabs__link">
+      <a href="../../reference/native/" class="md-tabs__link">
         
   
   
@@ -284,7 +291,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/explanation/native-first/" class="md-tabs__link">
+      <a href="../../explanation/native-first/" class="md-tabs__link">
         
   
   
@@ -303,7 +310,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/development/build-and-test/" class="md-tabs__link">
+      <a href="../build-and-test/" class="md-tabs__link">
         
   
   
@@ -338,7 +345,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/mifrost/dev/." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
+    <a href="../.." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -368,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -418,7 +425,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/tutorials/installation/" class="md-nav__link ">
+            <a href="../../tutorials/installation/" class="md-nav__link ">
               
   
   
@@ -460,7 +467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/tutorials/first-encoding/" class="md-nav__link">
+      <a href="../../tutorials/first-encoding/" class="md-nav__link">
         
   
   
@@ -488,7 +495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/tutorials/batching-and-streaming/" class="md-nav__link">
+      <a href="../../tutorials/batching-and-streaming/" class="md-nav__link">
         
   
   
@@ -552,7 +559,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/how-to/choose-an-encoder/" class="md-nav__link ">
+            <a href="../../how-to/choose-an-encoder/" class="md-nav__link ">
               
   
   
@@ -594,7 +601,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/encode-goals-actions-history/" class="md-nav__link">
+      <a href="../../how-to/encode-goals-actions-history/" class="md-nav__link">
         
   
   
@@ -622,7 +629,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
         
   
   
@@ -650,7 +657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/dynamic-graph-fields/" class="md-nav__link">
+      <a href="../../how-to/dynamic-graph-fields/" class="md-nav__link">
         
   
   
@@ -678,7 +685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/adapters/" class="md-nav__link">
+      <a href="../../how-to/adapters/" class="md-nav__link">
         
   
   
@@ -706,7 +713,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/performance/" class="md-nav__link">
+      <a href="../../how-to/performance/" class="md-nav__link">
         
   
   
@@ -762,7 +769,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/reference/native/" class="md-nav__link ">
+            <a href="../../reference/native/" class="md-nav__link ">
               
   
   
@@ -804,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/reference/api/" class="md-nav__link">
+      <a href="../../reference/api/" class="md-nav__link">
         
   
   
@@ -864,7 +871,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/explanation/native-first/" class="md-nav__link ">
+            <a href="../../explanation/native-first/" class="md-nav__link ">
               
   
   
@@ -906,7 +913,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/schema-and-tensors/" class="md-nav__link">
+      <a href="../../explanation/schema-and-tensors/" class="md-nav__link">
         
   
   
@@ -934,7 +941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/streaming-model/" class="md-nav__link">
+      <a href="../../explanation/streaming-model/" class="md-nav__link">
         
   
   
@@ -962,7 +969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/encoder-coverage/" class="md-nav__link">
+      <a href="../../explanation/encoder-coverage/" class="md-nav__link">
         
   
   
@@ -1018,7 +1025,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/development/build-and-test/" class="md-nav__link ">
+            <a href="../build-and-test/" class="md-nav__link ">
               
   
   
@@ -1060,7 +1067,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/development/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -1105,6 +1112,110 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#public-batching-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public batching APIs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Public batching APIs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrostbatch_encodings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mifrost.batch_encodings(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#encoderencode_batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        encoder.encode_batch(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batchencodingcollate_spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BatchEncoding.collate_spec()
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reserved-key-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reserved-key rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rationale
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -1117,8 +1228,105 @@
               
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+  
+  
+
+
+<h1 id="dynamic-attr-collation-design-current">Dynamic Attr Collation Design (Current)</h1>
+<p>This note reflects the current design after removing the old <code>EncodedGraph</code> wrapper path.</p>
+<h2 id="status">Status</h2>
+<p>The earlier wrapper-based plan (<code>EncodedGraph</code>, <code>encode_graph(...)</code>, <code>batch_graphs(...)</code>, <code>register_fields(...)</code>) is obsolete and no longer matches the implementation.</p>
+<p>Current behavior is based on two explicit batching entrypoints:</p>
+<ol>
+<li><code>mifrost.batch_encodings(encodings, collate_spec=None) -&gt; BatchEncoding</code></li>
+<li><code>encoder.encode_batch(..., batch_attrs=None, collate_spec=None) -&gt; BatchEncoding</code></li>
+</ol>
+<h2 id="core-model">Core model</h2>
+<p>There are now two distinct concepts:</p>
+<ol>
+<li>Native graph fields</li>
+<li>Declared with <code>BatchBuilder.register_field(...)</code></li>
+<li>Stored in native schema-backed graph tensor storage</li>
+<li>Exported through <code>BatchEncoding.as_dict()["tensors"]</code></li>
+<li>
+<p>Batched natively by <code>BatchBuilder.append_batch_encoding(...)</code></p>
+</li>
+<li>
+<p>Dynamic Python attrs</p>
+</li>
+<li>Assigned directly as Python attrs on <code>BatchEncoding</code></li>
+<li>Not promoted into native graph-field schema</li>
+<li>Collated only when an explicit Python batching path is used</li>
+<li>Exposed on the resulting <code>BatchEncoding</code> as Python attrs</li>
+</ol>
+<p>These are intentionally separate. Python attr collation metadata is not a substitute for native graph-field schema.</p>
+<h2 id="public-batching-apis">Public batching APIs</h2>
+<h3 id="mifrostbatch_encodings"><code>mifrost.batch_encodings(...)</code></h3>
+<p>Use this to merge single-graph encodings.</p>
+<ul>
+<li><code>collate_spec=None</code>:</li>
+<li>default collation is applied for non-native Python attrs</li>
+<li>if all values for a key are mappings: shallow dict value-list collation</li>
+<li>otherwise: list collation</li>
+<li>missing keys are errors</li>
+<li>mixed dict/non-dict values are errors</li>
+<li>
+<p>no recursive dict collation</p>
+</li>
+<li>
+<p><code>collate_spec={...}</code>:</p>
+</li>
+<li>explicit typed collation for selected keys</li>
+<li>supports <code>dtype in {pyobj, str, f32, i64}</code></li>
+<li>supports <code>mode in {stack, cat, ragged_cat, const}</code></li>
+<li>numeric modes honor <code>dim</code>, <code>cat_dim</code>, and <code>inc</code></li>
+</ul>
+<p>Important:
+- <code>collate_spec</code> must be passed explicitly for typed collation.
+- Stored <code>BatchEncoding.collate_spec()</code> metadata is not implicitly reused when re-batching.</p>
+<h3 id="encoderencode_batch"><code>encoder.encode_batch(...)</code></h3>
+<p>Use this when the encoder itself builds the batch.</p>
+<ul>
+<li><code>batch_attrs={...}</code> injects already-collated Python attrs onto the result</li>
+<li><code>collate_spec={...}</code> records read-only metadata describing those injected attrs</li>
+</ul>
+<p>This metadata exists for output introspection only. There is no public <code>register_collate_spec(...)</code> mutator on <code>BatchEncoding</code>.</p>
+<h2 id="batchencodingcollate_spec"><code>BatchEncoding.collate_spec()</code></h2>
+<p><code>BatchEncoding.collate_spec()</code> returns read-only metadata for dynamic Python attrs that were explicitly collated or explicitly annotated during batch construction.</p>
+<p>It does not:
+- declare native fields
+- validate future writes
+- participate implicitly in later batching operations</p>
+<h2 id="reserved-key-rules">Reserved-key rules</h2>
+<p>Dynamic Python attrs and Python attr collation reject keys that would collide with:</p>
+<ul>
+<li>internal <code>__mifrost_*</code> keys</li>
+<li>PyG structural keys such as <code>x</code>, <code>edge_index</code>, <code>edge_attr</code>, <code>batch</code>, <code>ptr</code></li>
+<li>native tensor field keys already present in the encoding</li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>This design keeps the boundary explicit:</p>
+<ul>
+<li>native graph fields are schema and storage</li>
+<li>Python attr collation is batching policy</li>
+</ul>
+<p>That avoids the main problem in the older wrapper plan: a registration-like API that looked like schema declaration but actually only stored deferred Python-side collation hints.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -1163,10 +1371,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "/mifrost/dev", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "/mifrost/dev/assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="/mifrost/dev/assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

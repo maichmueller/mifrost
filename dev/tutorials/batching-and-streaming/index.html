@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -708,6 +708,8 @@
       
         
       
+        
+      
     
     
     
@@ -775,6 +777,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1212,7 +1242,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1394,7 +1424,7 @@
 <p>Use <code>encode_batch</code> when all states are available in memory.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_batch.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1419,7 +1449,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.encode_batch([state, successor]) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 2
 num_nodes: 24
@@ -1462,7 +1492,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 50,
   &quot;num_graphs&quot;: 2,
   &quot;num_nodes&quot;: 24,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1472,7 +1502,7 @@ SNAPSHOT_JSON_END
 <p>Use <code>stream()</code> when samples arrive incrementally and only append semantics are needed.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_stream_append_only.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_1">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1502,7 +1532,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_1">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.stream().append(...).flush() (2 graphs) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 2
 num_nodes: 24
@@ -1545,7 +1575,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 50,
   &quot;num_graphs&quot;: 2,
   &quot;num_nodes&quot;: 24,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1561,7 +1591,7 @@ SNAPSHOT_JSON_END
 <p>Use <code>mutable_stream()</code> when you need stable IDs and update/remove semantics.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_stream_mutable.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_2">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1594,7 +1624,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_2">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.mutable_stream() append/update/remove/flush (1 graph) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 12
@@ -1637,7 +1667,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 24,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1751,7 +1781,7 @@ SNAPSHOT_JSON_END
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

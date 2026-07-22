@@ -10,25 +10,31 @@
       
       
       
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/how-to/encode-semantic-flat-inputs/">
       
+      
+        <link rel="prev" href="../encode-goals-actions-history/">
+      
+      
+        <link rel="next" href="../dynamic-graph-fields/">
       
       
         
       
       
-      <link rel="icon" href="/mifrost/dev/assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>mifrost</title>
+        <title>Encode backend-neutral semantic flat inputs - mifrost</title>
       
     
     
-      <link rel="stylesheet" href="/mifrost/dev/assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="/mifrost/dev/assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,11 +53,11 @@
       
     
     
-      <link rel="stylesheet" href="/mifrost/dev/assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="/mifrost/dev/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("/mifrost/dev",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -75,6 +81,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#encode-backend-neutral-semantic-flat-inputs" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -89,7 +100,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/mifrost/dev/." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
+    <a href="../.." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -109,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              Encode backend-neutral semantic flat inputs
             
           </span>
         </div>
@@ -208,7 +219,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -227,7 +238,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/tutorials/installation/" class="md-tabs__link">
+      <a href="../../tutorials/installation/" class="md-tabs__link">
         
   
   
@@ -244,9 +255,11 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="/mifrost/dev/how-to/choose-an-encoder/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="../choose-an-encoder/" class="md-tabs__link">
         
   
   
@@ -265,7 +278,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/reference/native/" class="md-tabs__link">
+      <a href="../../reference/native/" class="md-tabs__link">
         
   
   
@@ -284,7 +297,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/explanation/native-first/" class="md-tabs__link">
+      <a href="../../explanation/native-first/" class="md-tabs__link">
         
   
   
@@ -303,7 +316,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/mifrost/dev/development/build-and-test/" class="md-tabs__link">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
         
   
   
@@ -338,7 +351,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/mifrost/dev/." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
+    <a href="../.." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -368,7 +381,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -418,7 +431,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/tutorials/installation/" class="md-nav__link ">
+            <a href="../../tutorials/installation/" class="md-nav__link ">
               
   
   
@@ -460,7 +473,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/tutorials/first-encoding/" class="md-nav__link">
+      <a href="../../tutorials/first-encoding/" class="md-nav__link">
         
   
   
@@ -488,7 +501,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/tutorials/batching-and-streaming/" class="md-nav__link">
+      <a href="../../tutorials/batching-and-streaming/" class="md-nav__link">
         
   
   
@@ -520,8 +533,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -539,20 +554,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/how-to/choose-an-encoder/" class="md-nav__link ">
+            <a href="../choose-an-encoder/" class="md-nav__link ">
               
   
   
@@ -570,13 +588,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -594,7 +612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/encode-goals-actions-history/" class="md-nav__link">
+      <a href="../encode-goals-actions-history/" class="md-nav__link">
         
   
   
@@ -619,10 +637,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -638,6 +665,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -650,7 +678,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/dynamic-graph-fields/" class="md-nav__link">
+      <a href="../dynamic-graph-fields/" class="md-nav__link">
         
   
   
@@ -678,7 +706,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/adapters/" class="md-nav__link">
+      <a href="../adapters/" class="md-nav__link">
         
   
   
@@ -706,7 +734,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/how-to/performance/" class="md-nav__link">
+      <a href="../performance/" class="md-nav__link">
         
   
   
@@ -762,7 +790,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/reference/native/" class="md-nav__link ">
+            <a href="../../reference/native/" class="md-nav__link ">
               
   
   
@@ -804,7 +832,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/reference/api/" class="md-nav__link">
+      <a href="../../reference/api/" class="md-nav__link">
         
   
   
@@ -864,7 +892,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/explanation/native-first/" class="md-nav__link ">
+            <a href="../../explanation/native-first/" class="md-nav__link ">
               
   
   
@@ -906,7 +934,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/schema-and-tensors/" class="md-nav__link">
+      <a href="../../explanation/schema-and-tensors/" class="md-nav__link">
         
   
   
@@ -934,7 +962,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/streaming-model/" class="md-nav__link">
+      <a href="../../explanation/streaming-model/" class="md-nav__link">
         
   
   
@@ -962,7 +990,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/explanation/encoder-coverage/" class="md-nav__link">
+      <a href="../../explanation/encoder-coverage/" class="md-nav__link">
         
   
   
@@ -1018,7 +1046,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/mifrost/dev/development/build-and-test/" class="md-nav__link ">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
               
   
   
@@ -1060,7 +1088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/mifrost/dev/development/architecture/" class="md-nav__link">
+      <a href="../../development/architecture/" class="md-nav__link">
         
   
   
@@ -1105,6 +1133,8 @@
   
   
   
+    
+  
   
 </nav>
                   </div>
@@ -1117,8 +1147,76 @@
               
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+  
+  
+
+
+<h1 id="encode-backend-neutral-semantic-flat-inputs">Encode backend-neutral semantic flat inputs</h1>
+<p>Use <code>SemanticFlatRelationEncoderEngine</code> when planning data already has an owned
+semantic representation and should not be tied to a Mimir domain, problem, or
+state object. The engine implements the same flat relation, target, history,
+predicate-virtual, LGAN, and batch contract as <code>FlatRelationEncoderEngine</code>, but
+its input contains only strings and integer indices.</p>
+<p>The engine is initialized once from predicate and action schema:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
+
+<span class="n">category</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticPredicateCategory</span>
+<span class="n">predicates</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticPredicateSpec</span><span class="p">(</span><span class="n">category</span><span class="o">.</span><span class="n">fluent</span><span class="p">,</span> <span class="s2">&quot;at&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">actions</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticActionSpec</span><span class="p">(</span><span class="s2">&quot;move&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">engine</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticFlatRelationEncoderEngine</span><span class="p">(</span><span class="n">predicates</span><span class="p">,</span> <span class="n">actions</span><span class="p">)</span>
+</code></pre></div>
+<p>Each graph owns its object table. Predicate indices refer to the engine's
+predicate vector, action indices refer to its action vector, and object indices
+refer to that graph's object vector:</p>
+<div class="highlight"><pre><span></span><code><span class="n">value</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticFlatRelationInput</span><span class="p">()</span>
+<span class="n">value</span><span class="o">.</span><span class="n">objects</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;robot&quot;</span><span class="p">,</span> <span class="s2">&quot;room-a&quot;</span><span class="p">,</span> <span class="s2">&quot;room-b&quot;</span><span class="p">]</span>
+<span class="n">value</span><span class="o">.</span><span class="n">state_facts</span> <span class="o">=</span> <span class="p">[</span><span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticAtom</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])]</span>
+<span class="n">value</span><span class="o">.</span><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticLiteral</span><span class="p">(</span><span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticAtom</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span> <span class="kc">True</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">value</span><span class="o">.</span><span class="n">actions</span> <span class="o">=</span> <span class="p">[</span><span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticGroundAction</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])]</span>
+
+<span class="n">encoding</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<span class="n">tensors</span> <span class="o">=</span> <span class="n">encoding</span><span class="o">.</span><span class="n">as_pyg</span><span class="p">()</span>
+</code></pre></div>
+<p>These indices are compact call-local references, not persistent semantic IDs.
+For process, repository, replay, or checkpoint boundaries, serialize names and
+reconstruct the local indices deterministically. Never serialize planning
+repository indices or assume independently constructed repositories share
+identity.</p>
+<p><code>encode_batch</code> accepts any number of compatible owned inputs, including an
+empty list. It uses the same node offsets, LGAN relation-instance offsets,
+target-local candidate IDs, and optional relation-major packing as the Mimir
+engine:</p>
+<div class="highlight"><pre><span></span><code><span class="n">config</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">FlatRelationEncoderConfig</span><span class="p">(</span>
+    <span class="n">pack_relation_args_relation_major</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">engine</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">SemanticFlatRelationEncoderEngine</span><span class="p">(</span><span class="n">predicates</span><span class="p">,</span> <span class="n">actions</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">([</span><span class="n">value</span><span class="p">,</span> <span class="n">value</span><span class="p">])</span>
+</code></pre></div>
+<p>Input validation rejects duplicate schema/object names, invalid arities,
+out-of-scope indices, non-negative history deltas, unsupported target sources,
+and subgoal layers beyond <code>max_goal_level</code> before emitting a graph.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -1163,10 +1261,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "/mifrost/dev", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "/mifrost/dev/assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="/mifrost/dev/assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

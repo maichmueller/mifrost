@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -548,6 +548,8 @@
       
         
       
+        
+      
     
     
     
@@ -618,6 +620,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1065,7 +1095,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1125,7 +1155,12 @@
 
 
 <h1 id="adapters-for-custom-types">Adapters for Custom Types</h1>
-<p>Encoders accept native <code>pymimir</code> wrapper/advanced types by default. For custom wrappers, register explicit adapters.</p>
+<p>Public encoders accept native Pymimir wrapper/advanced values and native PyTyr
+planning values. Pass a Pymimir domain or PyTyr <code>PlanningTask</code> to the
+constructor; the backend is inferred per encoder instance, or can be selected
+explicitly with <code>backend="pymimir"</code> / <code>backend="pytyr"</code>.</p>
+<p>The <code>register_*_adapter</code> functions are the legacy Pymimir compatibility surface
+for custom wrappers that can losslessly expose <code>pymimir.advanced</code> values:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
 
 <span class="n">mifrost</span><span class="o">.</span><span class="n">register_state_adapter</span><span class="p">(</span><span class="n">MyStateType</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">to_advanced_state</span><span class="p">())</span>
@@ -1135,6 +1170,11 @@
 </code></pre></div>
 <p>Adapters are matched by exact concrete type and should return the corresponding <code>pymimir.advanced</code> object.</p>
 <p>Remove adapters with the matching <code>unregister_*_adapter</code> function.</p>
+<p>These registrations do not establish a process-global active backend and are
+not used by PyTyr runtimes. PyTyr accepts its native task/state/action/literal
+objects directly. For planner-independent data producers, use the semantic
+records and engines from <code>mifrost._neutral_core</code> instead of converting through
+Pymimir.</p>
 
 
 
@@ -1195,7 +1235,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

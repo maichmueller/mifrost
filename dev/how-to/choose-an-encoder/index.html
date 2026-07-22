@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -548,6 +548,8 @@
       
         
       
+        
+      
     
     
     
@@ -618,6 +620,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1055,7 +1085,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1364,7 +1394,7 @@
 <h2 id="minimal-runnable-examples">Minimal Runnable Examples</h2>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1386,7 +1416,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.encode(initial_state) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 12
@@ -1429,7 +1459,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 26,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1437,7 +1467,7 @@ SNAPSHOT_JSON_END
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/horizon_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_1">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1479,7 +1509,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_1">Output</h2>
 <div class="highlight"><pre><span></span><code>== HorizonEncoder.encode(root, dag, goals) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 18
@@ -1522,7 +1552,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 40,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 18,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 5944796290213023967
 }
@@ -1530,7 +1560,7 @@ SNAPSHOT_JSON_END
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/transition_full_vs_delta.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_2">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1565,7 +1595,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_2">Output</h2>
 <div class="highlight"><pre><span></span><code>== TransitionHGraphEncoder (full) encode(state, successor) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 12
@@ -1608,14 +1638,14 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 22,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 15812242964936039643
 }
 SNAPSHOT_JSON_END
 == TransitionEffectsHGraphEncoder (delta) encode(state, successor) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 12
@@ -1658,7 +1688,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 22,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 3017462943347528540
 }
@@ -1666,7 +1696,7 @@ SNAPSHOT_JSON_END
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/color_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_3">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1690,7 +1720,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_3">Output</h2>
 <div class="highlight"><pre><span></span><code>== ColorEncoder.encode(initial_state) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: homo
 num_graphs: 1
 num_nodes: 17
@@ -1715,7 +1745,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 17,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 17,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 4576704403193191383
 }
@@ -1723,7 +1753,7 @@ SNAPSHOT_JSON_END
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/ilg_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>390f8090430944521df7c322996af8aa89f78469</code></p>
+<p>Commit: <code>53cd97972d941be7e4e4ce272cec46bfdbd0bbd7</code></p>
 <h2 id="program_4">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1746,7 +1776,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_4">Output</h2>
 <div class="highlight"><pre><span></span><code>== ILGEncoder.encode(state, goals) ==
 python: 3.12.13
-platform: Linux-6.17.0-1018-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 10
@@ -1785,7 +1815,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 16,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 10,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1018-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 16751243357862855874
 }
@@ -1835,13 +1865,15 @@ SNAPSHOT_JSON_END
 <li>horizon encoder: <code>dags</code> accepts a shared DAG, an aligned iterable of
     <code>TransitionDAG | rustworkx.PyDiGraph | None</code>,
     <code>BatchParam.shared(...)</code>, or <code>BatchParam.separate([...])</code></li>
-<li>High-level encoder batch paths preprocess wrapper/adapter inputs in Python, then
-  dispatch to strict advanced-only C++ batch parsing.</li>
-<li>Direct low-level <code>_core._parse_*</code> batch helpers stay advanced-only and reject
-  adapter-backed objects.</li>
-<li><code>mifrost.transition_dag_from_rustworkx(...)</code> is the explicit conversion helper when
-  you want to pre-normalize a <code>PyDiGraph</code> yourself. The integration is Python-level;
-  there is no raw/native graph handoff into the C++ core.</li>
+<li>High-level encoder batch paths dispatch to the selected per-instance runtime.
+  Pymimir retains its compatibility parsers; PyTyr converts directly to owned
+  semantic input batches.</li>
+<li>Direct low-level Pymimir <code>_core._parse_*</code> helpers remain adapter-internal and
+  advanced-only. They are not the cross-backend public contract.</li>
+<li><code>mifrost.transition_dag_from_rustworkx(...)</code> is the historical explicit
+  Pymimir conversion helper. To stay backend-neutral, pass a raw <code>PyDiGraph</code>
+  directly to a selected <code>HorizonEncoder</code> or <code>FlatHorizonEncoder</code>; the runtime
+  converts it to its owned native/semantic DAG.</li>
 <li><code>transition_dag_from_rustworkx(...)</code> reads per-node candidate identity from payload
   <code>candidate_id</code> (mapping key or attribute). If candidate IDs are only partially present,
   conversion fails by default; pass
@@ -1920,7 +1952,7 @@ SNAPSHOT_JSON_END
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

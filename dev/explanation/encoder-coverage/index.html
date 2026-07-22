@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -546,6 +546,8 @@
       
         
       
+        
+      
     
     
     
@@ -613,6 +615,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1010,6 +1040,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#backend-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#streams-and-dynamic-fields-coverage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1124,7 +1165,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1170,6 +1211,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#backend-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend Support
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#streams-and-dynamic-fields-coverage" class="md-nav__link">
@@ -1297,6 +1349,61 @@
 </tr>
 </tbody>
 </table>
+<h2 id="backend-support">Backend Support</h2>
+<p>All encoders in the table accept Pymimir and PyTyr inputs through a per-instance
+runtime. Either planner can be installed independently, or both can coexist in
+one process. Compatible outputs from different backends share semantic schema
+fingerprints and can be passed together to <code>mifrost.batch_encodings</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th style="text-align: center;">Pymimir</th>
+<th style="text-align: center;">PyTyr</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Single and batch encoding</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>Stream encoding</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>HGraph relation-schema replacement</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>Explicit or inferred selection</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>Independent wheel/install</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>Same-process coexistence</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td>Mixed compatible <code>BatchEncoding</code> / PyG / serialization</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+</tbody>
+</table>
+<p><code>transition_dag_from_rustworkx(...)</code> remains a Pymimir-returning standalone
+helper for backward compatibility. For either backend, passing the raw
+<code>rustworkx.PyDiGraph</code> directly to the selected <code>HorizonEncoder</code> or
+<code>FlatHorizonEncoder</code> uses that runtime's native conversion path.</p>
 <h2 id="streams-and-dynamic-fields-coverage">Streams and Dynamic Fields Coverage</h2>
 <ul>
 <li>Stream semantics/parity: <code>tests/encoding/test_stream_encoder.py</code></li>
@@ -1371,7 +1478,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

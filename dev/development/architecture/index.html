@@ -21,15 +21,15 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>Architecture Notes - mifrost</title>
+        <title>Architecture Overview - mifrost</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#architecture-notes" class="md-skip">
+        <a href="#architecture-overview" class="md-skip">
           Skip to content
         </a>
       
@@ -118,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Architecture Notes
+              Architecture Overview
             
           </span>
         </div>
@@ -544,6 +544,8 @@
       
         
       
+        
+      
     
     
     
@@ -611,6 +613,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1055,6 +1085,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1062,7 +1110,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1071,6 +1119,141 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dependency Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-adaptation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input adaptation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#encoding-and-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encoding and conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-an-encoder-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding an Encoder Family
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#improvement-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Improvement Roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1104,6 +1287,130 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dependency Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-adaptation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input adaptation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#encoding-and-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encoding and conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-an-encoder-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding an Encoder Family
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#improvement-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Improvement Roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1122,18 +1429,108 @@
   
 
 
-<h1 id="architecture-notes">Architecture Notes</h1>
-<p>This project keeps encoder layering explicit:</p>
+<h1 id="architecture-overview">Architecture Overview</h1>
+<p><code>mifrost</code> uses a <code>src/</code> layout with a thin public Python package on top of an
+internal native core.</p>
+<h2 id="repository-layout">Repository Layout</h2>
 <ul>
-<li><code>HGraphEncoderEngine</code> owns shared heterogeneous encoding lifecycle.</li>
-<li><code>HorizonHGraphEncoderEngine</code> and <code>SuccessorHGraphEncoderEngine</code> own specialized graph semantics.</li>
-<li>Python wrappers keep a native-first API and explicit conversion utilities.</li>
+<li><code>src/mifrost/</code> is the public Python package imported by users.</li>
+<li><code>src/_core/mifrost/</code> contains the native implementation, nanobind bindings,
+  schema helpers, and encoder engines.</li>
+<li><code>src/CMakeLists.txt</code> ties the native sources into the build.</li>
+<li><code>src/mifrost/_core.pyi</code> provides the public stub for the extension module.
+  Nanobind generates it, git ignores it, CI regenerates it before packaging,
+  and <code>pyproject.toml</code> includes the generated file in release artifacts.</li>
 </ul>
-<p>Reference design notes in source tree:</p>
+<p>The Python layer stays intentionally small: it exposes the user-facing API,
+package-level helpers, and convenience wrappers, while the native layer owns
+the actual encoding and batching logic.</p>
+<h2 id="runtime-shape">Runtime Shape</h2>
+<ol>
+<li>Python callers construct encoder objects from <code>src/mifrost/</code>.</li>
+<li>Those wrappers delegate to the native core in <code>src/_core/mifrost/</code>.</li>
+<li>Native encoders produce <code>BatchEncoding</code> as the primary output.</li>
+<li>Python helpers convert that native output to PyTorch Geometric objects only
+   when needed.</li>
+</ol>
+<p>This keeps the package native-first without changing the boundary between the
+Python API and the C++ implementation.</p>
+<h2 id="dependency-boundaries">Dependency Boundaries</h2>
+<p>The encoder facade has three intentionally narrow boundaries. New encoders
+should reuse these boundaries instead of reproducing their implementation.</p>
+<h3 id="input-adaptation">Input adaptation</h3>
+<p><code>mifrost.encoders.types</code> owns the adapter registries and conversion of one
+domain object. <code>mifrost.encoders._batch_contract.prepare_core_batch_inputs</code>
+owns recursive adaptation of the standard batch lanes (<code>states</code>, <code>goals</code>,
+<code>actions</code>, <code>subgoal_layers</code>, <code>history_subgoals</code>, and <code>successors</code>). It preserves
+shared/per-state <code>BatchParam</code> structure while adapting only leaf values.</p>
+<p>Python encoder facades validate lane-specific policy, call this boundary once,
+and pass its result to a native parser or engine. They must not implement their
+own recursive wrapper-to-native traversal.</p>
+<h3 id="encoding-and-conversion">Encoding and conversion</h3>
+<p><code>EncoderBase</code> owns the non-stream lifecycle and <code>StreamEncoderBase</code> owns the
+stream lifecycle. Their shared internal conversion boundary accepts either a
+native <code>BatchEncoding</code> or a normalized encoding dictionary and produces PyG
+data. A custom encoder can override <code>_dict_to_pyg</code>; native encoders retain the
+direct native conversion fast path.</p>
+<p>Unknown runtime keyword arguments fail at this boundary. An encoder that adds a
+runtime option must declare it in <code>_accepted_kwargs</code> and consume it in <code>_encode</code>
+or <code>_encode_batch</code>. A lane that extends its parent's implementation should
+compose <code>super()._accepted_kwargs()</code>; an adapter lane should declare only the
+arguments that reach its own implementation. This makes spelling mistakes
+visible without leaking parent-only implementation arguments.</p>
+<h3 id="native-implementation">Native implementation</h3>
+<p>Bindings translate Python arguments and expose engine/config objects. Planning,
+schema construction, graph emission, and batch collation stay in
+<code>src/_core/mifrost/</code>. Native code must not depend on the Python facade. Shared
+native behavior belongs in <code>core/</code> or <code>input_handling/</code>, not in multiple binding
+initializers.</p>
+<h2 id="adding-an-encoder-family">Adding an Encoder Family</h2>
+<ol>
+<li>Add or reuse a native config and engine with a stable, batch-oriented entry
+   point.</li>
+<li>Define the supported optional lanes in <code>_lane_specs.py</code> and validate them at
+   the facade boundary.</li>
+<li>Reuse <code>prepare_core_batch_inputs</code> for standard batch lanes. Add a new lane to
+   that boundary only when it has repository-wide meaning.</li>
+<li>Declare non-standard runtime arguments through <code>_accepted_kwargs</code>.</li>
+<li>Test observable behavior through <code>encode</code>, <code>encode_batch</code>, and the stream
+   boundary, including wrapper/advanced-object parity and malformed input.</li>
+<li>Add the encoder to the public export table, generated API reference, and
+   encoder coverage documentation.</li>
+</ol>
+<h2 id="improvement-roadmap">Improvement Roadmap</h2>
+<p>The repository has strong native/Python separation and broad behavior tests.
+The remaining architectural risk is concentrated in a few large modules rather
+than spread across the package. Priorities are:</p>
+<ol>
+<li>Complete the visualization-boundary migration for the flat and color
+   families. HGraph and Horizon NetworkX conversion, drawing, and specialized
+   target-tree layout now use a private data-only context boundary while their
+   public method signatures remain stable.</li>
+<li>Decompose the largest native encoder translation units by stable concepts:
+   schema construction, traversal/planning, and graph emission. Keep the engine
+   class as the small public interface and add boundary tests before moving
+   implementation details.</li>
+<li>Expand static typing from the core public types to all Python facade modules
+   incrementally. Each newly covered module should first eliminate <code>Any</code> at its
+   public boundary rather than adding blanket ignores.</li>
+<li>Split benchmark orchestration from result formatting and baseline comparison
+   so each can be tested without running the native benchmark suite.</li>
+</ol>
+<h2 id="tests">Tests</h2>
 <ul>
-<li><code>src/ENCODER_INHERITANCE_ARCHITECTURE.md</code></li>
-<li><code>src/STREAM_ENCODER_PLAN.md</code></li>
-<li><code>src/dynamic_graph_fields_plan.md</code></li>
+<li>Python test suites live in <code>tests/encoding/</code>, <code>tests/python/</code>, and
+  <code>tests/native/</code>.</li>
+<li>Native behavior and binding coverage live in <code>tests/cpp/</code>.</li>
+<li>Shared test helpers live at <code>tests/conftest.py</code> and <code>tests/parity_utils.py</code>.</li>
+</ul>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li>User-facing dynamic graph field behavior: <code>docs/how-to/dynamic-graph-fields.md</code></li>
+<li>Historical design note for dynamic attr collation:
+  <code>docs/development/dynamic_graph_fields_plan.md</code></li>
+<li>Build and test workflow: <code>docs/development/build-and-test.md</code></li>
 </ul>
 
 
@@ -1195,7 +1592,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

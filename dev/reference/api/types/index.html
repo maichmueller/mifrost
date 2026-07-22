@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -27,7 +27,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -540,6 +540,8 @@
       
         
       
+        
+      
     
     
     
@@ -607,6 +609,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1044,7 +1074,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1170,54 +1200,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.unregister_state_adapter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        unregister_state_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.is_state_input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_state_input
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#mifrost.encoders.types.register_domain_adapter" class="md-nav__link">
     <span class="md-ellipsis">
       
         register_domain_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.unregister_domain_adapter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        unregister_domain_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.is_domain_input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_domain_input
       
     </span>
   </a>
@@ -1236,54 +1222,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.unregister_literal_adapter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        unregister_literal_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.is_goal_literal_input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_goal_literal_input
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#mifrost.encoders.types.register_action_adapter" class="md-nav__link">
     <span class="md-ellipsis">
       
         register_action_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.unregister_action_adapter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        unregister_action_adapter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mifrost.encoders.types.is_action_input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_action_input
       
     </span>
   </a>
@@ -1378,24 +1320,24 @@
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">57</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span>
+<span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
 <span class="normal">58</span>
 <span class="normal">59</span>
 <span class="normal">60</span>
 <span class="normal">61</span>
-<span class="normal">62</span>
-<span class="normal">63</span>
-<span class="normal">64</span>
-<span class="normal">65</span>
-<span class="normal">66</span>
-<span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span>
-<span class="normal">70</span>
-<span class="normal">71</span>
-<span class="normal">72</span>
-<span class="normal">73</span>
-<span class="normal">74</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">BatchParam</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">_BatchT</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Explicit shared/separate wrapper for batch inputs.&quot;&quot;&quot;</span>
 
@@ -1470,36 +1412,36 @@ storage attributes like <code>data["atom"].x</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">145</span>
-<span class="normal">146</span>
-<span class="normal">147</span>
-<span class="normal">148</span>
-<span class="normal">149</span>
-<span class="normal">150</span>
-<span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
-<span class="normal">159</span>
-<span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">BatchEncodingLike</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Structural type for native C++ ``BatchEncoding``-like objects.</span>
@@ -1581,13 +1523,13 @@ storage attributes like <code>data["atom"].x</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">HeteroEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Refined protocol for hetero native encodings.&quot;&quot;&quot;</span>
 
@@ -1646,13 +1588,13 @@ storage attributes like <code>data["atom"].x</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">HomoEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Refined protocol for homo native encodings.&quot;&quot;&quot;</span>
 
@@ -1713,18 +1655,18 @@ still homo-shaped and converts through the flat PyG carrier.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span>
-<span class="normal">202</span>
-<span class="normal">203</span>
-<span class="normal">204</span>
-<span class="normal">205</span>
-<span class="normal">206</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">FlatEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Refined protocol for flat native encodings.</span>
@@ -1772,82 +1714,16 @@ still homo-shaped and converts through the flat PyG carrier.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Register a custom state adapter.</p>
-<p>The adapter must return a <code>pymimir.advanced.search.State</code> instance.
-Adapters are matched by exact concrete type.</p>
+        <p>Register a legacy exact-type Pymimir state adapter.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">212</span>
-<span class="normal">213</span>
-<span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">StateAdapter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Register a custom state adapter.</span>
-
-<span class="sd">    The adapter must return a ``pymimir.advanced.search.State`` instance.</span>
-<span class="sd">    Adapters are matched by exact concrete type.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_STATE_ADAPTERS</span><span class="p">[</span><span class="n">state_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">adapter</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.unregister_state_adapter" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">unregister_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Remove a previously registered custom state adapter.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">unregister_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a previously registered custom state adapter.&quot;&quot;&quot;</span>
-    <span class="n">_STATE_ADAPTERS</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">state_type</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.is_state_input" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">is_state_input</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return whether <code>value</code> is accepted as a state input.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_state_input</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return whether ``value`` is accepted as a state input.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">STATE_TYPES</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_resolve_state_adapter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir state adapter.&quot;&quot;&quot;</span>
+    <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1865,70 +1741,16 @@ Adapters are matched by exact concrete type.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Register a custom domain adapter matched by exact concrete type.</p>
+        <p>Register a legacy exact-type Pymimir domain adapter.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">DomainAdapter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom domain adapter matched by exact concrete type.&quot;&quot;&quot;</span>
-    <span class="n">_DOMAIN_ADAPTERS</span><span class="p">[</span><span class="n">domain_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">adapter</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.unregister_domain_adapter" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">unregister_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Remove a previously registered custom domain adapter.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">unregister_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a previously registered custom domain adapter.&quot;&quot;&quot;</span>
-    <span class="n">_DOMAIN_ADAPTERS</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">domain_type</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.is_domain_input" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">is_domain_input</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return whether <code>value</code> is accepted as a domain input.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_domain_input</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return whether ``value`` is accepted as a domain input.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">DOMAIN_TYPES</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_resolve_domain_adapter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir domain adapter.&quot;&quot;&quot;</span>
+    <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1946,80 +1768,16 @@ Adapters are matched by exact concrete type.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Register a custom goal-literal adapter matched by exact concrete type.</p>
+        <p>Register a legacy exact-type Pymimir literal adapter.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_literal_adapter</span><span class="p">(</span>
-    <span class="n">literal_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">LiteralAdapter</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom goal-literal adapter matched by exact concrete type.&quot;&quot;&quot;</span>
-    <span class="n">_LITERAL_ADAPTERS</span><span class="p">[</span><span class="n">literal_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">adapter</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.unregister_literal_adapter" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">unregister_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Remove a previously registered custom literal adapter.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">unregister_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a previously registered custom literal adapter.&quot;&quot;&quot;</span>
-    <span class="n">_LITERAL_ADAPTERS</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">literal_type</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.is_goal_literal_input" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">is_goal_literal_input</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return whether <code>value</code> is accepted as a goal literal input.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">271</span>
-<span class="normal">272</span>
-<span class="normal">273</span>
-<span class="normal">274</span>
-<span class="normal">275</span>
-<span class="normal">276</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_goal_literal_input</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return whether ``value`` is accepted as a goal literal input.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">(</span>
-        <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">GOAL_LITERAL_TYPES</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="n">_resolve_literal_adapter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-    <span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir literal adapter.&quot;&quot;&quot;</span>
+    <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2037,76 +1795,16 @@ Adapters are matched by exact concrete type.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Register a custom ground-action adapter matched by exact concrete type.</p>
+        <p>Register a legacy exact-type Pymimir action adapter.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">ActionAdapter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom ground-action adapter matched by exact concrete type.&quot;&quot;&quot;</span>
-    <span class="n">_ACTION_ADAPTERS</span><span class="p">[</span><span class="n">action_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">adapter</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.unregister_action_adapter" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">unregister_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Remove a previously registered custom action adapter.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">unregister_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a previously registered custom action adapter.&quot;&quot;&quot;</span>
-    <span class="n">_ACTION_ADAPTERS</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">action_type</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="mifrost.encoders.types.is_action_input" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">is_action_input</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return whether <code>value</code> is accepted as an action input.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/mifrost/encoders/types.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_action_input</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return whether ``value`` is accepted as an action input.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">(</span>
-        <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">GROUND_ACTION_TYPES</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="n">_resolve_action_adapter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-    <span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir action adapter.&quot;&quot;&quot;</span>
+    <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2180,7 +1878,7 @@ Adapters are matched by exact concrete type.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

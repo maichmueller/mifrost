@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -27,7 +27,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -540,6 +540,8 @@
       
         
       
+        
+      
     
     
     
@@ -607,6 +609,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1044,7 +1074,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1167,9 +1197,7 @@
 
 
 
-        <p>Instance‑Learning Graph encoder (ILG) implemented in Python.</p>
-<p>This encoder mirrors the ILG topology/features and emits native batch encodings
-via <code>BatchBuilder</code>.</p>
+        <p>Instance-Learning Graph encoder with per-instance planner backends.</p>
 
 
 
@@ -1180,7 +1208,65 @@ via <code>BatchBuilder</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">166</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
 <span class="normal">167</span>
 <span class="normal">168</span>
 <span class="normal">169</span>
@@ -1408,141 +1494,14 @@ via <code>BatchBuilder</code>.</p>
 <span class="normal">391</span>
 <span class="normal">392</span>
 <span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span>
-<span class="normal">413</span>
-<span class="normal">414</span>
-<span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
-<span class="normal">487</span>
-<span class="normal">488</span>
-<span class="normal">489</span>
-<span class="normal">490</span>
-<span class="normal">491</span>
-<span class="normal">492</span>
-<span class="normal">493</span>
-<span class="normal">494</span>
-<span class="normal">495</span>
-<span class="normal">496</span>
-<span class="normal">497</span>
-<span class="normal">498</span>
-<span class="normal">499</span>
-<span class="normal">500</span>
-<span class="normal">501</span>
-<span class="normal">502</span>
-<span class="normal">503</span>
-<span class="normal">504</span>
-<span class="normal">505</span>
-<span class="normal">506</span>
-<span class="normal">507</span>
-<span class="normal">508</span>
-<span class="normal">509</span>
-<span class="normal">510</span>
-<span class="normal">511</span>
-<span class="normal">512</span>
-<span class="normal">513</span>
-<span class="normal">514</span>
-<span class="normal">515</span>
-<span class="normal">516</span>
-<span class="normal">517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ILGEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">HeteroData</span><span class="p">]):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Instance‑Learning Graph encoder (ILG) implemented in Python.</span>
-
-<span class="sd">    This encoder mirrors the ILG topology/features and emits native batch encodings</span>
-<span class="sd">    via ``BatchBuilder``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="normal">394</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ILGEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">HeteroData</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Instance-Learning Graph encoder with per-instance planner backends.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">ILGBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
         <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;action&quot;</span><span class="p">,</span>
         <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;![nullary_symbol]!&quot;</span><span class="p">,</span>
@@ -1550,261 +1509,232 @@ via <code>BatchBuilder</code>.</p>
         <span class="n">include_lgan_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one Pymimir domain or PyTyr task.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_ilg_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span> <span class="o">=</span> <span class="n">symbol_type_id</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span> <span class="o">=</span> <span class="n">action_type_id</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span> <span class="o">=</span> <span class="n">nullary_object_name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span> <span class="o">=</span> <span class="n">add_nullary_predicates</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">include_lgan_edges</span> <span class="o">=</span> <span class="n">include_lgan_edges</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span> <span class="o">=</span> <span class="n">lgan_nn_edge_pos</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">predicate_arities</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">action_feature_dim</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_predicates</span><span class="p">())</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">predicate_name</span><span class="p">(</span><span class="n">pred</span><span class="p">):</span> <span class="n">predicate_arity</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="k">for</span> <span class="n">pred</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span>
-        <span class="p">}</span>
-        <span class="n">actions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_actions</span><span class="p">())</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;get_actions&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="nb">max</span><span class="p">((</span><span class="nb">int</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">get_arity</span><span class="p">())</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-        <span class="p">)</span>
-
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_compute_statuses</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">facts</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
-        <span class="n">goal_level_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">AtomStatus</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Compute per-atom status flags and collect unsatisfied goal atoms.</span>
-
-<span class="sd">        Returns ``(missing_goal_facts, status_by_atom)``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">fact_signatures</span> <span class="o">=</span> <span class="p">{</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">fact</span><span class="p">)</span> <span class="k">for</span> <span class="n">fact</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">}</span>
+        <span class="n">facts</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">ILGAtom</span><span class="p">],</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ILGLiteral</span><span class="p">],</span>
+        <span class="n">goal_level_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">ILGLiteral</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">ILGAtom</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">AtomStatus</span><span class="p">]]:</span>
+        <span class="n">fact_signatures</span> <span class="o">=</span> <span class="p">{</span><span class="n">fact</span><span class="o">.</span><span class="n">signature</span> <span class="k">for</span> <span class="n">fact</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">}</span>
         <span class="n">goal_matches</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">atom_signature</span><span class="p">(</span><span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">))</span>
+            <span class="n">goal</span><span class="o">.</span><span class="n">atom</span><span class="o">.</span><span class="n">signature</span>
             <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goals</span>
-            <span class="k">if</span> <span class="p">(</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">))</span> <span class="ow">in</span> <span class="n">fact_signatures</span><span class="p">)</span>
-            <span class="o">==</span> <span class="n">literal_polarity</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">goal</span><span class="o">.</span><span class="n">atom</span><span class="o">.</span><span class="n">signature</span> <span class="ow">in</span> <span class="n">fact_signatures</span><span class="p">)</span> <span class="o">==</span> <span class="n">goal</span><span class="o">.</span><span class="n">positive</span>
         <span class="p">}</span>
         <span class="n">statuses</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">AtomStatus</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">missing_goal_facts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">missing_goal_facts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ILGAtom</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goals</span><span class="p">:</span>
-            <span class="n">atom</span> <span class="o">=</span> <span class="n">literal_atom</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
-            <span class="n">signature</span> <span class="o">=</span> <span class="n">atom_signature</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
+            <span class="n">signature</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">atom</span><span class="o">.</span><span class="n">signature</span>
             <span class="n">is_satisfied</span> <span class="o">=</span> <span class="n">signature</span> <span class="ow">in</span> <span class="n">goal_matches</span>
-            <span class="n">prev</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span>
-            <span class="n">new_levels</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">prev</span><span class="o">.</span><span class="n">goal_levels</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="n">goal_level_map</span><span class="p">[</span><span class="n">goal</span><span class="p">]}))</span>
+            <span class="n">previous</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span>
+            <span class="n">new_levels</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">previous</span><span class="o">.</span><span class="n">goal_levels</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="n">goal_level_map</span><span class="p">[</span><span class="n">goal</span><span class="p">]})</span>
+            <span class="p">)</span>
             <span class="n">statuses</span><span class="p">[</span><span class="n">signature</span><span class="p">]</span> <span class="o">=</span> <span class="n">AtomStatus</span><span class="p">(</span>
                 <span class="n">is_regular</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="n">is_negated</span><span class="o">=</span><span class="ow">not</span> <span class="n">literal_polarity</span><span class="p">(</span><span class="n">goal</span><span class="p">),</span>
+                <span class="n">is_negated</span><span class="o">=</span><span class="ow">not</span> <span class="n">goal</span><span class="o">.</span><span class="n">positive</span><span class="p">,</span>
                 <span class="n">is_satisfied</span><span class="o">=</span><span class="n">is_satisfied</span><span class="p">,</span>
                 <span class="n">goal_levels</span><span class="o">=</span><span class="n">new_levels</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_satisfied</span><span class="p">:</span>
-                <span class="n">missing_goal_facts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
+                <span class="n">missing_goal_facts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">goal</span><span class="o">.</span><span class="n">atom</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">missing_goal_facts</span><span class="p">,</span> <span class="n">statuses</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode_input_to_builder</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">builder</span><span class="p">:</span> <span class="n">BatchBuilder</span><span class="p">,</span>
+        <span class="n">input_value</span><span class="p">:</span> <span class="n">ILGInput</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">facts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">input_value</span><span class="o">.</span><span class="n">facts</span><span class="p">)</span>
+        <span class="n">goals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">input_value</span><span class="o">.</span><span class="n">goals</span><span class="p">)</span>
+        <span class="n">actions</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">input_value</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+        <span class="n">goal_level_map</span> <span class="o">=</span> <span class="n">_goal_levels</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">input_value</span><span class="o">.</span><span class="n">subgoal_layers</span><span class="p">)</span>
+        <span class="n">missing_goal_facts</span><span class="p">,</span> <span class="n">statuses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_statuses</span><span class="p">(</span>
+            <span class="n">facts</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">goal_level_map</span>
+        <span class="p">)</span>
+
+        <span class="n">symbol_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">input_value</span><span class="o">.</span><span class="n">objects</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">symbol_names</span><span class="p">:</span>
+            <span class="n">symbol_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span><span class="p">)</span>
+        <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+            <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="n">symbol_names</span><span class="p">)</span>
+        <span class="n">builder</span><span class="o">.</span><span class="n">set_object_names</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">)</span>
+
+        <span class="n">encoded_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">facts</span><span class="p">,</span> <span class="o">*</span><span class="n">missing_goal_facts</span><span class="p">]</span>
+        <span class="n">pred_atoms</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ILGAtom</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">encoded_atoms</span><span class="p">:</span>
+            <span class="n">pred_atoms</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">predicate</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">feature_dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom</span><span class="o">.</span><span class="n">signature</span><span class="p">,</span> <span class="n">AtomStatus</span><span class="p">())</span><span class="o">.</span><span class="n">encode</span><span class="p">())]</span>
+                <span class="o">*</span> <span class="n">feature_dim</span>
+                <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span>
+            <span class="p">]</span>
+            <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
+                <span class="n">pred_name</span><span class="p">,</span>
+                <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">display_name</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">actions</span><span class="p">:</span>
+            <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
+                <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">actions</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
+                <span class="p">[</span><span class="n">action</span><span class="o">.</span><span class="n">display_name</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">],</span>
+            <span class="p">)</span>
+
+        <span class="n">object_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">index</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">)}</span>
+        <span class="n">atom_index</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">pred_name</span><span class="p">:</span> <span class="p">{</span><span class="n">atom</span><span class="o">.</span><span class="n">display_name</span><span class="p">:</span> <span class="n">index</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">atoms</span><span class="p">)}</span>
+            <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="n">edge_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">add_edge</span><span class="p">(</span>
+            <span class="n">src_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">relation</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">dst_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">source</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">target</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sources</span><span class="p">,</span> <span class="n">targets</span> <span class="o">=</span> <span class="n">edge_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">src_type</span><span class="p">,</span> <span class="n">relation</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">),</span> <span class="p">([],</span> <span class="p">[])</span>
+            <span class="p">)</span>
+            <span class="n">sources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+            <span class="n">targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">:</span>
+                <span class="n">arguments</span> <span class="o">=</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">arguments</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">arguments</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span><span class="p">,)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span>
+                        <span class="k">else</span> <span class="p">()</span>
+                    <span class="p">)</span>
+                <span class="n">atom_idx</span> <span class="o">=</span> <span class="n">atom_index</span><span class="p">[</span><span class="n">pred_name</span><span class="p">][</span><span class="n">atom</span><span class="o">.</span><span class="n">display_name</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">object_value</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">arguments</span><span class="p">):</span>
+                    <span class="n">object_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">object_value</span><span class="p">]</span>
+                    <span class="n">add_edge</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="n">position</span><span class="p">),</span>
+                        <span class="n">pred_name</span><span class="p">,</span>
+                        <span class="n">object_idx</span><span class="p">,</span>
+                        <span class="n">atom_idx</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">add_edge</span><span class="p">(</span>
+                        <span class="n">pred_name</span><span class="p">,</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="n">position</span><span class="p">),</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                        <span class="n">atom_idx</span><span class="p">,</span>
+                        <span class="n">object_idx</span><span class="p">,</span>
+                    <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">action_idx</span><span class="p">,</span> <span class="n">action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">actions</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">object_value</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">arguments</span><span class="p">):</span>
+                <span class="n">object_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">object_value</span><span class="p">]</span>
+                <span class="n">add_edge</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">position</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
+                    <span class="n">object_idx</span><span class="p">,</span>
+                    <span class="n">action_idx</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">add_edge</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">position</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                    <span class="n">action_idx</span><span class="p">,</span>
+                    <span class="n">object_idx</span><span class="p">,</span>
+                <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_lgan_edges</span><span class="p">:</span>
+            <span class="n">object_neighbors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">object_atoms</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ILGAtom</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">encoded_atoms</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">first</span> <span class="ow">in</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span><span class="p">:</span>
+                    <span class="n">object_atoms</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">second</span> <span class="ow">in</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">first</span> <span class="o">!=</span> <span class="n">second</span><span class="p">:</span>
+                            <span class="n">object_neighbors</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">second</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">target_object</span> <span class="ow">in</span> <span class="n">object_atoms</span><span class="p">:</span>
+                <span class="n">neighbors</span> <span class="o">=</span> <span class="n">object_neighbors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_object</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
+                <span class="n">target_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">target_object</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">encoded_atoms</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="ow">not</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span>
+                        <span class="ow">or</span> <span class="n">target_object</span> <span class="ow">in</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span>
+                        <span class="ow">or</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">value</span> <span class="ow">in</span> <span class="n">neighbors</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">atom</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span>
+                    <span class="p">):</span>
+                        <span class="k">continue</span>
+                    <span class="n">atom_idx</span> <span class="o">=</span> <span class="n">atom_index</span><span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">predicate</span><span class="p">][</span><span class="n">atom</span><span class="o">.</span><span class="n">display_name</span><span class="p">]</span>
+                    <span class="n">add_edge</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
+                        <span class="n">atom</span><span class="o">.</span><span class="n">predicate</span><span class="p">,</span>
+                        <span class="n">target_idx</span><span class="p">,</span>
+                        <span class="n">atom_idx</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">add_edge</span><span class="p">(</span>
+                        <span class="n">atom</span><span class="o">.</span><span class="n">predicate</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
+                        <span class="n">atom_idx</span><span class="p">,</span>
+                        <span class="n">target_idx</span><span class="p">,</span>
+                    <span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">src_type</span><span class="p">,</span> <span class="n">relation</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">),</span> <span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span> <span class="ow">in</span> <span class="n">edge_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">sources</span><span class="p">:</span>
+                <span class="n">builder</span><span class="o">.</span><span class="n">add_edges</span><span class="p">(</span>
+                    <span class="n">src_type</span><span class="p">,</span>
+                    <span class="n">relation</span><span class="p">,</span>
+                    <span class="n">dst_type</span><span class="p">,</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span>
+                <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode_to_builder</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">builder</span><span class="p">:</span> <span class="n">BatchBuilder</span><span class="p">,</span>
-        <span class="n">state</span><span class="p">:</span> <span class="n">StateInput</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+        <span class="n">state</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="nb">object</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="nb">object</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="nb">object</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Encode one sample into an existing builder.</span>
-
-<span class="sd">        This is the common implementation used by single, batch and stream paths.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">WRAPPER_STATE_TYPES</span><span class="p">):</span>
-            <span class="n">problem</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">get_problem</span><span class="p">()</span>
-            <span class="n">facts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">get_atoms</span><span class="p">())</span>
-            <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">goals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">get_goal_condition</span><span class="p">()</span><span class="o">.</span><span class="n">get_literals</span><span class="p">())</span>
-            <span class="n">objects</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">get_objects</span><span class="p">())</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span>
-                <span class="n">problem</span><span class="o">.</span><span class="n">get_domain</span><span class="p">()</span><span class="o">.</span><span class="n">get_constants</span><span class="p">()</span>
-            <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">is_state_input</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
-            <span class="n">advanced_state</span> <span class="o">=</span> <span class="n">_advanced_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-            <span class="n">facts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">advanced_state</span><span class="o">.</span><span class="n">get_fluent_atoms</span><span class="p">())</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span>
-                <span class="n">advanced_state</span><span class="o">.</span><span class="n">get_derived_atoms</span><span class="p">()</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="n">facts</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">fact</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">fact</span> <span class="ow">in</span> <span class="n">facts</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                    <span class="s2">&quot;ILGEncoder does not support advanced states that expose atom &quot;</span>
-                    <span class="s2">&quot;indices only; pass wrapper states or an explicit iterable of atoms&quot;</span>
-                <span class="p">)</span>
-            <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">goals</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">objects</span> <span class="o">=</span> <span class="n">_gather_objects</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">facts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">goals</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">objects</span> <span class="o">=</span> <span class="n">_gather_objects</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span>
-
-        <span class="n">goals_list</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">[</span><span class="n">_advanced_literal</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span> <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goals</span><span class="p">]</span> <span class="k">if</span> <span class="n">goals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_encode_input_to_builder</span><span class="p">(</span>
+            <span class="n">builder</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">make_input</span><span class="p">(</span>
+                <span class="n">state</span><span class="p">,</span>
+                <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+                <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="p">),</span>
         <span class="p">)</span>
-        <span class="n">actions_list</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">[</span><span class="n">_advanced_action</span><span class="p">(</span><span class="n">action</span><span class="p">)</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">actions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-            <span class="k">else</span> <span class="p">[]</span>
-        <span class="p">)</span>
-        <span class="n">subgoal_layers_list</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">[[</span><span class="n">_advanced_literal</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span> <span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">layer</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">subgoal_layers</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">subgoal_layers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-            <span class="k">else</span> <span class="kc">None</span>
-        <span class="p">)</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="n">objects</span> <span class="o">=</span> <span class="n">_gather_objects</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span> <span class="o">+</span> <span class="n">goals_list</span> <span class="o">+</span> <span class="n">actions_list</span><span class="p">)</span>
-
-        <span class="n">goal_level_map</span> <span class="o">=</span> <span class="n">_goal_levels</span><span class="p">(</span><span class="n">goals_list</span><span class="p">,</span> <span class="n">subgoal_layers_list</span><span class="p">)</span>
-        <span class="n">missing_goal_facts</span><span class="p">,</span> <span class="n">statuses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_statuses</span><span class="p">(</span>
-            <span class="n">facts</span><span class="p">,</span> <span class="n">goals_list</span><span class="p">,</span> <span class="n">goal_level_map</span>
-        <span class="p">)</span>
-
-        <span class="n">symbol_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">object_name</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">]</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">symbol_names</span><span class="p">:</span>
-            <span class="n">symbol_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span><span class="p">)</span>
-
-        <span class="n">symbol_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">symbol_x</span><span class="p">)</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="n">symbol_names</span><span class="p">)</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">set_object_names</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">)</span>
-
-        <span class="n">pred_atoms</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span> <span class="o">+</span> <span class="n">missing_goal_facts</span><span class="p">:</span>
-            <span class="n">pred_name</span> <span class="o">=</span> <span class="n">predicate_name</span><span class="p">(</span><span class="n">predicate</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-            <span class="n">pred_atoms</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">arity</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-            <span class="n">feature_dim</span> <span class="o">=</span> <span class="n">arity</span> <span class="o">+</span> <span class="mi">1</span>
-            <span class="n">rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">:</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom_signature</span><span class="p">(</span><span class="n">atom</span><span class="p">),</span> <span class="n">AtomStatus</span><span class="p">())</span>
-                <span class="n">value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span>
-                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">value</span><span class="p">]</span> <span class="o">*</span> <span class="n">feature_dim</span><span class="p">)</span>
-                <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-            <span class="n">pred_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">pred_x</span><span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="n">names</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">actions_list</span><span class="p">:</span>
-            <span class="n">action_names</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">action</span><span class="p">)</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions_list</span><span class="p">]</span>
-            <span class="n">action_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
-                <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">action_names</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span>
-            <span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">action_x</span><span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span> <span class="n">action_names</span><span class="p">)</span>
-
-        <span class="n">object_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">)}</span>
-        <span class="n">atom_index</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">atom_index</span><span class="p">[</span><span class="n">pred_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">atom</span><span class="p">):</span> <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">atoms</span><span class="p">)}</span>
-
-        <span class="n">edge_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">add_edge</span><span class="p">(</span>
-            <span class="n">src_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rel</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">src</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dst</span><span class="p">:</span> <span class="nb">int</span>
-        <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">src_type</span><span class="p">,</span> <span class="n">rel</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">edge_map</span><span class="p">:</span>
-                <span class="n">edge_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">([],</span> <span class="p">[])</span>
-            <span class="n">edge_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
-            <span class="n">edge_map</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dst</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">pred_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">:</span>
-                <span class="n">obj_terms</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">atom_objects</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">obj_terms</span> <span class="ow">and</span> <span class="n">predicate_arity</span><span class="p">(</span><span class="n">predicate</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span><span class="p">:</span>
-                        <span class="n">obj_terms</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span><span class="p">]</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="k">continue</span>
-                <span class="n">atom_idx</span> <span class="o">=</span> <span class="n">atom_index</span><span class="p">[</span><span class="n">pred_name</span><span class="p">][</span><span class="nb">str</span><span class="p">(</span><span class="n">atom</span><span class="p">)]</span>
-                <span class="k">for</span> <span class="n">pos</span><span class="p">,</span> <span class="n">obj</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">obj_terms</span><span class="p">):</span>
-                    <span class="n">obj_name</span> <span class="o">=</span> <span class="n">obj</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">object_name</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                    <span class="n">obj_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">obj_name</span><span class="p">]</span>
-                    <span class="n">add_edge</span><span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">),</span> <span class="n">pred_name</span><span class="p">,</span> <span class="n">obj_idx</span><span class="p">,</span> <span class="n">atom_idx</span>
-                    <span class="p">)</span>
-                    <span class="n">add_edge</span><span class="p">(</span>
-                        <span class="n">pred_name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="n">atom_idx</span><span class="p">,</span> <span class="n">obj_idx</span>
-                    <span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">action_idx</span><span class="p">,</span> <span class="n">action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">actions_list</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">pos</span><span class="p">,</span> <span class="n">obj</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_objects</span><span class="p">(</span><span class="n">action</span><span class="p">)):</span>
-                <span class="n">obj_name</span> <span class="o">=</span> <span class="n">object_name</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                <span class="n">obj_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">obj_name</span><span class="p">]</span>
-                <span class="n">add_edge</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
-                    <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">),</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
-                    <span class="n">obj_idx</span><span class="p">,</span>
-                    <span class="n">action_idx</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">add_edge</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
-                    <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">),</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
-                    <span class="n">action_idx</span><span class="p">,</span>
-                    <span class="n">obj_idx</span><span class="p">,</span>
-                <span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_lgan_edges</span><span class="p">:</span>
-            <span class="n">object_neighbors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">set</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-            <span class="n">obj_to_atoms</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-            <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span> <span class="o">+</span> <span class="n">missing_goal_facts</span><span class="p">:</span>
-                <span class="n">objs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">atom_objects</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-                <span class="k">for</span> <span class="n">o1</span> <span class="ow">in</span> <span class="n">objs</span><span class="p">:</span>
-                    <span class="n">obj_to_atoms</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">o1</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">o2</span> <span class="ow">in</span> <span class="n">objs</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">o1</span> <span class="o">!=</span> <span class="n">o2</span><span class="p">:</span>
-                            <span class="n">object_neighbors</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">o1</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">o2</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">target_obj</span><span class="p">,</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">obj_to_atoms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="n">neighbors</span> <span class="o">=</span> <span class="n">object_neighbors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_obj</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
-                <span class="n">target_name</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="n">target_obj</span>
-                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target_obj</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
-                    <span class="k">else</span> <span class="n">object_name</span><span class="p">(</span><span class="n">target_obj</span><span class="p">)</span>
-                <span class="p">)</span>
-                <span class="n">target_idx</span> <span class="o">=</span> <span class="n">object_index</span><span class="p">[</span><span class="n">target_name</span><span class="p">]</span>
-                <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">facts</span><span class="p">)</span> <span class="o">+</span> <span class="n">missing_goal_facts</span><span class="p">:</span>
-                    <span class="n">atom_objs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">atom_objects</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-                    <span class="k">if</span> <span class="ow">not</span> <span class="n">atom_objs</span><span class="p">:</span>
-                        <span class="k">continue</span>
-                    <span class="k">if</span> <span class="n">target_obj</span> <span class="ow">in</span> <span class="n">atom_objs</span><span class="p">:</span>
-                        <span class="k">continue</span>
-                    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">o</span> <span class="ow">in</span> <span class="n">neighbors</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">atom_objs</span><span class="p">):</span>
-                        <span class="n">pred_name</span> <span class="o">=</span> <span class="n">predicate_name</span><span class="p">(</span><span class="n">predicate</span><span class="p">(</span><span class="n">atom</span><span class="p">))</span>
-                        <span class="n">atom_idx</span> <span class="o">=</span> <span class="n">atom_index</span><span class="p">[</span><span class="n">pred_name</span><span class="p">][</span><span class="nb">str</span><span class="p">(</span><span class="n">atom</span><span class="p">)]</span>
-                        <span class="n">add_edge</span><span class="p">(</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
-                            <span class="n">pred_name</span><span class="p">,</span>
-                            <span class="n">target_idx</span><span class="p">,</span>
-                            <span class="n">atom_idx</span><span class="p">,</span>
-                        <span class="p">)</span>
-                        <span class="n">add_edge</span><span class="p">(</span>
-                            <span class="n">pred_name</span><span class="p">,</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span><span class="p">,</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
-                            <span class="n">atom_idx</span><span class="p">,</span>
-                            <span class="n">target_idx</span><span class="p">,</span>
-                        <span class="p">)</span>
-
-        <span class="k">for</span> <span class="p">(</span><span class="n">src_type</span><span class="p">,</span> <span class="n">rel</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">),</span> <span class="p">(</span><span class="n">src_list</span><span class="p">,</span> <span class="n">dst_list</span><span class="p">)</span> <span class="ow">in</span> <span class="n">edge_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">src_list</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="n">src_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">src_list</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">dst_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">dst_list</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">builder</span><span class="o">.</span><span class="n">add_edges</span><span class="p">(</span><span class="n">src_type</span><span class="p">,</span> <span class="n">rel</span><span class="p">,</span> <span class="n">dst_type</span><span class="p">,</span> <span class="n">src_arr</span><span class="p">,</span> <span class="n">dst_arr</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1813,13 +1743,16 @@ via <code>BatchBuilder</code>.</p>
         <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one state into ILG format.&quot;&quot;&quot;</span>
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_encode_to_builder</span><span class="p">(</span>
-            <span class="n">builder</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span> <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span>
+            <span class="n">builder</span><span class="p">,</span>
+            <span class="n">state</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
 
@@ -1830,53 +1763,18 @@ via <code>BatchBuilder</code>.</p>
         <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many states into ILG batch format.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">is_state_input</span><span class="p">(</span><span class="n">states</span><span class="p">):</span>
-            <span class="n">state_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">states</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">state_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">states</span><span class="p">)</span>
-
-        <span class="n">states_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">state_list</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_state_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_state</span><span class="p">,</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">make_batch_inputs</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">goals_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">goals</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">actions_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">actions</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_action_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_action</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">subgoal_layers_for_core</span> <span class="o">=</span> <span class="n">_convert_batch_payload</span><span class="p">(</span>
-            <span class="n">subgoal_layers</span><span class="p">,</span>
-            <span class="n">is_leaf</span><span class="o">=</span><span class="n">is_goal_literal_input</span><span class="p">,</span>
-            <span class="n">convert_leaf</span><span class="o">=</span><span class="n">to_advanced_literal</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">goals_per_state</span><span class="p">,</span> <span class="n">actions_per_state</span><span class="p">,</span> <span class="n">subgoal_layers_per_state</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">_core</span><span class="o">.</span><span class="n">_parse_ilg_batch_inputs</span><span class="p">(</span>
-                <span class="n">states_for_core</span><span class="p">,</span>
-                <span class="n">goals</span><span class="o">=</span><span class="n">goals_for_core</span><span class="p">,</span>
-                <span class="n">actions</span><span class="o">=</span><span class="n">actions_for_core</span><span class="p">,</span>
-                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_for_core</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="p">)</span>
-
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">state_list</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_encode_to_builder</span><span class="p">(</span>
-                <span class="n">builder</span><span class="p">,</span>
-                <span class="n">state</span><span class="p">,</span>
-                <span class="n">goals</span><span class="o">=</span><span class="n">goals_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
-                <span class="n">actions</span><span class="o">=</span><span class="n">actions_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
-                <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers_per_state</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span>
-            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">input_value</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_encode_input_to_builder</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">input_value</span><span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">next_graph</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
 
@@ -1903,49 +1801,46 @@ via <code>BatchBuilder</code>.</p>
 
 
 <h3 id="mifrost.encoders.ilg.ILGEncoder.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">action_type_id</span><span class="o">=</span><span class="s1">&#39;action&#39;</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="s1">&#39;![nullary_symbol]!&#39;</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">action_type_id</span><span class="o">=</span><span class="s1">&#39;action&#39;</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="s1">&#39;![nullary_symbol]!&#39;</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Create an ILG encoder for one domain.</p>
+        <p>Create an ILG encoder for one Pymimir domain or PyTyr task.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">ILGBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
     <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;action&quot;</span><span class="p">,</span>
     <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;![nullary_symbol]!&quot;</span><span class="p">,</span>
@@ -1953,23 +1848,18 @@ via <code>BatchBuilder</code>.</p>
     <span class="n">include_lgan_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one Pymimir domain or PyTyr task.&quot;&quot;&quot;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_ilg_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span> <span class="o">=</span> <span class="n">symbol_type_id</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span> <span class="o">=</span> <span class="n">action_type_id</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span> <span class="o">=</span> <span class="n">nullary_object_name</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">add_nullary_predicates</span> <span class="o">=</span> <span class="n">add_nullary_predicates</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">include_lgan_edges</span> <span class="o">=</span> <span class="n">include_lgan_edges</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">lgan_nn_edge_pos</span> <span class="o">=</span> <span class="n">lgan_nn_edge_pos</span>
-
-    <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_predicates</span><span class="p">())</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">predicate_name</span><span class="p">(</span><span class="n">pred</span><span class="p">):</span> <span class="n">predicate_arity</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="k">for</span> <span class="n">pred</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicates</span>
-    <span class="p">}</span>
-    <span class="n">actions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_actions</span><span class="p">())</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;get_actions&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="nb">max</span><span class="p">((</span><span class="nb">int</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">get_arity</span><span class="p">())</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_relation_arity</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">predicate_arities</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">action_feature_dim</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1992,9 +1882,9 @@ via <code>BatchBuilder</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/ilg.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">515</span>
-<span class="normal">516</span>
-<span class="normal">517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming ILG encoder.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ILGEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -2070,7 +1960,7 @@ via <code>BatchBuilder</code>.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

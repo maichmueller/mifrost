@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -546,6 +546,8 @@
       
         
       
+        
+      
     
     
     
@@ -613,6 +615,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1055,7 +1085,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1125,6 +1155,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#generated-stubs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated stubs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1169,26 +1210,92 @@
 <h1 id="build-and-test">Build and Test</h1>
 <p>This project uses a Python build backend that configures and builds the C++ core with CMake.</p>
 <h2 id="local-setup">Local setup</h2>
+<p>Activate the Python environment you use for development before running import
+checks or tests. Editable installs should use the normal rebuild behavior so
+native C++ changes are reflected in Python runtime checks.</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
 python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>dev<span class="o">]</span>
 </code></pre></div>
 <p>If your environment does not provide extras, install the minimal tools directly:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pymimir<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>pymimir<span class="o">]</span>
 python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pytest<span class="w"> </span>mkdocs<span class="w"> </span>mkdocs-material
 </code></pre></div>
 <h2 id="build-and-install">Build and install</h2>
+<p>Use a named build mode for each local purpose. <code>configure.py</code> and <code>cbuild.py</code>
+read these modes from <code>local_build_dirs.py</code>, so the default directories,
+configs, benchmark toggle, and default build targets stay in one place:</p>
+<ul>
+<li><code>local-release</code>: <code>build/local-release</code>, <code>Release</code>, target <code>all</code></li>
+<li><code>local-debug</code>: <code>build/local-debug</code>, <code>Debug</code>, target <code>all</code></li>
+<li><code>stubs</code>: <code>build/stubs</code>, <code>Release</code>, target <code>mifrost_core_module_stubs</code></li>
+<li><code>ci</code>: <code>build/ci</code>, <code>Release</code>, target <code>mifrost_tests</code></li>
+<li><code>bench</code>: <code>build/bench-release</code>, <code>Release</code>, benchmarks enabled, target
+  <code>mifrost_bench_hgraph</code></li>
+</ul>
+<p>Avoid ad hoc root-level build directories like <code>build_*_probe</code> unless they are
+short-lived ignored experiments.</p>
+<p>The Python helpers treat those modes as the canonical local build roots:</p>
+<ul>
+<li><code>configure.py</code> prepares a build tree and installs dependencies.</li>
+<li><code>cbuild.py</code> only builds an already configured tree.</li>
+<li><code>build_backend.py</code> owns editable/wheel build-time environment setup.</li>
+</ul>
+<p>You can still pass <code>--build_dir</code>, <code>--config</code>, or <code>--target</code> for short-lived
+experiments, but prefer <code>--mode</code> for checked-in commands and reproducible
+developer workflows.</p>
 <p>Install the package (this triggers a full native build):</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-v<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;.[backends]&quot;</span>
 </code></pre></div>
 <p>For editable development:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[backends]&quot;</span>
 </code></pre></div>
+<p>The Python build backend builds both native adapters by default. Set
+<code>MIFROST_BUILD_BACKENDS</code> to <code>core</code>, <code>pymimir</code>, <code>pytyr</code>, or <code>both</code> to exercise a
+specific installation variant. This controls native targets; the matching
+project extra controls runtime planner dependencies.</p>
+<p>The CMake helper exposes the same selection directly:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>local-release<span class="w"> </span>--backends<span class="w"> </span>pytyr
+</code></pre></div>
+<p>For explicit CMake-driven local builds, the blessed layout is:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>local-release
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>local-release
+</code></pre></div>
+<p>Use the debug mode when you need a debug tree:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>local-debug
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>local-debug
+</code></pre></div>
+<h2 id="generated-stubs">Generated stubs</h2>
+<p><code>src/mifrost/_core.pyi</code> is generated by nanobind, not hand-edited. The file is
+ignored in version control, but the packaging flow still expects it to exist:</p>
+<ul>
+<li>CI generates it before the source distribution and wheel jobs run.</li>
+<li><code>pyproject.toml</code> includes it in the source distribution, so the wheel build
+  path can package the generated stub.</li>
+<li>Local editable or stub-oriented work should regenerate it from the CMake
+  target rather than editing the file directly.</li>
+</ul>
+<p>Local generation commands:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>stubs
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>stubs
+python<span class="w"> </span>scripts/validate_generated_stub.py
+</code></pre></div>
+<p>The validation script is the same guard used by CI. It confirms that the stub
+file was produced, is non-empty, and is valid Python syntax.</p>
 <h2 id="run-tests">Run tests</h2>
 <p>Run the full Python test suite:</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pytest
 </code></pre></div>
 <p>Run a single test module while iterating:</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/encoding/test_color_encoder.py<span class="w"> </span>-q
+</code></pre></div>
+<p>Run the C++ test target through the CI-like mode:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>ci
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>ci
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/ci<span class="w"> </span>-R<span class="w"> </span>mifrost_tests<span class="w"> </span>--output-on-failure
+</code></pre></div>
+<p>Build the benchmark target:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>bench
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>bench
 </code></pre></div>
 <h2 id="build-docs">Build docs</h2>
 <p>Strict docs build (fails on warnings):</p>
@@ -1254,7 +1361,7 @@ python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </sp
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

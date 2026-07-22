@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -551,6 +551,8 @@
       
         
       
+        
+      
     
     
     
@@ -618,6 +620,34 @@
     
   
     Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
   
 
     
@@ -1055,7 +1085,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture Notes
+    Architecture Overview
   
 
     
@@ -1241,45 +1271,55 @@
 <h1 id="installation">Installation</h1>
 <h2 id="requirements">Requirements</h2>
 <ul>
-<li>Python <code>&gt;=3.10</code></li>
+<li>Python <code>&gt;=3.12</code></li>
 <li>A working C++ toolchain</li>
-<li><code>pymimir&gt;=0.13.60</code> available in the active environment</li>
+<li>At least one planner for encoder use: <code>pymimir&gt;=0.13.60</code> or <code>pytyr&gt;=0.0.30</code></li>
 <li>Conan 2 (for source builds via <code>configure.py</code>)</li>
 <li>Optional for PyG conversion: <code>torch</code> and <code>torch-geometric</code></li>
 </ul>
 <h2 id="install-from-pypi">Install From PyPI</h2>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>mifrost
+<p>Choose one planner or install both for same-process interoperability:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[pymimir]&quot;</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[pytyr]&quot;</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[backends]&quot;</span>
 </code></pre></div>
+<p>The base package contains the planner-neutral API. Planner extras are optional;
+installing one does not install the other.</p>
 <h2 id="install-from-source">Install From Source</h2>
 <h3 id="minimal">Minimal</h3>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/maichmueller/mifrost.git
 <span class="nb">cd</span><span class="w"> </span>mifrost
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+<span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pytyr<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[pytyr]&quot;</span>
 </code></pre></div>
+<p><code>MIFROST_BUILD_BACKENDS</code> accepts <code>core</code>, <code>pymimir</code>, <code>pytyr</code>, or <code>both</code>.
+Reduced builds omit the unused native adapter entirely. Package builds default
+to <code>both</code>; runtime extras still determine which planners are installed.</p>
 <h3 id="recommended-explicit-configurebuild">Recommended (explicit configure/build)</h3>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/maichmueller/mifrost.git
 <span class="nb">cd</span><span class="w"> </span>mifrost
-python<span class="w"> </span>configure.py<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>--build_dir<span class="w"> </span>build
-python<span class="w"> </span>cbuild.py<span class="w"> </span>build
+python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>local-release
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>local-release
 </code></pre></div>
 <h3 id="alternative-cmake-presets">Alternative: CMake Presets</h3>
 <div class="highlight"><pre><span></span><code>cmake<span class="w"> </span>--preset<span class="w"> </span>local-release
 cmake<span class="w"> </span>--build<span class="w"> </span>build/local-release
 </code></pre></div>
-<p>In CLion, use <code>local-release</code> / <code>local-debug</code>. If your conda env is not
-<code>rgnet_new</code>, set <code>Python_EXECUTABLE=/path/to/env/bin/python</code> in the profile's
-CMake cache variables.</p>
+<p>In CLion, use <code>local-release</code> / <code>local-debug</code>. If CMake does not auto-detect
+the intended Python environment, set
+<code>Python_EXECUTABLE=/path/to/env/bin/python</code> in the profile's CMake cache
+variables.</p>
 <h3 id="with-benchmarks-enabled">With Benchmarks Enabled</h3>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/maichmueller/mifrost.git
 <span class="nb">cd</span><span class="w"> </span>mifrost
-python<span class="w"> </span>configure.py<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>--build_dir<span class="w"> </span>build_bench<span class="w"> </span>--with_benchmarks
-python<span class="w"> </span>cbuild.py<span class="w"> </span>build_bench
+python<span class="w"> </span>configure.py<span class="w"> </span>--mode<span class="w"> </span>bench
+python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class="w"> </span>bench
 </code></pre></div>
 <p>If <code>conan</code> is not on <code>PATH</code>, pass it explicitly:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>--build_dir<span class="w"> </span>build<span class="w"> </span>--conan_cmd<span class="w"> </span>/path/to/conan
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>--conan_cmd<span class="w"> </span>/path/to/conan
 </code></pre></div>
-<p>If CMake cannot find <code>pymimir</code>, extend <code>CMAKE_PREFIX_PATH</code>:</p>
+<p>If a selected planner cannot be found, use its package-provided CMake prefix:</p>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pymimir; print(pymimir.get_cmake_dir())&#39;</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pytyr; print(pytyr.cmake_prefix())&#39;</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">&quot;</span>
 </code></pre></div>
 <p>If you switch benchmark mode (<code>--with_benchmarks</code> on/off), use a fresh build directory or re-run <code>configure.py</code> with a clean build tree to avoid stale CMake cache settings.</p>
 <h2 id="linux-cibuildwheel-podman-with-external-conan-cache">Linux cibuildwheel (podman) with external Conan cache</h2>
@@ -1289,7 +1329,7 @@ python<span class="w"> </span>cbuild.py<span class="w"> </span>build_bench
 <span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_BEFORE_BUILD_LINUX</span><span class="o">=</span><span class="s2">&quot;rm -rf /project/build &amp;&amp; python -m pip install conan&quot;</span>
 </code></pre></div>
 <h2 id="editable-development-install">Editable Development Install</h2>
-<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pymimir; print(pymimir.get_cmake_dir())&#39;</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">&quot;</span>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>both
 python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--config-settings<span class="o">=</span>editable.rebuild<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-Cbuild-dir<span class="o">=</span>build_editable<span class="w"> </span><span class="se">\</span>
@@ -1303,6 +1343,18 @@ python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;im
 </code></pre></div>
 <p>For downstream CMake projects, either prepend <code>mifrost.get_cmake_dir()</code> to
 <code>CMAKE_PREFIX_PATH</code> or pass <code>-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir())')"</code>.</p>
+<p>For a C++-only SDK, disable Python independently of the selected adapters:</p>
+<div class="highlight"><pre><span></span><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/native<span class="w"> </span>-DMIFROST_BUILD_PYTHON<span class="o">=</span>OFF<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DMIFROST_BUILD_PYMIMIR_ADAPTER<span class="o">=</span>OFF<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DMIFROST_BUILD_PYTYR_ADAPTER<span class="o">=</span>ON
+cmake<span class="w"> </span>--build<span class="w"> </span>build/native
+cmake<span class="w"> </span>--install<span class="w"> </span>build/native<span class="w"> </span>--prefix<span class="w"> </span>/path/to/mifrost-sdk
+</code></pre></div>
+<p>An installed PyTyr adapter first looks for planner libraries in the wheel-style
+sibling layout. Standalone SDK consumers can instead set
+<code>MIFROST_PYTYR_NATIVE_PREFIX</code>, <code>MIFROST_PYYGGDRASIL_NATIVE_PREFIX</code>, and
+<code>MIFROST_PYPDDL_NATIVE_PREFIX</code> in their CMake cache (or the corresponding
+environment variables without the <code>MIFROST_</code> prefix).</p>
 
 
 
@@ -1363,7 +1415,7 @@ python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;im
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
