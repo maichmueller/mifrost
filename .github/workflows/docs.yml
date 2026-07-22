@@ -89,8 +89,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -c requirements/constraints-ci.txt -r requirements.txt
           python -m pip install wheelhouse/*.whl
-          # Snippet execution touches the optional torch-backed encoders.
-          python -m pip install -c requirements/constraints-ci.txt torch torch-geometric numpy
+          # Snippet execution imports pymimir directly (see
+          # generate_snippet_includes.py) and touches the optional
+          # torch-backed encoders; requirements.txt no longer pulls in
+          # either since planner backends became optional extras.
+          python -m pip install -c requirements/constraints-ci.txt pymimir torch torch-geometric numpy
 
       - name: Sanity import
         run: python -c "import mifrost, pymimir; print('ok')"
