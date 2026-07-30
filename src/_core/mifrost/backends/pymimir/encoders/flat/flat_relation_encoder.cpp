@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "flat_relation_context.hpp"
+#include "flat_relation_keys.hpp"
 #include "flat_tuple_args.hpp"
 #include "mifrost/core/encoders/flat/flat_encoder_common.hpp"
 #include "mifrost/core/encoders/flat/flat_lgan.hpp"
@@ -181,7 +182,7 @@ class FlatRelationEncoderEngine::RelationComponent {
    virtual ~RelationComponent() = default;
    virtual void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const = 0;
    virtual void emit(
       const FlatRelationEncoderEngine& engine,
@@ -198,17 +199,17 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
   public:
    void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const override
    {
       for(const auto& spec : engine.predicate_specs_) {
          if(engine.config_.ignore_zero_arity_relations and spec.arity == 0) {
             continue;
          }
-         registry.add(
-            spec.name,
+         builder.register_relation(
+            predicate_relation_key(spec.name),
             make_predicate_tuple_layout(spec.arity, {}, engine.config_.use_predicate_virtual_nodes),
-            "state"
+            RelationUsage::state
          );
       }
    }
@@ -228,7 +229,7 @@ class FlatRelationEncoderEngine::StateFactsComponent final:
             return;
          }
          const auto relation_id = engine.relation_id_for(
-            RelationFormatter::format_predicate(atom->get_predicate())
+            predicate_relation_key(atom->get_predicate())
          );
          const auto args = local_arg_rows_for_atom(engine, context, atom);
          sink.emit(relation_id, args);
@@ -242,7 +243,7 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
   public:
    void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const override
    {
       if(not includes_plain_goal_derivation(engine.config_.goal_derivations)) {
@@ -255,27 +256,23 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
          for(size_t level = 0; level <= engine.config_.max_goal_level; ++level) {
             const GoalLevel goal_level(level);
             for(bool polarity : {true, false}) {
-               registry.add(
-                  RelationFormatter::format_predicate(
-                     spec.name, goal_level, std::nullopt, polarity
-                  ),
+               builder.register_relation(
+                  predicate_relation_key(spec.name, polarity, goal_level),
                   goal_relation_layout(
                      relation_config_view(engine.get_config()), spec.arity, level
                   ),
-                  "goal"
+                  RelationUsage::goal
                );
             }
          }
          if(engine.config_.support_literals) {
             for(bool polarity : {true, false}) {
-               registry.add(
-                  RelationFormatter::format_predicate(
-                     spec.name, std::nullopt, std::nullopt, polarity
-                  ),
+               builder.register_relation(
+                  predicate_relation_key(spec.name, polarity),
                   goal_relation_layout(
                      relation_config_view(engine.get_config()), spec.arity, std::nullopt
                   ),
-                  "goal"
+                  RelationUsage::goal
                );
             }
          }
@@ -319,18 +316,13 @@ class FlatRelationEncoderEngine::GoalFactsComponent final:
          }
 
          const auto level = goal_level_for(goal_levels, literal);
-         std::string relation_name;
-         if(level.has_value()) {
-            relation_name = RelationFormatter::format_predicate(
-               predicate, GoalLevel(*level), std::nullopt, literal->get_polarity()
-            );
-         } else {
-            relation_name = RelationFormatter::format_predicate(
-               predicate, std::nullopt, std::nullopt, literal->get_polarity()
-            );
-         }
+         const auto key = predicate_relation_key(
+            predicate,
+            literal->get_polarity(),
+            level.has_value() ? std::optional< GoalLevel >(GoalLevel(*level)) : std::nullopt
+         );
 
-         const auto relation_id = engine.relation_id_for(relation_name);
+         const auto relation_id = engine.relation_id_for(key);
          const auto args = local_arg_rows_for_goal_literal(engine, context, literal, level);
          sink.emit(relation_id, args);
       }
@@ -342,7 +334,7 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
   public:
    void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const override
    {
       if(not has_non_plain_goal_derivations(engine.config_.goal_derivations)) {
@@ -357,27 +349,23 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
             for(size_t level = 0; level <= engine.config_.max_goal_level; ++level) {
                const GoalLevel goal_level(level);
                for(bool polarity : {true, false}) {
-                  registry.add(
-                     RelationFormatter::format_predicate(
-                        spec.name, goal_level, derivation, polarity
-                     ),
+                  builder.register_relation(
+                     predicate_relation_key(spec.name, polarity, goal_level, derivation),
                      make_predicate_tuple_layout(
                         spec.arity, {}, engine.config_.use_predicate_virtual_nodes
                      ),
-                     "goal_derivation"
+                     RelationUsage::goal_derivation
                   );
                }
             }
             if(engine.config_.support_literals) {
                for(bool polarity : {true, false}) {
-                  registry.add(
-                     RelationFormatter::format_predicate(
-                        spec.name, std::nullopt, derivation, polarity
-                     ),
+                  builder.register_relation(
+                     predicate_relation_key(spec.name, polarity, std::nullopt, derivation),
                      make_predicate_tuple_layout(
                         spec.arity, {}, engine.config_.use_predicate_virtual_nodes
                      ),
-                     "goal_derivation"
+                     RelationUsage::goal_derivation
                   );
                }
             }
@@ -435,18 +423,14 @@ class FlatRelationEncoderEngine::GoalDerivationComponent final:
          }
 
          const auto level = goal_level_for(goal_levels, literal);
-         std::string relation_name;
-         if(level.has_value()) {
-            relation_name = RelationFormatter::format_predicate(
-               predicate, GoalLevel(*level), satisfaction, literal->get_polarity()
-            );
-         } else {
-            relation_name = RelationFormatter::format_predicate(
-               predicate, std::nullopt, satisfaction, literal->get_polarity()
-            );
-         }
+         const auto key = predicate_relation_key(
+            predicate,
+            literal->get_polarity(),
+            level.has_value() ? std::optional< GoalLevel >(GoalLevel(*level)) : std::nullopt,
+            satisfaction
+         );
 
-         const auto relation_id = engine.relation_id_for(relation_name);
+         const auto relation_id = engine.relation_id_for(key);
          const auto args = local_arg_rows_for_atom(engine, context, literal->get_atom());
          sink.emit(relation_id, args);
       }
@@ -458,14 +442,14 @@ class FlatRelationEncoderEngine::GroundActionsComponent final:
   public:
    void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const override
    {
       for(const auto& spec : engine.action_specs_) {
-         registry.add(
-            spec.name,
+         builder.register_relation(
+            action_relation_key(spec.name),
             make_nonpredicate_tuple_layout(spec.arity - 1, {FlatSlotRole::action_slot}),
-            "action"
+            RelationUsage::action
          );
       }
    }
@@ -481,7 +465,7 @@ class FlatRelationEncoderEngine::GroundActionsComponent final:
    {
       for(const auto& action : context.unique_actions) {
          const auto relation_id = engine.relation_id_for(
-            RelationFormatter::format_action_schema(*action->get_action())
+            action_schema_relation_key(*action->get_action())
          );
          const auto args = local_arg_rows_for_action(context, action);
          sink.emit(relation_id, args);
@@ -494,7 +478,7 @@ class FlatRelationEncoderEngine::HistoryFactsComponent final:
   public:
    void declare_schema(
       const FlatRelationEncoderEngine& engine,
-      FlatRelationSchemaRegistry& registry
+      FlatRelationSchemaBuilder& builder
    ) const override
    {
       for(const auto& spec : engine.predicate_specs_) {
@@ -502,12 +486,10 @@ class FlatRelationEncoderEngine::HistoryFactsComponent final:
             continue;
          }
          for(bool polarity : {true, false}) {
-            registry.add(
-               RelationFormatter::format_predicate(
-                  spec.name, std::nullopt, std::nullopt, polarity, "[hist]"
-               ),
+            builder.register_relation(
+               predicate_relation_key(spec.name, polarity, std::nullopt, std::nullopt, "[hist]"),
                history_relation_layout(relation_config_view(engine.get_config()), spec.arity),
-               "history"
+               RelationUsage::history
             );
          }
       }
@@ -533,9 +515,9 @@ class FlatRelationEncoderEngine::HistoryFactsComponent final:
                   if(engine.config_.ignore_zero_arity_relations and arity == 0) {
                      return;
                   }
-                  const auto relation_id = engine.relation_id_for(
-                     history_relation_name(predicate, literal->get_polarity())
-                  );
+                  const auto relation_id = engine.relation_id_for(predicate_relation_key(
+                     predicate, literal->get_polarity(), std::nullopt, std::nullopt, "[hist]"
+                  ));
                   const auto args = local_arg_rows_for_history_literal(
                      engine, context, entry.entity_index, entry.dt, entry.entry_idx, literal
                   );
@@ -689,48 +671,24 @@ void FlatRelationEncoderEngine::initialize_from_domain()
 
 void FlatRelationEncoderEngine::rebuild_schema()
 {
-   FlatRelationSchemaRegistry registry;
+   FlatRelationSchemaBuilder builder;
    for(const auto& component : components_) {
-      component->declare_schema(*this, registry);
+      component->declare_schema(*this, builder);
    }
 
-   const auto metadata = build_flat_relation_schema_metadata(
-      registry,
+   schema_ = std::move(builder).finalize(
       static_cast< int >(config_.max_goal_level),
       config_.support_literals,
       config_.goal_derivations,
       "FlatRelationEncoderEngine did not derive any relation types for this domain/config"
    );
-
-   relation_dict_ = metadata.relation_dict;
-   relation_names_ = metadata.relation_names;
-   relation_arities_ = metadata.relation_arities;
-   relation_sources_ = metadata.relation_sources;
-   relation_logical_arities_ = metadata.relation_logical_arities;
-   relation_encoded_arities_ = metadata.relation_encoded_arities;
-   relation_slot_roles_ = metadata.relation_slot_roles;
-   relation_slot_role_offsets_ = metadata.relation_slot_role_offsets;
-   slot_role_names_ = metadata.slot_role_names;
-   relation_name_to_id_ = metadata.relation_name_to_id;
 }
 
 void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
 {
-   const FlatRelationSchemaMetadata metadata{
-      .relation_dict = relation_dict_,
-      .relation_names = relation_names_,
-      .relation_arities = relation_arities_,
-      .relation_sources = relation_sources_,
-      .relation_logical_arities = relation_logical_arities_,
-      .relation_encoded_arities = relation_encoded_arities_,
-      .relation_slot_roles = relation_slot_roles_,
-      .relation_slot_role_offsets = relation_slot_role_offsets_,
-      .slot_role_names = slot_role_names_,
-      .relation_name_to_id = relation_name_to_id_,
-   };
    set_flat_graph_attrs(
       builder,
-      metadata,
+      schema_.as_metadata(),
       FlatBuilderGraphConfig{
          .include_lgan_edges = config_.include_lgan_edges,
          .use_predicate_virtual_nodes = config_.use_predicate_virtual_nodes,
@@ -770,7 +728,7 @@ void FlatRelationEncoderEngine::prepare_builder(BatchBuilder& builder) const
       builder.set_graph_attr(std::string(kTargetGroupsAttr), target_metadata_group_names_);
       builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config_.target_symbol_prefix);
    }
-   register_flat_relation_instance_fields(builder, static_cast< int >(relation_names_.size()));
+   register_flat_relation_instance_fields(builder, static_cast< int >(schema_.size()));
    if(config_.include_lgan_edges) {
       register_flat_lgan_fields(builder);
    }
@@ -801,13 +759,9 @@ FlatRelationEncoderEngine::EncodingContext FlatRelationEncoderEngine::make_conte
    );
 }
 
-int FlatRelationEncoderEngine::relation_id_for(const std::string& name) const
+int FlatRelationEncoderEngine::relation_id_for(const RelationKey& key) const
 {
-   const auto it = relation_name_to_id_.find(name);
-   if(it == relation_name_to_id_.end()) {
-      throw std::invalid_argument("Unknown flat relation name '" + name + "'");
-   }
-   return it->second;
+   return schema_.id_for(key);
 }
 
 bool FlatRelationEncoderEngine::has_target_source(TargetSource source) const
@@ -937,7 +891,7 @@ void FlatRelationEncoderEngine::encode_impl(
       prepare_builder(builder);
    }
    auto context = make_context(state, goals, actions, history_subgoals, history_max_steps);
-   FlatRelationSink sink(relation_names_.size(), config_.include_lgan_edges);
+   FlatRelationSink sink(schema_.size(), config_.include_lgan_edges);
 
    // Phase 2: collect state facts so later goal-derivation emission can test satisfaction.
    hash_set< uint64_t > fact_keys;
@@ -1191,7 +1145,7 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
 void FlatRelationEncoderEngine::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
 {
    if(config_.pack_relation_args_relation_major) {
-      pack_flat_relation_args_relation_major(encoding, std::span{relation_arities_});
+      pack_flat_relation_args_relation_major(encoding, std::span{schema_.arities()});
    }
 }
 

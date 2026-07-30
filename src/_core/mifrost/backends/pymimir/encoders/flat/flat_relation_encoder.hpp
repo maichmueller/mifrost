@@ -57,10 +57,10 @@ struct FlatBatchInputs;
  *  - it does not manage batch merging beyond writing into `BatchBuilder`
  *
  * Invariants:
- *  - `relation_arities_` stores encoded arities for backward compatibility
- *  - `relation_logical_arities_` stores the underlying predicate/action arity
- *  - `relation_slot_roles_` / `relation_slot_role_offsets_` stay aligned with
- *    `relation_names_` and `relation_encoded_arities_`
+ *  - `schema_` is the single persistent source of truth for relation ids, names, arities, slot
+ *    roles, and sources; `RelationComponent::declare_schema()`/`emit()` pairs build the same
+ *    structured `RelationKey` for a given relation, so schema declaration and emission cannot
+ *    independently drift on the exported name.
  */
 class MIFROST_API FlatRelationEncoderEngine {
   public:
@@ -116,38 +116,38 @@ class MIFROST_API FlatRelationEncoderEngine {
    /// Return the effective immutable encoder config.
    [[nodiscard]] const Config& get_config() const { return config_; }
    /// Return the exported relation dictionary keyed by relation name.
-   [[nodiscard]] const RelationDict& get_relation_dict() const { return relation_dict_; }
+   [[nodiscard]] const RelationDict& get_relation_dict() const { return schema_.relation_dict(); }
    [[nodiscard]] const std::vector< std::string >& get_relation_names() const
    {
-      return relation_names_;
+      return schema_.names();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const
    {
-      return relation_arities_;
+      return schema_.arities();
    }
    [[nodiscard]] const std::vector< std::string >& get_relation_sources() const
    {
-      return relation_sources_;
+      return schema_.sources();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
    {
-      return relation_logical_arities_;
+      return schema_.logical_arities();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
    {
-      return relation_encoded_arities_;
+      return schema_.encoded_arities();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
    {
-      return relation_slot_roles_;
+      return schema_.slot_roles();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
    {
-      return relation_slot_role_offsets_;
+      return schema_.slot_role_offsets();
    }
    [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
    {
-      return slot_role_names_;
+      return schema_.slot_role_names();
    }
 
    /**
@@ -221,7 +221,7 @@ class MIFROST_API FlatRelationEncoderEngine {
       std::span< const HistorySubgoal > history_subgoals,
       std::optional< int > history_max_steps
    ) const;
-   int relation_id_for(const std::string& name) const;
+   int relation_id_for(const RelationKey& key) const;
    [[nodiscard]] bool has_target_source(TargetSource source) const;
    [[nodiscard]] bool has_lgan_anchor_source(TargetSource source) const;
    [[nodiscard]] bool has_anchor_entity_source(TargetSource source) const;
@@ -232,20 +232,11 @@ class MIFROST_API FlatRelationEncoderEngine {
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    Config config_;
-   RelationDict relation_dict_;
+   FlatRelationSchema schema_;
    std::vector< PredicateSpec > predicate_specs_;
    std::vector< PredicateSpec > regular_predicate_specs_;
    std::vector< PredicateSpec > action_specs_;
    std::vector< std::unique_ptr< RelationComponent > > components_;
-   std::vector< std::string > relation_names_;
-   std::vector< int64_t > relation_arities_;
-   std::vector< std::string > relation_sources_;
-   std::vector< int64_t > relation_logical_arities_;
-   std::vector< int64_t > relation_encoded_arities_;
-   std::vector< int64_t > relation_slot_roles_;
-   std::vector< int64_t > relation_slot_role_offsets_;
-   std::vector< std::string > slot_role_names_;
-   hash_map< std::string, int > relation_name_to_id_;
    std::vector< std::string > target_entity_group_names_;
    std::map< TargetSource, int64_t > target_entity_group_ids_;
    std::vector< std::string > target_metadata_group_names_;

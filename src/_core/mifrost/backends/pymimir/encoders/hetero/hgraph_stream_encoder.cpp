@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <variant>
 
+#include "hetero_relation_keys.hpp"
 #include "mifrost/backends/pymimir/encoders/common/state_fact_iteration.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
@@ -74,14 +75,95 @@ void HGraphEncoderEngine::initialize_from_domain()
    if(not config_.ignore_actions) {
       actions.assign(domain_.get_actions().begin(), domain_.get_actions().end());
    }
-   const int predicate_arity_offset = 0;
    const int action_arity_offset = (has_target_source(TargetSource::actions)
                                     or config_.include_lgan_edges)
                                       ? 1
                                       : 0;
-   relation_dict_ = build_pymimir_relation_dict(
-      domain_, actions, rel_config, predicate_arity_offset, action_arity_offset
+
+   HeteroRelationSchemaBuilder builder;
+   std::vector< std::pair< std::string, int64_t > > regular_predicates;
+   auto collect_predicates = [&]< typename Tag >(Tag) {
+      for(const auto predicate : domain_.get_predicates< Tag >()) {
+         const auto& name = predicate->get_name();
+         const auto arity = static_cast< int64_t >(predicate->get_arity());
+         builder.register_relation(
+            predicate_relation_key(predicate), HeteroRelationLayout{arity}, RelationUsage::state
+         );
+         if(rel_config.top_type_predicates.contains(name)) {
+            continue;
+         }
+         regular_predicates.emplace_back(name, arity);
+      }
+   };
+   collect_predicates(mimir::formalism::StaticTag{});
+   collect_predicates(mimir::formalism::FluentTag{});
+   collect_predicates(mimir::formalism::DerivedTag{});
+
+   const int max_goal_level = std::max(0, static_cast< int >(config_.max_goal_level));
+   if(includes_plain_goal_derivation(config_.goal_derivations)) {
+      for(const auto& [name, arity] : regular_predicates) {
+         for(int level = 0; level <= max_goal_level; ++level) {
+            const GoalLevel goal_level(level);
+            for(bool polarity : {true, false}) {
+               builder.register_relation(
+                  predicate_relation_key(name, polarity, goal_level),
+                  HeteroRelationLayout{arity},
+                  RelationUsage::goal
+               );
+            }
+         }
+         if(config_.support_literals) {
+            for(bool polarity : {true, false}) {
+               builder.register_relation(
+                  predicate_relation_key(name, polarity),
+                  HeteroRelationLayout{arity},
+                  RelationUsage::goal
+               );
+            }
+         }
+      }
+   }
+
+   for(const auto derivation : goal_satisfaction_derivations(config_.goal_derivations)) {
+      for(const auto& [name, arity] : regular_predicates) {
+         for(int level = 0; level <= max_goal_level; ++level) {
+            const GoalLevel goal_level(level);
+            for(bool polarity : {true, false}) {
+               builder.register_relation(
+                  predicate_relation_key(name, polarity, goal_level, derivation),
+                  HeteroRelationLayout{arity},
+                  RelationUsage::goal_derivation
+               );
+            }
+         }
+         if(config_.support_literals) {
+            for(bool polarity : {true, false}) {
+               builder.register_relation(
+                  predicate_relation_key(name, polarity, std::nullopt, derivation),
+                  HeteroRelationLayout{arity},
+                  RelationUsage::goal_derivation
+               );
+            }
+         }
+      }
+   }
+
+   for(const auto& action : actions) {
+      const auto arity = std::max< int64_t >(
+         0, static_cast< int64_t >(action->get_arity()) + action_arity_offset
+      );
+      builder.register_relation(
+         action_schema_relation_key(*action), HeteroRelationLayout{arity}, RelationUsage::action
+      );
+   }
+
+   schema_ = std::move(builder).finalize(
+      max_goal_level,
+      config_.support_literals,
+      config_.goal_derivations,
+      "HGraphEncoderEngine did not derive any relation types for this domain/config"
    );
+   relation_dict_ = schema_.relation_dict();
    rebuild_all_edge_types();
 }
 
@@ -553,7 +635,7 @@ hash_set< uint64_t > HGraphEncoderEngine::encode_facts(
       if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
-      const std::string node_type = RelationFormatter::format_predicate(predicate);
+      const std::string node_type = schema_.name_for(predicate_relation_key(predicate));
       const int64_t relation_key = static_cast< int64_t >(atom->get_index());
       const std::string node_name = config_.export_node_names
                                        ? RelationFormatter::format_atom< Tag >(atom)
@@ -637,7 +719,9 @@ void HGraphEncoderEngine::encode_actions(
 
    for(size_t action_pos = 0; action_pos < actions.size(); ++action_pos) {
       const auto& action = actions[action_pos];
-      const std::string node_type = RelationFormatter::format_action_schema(*action->get_action());
+      const std::string node_type = schema_.name_for(
+         action_schema_relation_key(*action->get_action())
+      );
       const int64_t relation_key = static_cast< int64_t >(action->get_index());
       const std::string action_name = (config_.export_node_names or needs_action_target_symbol)
                                          ? RelationFormatter::format_action(action)
@@ -789,8 +873,8 @@ void HGraphEncoderEngine::encode_history(
                   return;
                }
 
-               const std::string node_type = RelationFormatter::format_predicate(
-                  predicate, std::nullopt, std::nullopt, literal->get_polarity()
+               const std::string node_type = schema_.name_for(
+                  predicate_relation_key(predicate, literal->get_polarity())
                );
 
                auto& indices = workspace_.node_indices_i64[node_type];

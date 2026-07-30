@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "hetero_relation_keys.hpp"
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_dict.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_formatter.hpp"
@@ -38,6 +39,7 @@
 #include "mifrost/core/encoders/common/stream_encoder_base.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/encoders/common/target_source.hpp"
+#include "mifrost/core/encoders/hetero/hetero_relation_schema.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 
 namespace mifrost {
@@ -597,7 +599,12 @@ class MIFROST_API HGraphEncoderEngine {
    Config config_;
    /// Reused scratch workspace to avoid repeated per-step allocations.
    HeteroEncodingWorkspace workspace_;
-   /// Derived relation and schema metadata.
+   /// Persistent structured relation schema, rebuilt whenever the domain-derived relation
+   /// universe changes (construction, `initialize_from_domain()`). `update_relations()` never
+   /// touches this; it only ever mutates the compat/export view below.
+   HeteroRelationSchema schema_;
+   /// Caller-mutable compat/export view derived from `schema_` at construction, and
+   /// independently replaceable via `update_relations()`.
    RelationDict relation_dict_;
    /// Precomputed edge types used when `Config::include_empty_edge_types` is enabled.
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types_;
@@ -888,15 +895,13 @@ void HGraphEncoderEngine::encode_literals(
       std::string formatted_literal;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
-         node_type = RelationFormatter::format_predicate(
-            predicate, level, std::nullopt, literal->get_polarity()
+         node_type = schema_.name_for(
+            predicate_relation_key(predicate, literal->get_polarity(), level)
          );
          formatted_literal = RelationFormatter::format_literal< GoalTag >(literal, level);
          node_name = config_.export_node_names ? formatted_literal : "";
       } else {
-         node_type = RelationFormatter::format_predicate(
-            predicate, std::nullopt, std::nullopt, literal->get_polarity()
-         );
+         node_type = schema_.name_for(predicate_relation_key(predicate, literal->get_polarity()));
          formatted_literal = RelationFormatter::format_literal< GoalTag >(literal, std::nullopt);
          node_name = config_.export_node_names ? formatted_literal : "";
       }
@@ -1047,16 +1052,16 @@ void HGraphEncoderEngine::encode_goal_satisfaction(
       std::string formatted_literal;
       if(goal_level.has_value()) {
          const GoalLevel level(*goal_level);
-         node_type = RelationFormatter::format_predicate(
-            predicate, level, sat, goal->get_polarity(), suffix
+         node_type = schema_.name_for(
+            predicate_relation_key(predicate, goal->get_polarity(), level, sat, suffix)
          );
          formatted_literal = RelationFormatter::format_literal< GoalTag >(
             goal, level, sat, std::nullopt, suffix
          );
          node_name = config_.export_node_names ? formatted_literal : "";
       } else {
-         node_type = RelationFormatter::format_predicate(
-            predicate, std::nullopt, sat, goal->get_polarity(), suffix
+         node_type = schema_.name_for(
+            predicate_relation_key(predicate, goal->get_polarity(), std::nullopt, sat, suffix)
          );
          formatted_literal = RelationFormatter::format_literal< GoalTag >(
             goal, std::nullopt, sat, std::nullopt, suffix

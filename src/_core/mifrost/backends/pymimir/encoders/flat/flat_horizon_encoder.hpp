@@ -106,38 +106,38 @@ class MIFROST_API FlatHorizonEncoderEngine {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const { return config_; }
-   [[nodiscard]] const RelationDict& get_relation_dict() const { return relation_dict_; }
+   [[nodiscard]] const RelationDict& get_relation_dict() const { return schema_.relation_dict(); }
    [[nodiscard]] const std::vector< std::string >& get_relation_names() const
    {
-      return relation_names_;
+      return schema_.names();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const
    {
-      return relation_arities_;
+      return schema_.arities();
    }
    [[nodiscard]] const std::vector< std::string >& get_relation_sources() const
    {
-      return relation_sources_;
+      return schema_.sources();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
    {
-      return relation_logical_arities_;
+      return schema_.logical_arities();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
    {
-      return relation_encoded_arities_;
+      return schema_.encoded_arities();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
    {
-      return relation_slot_roles_;
+      return schema_.slot_roles();
    }
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
    {
-      return relation_slot_role_offsets_;
+      return schema_.slot_role_offsets();
    }
    [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
    {
-      return slot_role_names_;
+      return schema_.slot_role_names();
    }
 
    /**
@@ -178,26 +178,17 @@ class MIFROST_API FlatHorizonEncoderEngine {
    );
    [[nodiscard]] EncodingContext
    make_context(const mimir::search::State& root, const TransitionDAG& dag) const;
-   [[nodiscard]] int relation_id_for(const std::string& name) const;
+   [[nodiscard]] int relation_id_for(const RelationKey& key) const;
    [[nodiscard]] int64_t
    state_entity_index_for(const EncodingContext& context, int64_t node_index) const;
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    Config config_;
-   RelationDict relation_dict_;
+   FlatRelationSchema schema_;
    std::vector< PredicateSpec > predicate_specs_;
    std::vector< PredicateSpec > regular_predicate_specs_;
    std::vector< PredicateSpec > action_specs_;
-   std::vector< std::string > relation_names_;
-   std::vector< int64_t > relation_arities_;
-   std::vector< std::string > relation_sources_;
-   std::vector< int64_t > relation_logical_arities_;
-   std::vector< int64_t > relation_encoded_arities_;
-   std::vector< int64_t > relation_slot_roles_;
-   std::vector< int64_t > relation_slot_role_offsets_;
-   std::vector< std::string > slot_role_names_;
-   hash_map< std::string, int > relation_name_to_id_;
    std::vector< std::string > target_entity_group_names_;
    std::vector< std::string > target_metadata_group_names_;
 };

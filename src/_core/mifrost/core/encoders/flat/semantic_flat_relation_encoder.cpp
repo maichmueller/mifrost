@@ -62,32 +62,6 @@ const std::set< std::string, std::less<> > kTopTypePredicates = {
    "_action_",
 };
 
-std::string goal_relation_name(
-   std::string_view predicate,
-   bool positive,
-   std::optional< size_t > level,
-   std::optional< GoalDerivation > derivation,
-   std::string_view trailing_suffix = ""
-)
-{
-   std::string result = positive ? "[+]" : "[-]";
-   result += predicate;
-   result += trailing_suffix;
-   if(level.has_value()) {
-      result += kGoalLevelSuffixes.at(*level);
-   }
-   if(derivation.has_value()) {
-      switch(*derivation) {
-         case GoalDerivation::plain: break;
-         case GoalDerivation::satisfied: result += "[sat]"; break;
-         case GoalDerivation::unsatisfied: result += "[unsat]"; break;
-         case GoalDerivation::added_satisfied: result += "[sat+]"; break;
-         case GoalDerivation::added_unsatisfied: result += "[sat-]"; break;
-      }
-   }
-   return result;
-}
-
 bool supports_semantic_goal_derivation(GoalDerivation derivation)
 {
    return derivation == GoalDerivation::plain or derivation == GoalDerivation::satisfied
@@ -292,13 +266,6 @@ struct SemanticEncodingContext {
    TargetColumns target_columns;
 };
 
-constexpr std::string_view kCandidateRelationSuffix = "[state]";
-
-std::string state_anchored_relation_name(std::string_view name)
-{
-   return std::string(name) + std::string(kCandidateRelationSuffix);
-}
-
 bool split_full_state_relations(const SemanticFlatHorizonEncoderConfig& config)
 {
    return config.transition_mode == SemanticHorizonMode::full
@@ -329,7 +296,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    std::shared_ptr< const SemanticTaskContext > task_context;
    const std::vector< SemanticPredicateSpec >& predicates;
    const std::vector< SemanticActionSpec >& actions;
-   FlatRelationSchemaMetadata metadata;
+   FlatRelationSchema schema_;
    std::vector< std::string > target_entity_group_names;
    std::map< TargetSource, int64_t > target_entity_group_ids;
    std::vector< std::string > target_group_names;
@@ -405,19 +372,18 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       throw std::invalid_argument("unsupported semantic Flat Horizon goal derivation");
    }
 
-   int relation_id_at_construction(std::string_view name) const
+   int relation_id_at_construction(const RelationKey& key) const
    {
-      const auto it = metadata.relation_name_to_id.find(std::string(name));
-      if(it == metadata.relation_name_to_id.end()) {
+      const auto id = schema_.try_id_for(key);
+      if(not id.has_value()) {
          throw std::invalid_argument("missing precomputed semantic Flat relation");
       }
-      return it->second;
+      return *id;
    }
 
-   int optional_relation_id_at_construction(std::string_view name) const
+   int optional_relation_id_at_construction(const RelationKey& key) const
    {
-      const auto it = metadata.relation_name_to_id.find(std::string(name));
-      return it == metadata.relation_name_to_id.end() ? -1 : it->second;
+      return schema_.try_id_for(key).value_or(-1);
    }
 
    int required_relation_id(int id) const
@@ -440,11 +406,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          if(config.ignore_zero_arity_relations and predicate.arity == 0) {
             continue;
          }
-         state_relation_ids[predicate_index] = relation_id_at_construction(predicate.name);
+         state_relation_ids[predicate_index] = relation_id_at_construction(
+            predicate_relation_key(predicate.name)
+         );
          for(const bool positive : {false, true}) {
             const auto polarity_index = positive ? size_t{1} : size_t{0};
             history_relation_ids[predicate_index][polarity_index] = relation_id_at_construction(
-               goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt, "[hist]")
+               predicate_relation_key(
+                  predicate.name, positive, std::nullopt, std::nullopt, "[hist]"
+               )
             );
             if(kTopTypePredicates.contains(predicate.name)) {
                continue;
@@ -456,11 +426,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                       std::optional< GoalDerivation >{GoalDerivation::unsatisfied},
                    }) {
                   const auto slot = goal_derivation_index(derivation);
-                  const auto name = goal_relation_name(predicate.name, positive, level, derivation);
-                  const auto it = metadata.relation_name_to_id.find(name);
-                  if(it != metadata.relation_name_to_id.end()) {
+                  const auto key = predicate_relation_key(
+                     predicate.name, positive, GoalLevel(level), derivation
+                  );
+                  if(const auto id = schema_.try_id_for(key); id.has_value()) {
                      goal_relation_ids[predicate_index][level]
-                        .by_polarity[polarity_index][slot] = it->second;
+                        .by_polarity[polarity_index][slot] = *id;
                   }
                }
             }
@@ -469,7 +440,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       action_relation_ids.resize(actions.size());
       for(size_t action_index = 0; action_index < actions.size(); ++action_index) {
          action_relation_ids[action_index] = relation_id_at_construction(
-            actions[action_index].name
+            action_relation_key(actions[action_index].name)
          );
       }
    }
@@ -525,25 +496,25 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    void build_schema()
    {
-      FlatRelationSchemaRegistry registry;
+      FlatRelationSchemaBuilder builder;
       for(const auto& predicate : predicates) {
          const auto arity = static_cast< int >(predicate.arity);
          if(config.ignore_zero_arity_relations and arity == 0) {
             continue;
          }
-         registry.add(
-            predicate.name,
+         builder.register_relation(
+            predicate_relation_key(predicate.name),
             make_predicate_tuple_layout(arity, {}, config.use_predicate_virtual_nodes),
-            "state"
+            RelationUsage::state
          );
          if(not kTopTypePredicates.contains(predicate.name)) {
             if(config.goal_derivations.contains(GoalDerivation::plain)) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
                   for(const bool positive : {true, false}) {
-                     registry.add(
-                        goal_relation_name(predicate.name, positive, level, std::nullopt),
+                     builder.register_relation(
+                        predicate_relation_key(predicate.name, positive, GoalLevel(level)),
                         semantic_goal_layout(config, arity, level),
-                        "goal"
+                        RelationUsage::goal
                      );
                   }
                }
@@ -553,12 +524,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                      if(has_anchor_entity_source(config, TargetSource::goals)) {
                         roles.push_back(FlatSlotRole::goal_target_slot);
                      }
-                     registry.add(
-                        goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt),
+                     builder.register_relation(
+                        predicate_relation_key(predicate.name, positive),
                         make_predicate_tuple_layout(
                            arity, std::span{roles}, config.use_predicate_virtual_nodes
                         ),
-                        "goal"
+                        RelationUsage::goal
                      );
                   }
                }
@@ -569,43 +540,46 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                }
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
                   for(const bool positive : {true, false}) {
-                     registry.add(
-                        goal_relation_name(predicate.name, positive, level, derivation),
+                     builder.register_relation(
+                        predicate_relation_key(
+                           predicate.name, positive, GoalLevel(level), derivation
+                        ),
                         make_predicate_tuple_layout(arity, {}, config.use_predicate_virtual_nodes),
-                        "goal_derivation"
+                        RelationUsage::goal_derivation
                      );
                   }
                }
                if(config.support_literals) {
                   for(const bool positive : {true, false}) {
-                     registry.add(
-                        goal_relation_name(predicate.name, positive, std::nullopt, derivation),
+                     builder.register_relation(
+                        predicate_relation_key(predicate.name, positive, std::nullopt, derivation),
                         make_predicate_tuple_layout(arity, {}, config.use_predicate_virtual_nodes),
-                        "goal_derivation"
+                        RelationUsage::goal_derivation
                      );
                   }
                }
             }
          }
          for(const bool positive : {true, false}) {
-            registry.add(
-               goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt, "[hist]"),
+            builder.register_relation(
+               predicate_relation_key(
+                  predicate.name, positive, std::nullopt, std::nullopt, "[hist]"
+               ),
                semantic_history_layout(config, arity),
-               "history"
+               RelationUsage::history
             );
          }
       }
       for(const auto& action : actions) {
-         registry.add(
-            action.name,
+         builder.register_relation(
+            action_relation_key(action.name),
             make_nonpredicate_tuple_layout(
                static_cast< int >(action.arity), {FlatSlotRole::action_slot}
             ),
-            "action"
+            RelationUsage::action
          );
       }
-      metadata = build_flat_relation_schema_metadata(
-         registry,
+      schema_ = std::move(builder).finalize(
          static_cast< int >(config.max_goal_level),
          config.support_literals,
          config.goal_derivations,
@@ -622,7 +596,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          throw std::invalid_argument("Action flat horizon encoding requires ignore_actions=false.");
       }
 
-      FlatRelationSchemaRegistry registry;
+      FlatRelationSchemaBuilder builder;
       const bool root_state_slot = root_in_state_relations(horizon.root_policy);
       const bool split_candidates = split_full_state_relations(horizon);
       auto predicate_layout = [&](int arity, bool state_slot) {
@@ -633,28 +607,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             horizon.use_predicate_virtual_nodes
          );
       };
-      auto add_root = [&](std::string name, int arity, std::string source) {
-         registry.add_or_validate(
-            std::move(name), predicate_layout(arity, root_state_slot), std::move(source)
-         );
+      auto add_root = [&](RelationKey key, int arity, RelationUsage usage) {
+         builder.register_relation(std::move(key), predicate_layout(arity, root_state_slot), usage);
       };
-      auto add_full = [&](const std::string& name, int arity, const std::string& source) {
-         add_root(name, arity, source);
+      auto add_full = [&](const RelationKey& key, int arity, RelationUsage usage) {
+         add_root(key, arity, usage);
          if(split_candidates) {
-            registry.add_or_validate(
-               state_anchored_relation_name(name), predicate_layout(arity, true), source
-            );
+            RelationKey anchored = key;
+            anchored.state_anchored = true;
+            builder.register_relation(std::move(anchored), predicate_layout(arity, true), usage);
          }
       };
-      auto add_candidate = [&](std::string name, int arity, std::string source) {
-         registry.add_or_validate(
-            std::move(name), predicate_layout(arity, true), std::move(source)
-         );
+      auto add_candidate = [&](RelationKey key, int arity, RelationUsage usage) {
+         builder.register_relation(std::move(key), predicate_layout(arity, true), usage);
       };
 
       for(const auto& predicate : predicates) {
          const int arity = static_cast< int >(predicate.arity);
-         add_full(predicate.name, arity, "state");
+         add_full(predicate_relation_key(predicate.name), arity, RelationUsage::state);
          if(kTopTypePredicates.contains(predicate.name)) {
             continue;
          }
@@ -662,20 +632,20 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
                for(const bool positive : {true, false}) {
                   add_root(
-                     goal_relation_name(predicate.name, positive, level, std::nullopt),
+                     predicate_relation_key(predicate.name, positive, GoalLevel(level)),
                      arity,
-                     "goal"
+                     RelationUsage::goal
                   );
                }
             }
          }
          if(horizon.support_literals) {
             for(const bool positive : {true, false}) {
-               auto name = goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt);
+               auto key = predicate_relation_key(predicate.name, positive);
                if(horizon.transition_mode == SemanticHorizonMode::delta) {
-                  add_candidate(std::move(name), arity, "state");
+                  add_candidate(std::move(key), arity, RelationUsage::state);
                } else {
-                  add_root(std::move(name), arity, "state");
+                  add_root(std::move(key), arity, RelationUsage::state);
                }
             }
          }
@@ -691,41 +661,53 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
                   for(const bool positive : {true, false}) {
                      add_root(
-                        goal_relation_name(predicate.name, positive, level, derivation),
+                        predicate_relation_key(
+                           predicate.name, positive, GoalLevel(level), derivation
+                        ),
                         arity,
-                        "goal_satisfaction"
+                        RelationUsage::goal_satisfaction
                      );
                   }
                }
                if(horizon.support_literals) {
                   for(const bool positive : {true, false}) {
                      add_root(
-                        goal_relation_name(predicate.name, positive, std::nullopt, derivation),
+                        predicate_relation_key(predicate.name, positive, std::nullopt, derivation),
                         arity,
-                        "goal_satisfaction"
+                        RelationUsage::goal_satisfaction
                      );
                   }
                }
                if(horizon.transition_mode == SemanticHorizonMode::full and split_candidates) {
                   for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
                      for(const bool positive : {true, false}) {
-                        registry.add_or_validate(
-                           state_anchored_relation_name(
-                              goal_relation_name(predicate.name, positive, level, derivation)
+                        builder.register_relation(
+                           predicate_relation_key(
+                              predicate.name,
+                              positive,
+                              GoalLevel(level),
+                              derivation,
+                              /*modifier=*/"",
+                              /*state_anchored=*/true
                            ),
                            predicate_layout(arity, true),
-                           "goal_satisfaction"
+                           RelationUsage::goal_satisfaction
                         );
                      }
                   }
                   if(horizon.support_literals) {
                      for(const bool positive : {true, false}) {
-                        registry.add_or_validate(
-                           state_anchored_relation_name(
-                              goal_relation_name(predicate.name, positive, std::nullopt, derivation)
+                        builder.register_relation(
+                           predicate_relation_key(
+                              predicate.name,
+                              positive,
+                              std::nullopt,
+                              derivation,
+                              /*modifier=*/"",
+                              /*state_anchored=*/true
                            ),
                            predicate_layout(arity, true),
-                           "goal_satisfaction"
+                           RelationUsage::goal_satisfaction
                         );
                      }
                   }
@@ -735,18 +717,20 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
                   for(const bool positive : {true, false}) {
                      add_candidate(
-                        goal_relation_name(predicate.name, positive, level, derivation),
+                        predicate_relation_key(
+                           predicate.name, positive, GoalLevel(level), derivation
+                        ),
                         arity,
-                        "goal_satisfaction"
+                        RelationUsage::goal_satisfaction
                      );
                   }
                }
                if(horizon.support_literals) {
                   for(const bool positive : {true, false}) {
                      add_candidate(
-                        goal_relation_name(predicate.name, positive, std::nullopt, derivation),
+                        predicate_relation_key(predicate.name, positive, std::nullopt, derivation),
                         arity,
-                        "goal_satisfaction"
+                        RelationUsage::goal_satisfaction
                      );
                   }
                }
@@ -755,12 +739,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
       if(not horizon.ignore_actions) {
          for(const auto& action : actions) {
-            registry.add_or_validate(
-               action.name,
+            builder.register_relation(
+               action_relation_key(action.name),
                make_nonpredicate_tuple_layout(
                   static_cast< int >(action.arity), {FlatSlotRole::state_slot}
                ),
-               "action"
+               RelationUsage::action
             );
          }
       }
@@ -768,16 +752,21 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          0, {FlatSlotRole::state_slot, FlatSlotRole::state_slot}
       );
       if(horizon.enable_parent_relation) {
-         registry.add_or_validate(horizon.parent_relation, topology_layout, "parent");
+         builder.register_relation(
+            opaque_relation_key(horizon.parent_relation), topology_layout, RelationUsage::parent
+         );
       }
       if(horizon.enable_sibling_relation) {
-         registry.add_or_validate(horizon.sibling_relation, topology_layout, "sibling");
+         builder.register_relation(
+            opaque_relation_key(horizon.sibling_relation), topology_layout, RelationUsage::sibling
+         );
       }
       if(horizon.enable_cousin_relation) {
-         registry.add_or_validate(horizon.cousin_relation, topology_layout, "cousin");
+         builder.register_relation(
+            opaque_relation_key(horizon.cousin_relation), topology_layout, RelationUsage::cousin
+         );
       }
-      metadata = build_flat_relation_schema_metadata(
-         registry,
+      schema_ = std::move(builder).finalize(
          static_cast< int >(horizon.max_goal_level),
          horizon.support_literals,
          horizon.goal_derivations,
@@ -798,23 +787,30 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       for(size_t predicate_index = 0; predicate_index < predicates.size(); ++predicate_index) {
          const auto& predicate = predicates[predicate_index];
-         const int state_id = relation_id_at_construction(predicate.name);
+         const int state_id = relation_id_at_construction(predicate_relation_key(predicate.name));
          horizon_state_relation_ids[predicate_index] = state_id;
-         horizon_state_anchored_relation_ids
-            [predicate_index] = split_candidates ? relation_id_at_construction(
-                                                      state_anchored_relation_name(predicate.name)
-                                                   )
-                                                 : state_id;
+         horizon_state_anchored_relation_ids[predicate_index] = split_candidates
+                                                                   ? relation_id_at_construction(
+                                                                        predicate_relation_key(
+                                                                           predicate.name,
+                                                                           std::nullopt,
+                                                                           std::nullopt,
+                                                                           std::nullopt,
+                                                                           "",
+                                                                           true
+                                                                        )
+                                                                     )
+                                                                   : state_id;
          if(kTopTypePredicates.contains(predicate.name)) {
             continue;
          }
          for(const bool positive : {false, true}) {
             const auto polarity = positive ? size_t{1} : size_t{0};
             if(horizon.support_literals) {
-               horizon_literal_relation_ids
-                  [predicate_index][polarity] = optional_relation_id_at_construction(
-                     goal_relation_name(predicate.name, positive, std::nullopt, std::nullopt)
-                  );
+               horizon_literal_relation_ids[predicate_index]
+                                           [polarity] = optional_relation_id_at_construction(
+                                              predicate_relation_key(predicate.name, positive)
+                                           );
             }
             for(size_t level = 0; level <= horizon.max_goal_level; ++level) {
                auto& ids = horizon_goal_relation_ids[predicate_index][level];
@@ -826,17 +822,17 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                       std::optional< GoalDerivation >{GoalDerivation::added_unsatisfied},
                    }) {
                   const auto slot = horizon_goal_derivation_index(derivation);
-                  const auto relation = goal_relation_name(
-                     predicate.name, positive, level, derivation
+                  const auto key = predicate_relation_key(
+                     predicate.name, positive, GoalLevel(level), derivation
                   );
-                  const int root = optional_relation_id_at_construction(relation);
+                  const int root = optional_relation_id_at_construction(key);
                   ids.root[polarity][slot] = root;
                   ids.candidate[polarity][slot] = root;
                   if(split_candidates
                      and (derivation == GoalDerivation::satisfied or derivation == GoalDerivation::unsatisfied)) {
-                     ids.candidate[polarity][slot] = optional_relation_id_at_construction(
-                        state_anchored_relation_name(relation)
-                     );
+                     RelationKey anchored = key;
+                     anchored.state_anchored = true;
+                     ids.candidate[polarity][slot] = optional_relation_id_at_construction(anchored);
                   }
                }
             }
@@ -847,18 +843,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       if(not horizon.ignore_actions) {
          for(size_t action_index = 0; action_index < actions.size(); ++action_index) {
             horizon_action_relation_ids[action_index] = relation_id_at_construction(
-               actions[action_index].name
+               action_relation_key(actions[action_index].name)
             );
          }
       }
       horizon_parent_relation_id = horizon.enable_parent_relation
-                                      ? relation_id_at_construction(horizon.parent_relation)
+                                      ? relation_id_at_construction(
+                                           opaque_relation_key(horizon.parent_relation)
+                                        )
                                       : -1;
       horizon_sibling_relation_id = horizon.enable_sibling_relation
-                                       ? relation_id_at_construction(horizon.sibling_relation)
+                                       ? relation_id_at_construction(
+                                            opaque_relation_key(horizon.sibling_relation)
+                                         )
                                        : -1;
       horizon_cousin_relation_id = horizon.enable_cousin_relation
-                                      ? relation_id_at_construction(horizon.cousin_relation)
+                                      ? relation_id_at_construction(
+                                           opaque_relation_key(horizon.cousin_relation)
+                                        )
                                       : -1;
    }
 
@@ -872,7 +874,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       };
       set_flat_graph_attrs(
          builder,
-         metadata,
+         schema_.as_metadata(),
          FlatBuilderGraphConfig{
             .include_lgan_edges = horizon.include_lgan_edges,
             .use_predicate_virtual_nodes = horizon.use_predicate_virtual_nodes,
@@ -903,9 +905,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       builder.set_graph_attr(std::string(kTargetGroupsAttr), groups);
       builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), horizon.target_symbol_prefix);
       builder.set_graph_attr(std::string(kParentRelationAttr), horizon.parent_relation);
-      register_flat_relation_instance_fields(
-         builder, static_cast< int >(metadata.relation_names.size())
-      );
+      register_flat_relation_instance_fields(builder, static_cast< int >(schema_.size()));
       if(horizon.include_lgan_edges) {
          register_flat_lgan_fields(builder);
       }
@@ -915,7 +915,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    {
       set_flat_graph_attrs(
          builder,
-         metadata,
+         schema_.as_metadata(),
          FlatBuilderGraphConfig{
             .include_lgan_edges = config.include_lgan_edges,
             .use_predicate_virtual_nodes = config.use_predicate_virtual_nodes,
@@ -956,9 +956,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          builder.set_graph_attr(std::string(kTargetGroupsAttr), target_group_names);
          builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), config.target_symbol_prefix);
       }
-      register_flat_relation_instance_fields(
-         builder, static_cast< int >(metadata.relation_names.size())
-      );
+      register_flat_relation_instance_fields(builder, static_cast< int >(schema_.size()));
       if(config.include_lgan_edges) {
          register_flat_lgan_fields(builder);
       }
@@ -1288,7 +1286,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
 
       auto context = make_context(input, grouped_goals, goal_levels);
-      FlatRelationSink sink(metadata.relation_names.size(), config.include_lgan_edges);
+      FlatRelationSink sink(schema_.size(), config.include_lgan_edges);
       auto emit =
          [&](int relation_id, const SemanticAtom& atom, std::span< const int64_t > auxiliary = {}) {
             const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
@@ -1576,7 +1574,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
 
-      FlatRelationSink sink(metadata.relation_names.size(), horizon.include_lgan_edges);
+      FlatRelationSink sink(schema_.size(), horizon.include_lgan_edges);
       auto state_position = [&](int64_t node_index) {
          if(node_index < 0
             or static_cast< size_t >(node_index) >= context.state_entity_indices.size()
@@ -2001,7 +1999,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    ) const
    {
       if(horizon.pack_relation_args_relation_major) {
-         pack_flat_relation_args_relation_major(encoding, std::span{metadata.relation_arities});
+         pack_flat_relation_args_relation_major(encoding, std::span{schema_.arities()});
       }
    }
 
@@ -2045,7 +2043,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
    {
       if(config.pack_relation_args_relation_major) {
-         pack_flat_relation_args_relation_major(encoding, std::span{metadata.relation_arities});
+         pack_flat_relation_args_relation_major(encoding, std::span{schema_.arities()});
       }
    }
 };
@@ -2131,45 +2129,45 @@ const std::vector< SemanticActionSpec >& SemanticFlatRelationEncoderEngine::get_
 
 const std::vector< std::string >& SemanticFlatRelationEncoderEngine::get_relation_names() const
 {
-   return impl_->metadata.relation_names;
+   return impl_->schema_.names();
 }
 
 const std::vector< int64_t >& SemanticFlatRelationEncoderEngine::get_relation_arities() const
 {
-   return impl_->metadata.relation_arities;
+   return impl_->schema_.arities();
 }
 
 const std::vector< std::string >& SemanticFlatRelationEncoderEngine::get_relation_sources() const
 {
-   return impl_->metadata.relation_sources;
+   return impl_->schema_.sources();
 }
 
 const std::vector< int64_t >&
 SemanticFlatRelationEncoderEngine::get_relation_logical_arities() const
 {
-   return impl_->metadata.relation_logical_arities;
+   return impl_->schema_.logical_arities();
 }
 
 const std::vector< int64_t >&
 SemanticFlatRelationEncoderEngine::get_relation_encoded_arities() const
 {
-   return impl_->metadata.relation_encoded_arities;
+   return impl_->schema_.encoded_arities();
 }
 
 const std::vector< int64_t >& SemanticFlatRelationEncoderEngine::get_relation_slot_roles() const
 {
-   return impl_->metadata.relation_slot_roles;
+   return impl_->schema_.slot_roles();
 }
 
 const std::vector< int64_t >&
 SemanticFlatRelationEncoderEngine::get_relation_slot_role_offsets() const
 {
-   return impl_->metadata.relation_slot_role_offsets;
+   return impl_->schema_.slot_role_offsets();
 }
 
 const std::vector< std::string >& SemanticFlatRelationEncoderEngine::get_slot_role_names() const
 {
-   return impl_->metadata.slot_role_names;
+   return impl_->schema_.slot_role_names();
 }
 
 void SemanticFlatRelationEncoderEngine::configure_horizon(

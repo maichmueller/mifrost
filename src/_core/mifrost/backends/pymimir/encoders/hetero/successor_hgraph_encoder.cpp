@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+#include "hetero_relation_keys.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
@@ -104,16 +105,9 @@ void SuccessorHGraphEncoderEngine::encode_impl(
       if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
          return;
       }
-      std::string node_type;
-      if(polarity.has_value()) {
-         node_type = RelationFormatter::format_predicate(
-            predicate, std::nullopt, std::nullopt, *polarity, successor_config_.successor_suffix
-         );
-      } else {
-         node_type = RelationFormatter::format_predicate(
-            predicate, std::nullopt, std::nullopt, std::nullopt, successor_config_.successor_suffix
-         );
-      }
+      const std::string node_type = schema_.name_for(predicate_relation_key(
+         predicate, polarity, std::nullopt, std::nullopt, successor_config_.successor_suffix
+      ));
       const int64_t relation_key = static_cast< int64_t >(atom->get_index());
       std::string node_name;
       if(config_.export_node_names) {

@@ -1,13 +1,11 @@
 /**
  * @file flat_relation_schema.cpp
- * @brief Flat relation-schema materialization helpers.
- *
- * The registry is collected incrementally by encoder setup code. This file
- * turns that registry into stable exported metadata vectors with aligned
- * relation ids and slot-role offsets.
+ * @brief Flat relation-schema builder and immutable-schema implementation.
  */
 #include "flat_relation_schema.hpp"
 
+#include <algorithm>
+#include <map>
 #include <stdexcept>
 #include <utility>
 
@@ -15,111 +13,140 @@ namespace mifrost {
 
 namespace {
 
-bool schema_entries_match(const FlatRelationSchemaEntry& lhs, const FlatRelationSchemaEntry& rhs)
+bool layouts_compatible(const FlatTupleLayout& lhs, const FlatTupleLayout& rhs)
 {
-   return lhs.layout.logical_arity == rhs.layout.logical_arity
-          && lhs.layout.include_predicate_virtual_node == rhs.layout.include_predicate_virtual_node
-          && lhs.layout.auxiliary_slot_roles == rhs.layout.auxiliary_slot_roles
-          && lhs.source == rhs.source;
+   return lhs.logical_arity == rhs.logical_arity
+          && lhs.include_predicate_virtual_node == rhs.include_predicate_virtual_node
+          && lhs.auxiliary_slot_roles == rhs.auxiliary_slot_roles;
 }
 
 }  // namespace
 
-void FlatRelationSchemaRegistry::add(std::string name, FlatTupleLayout layout, std::string source)
-{
-   auto [it, inserted] = entries_.try_emplace(
-      std::move(name), FlatRelationSchemaEntry{std::move(layout), std::move(source)}
-   );
-   if(not inserted) {
-      throw std::invalid_argument(
-         "Flat relation schema collision for relation '" + it->first + "'"
-      );
-   }
-}
-
-void FlatRelationSchemaRegistry::add_or_validate(
-   std::string name,
+void FlatRelationSchemaBuilder::register_relation(
+   RelationKey key,
    FlatTupleLayout layout,
-   std::string source
+   RelationUsage usage
 )
 {
-   auto [it, inserted] = entries_.try_emplace(
-      std::move(name), FlatRelationSchemaEntry{std::move(layout), std::move(source)}
-   );
-   if(inserted) {
+   const auto it = entries_.find(key);
+   if(it == entries_.end()) {
+      entries_.emplace(std::move(key), PendingEntry{std::move(layout), usage});
       return;
    }
-   if(not schema_entries_match(
-         it->second, FlatRelationSchemaEntry{std::move(layout), std::move(source)}
-      )) {
+   if(not layouts_compatible(it->second.layout, layout)) {
       throw std::invalid_argument(
-         "Flat relation schema collision for relation '" + it->first + "'"
+         "Flat relation schema layout mismatch for relation '" + format_relation_name(key) + "'"
       );
    }
+   // Same key, compatible layout: no-op. The first-registered usage is kept.
 }
 
-bool FlatRelationSchemaRegistry::contains(const std::string& name) const
-{
-   return entries_.contains(name);
-}
-
-size_t FlatRelationSchemaRegistry::size() const
-{
-   return entries_.size();
-}
-
-const std::map< std::string, FlatRelationSchemaEntry >& FlatRelationSchemaRegistry::entries() const
-{
-   return entries_;
-}
-
-FlatRelationSchemaMetadata build_flat_relation_schema_metadata(
-   const FlatRelationSchemaRegistry& registry,
+FlatRelationSchema FlatRelationSchemaBuilder::finalize(
    int max_goal_level,
    bool support_literals,
    const std::set< GoalDerivation >& goal_derivations,
    std::string_view empty_error_message
-)
+) &&
 {
-   FlatRelationSchemaMetadata metadata;
+   if(entries_.empty()) {
+      throw std::invalid_argument(std::string(empty_error_message));
+   }
+
+   struct Row {
+      std::string name;
+      const RelationKey* key = nullptr;
+      const PendingEntry* pending = nullptr;
+   };
+   std::vector< Row > rows;
+   rows.reserve(entries_.size());
+   for(const auto& [key, pending] : entries_) {
+      rows.push_back(Row{format_relation_name(key), &key, &pending});
+   }
+   std::ranges::sort(rows, {}, &Row::name);
+
+   for(size_t idx = 1; idx < rows.size(); ++idx) {
+      if(rows[idx].name == rows[idx - 1].name) {
+         throw std::invalid_argument(
+            "Flat relation schema name collision between distinct relation keys for '"
+            + rows[idx].name + "'"
+         );
+      }
+   }
+
+   FlatRelationSchema schema;
+   auto& metadata = schema.metadata_;
    metadata.slot_role_names = flat_slot_role_names();
-   metadata.relation_names.reserve(registry.size());
-   metadata.relation_arities.reserve(registry.size());
-   metadata.relation_sources.reserve(registry.size());
-   metadata.relation_logical_arities.reserve(registry.size());
-   metadata.relation_encoded_arities.reserve(registry.size());
-   metadata.relation_name_to_id.reserve(registry.size());
-   metadata.relation_slot_role_offsets.reserve(registry.size() + 1);
+   metadata.relation_names.reserve(rows.size());
+   metadata.relation_arities.reserve(rows.size());
+   metadata.relation_sources.reserve(rows.size());
+   metadata.relation_logical_arities.reserve(rows.size());
+   metadata.relation_encoded_arities.reserve(rows.size());
+   metadata.relation_name_to_id.reserve(rows.size());
+   metadata.relation_slot_role_offsets.reserve(rows.size() + 1);
    metadata.relation_slot_role_offsets.push_back(0);
+   schema.key_to_id_.reserve(rows.size());
 
    std::map< std::string, int > relation_dict_arity;
-   for(const auto& [name, entry] : registry.entries()) {
-      metadata.relation_name_to_id.emplace(
-         name, static_cast< int >(metadata.relation_names.size())
-      );
-      metadata.relation_names.push_back(name);
-      metadata.relation_arities.push_back(entry.layout.encoded_arity());
-      metadata.relation_sources.push_back(entry.source);
-      metadata.relation_logical_arities.push_back(entry.layout.logical_arity);
-      metadata.relation_encoded_arities.push_back(entry.layout.encoded_arity());
-      const auto slot_roles = entry.layout.slot_role_ids();
+   for(size_t idx = 0; idx < rows.size(); ++idx) {
+      const auto& row = rows[idx];
+      const auto relation_id = static_cast< int >(idx);
+      metadata.relation_name_to_id.emplace(row.name, relation_id);
+      schema.key_to_id_.emplace(*row.key, relation_id);
+      metadata.relation_names.push_back(row.name);
+      metadata.relation_arities.push_back(row.pending->layout.encoded_arity());
+      metadata.relation_sources.emplace_back(relation_usage_source_label(row.pending->usage));
+      metadata.relation_logical_arities.push_back(row.pending->layout.logical_arity);
+      metadata.relation_encoded_arities.push_back(row.pending->layout.encoded_arity());
+      const auto slot_roles = row.pending->layout.slot_role_ids();
       metadata.relation_slot_roles.insert(
          metadata.relation_slot_roles.end(), slot_roles.begin(), slot_roles.end()
       );
       metadata.relation_slot_role_offsets.push_back(
          static_cast< int64_t >(metadata.relation_slot_roles.size())
       );
-      relation_dict_arity.emplace(name, entry.layout.encoded_arity());
-   }
-
-   if(metadata.relation_names.empty()) {
-      throw std::invalid_argument(std::string(empty_error_message));
+      relation_dict_arity.emplace(row.name, row.pending->layout.encoded_arity());
    }
 
    metadata.relation_dict = RelationDict(
       std::move(relation_dict_arity), max_goal_level, support_literals, goal_derivations
    );
-   return metadata;
+   return schema;
+}
+
+int FlatRelationSchema::id_for(const RelationKey& key) const
+{
+   const auto it = key_to_id_.find(key);
+   if(it == key_to_id_.end()) {
+      throw std::invalid_argument("Unknown flat relation key '" + format_relation_name(key) + "'");
+   }
+   return it->second;
+}
+
+std::optional< int > FlatRelationSchema::try_id_for(const RelationKey& key) const
+{
+   const auto it = key_to_id_.find(key);
+   if(it == key_to_id_.end()) {
+      return std::nullopt;
+   }
+   return it->second;
+}
+
+int FlatRelationSchema::id_for(const std::string& name) const
+{
+   const auto it = metadata_.relation_name_to_id.find(name);
+   if(it == metadata_.relation_name_to_id.end()) {
+      throw std::invalid_argument("Unknown flat relation name '" + name + "'");
+   }
+   return it->second;
+}
+
+std::optional< int > FlatRelationSchema::try_id_for(const std::string& name) const
+{
+   const auto it = metadata_.relation_name_to_id.find(name);
+   if(it == metadata_.relation_name_to_id.end()) {
+      return std::nullopt;
+   }
+   return it->second;
 }
 
 }  // namespace mifrost

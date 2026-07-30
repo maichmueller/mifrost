@@ -10,6 +10,11 @@ import sys
 import sysconfig
 from pathlib import Path
 
+try:
+    from resolve_native_prefixes import _native_prefix
+except ImportError:  # pragma: no cover - package import path in unit tests
+    from scripts.resolve_native_prefixes import _native_prefix
+
 
 def _split_path_list(value: str | None) -> list[Path]:
     if not value:
@@ -103,7 +108,19 @@ def _iter_pymimir_lib_dirs() -> list[Path]:
 
 def _iter_pytyr_lib_dirs() -> list[Path]:
     candidates = _split_path_list(os.environ.get("MIFROST_PYTYR_LIB_DIR"))
-    for package_name in ("pytyr", "pyyggdrasil", "pypddl"):
+    package_markers = {
+        "pytyr": "tyr",
+        "pyyggdrasil": "yggdrasil",
+        "pypddl": "loki",
+    }
+    for package_name, marker in package_markers.items():
+        # Locate bundled native libraries from package files even when importing
+        # the package fails because its extensions are not loader-resolvable yet.
+        try:
+            prefix = _native_prefix(package_name, marker)
+            candidates.extend((prefix / "lib", prefix / "native" / "lib"))
+        except Exception:
+            pass
         try:
             module = importlib.import_module(package_name)
         except Exception:

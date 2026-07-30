@@ -91,7 +91,13 @@ wheel.packages = ["src/mifrost"]
 # nanobind generates the public stub in the source package. Git ignores the
 # file, but packaging still needs it, so include it in the sdist; the wheel
 # build path then carries the generated stub into the final wheel artifact.
-sdist.include = ["src/mifrost/_core.pyi", "src/mifrost/_neutral_core.pyi", "src/mifrost/_pymimir_adapter.pyi", "src/mifrost/_pytyr_adapter.pyi"]
+sdist.include = [
+    "scripts/resolve_native_prefixes.py",
+    "src/mifrost/_core.pyi",
+    "src/mifrost/_neutral_core.pyi",
+    "src/mifrost/_pymimir_adapter.pyi",
+    "src/mifrost/_pytyr_adapter.pyi",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -190,35 +190,54 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
             CACHE PATH "Path to the PyPDDL native prefix")
     endif ()
     if (NOT DEFINED MIFROST_PYTYR_NATIVE_PREFIX OR
+        "${MIFROST_PYTYR_NATIVE_PREFIX}" STREQUAL "" OR
         NOT DEFINED MIFROST_PYYGGDRASIL_NATIVE_PREFIX OR
-        NOT DEFINED MIFROST_PYPDDL_NATIVE_PREFIX)
+        "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}" STREQUAL "" OR
+        NOT DEFINED MIFROST_PYPDDL_NATIVE_PREFIX OR
+        "${MIFROST_PYPDDL_NATIVE_PREFIX}" STREQUAL "")
         execute_process(
-            COMMAND "${Python_EXECUTABLE}" "-c" "import pytyr, pyyggdrasil, pypddl; print(pytyr.native_prefix()); print(pyyggdrasil.native_prefix()); print(pypddl.native_prefix())"
+            COMMAND "${Python_EXECUTABLE}"
+                "${CMAKE_CURRENT_LIST_DIR}/../scripts/resolve_native_prefixes.py"
             RESULT_VARIABLE _mifrost_tyr_result
             OUTPUT_VARIABLE _mifrost_tyr_paths
-            ERROR_QUIET
+            ERROR_VARIABLE _mifrost_tyr_error
             OUTPUT_STRIP_TRAILING_WHITESPACE
         )
         if (_mifrost_tyr_result EQUAL 0)
             string(REPLACE "\n" ";" _mifrost_tyr_paths "${_mifrost_tyr_paths}")
+            list(LENGTH _mifrost_tyr_paths _mifrost_tyr_path_count)
+            if (_mifrost_tyr_path_count LESS 3)
+                message(FATAL_ERROR
+                    "Native planner prefix resolver returned too few paths: ${_mifrost_tyr_paths}"
+                )
+            endif ()
             list(GET _mifrost_tyr_paths 0 _mifrost_tyr_prefix)
             list(GET _mifrost_tyr_paths 1 _mifrost_yggdrasil_prefix)
             list(GET _mifrost_tyr_paths 2 _mifrost_pypddl_prefix)
-            if (NOT DEFINED MIFROST_PYTYR_NATIVE_PREFIX)
+            if (NOT DEFINED MIFROST_PYTYR_NATIVE_PREFIX OR
+                "${MIFROST_PYTYR_NATIVE_PREFIX}" STREQUAL "")
                 set(MIFROST_PYTYR_NATIVE_PREFIX "${_mifrost_tyr_prefix}"
                     CACHE PATH "Path to the PyTyr native prefix")
             endif ()
-            if (NOT DEFINED MIFROST_PYYGGDRASIL_NATIVE_PREFIX)
+            if (NOT DEFINED MIFROST_PYYGGDRASIL_NATIVE_PREFIX OR
+                "${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}" STREQUAL "")
                 set(MIFROST_PYYGGDRASIL_NATIVE_PREFIX "${_mifrost_yggdrasil_prefix}"
                     CACHE PATH "Path to the PyYggdrasil native prefix")
             endif ()
-            if (NOT DEFINED MIFROST_PYPDDL_NATIVE_PREFIX)
+            if (NOT DEFINED MIFROST_PYPDDL_NATIVE_PREFIX OR
+                "${MIFROST_PYPDDL_NATIVE_PREFIX}" STREQUAL "")
                 set(MIFROST_PYPDDL_NATIVE_PREFIX "${_mifrost_pypddl_prefix}"
                     CACHE PATH "Path to the PyPDDL native prefix")
             endif ()
+        else ()
+            message(FATAL_ERROR
+                "Could not resolve native planner package prefixes. ${_mifrost_tyr_error}"
+            )
         endif ()
         unset(_mifrost_tyr_result)
         unset(_mifrost_tyr_paths)
+        unset(_mifrost_tyr_error)
+        unset(_mifrost_tyr_path_count)
         unset(_mifrost_tyr_prefix)
         unset(_mifrost_yggdrasil_prefix)
         unset(_mifrost_pypddl_prefix)
@@ -383,6 +402,9 @@ add_library(
     SHARED
         "_core/mifrost/core/batch_builder.cpp"
         "_core/mifrost/core/schema.cpp"
+        "_core/mifrost/core/encoders/common/relation_catalog.cpp"
+        "_core/mifrost/core/encoders/common/relation_key.cpp"
+        "_core/mifrost/core/encoders/hetero/hetero_relation_schema.cpp"
         "_core/mifrost/core/encoders/flat/flat_encoder_common.cpp"
         "_core/mifrost/core/encoders/flat/flat_lgan.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
@@ -1038,7 +1060,10 @@ else ()
         "core/utils/type_traits.hpp"
         "core/encoders/common/default_relations.hpp"
         "core/encoders/common/goal_derivation.hpp"
+        "core/encoders/common/goal_level.hpp"
+        "core/encoders/common/relation_catalog.hpp"
         "core/encoders/common/relation_dict_types.hpp"
+        "core/encoders/common/relation_key.hpp"
         "core/encoders/common/root_policy.hpp"
         "core/encoders/common/target_metadata.hpp"
         "core/encoders/common/target_source.hpp"
@@ -1049,6 +1074,7 @@ else ()
         "core/encoders/flat/flat_tuple_layout.hpp"
         "core/encoders/flat/semantic_flat_relation_encoder.hpp"
         "core/encoders/homo/semantic_color_encoder.hpp"
+        "core/encoders/hetero/hetero_relation_schema.hpp"
         "core/encoders/hetero/semantic_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
@@ -1265,6 +1291,11 @@ if (BUILD_TESTING)
     add_executable(
             mifrost_neutral_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hetero_relation_schema_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_catalog_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_key_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_schema_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/semantic_flat_horizon_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/semantic_transition_dag_test.cpp"
     )
     target_include_directories(mifrost_neutral_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/_core")

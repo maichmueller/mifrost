@@ -15,7 +15,9 @@
 #include <utility>
 
 #include "mifrost/core/common_types.hpp"
+#include "mifrost/core/encoders/common/relation_key.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
+#include "mifrost/core/encoders/hetero/hetero_relation_schema.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
 
@@ -54,26 +56,6 @@ std::string_view derivation_suffix(GoalDerivation derivation)
       case GoalDerivation::added_unsatisfied: return "[sat-]";
    }
    return "";
-}
-
-std::string relation_name(
-   std::string_view predicate,
-   bool positive,
-   std::optional< size_t > goal_level,
-   std::optional< GoalDerivation > derivation = std::nullopt,
-   std::string_view predicate_suffix = {}
-)
-{
-   std::string result = positive ? "[+]" : "[-]";
-   result += predicate;
-   result += predicate_suffix;
-   if(goal_level) {
-      result += kGoalSuffixes.at(*goal_level);
-   }
-   if(derivation) {
-      result += derivation_suffix(*derivation);
-   }
-   return result;
 }
 
 std::string atom_name(
@@ -311,70 +293,39 @@ struct SemanticHGraphEncoderEngine::Impl {
    const std::vector< SemanticPredicateSpec >& predicates;
    const std::vector< SemanticActionSpec >& actions;
    Config config;
+   // Persistent structured relation schema; resolves node/edge-type strings for both declared
+   // and undeclared keys without re-deriving them per atom/literal (see
+   // `HeteroRelationSchema::name_for`). Rebuilt whenever the relation universe changes
+   // (construction, `configure_horizon()`); `update_relations()` never touches it.
+   HeteroRelationSchema schema_;
+   // Caller-mutable compat/export view, derived from `schema_` whenever it is rebuilt, and
+   // independently replaceable via `update_relations()`.
    std::map< std::string, int > relation_arities;
    std::vector< std::tuple< std::string, std::string, std::string > > all_edge_types;
 
-   // `relation_name(...)` builds the PyG hetero node/edge type key (not a
-   // display name; it is always required, independent of
-   // config.export_node_names), and the same (predicate, polarity, level,
-   // derivation, suffix) combination recurs for every atom of every state
-   // that shares it. Memoize it in a dense-indexed cache instead of
-   // re-deriving the string per atom/literal. The key is an exact bijective
-   // packing (not a hash) of small bounded fields, so there is no collision
-   // risk. `predicate_suffix` is always empty or one of a handful of values
-   // fixed by this engine's config for its whole lifetime (e.g.
-   // successor_suffix, "[state]"), so interning first-seen suffixes into a
-   // small vector keeps the packed key exact without hashing string bytes.
-   // Mutating these on encode() is safe only because init_semantic_hgraph_encoder.cpp
-   // (unlike the legacy Pymimir-only init_hgraph_encoder.cpp bindings) never
-   // releases the GIL around SemanticHGraphEncoderEngine calls, so concurrent
-   // Python access to one engine is already serialized.
-   mutable std::vector< std::string > relation_name_suffixes_;
-   mutable hash_map< uint64_t, std::string > relation_name_cache_;
-
-   size_t suffix_index(std::string_view suffix) const
+   [[nodiscard]] std::string_view predicate_name(int64_t predicate_index) const
    {
-      for(size_t index = 0; index < relation_name_suffixes_.size(); ++index) {
-         if(relation_name_suffixes_[index] == suffix) {
-            return index;
-         }
-      }
-      if(relation_name_suffixes_.size() >= 255) {
-         throw std::invalid_argument("Semantic HGraph exceeded the cached predicate-suffix budget");
-      }
-      relation_name_suffixes_.emplace_back(suffix);
-      return relation_name_suffixes_.size() - 1;
+      return predicates.at(static_cast< size_t >(predicate_index)).name;
    }
 
-   const std::string& cached_relation_name(
-      int64_t predicate_index,
-      bool positive,
-      std::optional< size_t > level,
-      std::optional< GoalDerivation > derivation = std::nullopt,
-      std::string_view predicate_suffix = {}
-   ) const
+   /// A `SemanticHGraphEncoderEngine` may legitimately be given empty predicate/action lists (the
+   /// caller relies purely on topology relations, added to `relation_arities` after this call
+   /// returns) — unlike `HeteroRelationSchemaBuilder::finalize()`, which throws on an empty
+   /// builder, an empty predicate/action-derived schema here is not an error.
+   [[nodiscard]] static HeteroRelationSchema finalize_schema(
+      HeteroRelationSchemaBuilder builder,
+      int max_goal_level,
+      bool support_literals,
+      const std::set< GoalDerivation >& goal_derivations,
+      std::string_view empty_error_message
+   )
    {
-      const auto level_code = static_cast< uint64_t >(level ? *level + 1 : 0);
-      const auto derivation_code = static_cast< uint64_t >(
-         derivation ? static_cast< int >(*derivation) + 1 : 0
-      );
-      const auto suffix_code = static_cast< uint64_t >(suffix_index(predicate_suffix));
-      const auto key = static_cast< uint64_t >(predicate_index) | (uint64_t{positive} << 24)
-                       | (level_code << 25) | (derivation_code << 28) | (suffix_code << 31);
-      if(const auto it = relation_name_cache_.find(key); it != relation_name_cache_.end()) {
-         return it->second;
+      if(builder.size() == 0) {
+         return HeteroRelationSchema{};
       }
-      const auto [emplaced_it, _] = relation_name_cache_.emplace(
-         key,
-         relation_name(
-            predicates.at(static_cast< size_t >(predicate_index)).name,
-            positive,
-            level,
-            derivation,
-            predicate_suffix
-         )
+      return std::move(builder).finalize(
+         max_goal_level, support_literals, goal_derivations, empty_error_message
       );
-      return emplaced_it->second;
    }
 
    Impl(
@@ -416,60 +367,9 @@ struct SemanticHGraphEncoderEngine::Impl {
              or (config.include_lgan_edges and config.lgan_anchor_sources.contains(source));
    }
 
-   void build_relation_arities()
+   void rebuild_all_edge_types()
    {
-      const std::set< std::string > top_types = {
-         "object", "number", config.symbol_type_id, "_action_"
-      };
-      std::vector< std::pair< std::string, int > > regular;
-      for(const auto category : kCategoryOrder) {
-         for(const auto& predicate : predicates) {
-            if(predicate.category != category) {
-               continue;
-            }
-            const auto arity = static_cast< int >(predicate.arity);
-            relation_arities[predicate.name] = arity;
-            if(not top_types.contains(predicate.name)) {
-               regular.emplace_back(predicate.name, arity);
-            }
-         }
-      }
-      if(includes_plain_goal_derivation(config.goal_derivations)) {
-         for(const auto& [name, arity] : regular) {
-            for(size_t level = 0; level <= config.max_goal_level; ++level) {
-               for(const bool positive : {true, false}) {
-                  relation_arities[relation_name(name, positive, level)] = arity;
-               }
-            }
-            if(config.support_literals) {
-               for(const bool positive : {true, false}) {
-                  relation_arities[relation_name(name, positive, std::nullopt)] = arity;
-               }
-            }
-         }
-      }
-      for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
-         for(const auto& [name, arity] : regular) {
-            for(size_t level = 0; level <= config.max_goal_level; ++level) {
-               for(const bool positive : {true, false}) {
-                  relation_arities[relation_name(name, positive, level, derivation)] = arity;
-               }
-            }
-            if(config.support_literals) {
-               for(const bool positive : {true, false}) {
-                  relation_arities[relation_name(name, positive, std::nullopt, derivation)] = arity;
-               }
-            }
-         }
-      }
-      if(not config.ignore_actions) {
-         const int offset = (has_target_source(TargetSource::actions) or config.include_lgan_edges)
-                               ? 1
-                               : 0;
-         for(const auto& action : actions) {
-            relation_arities[action.name] = static_cast< int >(action.arity) + offset;
-         }
-      }
+      all_edge_types.clear();
       for(const auto& [type, arity] : relation_arities) {
          const int effective = config.add_nullary_predicates and arity == 0 ? 1 : arity;
          for(int position = 0; position < effective; ++position) {
@@ -486,25 +386,123 @@ struct SemanticHGraphEncoderEngine::Impl {
       all_edge_types.erase(std::ranges::unique(all_edge_types).begin(), all_edge_types.end());
    }
 
+   void build_relation_arities()
+   {
+      const std::set< std::string > top_types = {
+         "object", "number", config.symbol_type_id, "_action_"
+      };
+      std::vector< std::pair< std::string, int64_t > > regular;
+      HeteroRelationSchemaBuilder builder;
+      for(const auto category : kCategoryOrder) {
+         for(const auto& predicate : predicates) {
+            if(predicate.category != category) {
+               continue;
+            }
+            const auto arity = predicate.arity;
+            builder.register_relation(
+               predicate_relation_key(predicate.name),
+               HeteroRelationLayout{arity},
+               RelationUsage::state
+            );
+            if(not top_types.contains(predicate.name)) {
+               regular.emplace_back(predicate.name, arity);
+            }
+         }
+      }
+      if(includes_plain_goal_derivation(config.goal_derivations)) {
+         for(const auto& [name, arity] : regular) {
+            for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
+               for(const bool positive : {true, false}) {
+                  builder.register_relation(
+                     predicate_relation_key(name, positive, goal_level),
+                     HeteroRelationLayout{arity},
+                     RelationUsage::goal
+                  );
+               }
+            }
+            if(config.support_literals) {
+               for(const bool positive : {true, false}) {
+                  builder.register_relation(
+                     predicate_relation_key(name, positive),
+                     HeteroRelationLayout{arity},
+                     RelationUsage::goal
+                  );
+               }
+            }
+         }
+      }
+      for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
+         for(const auto& [name, arity] : regular) {
+            for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
+               for(const bool positive : {true, false}) {
+                  builder.register_relation(
+                     predicate_relation_key(name, positive, goal_level, derivation),
+                     HeteroRelationLayout{arity},
+                     RelationUsage::goal_derivation
+                  );
+               }
+            }
+            if(config.support_literals) {
+               for(const bool positive : {true, false}) {
+                  builder.register_relation(
+                     predicate_relation_key(name, positive, std::nullopt, derivation),
+                     HeteroRelationLayout{arity},
+                     RelationUsage::goal_derivation
+                  );
+               }
+            }
+         }
+      }
+      if(not config.ignore_actions) {
+         const int64_t offset = (has_target_source(TargetSource::actions)
+                                 or config.include_lgan_edges)
+                                   ? 1
+                                   : 0;
+         for(const auto& action : actions) {
+            builder.register_relation(
+               action_relation_key(action.name),
+               HeteroRelationLayout{action.arity + offset},
+               RelationUsage::action
+            );
+         }
+      }
+      schema_ = finalize_schema(
+         std::move(builder),
+         static_cast< int >(config.max_goal_level),
+         config.support_literals,
+         config.goal_derivations,
+         "SemanticHGraphEncoderEngine did not derive any relation types for this predicate/action "
+         "schema"
+      );
+      relation_arities = schema_.relation_dict().arity;
+      rebuild_all_edge_types();
+   }
+
    void configure_horizon(const SemanticHorizonHGraphEncoderConfig& horizon)
    {
-      relation_arities.clear();
-      all_edge_types.clear();
       const bool root_slot = root_in_state_relations(horizon.root_policy);
       const bool split = horizon.transition_mode == SemanticHorizonMode::full
                          and root_uses_split_state_relations(horizon.root_policy);
       const std::set< std::string > top_types = {
          "object", "number", config.symbol_type_id, "_action_"
       };
-      std::vector< std::pair< std::string, int > > regular;
+      std::vector< std::pair< std::string, int64_t > > regular;
+      HeteroRelationSchemaBuilder builder;
 
-      const auto root_relation = [&](const std::string& name, int arity) {
-         relation_arities[name] = arity + (root_slot ? 1 : 0);
+      const auto register_relation = [&](RelationKey key, int64_t arity, RelationUsage usage) {
+         builder.register_relation(std::move(key), HeteroRelationLayout{arity}, usage);
       };
-      const auto full_relation = [&](const std::string& name, int arity) {
-         root_relation(name, arity);
+      const auto root_relation = [&](const RelationKey& key, int64_t arity, RelationUsage usage) {
+         register_relation(key, arity + (root_slot ? 1 : 0), usage);
+      };
+      const auto full_relation = [&](const RelationKey& key, int64_t arity, RelationUsage usage) {
+         root_relation(key, arity, usage);
          if(split) {
-            relation_arities[name + "[state]"] = arity + 1;
+            RelationKey anchored = key;
+            anchored.state_anchored = true;
+            register_relation(std::move(anchored), arity + 1, usage);
          }
       };
       for(const auto category : kCategoryOrder) {
@@ -512,8 +510,8 @@ struct SemanticHGraphEncoderEngine::Impl {
             if(predicate.category != category) {
                continue;
             }
-            const auto arity = static_cast< int >(predicate.arity);
-            full_relation(predicate.name, arity);
+            const auto arity = predicate.arity;
+            full_relation(predicate_relation_key(predicate.name), arity, RelationUsage::state);
             if(not top_types.contains(predicate.name)) {
                regular.emplace_back(predicate.name, arity);
             }
@@ -523,18 +521,21 @@ struct SemanticHGraphEncoderEngine::Impl {
       for(const auto& [name, arity] : regular) {
          if(includes_plain_goal_derivation(config.goal_derivations)) {
             for(size_t level = 0; level <= config.max_goal_level; ++level) {
+               const GoalLevel goal_level(level);
                for(const bool positive : {true, false}) {
-                  root_relation(relation_name(name, positive, level), arity);
+                  root_relation(
+                     predicate_relation_key(name, positive, goal_level), arity, RelationUsage::goal
+                  );
                }
             }
          }
          if(config.support_literals) {
             for(const bool positive : {true, false}) {
-               const auto type = relation_name(name, positive, std::nullopt);
+               const auto key = predicate_relation_key(name, positive);
                if(horizon.transition_mode == SemanticHorizonMode::delta) {
-                  relation_arities[type] = arity + 1;
+                  register_relation(key, arity + 1, RelationUsage::state);
                } else {
-                  root_relation(type, arity);
+                  root_relation(key, arity, RelationUsage::state);
                }
             }
          }
@@ -542,18 +543,24 @@ struct SemanticHGraphEncoderEngine::Impl {
             if(derivation == GoalDerivation::satisfied
                or derivation == GoalDerivation::unsatisfied) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
                   for(const bool positive : {true, false}) {
-                     const auto type = relation_name(name, positive, level, derivation);
-                     root_relation(type, arity);
-                     if(split) {
-                        relation_arities[type + "[state]"] = arity + 1;
-                     }
+                     full_relation(
+                        predicate_relation_key(name, positive, goal_level, derivation),
+                        arity,
+                        RelationUsage::goal_satisfaction
+                     );
                   }
                }
             } else if(horizon.transition_mode == SemanticHorizonMode::delta) {
                for(size_t level = 0; level <= config.max_goal_level; ++level) {
+                  const GoalLevel goal_level(level);
                   for(const bool positive : {true, false}) {
-                     relation_arities[relation_name(name, positive, level, derivation)] = arity + 1;
+                     register_relation(
+                        predicate_relation_key(name, positive, goal_level, derivation),
+                        arity + 1,
+                        RelationUsage::goal_satisfaction
+                     );
                   }
                }
             }
@@ -561,9 +568,25 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
       if(not config.ignore_actions) {
          for(const auto& action : actions) {
-            relation_arities[action.name] = static_cast< int >(action.arity) + 1;
+            register_relation(
+               action_relation_key(action.name), action.arity + 1, RelationUsage::action
+            );
          }
       }
+
+      schema_ = finalize_schema(
+         std::move(builder),
+         static_cast< int >(config.max_goal_level),
+         config.support_literals,
+         config.goal_derivations,
+         "SemanticHGraphEncoderEngine (horizon) did not derive any relation types for this "
+         "predicate/action schema"
+      );
+      relation_arities = schema_.relation_dict().arity;
+
+      // Topology relations are fully user-configurable names, not schema-derived, so they bypass
+      // the immutable `schema_` and go straight into the compat map (mirrors
+      // `HorizonHGraphEncoderEngine::register_relation_type`).
       if(horizon.enable_parent_relation) {
          relation_arities[horizon.parent_relation] = 2;
       }
@@ -574,20 +597,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          relation_arities[horizon.cousin_relation] = 2;
       }
 
-      for(const auto& [type, arity] : relation_arities) {
-         const int effective = config.add_nullary_predicates and arity == 0 ? 1 : arity;
-         for(int position = 0; position < effective; ++position) {
-            const auto pos = std::to_string(position);
-            all_edge_types.emplace_back(config.symbol_type_id, pos, type);
-            all_edge_types.emplace_back(type, pos, config.symbol_type_id);
-         }
-         if(config.include_lgan_edges) {
-            all_edge_types.emplace_back(type, config.lgan_tn_edge_pos, config.symbol_type_id);
-            all_edge_types.emplace_back(type, config.lgan_nn_edge_pos, config.symbol_type_id);
-         }
-      }
-      std::ranges::sort(all_edge_types);
-      all_edge_types.erase(std::ranges::unique(all_edge_types).begin(), all_edge_types.end());
+      rebuild_all_edge_types();
    }
 
    Workspace initialize_workspace(BatchBuilder& builder) const
@@ -876,18 +886,12 @@ struct SemanticHGraphEncoderEngine::Impl {
       std::optional< bool > polarity = std::nullopt
    ) const
    {
-      const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
       if(atom.arguments.empty() and not config.add_nullary_predicates) {
          return;
       }
-      const auto type = polarity ? cached_relation_name(
-                                      atom.predicate,
-                                      *polarity,
-                                      std::nullopt,
-                                      std::nullopt,
-                                      predicate_suffix
-                                   )
-                                 : predicate.name + std::string(predicate_suffix);
+      const std::string type = schema_.name_for(predicate_relation_key(
+         predicate_name(atom.predicate), polarity, std::nullopt, std::nullopt, predicate_suffix
+      ));
       auto formatted = config.export_node_names
                           ? atom_name(atom, predicates, semantic_objects(input), predicate_suffix)
                           : std::string{};
@@ -916,9 +920,13 @@ struct SemanticHGraphEncoderEngine::Impl {
       if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
          return;
       }
-      const auto type = cached_relation_name(
-         literal.atom.predicate, literal.positive, prepared.level, derivation, predicate_suffix
-      );
+      const std::string type = schema_.name_for(predicate_relation_key(
+         predicate_name(literal.atom.predicate),
+         literal.positive,
+         GoalLevel(prepared.level),
+         derivation,
+         predicate_suffix
+      ));
       const auto formatted = config.export_node_names ? literal_name(
                                                            literal,
                                                            predicates,
@@ -1067,8 +1075,8 @@ struct SemanticHGraphEncoderEngine::Impl {
             if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
                continue;
             }
-            const auto type = cached_relation_name(
-               literal.atom.predicate, literal.positive, std::nullopt
+            const std::string type = schema_.name_for(
+               predicate_relation_key(predicate_name(literal.atom.predicate), literal.positive)
             );
             const auto formatted = config.export_node_names ? literal_name(
                                                                  literal,
@@ -1664,12 +1672,14 @@ struct SemanticHGraphEncoderEngine::Impl {
                                            std::optional< GoalDerivation > derivation,
                                            bool state_suffix
                                         ) {
-         auto type = cached_relation_name(
-            goal.literal.atom.predicate, goal.literal.positive, goal.level, derivation
-         );
-         if(state_suffix) {
-            type += "[state]";
-         }
+         const std::string type = schema_.name_for(predicate_relation_key(
+            predicate_name(goal.literal.atom.predicate),
+            goal.literal.positive,
+            GoalLevel(goal.level),
+            derivation,
+            /*modifier=*/"",
+            state_suffix
+         ));
          encode_atom_relation(
             goal.literal.atom,
             type,
@@ -1734,9 +1744,17 @@ struct SemanticHGraphEncoderEngine::Impl {
                      continue;
                   }
                   const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
+                  const std::string type = schema_.name_for(predicate_relation_key(
+                     predicate.name,
+                     std::nullopt,
+                     std::nullopt,
+                     std::nullopt,
+                     /*modifier=*/"",
+                     split_state
+                  ));
                   encode_atom_relation(
                      fact,
-                     predicate.name + (split_state ? "[state]" : ""),
+                     type,
                      prefix,
                      config.export_node_names ? atom_name(fact, predicates, root_objects) : "",
                      state_key
@@ -1794,8 +1812,8 @@ struct SemanticHGraphEncoderEngine::Impl {
             std::set< SemanticAtom > removed;
             for(const auto& literal : deltas) {
                const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
-               const auto type = cached_relation_name(
-                  literal.atom.predicate, literal.positive, std::nullopt
+               const std::string type = schema_.name_for(
+                  predicate_relation_key(predicate.name, literal.positive)
                );
                encode_atom_relation(
                   literal.atom,
