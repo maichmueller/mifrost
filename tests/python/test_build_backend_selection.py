@@ -121,9 +121,11 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     ]
     assert len(before_build_lines) == 2
     assert all("requirements/build.txt" in line for line in before_build_lines)
+    assert all("requirements/constraints-ci.txt" in line for line in before_build_lines)
     assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
     assert (
         'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 '
+        "pyyggdrasil==0.0.21 pypddl==1.0.23 "
         'torch>=2.2,<3 torch-geometric>=2.7 numpy"' in workflow
     )
     assert workflow.count("flavor:") == 2
