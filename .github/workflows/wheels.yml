@@ -183,12 +183,17 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.cibw_build }}
         CIBW_SKIP: ${{ matrix.cibw_skip }}
-        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 torch>=2.2,<3 torch-geometric>=2.7 numpy"
+        # Keep the native planner packages on the same tested ABI set in both
+        # the build image and the installed-wheel smoke environment.  PyTyr's
+        # native library is linked against the matching PyYggdrasil/PyPDDL
+        # runtime; allowing pip to select newer transitive native wheels can
+        # produce an undefined C++ ABI symbol before Mifrost is imported.
+        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 pyyggdrasil==0.0.21 pypddl==1.0.23 torch>=2.2,<3 torch-geometric>=2.7 numpy"
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
-        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -r /project/requirements/build.txt
-        CIBW_BEFORE_BUILD_MACOS: python -m pip install -r {project}/requirements/build.txt && python -m pip install delocate
+        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -c /project/requirements/constraints-ci.txt -r /project/requirements/build.txt
+        CIBW_BEFORE_BUILD_MACOS: python -m pip install -c {project}/requirements/constraints-ci.txt -r {project}/requirements/build.txt && python -m pip install delocate
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
