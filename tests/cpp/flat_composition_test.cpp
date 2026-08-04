@@ -214,6 +214,39 @@ TEST(FlatCompositionTest, RequiresConfiguredRelationArgumentOffsetNode)
    EXPECT_THROW((void) plan.compile(config), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, RejectsUndeclaredFieldOffsetNode)
+{
+   class InvalidField final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "invalid_field"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+      void declare_fields(FlatFieldPlanBuilder& builder) const override
+      {
+         builder.register_field(
+            "bad",
+            GraphFieldSpec{
+               .dtype = GraphFieldDType::I64,
+               .mode = GraphFieldMode::CAT,
+               .dim = 1,
+               .inc = GraphFieldInc{
+                  .kind = GraphFieldInc::Kind::NODE_OFFSET,
+                  .node_type = "missing",
+               },
+            }
+         );
+      }
+   };
+   FlatEncoderPlan plan;
+   plan.emplace_component< InvalidField >();
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, EmptyBatchStillCarriesCompiledSchemaMetadata)
 {
    FlatEncoderPlan plan;

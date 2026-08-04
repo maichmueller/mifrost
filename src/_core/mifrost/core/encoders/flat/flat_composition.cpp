@@ -584,6 +584,32 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
          + config.relation_args_node_type
       );
    }
+   const auto is_runtime_field = [](std::string_view key) {
+      return key == kRelationInstanceSizesField or key == kRelationCountsField
+             or key == kRelationArgsField;
+   };
+   const auto has_declared_field = [&](std::string_view key) {
+      return std::ranges::any_of(fields, [&](const auto& field) { return field.key == key; });
+   };
+   for(const auto& field : fields) {
+      if(field.spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET
+         and (field.spec.inc.node_type.empty()
+             or not node_schema.try_id_for(field.spec.inc.node_type).has_value())) {
+         throw std::invalid_argument(
+            "Flat composition field '" + field.key + "' references an undeclared node-offset type '"
+            + field.spec.inc.node_type + "'"
+         );
+      }
+      if(field.spec.inc.kind == GraphFieldInc::Kind::FIELD_OFFSET
+         and (field.spec.inc.field_key.empty()
+             or (not is_runtime_field(field.spec.inc.field_key)
+                 and not has_declared_field(field.spec.inc.field_key)))) {
+         throw std::invalid_argument(
+            "Flat composition field '" + field.key + "' references an undeclared field-offset key '"
+            + field.spec.inc.field_key + "'"
+         );
+      }
+   }
 
    std::vector< CompiledFlatRelationProjection > projections;
    projections.reserve(projection_declarations.size());
