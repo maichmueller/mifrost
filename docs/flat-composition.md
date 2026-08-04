@@ -24,6 +24,8 @@ goal, and transition loops remain inside native component implementations;
 there is no Python callback or per-relation component dispatch in this layer.
 `FlatRelationProjection` performs slot remapping with integer relation ids and
 supports source slots, constants, and graph-local node references.
+Components that emit many tuples should resolve `FlatGraphContext::relation_id`
+once before their hot loop and call the integer-id overload of `emit`.
 
 ## External downstream modes
 
