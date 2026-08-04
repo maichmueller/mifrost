@@ -72,8 +72,10 @@
     `TransitionDAG | rustworkx.PyDiGraph | None`,
     `BatchParam.shared(...)`, or `BatchParam.separate([...])`
 - High-level encoder batch paths dispatch to the selected per-instance runtime.
-  Pymimir retains its compatibility parsers; PyTyr converts directly to owned
-  semantic input batches.
+  Pymimir and PyTyr runtimes retain their compatibility parsers while their
+  native boundaries expose task-scoped, non-owning Views to canonical native
+  algorithms. Explicit semantic snapshots remain available for compatibility
+  and parity tooling.
 - Direct low-level Pymimir `_core._parse_*` helpers remain adapter-internal and
   advanced-only. They are not the cross-backend public contract.
 - `mifrost.transition_dag_from_rustworkx(...)` is the historical explicit

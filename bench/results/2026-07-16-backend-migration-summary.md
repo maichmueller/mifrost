@@ -22,12 +22,13 @@ inspect the result.
 | Full transition default batch | +0.27% | +43.07% | Pymimir RSS -1.05% |
 
 The PyTyr batch deltas are visible but do not indicate repeated Python
-materialization or per-state ABI crossings: each batch crosses once as an owned
-semantic-input vector. Single/stream results also vary in both directions. For
-example, PyTyr Flat stream end-to-end is 12.61% faster, Color stream is 24.44%
-faster, HGraph stream is 25.59% slower, and full-transition stream is 77.99%
-faster. The migration therefore keeps the simple shared semantic boundary and
-does not add family- or shape-specific fast paths for benchmark noise.
+materialization or per-state ABI crossings. Single/stream results also vary in
+both directions. For example, PyTyr Flat stream end-to-end is 12.61% faster,
+Color stream is 24.44% faster, HGraph stream is 25.59% slower, and
+full-transition stream is 77.99% faster. The shared semantic snapshot path is
+retained for compatibility while the native View boundary is introduced; the
+benchmark remains the regression guard for the eventual direct View execution
+path.
 
 Native Release smoke coverage is separate from the three-way Python/runtime
 comparison. `mifrost_bench_hgraph`, `mifrost_bench_flat_relation`, and
