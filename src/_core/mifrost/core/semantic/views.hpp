@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <iterator>
 #include <span>
 #include <string_view>
 #include <type_traits>
