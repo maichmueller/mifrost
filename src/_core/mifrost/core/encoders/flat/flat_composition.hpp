@@ -398,8 +398,12 @@ struct FlatCompositionRelationSpec {
 class MIFROST_API FlatCompositionInputBuilder {
   public:
    explicit FlatCompositionInputBuilder(const FlatRelationSchema& schema) : schema_(schema) {}
+   explicit FlatCompositionInputBuilder(const FlatSchemaPlan& plan)
+       : schema_(plan.relation_schema), aliases_(plan.relation_aliases)
+   {
+   }
 
-   [[nodiscard]] int relation_id(const RelationKey& key) const { return schema_.id_for(key); }
+   [[nodiscard]] int relation_id(const RelationKey& key) const;
    void add_object(std::string name);
    void add_node(std::string node_type, std::string key);
    void add_relation(int relation_id, std::span< const int64_t > args, std::string component = {});
@@ -414,6 +418,7 @@ class MIFROST_API FlatCompositionInputBuilder {
 
   private:
    const FlatRelationSchema& schema_;
+   std::span< const FlatRelationAlias > aliases_;
    FlatCompositionInput input_;
 };
 

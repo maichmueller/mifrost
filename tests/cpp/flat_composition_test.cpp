@@ -445,8 +445,10 @@ TEST(FlatCompositionTest, ResolvesRelationAliasesBeforeEmission)
    FlatEncoderPlan plan;
    plan.emplace_component< AliasComponent >();
    const auto compiled = plan.compile();
-   FlatCompositionInput input;
-   input.objects = {"a"};
+   FlatCompositionInputBuilder input_builder(compiled.schema_plan());
+   input_builder.add_object("a");
+   input_builder.add_relation(predicate_relation_key("state_fact"), std::array< int64_t, 1 >{0});
+   auto input = std::move(input_builder).finish();
    const auto encoding = compiled.encode(FlatInputView::from(input));
    EXPECT_EQ(
       std::get< std::vector< int64_t > >(

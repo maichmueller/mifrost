@@ -67,6 +67,8 @@ an incompatible batch.
 boundary.  Its relation-key overloads are setup operations; use
 `relation_id()` plus the integer overload when constructing a large relation
 stream, and call `finish()` only after all graph-local values have been added.
+Construct it from `FlatSchemaPlan` when the adapter needs the plan's compiled
+relation aliases as well as canonical keys.
 
 `compare_flat_batch_encodings()` compares the native carrier, including node
 tables, columns, graph attributes/fields, pointers, schema metadata, and lazy

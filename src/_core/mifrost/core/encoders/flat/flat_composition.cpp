@@ -435,6 +435,18 @@ void FlatGraphContext::emit_projection(
 
 FlatEmitterComponent::~FlatEmitterComponent() = default;
 
+int FlatCompositionInputBuilder::relation_id(const RelationKey& key) const
+{
+   if(const auto id = schema_.try_id_for(key); id.has_value()) {
+      return *id;
+   }
+   const auto it = std::ranges::find(aliases_, key, &FlatRelationAlias::alias);
+   if(it != aliases_.end()) {
+      return it->target_relation_id;
+   }
+   throw std::invalid_argument("Flat composition relation key is undeclared");
+}
+
 void FlatCompositionInputBuilder::add_object(std::string name)
 {
    if(name.empty()) {
