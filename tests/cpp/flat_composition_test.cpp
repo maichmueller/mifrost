@@ -612,6 +612,7 @@ TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
 
 TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)
 {
+   EXPECT_THROW((void) FlatNodePlan{}.schema(), std::logic_error);
    FlatNodeSchemaBuilder schema_builder;
    const auto entity_type = schema_builder.declare_node_type("entity");
    const auto schema = std::move(schema_builder).finalize();

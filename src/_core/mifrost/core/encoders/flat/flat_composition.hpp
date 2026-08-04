@@ -164,7 +164,13 @@ class MIFROST_API FlatNodePlan {
    [[nodiscard]] int64_t index(FlatNodeTypeId type, std::string_view key) const;
    [[nodiscard]] int64_t count(FlatNodeTypeId type) const;
    [[nodiscard]] const std::vector< std::string >& names(FlatNodeTypeId type) const;
-   [[nodiscard]] const FlatNodeSchema& schema() const { return *schema_; }
+   [[nodiscard]] const FlatNodeSchema& schema() const
+   {
+      if(schema_ == nullptr) {
+         throw std::logic_error("Flat node plan is not initialized");
+      }
+      return *schema_;
+   }
 
   private:
    friend class FlatNodePlanBuilder;
