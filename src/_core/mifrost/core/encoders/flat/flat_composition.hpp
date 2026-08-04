@@ -11,6 +11,7 @@
 
 #include <any>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <set>
@@ -164,6 +165,7 @@ class MIFROST_API FlatNodePlan {
 
    [[nodiscard]] int64_t index(FlatNodeRef ref) const;
    [[nodiscard]] int64_t index(FlatNodeTypeId type, std::string_view key) const;
+   [[nodiscard]] int64_t index_from_source(FlatNodeTypeId type, int64_t source_index) const;
    [[nodiscard]] int64_t count(FlatNodeTypeId type) const;
    [[nodiscard]] const std::vector< std::string >& names(FlatNodeTypeId type) const;
    [[nodiscard]] const FlatNodeSchema& schema() const
@@ -198,8 +200,25 @@ class MIFROST_API FlatNodePlanBuilder {
 
 enum class FlatSlotResolverKind : int8_t {
    source_slot,
+   source_node,
    constant,
    node,
+};
+
+enum class FlatUnownedRelationPolicy : int8_t {
+   unique_owner,
+   broadcast,
+};
+
+struct FlatProjectionHandle {
+   size_t global_id = std::numeric_limits< size_t >::max();
+   size_t component_id = std::numeric_limits< size_t >::max();
+   std::string component;
+
+   [[nodiscard]] bool valid() const noexcept
+   {
+      return global_id != std::numeric_limits< size_t >::max() and not component.empty();
+   }
 };
 
 /** One output-tuple slot in a relation projection. */
@@ -208,8 +227,10 @@ struct FlatSlotResolver {
    int source_slot = -1;
    int64_t constant = 0;
    FlatNodeRef node;
+   FlatNodeTypeId source_node_type = -1;
 
    static FlatSlotResolver source(int slot);
+   static FlatSlotResolver source_node(int slot, FlatNodeTypeId node_type);
    static FlatSlotResolver constant_value(int64_t value);
    static FlatSlotResolver node_ref(FlatNodeRef ref);
 };
@@ -219,6 +240,8 @@ struct FlatRelationProjection {
    RelationKey source_relation;
    RelationKey output_relation;
    std::vector< FlatSlotResolver > slots;
+   std::string component;
+   size_t component_id = std::numeric_limits< size_t >::max();
 };
 
 /** Alternate symbolic relation key resolved to one canonical relation id. */
@@ -232,9 +255,15 @@ struct CompiledFlatRelationProjection {
    int source_relation_id = -1;
    int output_relation_id = -1;
    std::vector< FlatSlotResolver > slots;
+   FlatProjectionHandle handle;
 
    [[nodiscard]] std::vector< int64_t >
    project(std::span< const int64_t > source_args, const FlatNodePlan& nodes) const;
+   void project_into(
+      std::span< int64_t > output,
+      std::span< const int64_t > source_args,
+      const FlatNodePlan& nodes
+   ) const;
 };
 
 struct FlatFieldPlanEntry {
@@ -257,6 +286,16 @@ struct FlatMetadataPlan {
    std::unordered_map< std::string, std::string > graph_attr_owners;
 };
 
+struct FlatRelationBinding {
+   std::string component;
+   std::vector< int > relation_ids;
+};
+
+struct FlatRelationDeclaration {
+   std::string component;
+   RelationKey key;
+};
+
 /** Immutable compiled schema portion of a flat composition plan. */
 struct FlatSchemaPlan {
    FlatRelationSchema relation_schema;
@@ -266,6 +305,7 @@ struct FlatSchemaPlan {
    std::vector< CompiledFlatRelationProjection > projections;
    FlatMetadataPlan metadata;
    std::vector< FlatRelationAlias > relation_aliases;
+   std::vector< FlatRelationBinding > relation_bindings;
 };
 
 /** Compile-time field declarations with explicit single-owner semantics. */
@@ -323,15 +363,19 @@ struct FlatCompositionConfig {
    FlatBuilderGraphConfig graph_config;
    /// Node type whose graph-local offsets are applied to relation argument fields.
    std::string relation_args_node_type = std::string(kFlatEntityNodeType);
+   /// Exported node type for the homogeneous flat entity index space.
+   std::optional< std::string > entity_node_type;
+   FlatUnownedRelationPolicy unowned_relation_policy = FlatUnownedRelationPolicy::unique_owner;
    bool track_relation_instances = false;
    bool pack_relation_args_relation_major = true;
 };
 
 class MIFROST_API FlatSchemaPlanBuilder {
   public:
+   void begin_component(std::string component);
    void register_relation(RelationKey key, FlatTupleLayout layout, RelationUsage usage);
    void register_relation_alias(RelationKey alias, RelationKey target);
-   void add_projection(FlatRelationProjection projection);
+   [[nodiscard]] FlatProjectionHandle add_projection(FlatRelationProjection projection);
    [[nodiscard]] FlatNodeTypeId declare_node_type(
       std::string name,
       FlatNodeKind kind = FlatNodeKind::auxiliary,
@@ -348,6 +392,14 @@ class MIFROST_API FlatSchemaPlanBuilder {
    {
       return relation_aliases_;
    }
+   [[nodiscard]] const std::vector< FlatRelationProjection >& projection_declarations() const
+   {
+      return projections_;
+   }
+   [[nodiscard]] const std::vector< FlatRelationDeclaration >& relation_declarations() const
+   {
+      return relation_declarations_;
+   }
 
    [[nodiscard]] FlatRelationSchema finalize_schema(const FlatCompositionConfig& config) &&;
    [[nodiscard]] FlatNodeSchema finalize_nodes() && { return std::move(node_schema_).finalize(); }
@@ -357,6 +409,8 @@ class MIFROST_API FlatSchemaPlanBuilder {
    FlatNodeSchemaBuilder node_schema_;
    std::vector< FlatRelationProjection > projections_;
    std::vector< FlatRelationAlias > relation_aliases_;
+   std::vector< FlatRelationDeclaration > relation_declarations_;
+   std::string current_component_;
 };
 
 /** A type-erased, checked view used at component boundaries. */
@@ -490,6 +544,7 @@ class MIFROST_API FlatCompositionInputBuilder {
        : schema_(plan.relation_schema), aliases_(plan.relation_aliases)
    {
    }
+   FlatCompositionInputBuilder(const FlatSchemaPlan&&) = delete;
 
    [[nodiscard]] int relation_id(const RelationKey& key) const;
    void add_object(std::string name);
@@ -517,12 +572,20 @@ struct FlatGraphContext {
    FlatRelationSink& relations;
    std::span< const CompiledFlatRelationProjection > projections;
    std::span< const FlatRelationAlias > relation_aliases;
+   std::span< const FlatRelationBinding > relation_bindings;
+   FlatUnownedRelationPolicy unowned_relation_policy;
    FlatGraphScratch scratch;
+   mutable std::vector< int64_t > projection_buffer;
 
    [[nodiscard]] int relation_id(const RelationKey& key) const;
+   [[nodiscard]] bool component_owns_relation(std::string_view component, int relation_id) const;
+   [[nodiscard]] bool should_emit_relation(std::string_view component, int relation_id) const;
    void emit(int relation_id, std::span< const int64_t > args) const;
    void emit(const RelationKey& key, std::span< const int64_t > args) const;
-   void emit_projection(size_t projection_id, std::span< const int64_t > source_args) const;
+   void emit_projection(
+      const FlatProjectionHandle& projection,
+      std::span< const int64_t > source_args
+   ) const;
 };
 
 /** Owner-scoped writer for native node feature columns. */
@@ -571,8 +634,13 @@ class MIFROST_API FlatEmitterComponent {
 /** Owner-scoped writer for non-field graph metadata emitted by a component. */
 class MIFROST_API FlatMetadataWriter {
   public:
-   FlatMetadataWriter(BatchBuilder& builder, const FlatMetadataPlan& plan, std::string_view owner)
-       : builder_(builder), plan_(plan), owner_(owner)
+   FlatMetadataWriter(
+      BatchBuilder& builder,
+      const FlatMetadataPlan& plan,
+      std::string_view owner,
+      std::unordered_map< std::string, BatchBuilder::GraphAttrValue >* batch_constants = nullptr
+   )
+       : builder_(builder), plan_(plan), owner_(owner), batch_constants_(batch_constants)
    {
    }
 
@@ -582,11 +650,15 @@ class MIFROST_API FlatMetadataWriter {
    void set_graph_attr(std::string_view key, std::string value) const;
    void set_graph_attr(std::string_view key, std::vector< int64_t > value) const;
    void set_graph_attr(std::string_view key, std::vector< std::string > value) const;
+   void finish() const;
 
   private:
    BatchBuilder& builder_;
    const FlatMetadataPlan& plan_;
    std::string owner_;
+   std::unordered_map< std::string, BatchBuilder::GraphAttrValue >* batch_constants_ = nullptr;
+   mutable std::unordered_set< std::string > written_graph_attrs_;
+   mutable bool wrote_object_names_ = false;
 };
 
 /** Adds graph-local object rows from `FlatCompositionInput::objects`. */
@@ -698,7 +770,7 @@ class MIFROST_API FlatFieldWriter {
 
 class MIFROST_API CompiledFlatPlan {
   public:
-   CompiledFlatPlan() = default;
+   CompiledFlatPlan() = delete;
 
    [[nodiscard]] const FlatSchemaPlan& schema_plan() const { return schema_plan_; }
    [[nodiscard]] const FlatRelationSchema& schema() const { return schema_plan_.relation_schema; }
@@ -726,12 +798,26 @@ class MIFROST_API CompiledFlatPlan {
 
   private:
    friend class FlatEncoderPlan;
+   CompiledFlatPlan(
+      FlatSchemaPlan schema_plan,
+      std::vector< std::shared_ptr< FlatEmitterComponent > > components,
+      FlatCompositionConfig config
+   )
+       : schema_plan_(std::move(schema_plan)),
+         components_(std::move(components)),
+         config_(std::move(config))
+   {
+   }
    FlatSchemaPlan schema_plan_;
    std::vector< std::shared_ptr< FlatEmitterComponent > > components_;
    FlatCompositionConfig config_;
 
    void configure_builder(BatchBuilder& builder) const;
-   void encode_graph(const FlatInputView& input, BatchBuilder& builder) const;
+   void encode_graph(
+      const FlatInputView& input,
+      BatchBuilder& builder,
+      std::unordered_map< std::string, BatchBuilder::GraphAttrValue >& batch_constants
+   ) const;
 };
 
 /**
@@ -744,6 +830,7 @@ class MIFROST_API CompiledFlatPlan {
 class MIFROST_API FlatBatchRuntime {
   public:
    explicit FlatBatchRuntime(const CompiledFlatPlan& plan) : plan_(plan) {}
+   FlatBatchRuntime(const CompiledFlatPlan&&) = delete;
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const FlatInputView& input) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(

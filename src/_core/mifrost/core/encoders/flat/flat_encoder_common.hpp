@@ -65,6 +65,7 @@ inline constexpr std::string_view kLGANRREdgePosAttr = "lgan_rr_edge_pos";
  * These values describe the graph format. They are not per-graph state.
  */
 struct FlatBuilderGraphConfig {
+   std::string entity_node_type = std::string(kFlatEntityNodeType);
    bool include_lgan_edges = false;
    bool use_predicate_virtual_nodes = false;
    std::optional< std::vector< std::string > > target_sources;

@@ -37,16 +37,26 @@ TEST(FlatRelationSchemaTest, StableAlphabeticalOrderingAndIds)
    EXPECT_EQ(schema.id_for(std::string("on")), 2);
 }
 
-TEST(FlatRelationSchemaTest, DuplicateRegistrationWithCompatibleLayoutIsAccepted)
+TEST(FlatRelationSchemaTest, DuplicateRegistrationWithConflictingUsageIsRejected)
 {
    FlatRelationSchemaBuilder builder;
    builder.register_relation(predicate_relation_key("at"), unary_layout(), RelationUsage::state);
-   builder.register_relation(predicate_relation_key("at"), unary_layout(), RelationUsage::goal);
+   EXPECT_THROW(
+      builder.register_relation(predicate_relation_key("at"), unary_layout(), RelationUsage::goal),
+      std::invalid_argument
+   );
+   EXPECT_EQ(builder.size(), 1u);
+}
+
+TEST(FlatRelationSchemaTest, DuplicateRegistrationWithSameUsageIsAccepted)
+{
+   FlatRelationSchemaBuilder builder;
+   builder.register_relation(predicate_relation_key("at"), unary_layout(), RelationUsage::state);
+   builder.register_relation(predicate_relation_key("at"), unary_layout(), RelationUsage::state);
 
    EXPECT_EQ(builder.size(), 1u);
    auto schema = std::move(builder).finalize(0, false, {GoalDerivation::plain}, "empty");
    ASSERT_EQ(schema.size(), 1u);
-   // First-registered usage wins.
    EXPECT_EQ(schema.sources(), (std::vector< std::string >{"state"}));
 }
 

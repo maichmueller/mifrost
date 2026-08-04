@@ -80,7 +80,7 @@ class ProjectionComponent final: public FlatEmitterComponent {
       builder.register_relation(
          predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
       );
-      builder.add_projection(
+      projection_ = builder.add_projection(
          FlatRelationProjection{
             .source_relation = predicate_relation_key("fact"),
             .output_relation = predicate_relation_key("anchor"),
@@ -92,8 +92,11 @@ class ProjectionComponent final: public FlatEmitterComponent {
    void emit(const FlatInputView&, FlatGraphContext& context) const override
    {
       const std::array source_args{int64_t{0}};
-      context.emit_projection(0, source_args);
+      context.emit_projection(projection_, source_args);
    }
+
+  private:
+   mutable FlatProjectionHandle projection_;
 };
 
 class ConflictingFieldComponent final: public FlatEmitterComponent {
@@ -519,6 +522,82 @@ TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
    );
 }
 
+TEST(FlatCompositionTest, RejectsUnownedRelationsWithMultipleDeclaringEmitters)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   const auto relation = FlatCompositionRelationSpec{
+      .key = predicate_relation_key("fact"),
+      .layout = unary_layout(),
+      .usage = RelationUsage::state,
+   };
+   plan.emplace_component< FlatRelationEmitterComponent >("facts", std::vector{relation});
+   plan.emplace_component< FlatRelationEmitterComponent >("other", std::vector{relation});
+   const auto compiled = plan.compile();
+
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.relations = {{
+      compiled.schema().id_for(predicate_relation_key("fact")),
+      {0},
+   }};
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(input)), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, RejectsNamedRelationsThatTheOwnerDidNotDeclare)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   const auto compiled = plan.compile();
+
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.relations = {{
+      compiled.schema().id_for(predicate_relation_key("fact")),
+      {0},
+      "missing",
+   }};
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(input)), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, BroadcastPolicyExplicitlyDuplicatesUnownedRelations)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   const auto relation = FlatCompositionRelationSpec{
+      .key = predicate_relation_key("fact"),
+      .layout = unary_layout(),
+      .usage = RelationUsage::state,
+   };
+   plan.emplace_component< FlatRelationEmitterComponent >("facts", std::vector{relation});
+   plan.emplace_component< FlatRelationEmitterComponent >("other", std::vector{relation});
+   FlatCompositionConfig config;
+   config.unowned_relation_policy = FlatUnownedRelationPolicy::broadcast;
+   const auto compiled = plan.compile(config);
+
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.relations = {{
+      compiled.schema().id_for(predicate_relation_key("fact")),
+      {0},
+   }};
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationCountsField)).values
+      ),
+      (std::vector< int64_t >{2})
+   );
+}
+
 TEST(FlatCompositionTest, InputBuilderPrevalidatesCarrierIdentityAndArity)
 {
    FlatEncoderPlan plan;
@@ -709,6 +788,117 @@ TEST(FlatCompositionTest, PreparationUsesGraphLocalScratchWithoutComponentMutati
    );
 }
 
+TEST(FlatCompositionTest, PreparedScratchIsAvailableToNodeFeatureWriters)
+{
+   struct PreparedNode {
+      float value = 0.0F;
+   };
+   class PreparedFeatureComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "prepared_feature"; }
+
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, false);
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+
+      void declare_node_features(FlatNodeFeaturePlanBuilder& builder) const override
+      {
+         builder.register_feature("entity", "prepared", 1);
+      }
+
+      void plan_graph(const FlatInputView&, FlatNodePlanBuilder& builder) const override
+      {
+         (void) builder.add_node("entity", "a");
+      }
+
+      void prepare_graph(const FlatInputView&, FlatGraphContext& context) const override
+      {
+         context.scratch.emplace< PreparedNode >(7.0F);
+      }
+
+      void write_node_features(
+         const FlatGraphContext& context,
+         FlatNodeFeatureWriter& writer
+      ) const override
+      {
+         const auto value = context.scratch.get< PreparedNode >().value;
+         writer.set("entity", "prepared", std::span{&value, size_t{1}});
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< PreparedFeatureComponent >();
+   const auto encoding = plan.compile().encode(FlatInputView::from(FlatCompositionInput{}));
+   EXPECT_EQ(
+      std::get< std::vector< float > >(encoding.columns.at("entity/prepared").data),
+      (std::vector< float >{7.0F})
+   );
+}
+
+TEST(FlatCompositionTest, GraphMetadataMustRemainConstantAcrossBatch)
+{
+   struct MetadataInput {
+      int64_t value = 0;
+   };
+   class MetadataComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "varying_metadata"; }
+
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, false);
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+
+      void declare_metadata(FlatMetadataPlanBuilder& builder) const override
+      {
+         builder.claim_graph_attr("constant");
+      }
+
+      void
+      write_metadata(const FlatGraphContext& context, FlatMetadataWriter& writer) const override
+      {
+         writer.set_graph_attr("constant", context.input.get< MetadataInput >().value);
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< MetadataComponent >();
+   const auto compiled = plan.compile();
+   const MetadataInput first{1};
+   const MetadataInput second{2};
+   const std::array inputs{FlatInputView::from(first), FlatInputView::from(second)};
+   EXPECT_THROW((void) compiled.encode_batch(inputs), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, RelationArgumentNodeTypeIsExportedConsistently)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >(
+      "vertices", "vertex", FlatNodeKind::object, 1, true
+   );
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   FlatCompositionConfig config;
+   config.relation_args_node_type = "vertex";
+   const auto encoding = plan.compile(config).encode(FlatInputView::from(FlatCompositionInput{}));
+   EXPECT_EQ(
+      std::get< std::string >(encoding.graph_attrs.at(std::string(kFlatEntityTypeAttr))), "vertex"
+   );
+}
+
 TEST(FlatCompositionTest, ResolvesRelationAliasesBeforeEmission)
 {
    class AliasComponent final: public FlatEmitterComponent {
@@ -776,7 +966,7 @@ TEST(FlatCompositionTest, RejectsProjectionWithUnknownNodeType)
          builder.register_relation(
             predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
          );
-         builder.add_projection(
+         (void) builder.add_projection(
             FlatRelationProjection{
                .source_relation = predicate_relation_key("fact"),
                .output_relation = predicate_relation_key("anchor"),
@@ -931,6 +1121,27 @@ TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)
    };
    EXPECT_THROW(
       (void) invalid.project(std::array< int64_t, 2 >{2, 3}, nodes), std::invalid_argument
+   );
+}
+
+TEST(FlatCompositionTest, ProjectionCanInterpretSourceIdentityAsNodeIndex)
+{
+   FlatNodeSchemaBuilder schema_builder;
+   const auto entity_type = schema_builder.declare_node_type("entity");
+   const auto schema = std::move(schema_builder).finalize();
+   FlatNodePlanBuilder node_builder(schema);
+   (void) node_builder.add_node(entity_type, "a");
+   (void) node_builder.add_node(entity_type, "b");
+   const auto nodes = std::move(node_builder).finish();
+
+   const CompiledFlatRelationProjection projection{
+      .source_relation_id = 0,
+      .output_relation_id = 1,
+      .slots = {FlatSlotResolver::source_node(0, entity_type)},
+   };
+   EXPECT_EQ(projection.project(std::array< int64_t, 1 >{1}, nodes), (std::vector< int64_t >{1}));
+   EXPECT_THROW(
+      (void) projection.project(std::array< int64_t, 1 >{2}, nodes), std::invalid_argument
    );
 }
 

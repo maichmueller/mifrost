@@ -98,7 +98,7 @@ void set_flat_graph_attrs(
 {
    builder.set_graph_kind("flat");
    builder.set_schema_flag("flat_relations", true);
-   builder.set_graph_attr(std::string(kFlatEntityTypeAttr), std::string(kFlatEntityNodeType));
+   builder.set_graph_attr(std::string(kFlatEntityTypeAttr), config.entity_node_type);
    builder.set_graph_attr(
       std::string(kIncludeLGANEdgesAttr), static_cast< int64_t >(config.include_lgan_edges)
    );

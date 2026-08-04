@@ -38,7 +38,11 @@ void FlatRelationSchemaBuilder::register_relation(
          "Flat relation schema layout mismatch for relation '" + format_relation_name(key) + "'"
       );
    }
-   // Same key, compatible layout: no-op. The first-registered usage is kept.
+   if(it->second.usage != usage) {
+      throw std::invalid_argument(
+         "Flat relation schema usage mismatch for relation '" + format_relation_name(key) + "'"
+      );
+   }
 }
 
 FlatRelationSchema FlatRelationSchemaBuilder::finalize(

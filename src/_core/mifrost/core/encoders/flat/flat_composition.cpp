@@ -123,6 +123,63 @@ bool is_reserved_flat_graph_attr(std::string_view key)
    return std::ranges::find(reserved, key) != reserved.end();
 }
 
+void validate_composition_relations(
+   const FlatCompositionInput& input,
+   const FlatRelationSchema& schema,
+   std::span< const FlatRelationBinding > bindings,
+   FlatUnownedRelationPolicy policy
+)
+{
+   for(const auto& relation : input.relations) {
+      if(relation.relation_id < 0
+         or static_cast< size_t >(relation.relation_id) >= schema.arities().size()) {
+         throw std::invalid_argument("Flat composition relation id is out of range");
+      }
+      const auto expected_arity = schema.arities()[static_cast< size_t >(relation.relation_id)];
+      if(relation.args.size() != static_cast< size_t >(expected_arity)) {
+         throw std::invalid_argument("Flat composition relation arguments have wrong arity");
+      }
+
+      size_t owner_count = 0;
+      bool named_owner_found = false;
+      bool named_owner_declared = false;
+      for(const auto& binding : bindings) {
+         const auto owns = std::ranges::find(binding.relation_ids, relation.relation_id)
+                           != binding.relation_ids.end();
+         if(owns) {
+            ++owner_count;
+         }
+         if(not relation.component.empty() and binding.component == relation.component) {
+            named_owner_found = true;
+            named_owner_declared = owns;
+         }
+      }
+      if(not relation.component.empty()) {
+         if(not named_owner_found) {
+            throw std::invalid_argument(
+               "Flat composition relation names unknown component '" + relation.component + "'"
+            );
+         }
+         if(not named_owner_declared) {
+            throw std::invalid_argument(
+               "Flat composition relation owner does not declare relation id "
+               + std::to_string(relation.relation_id)
+            );
+         }
+      } else if(owner_count == 0) {
+         throw std::invalid_argument(
+            "Flat composition relation has no declaring emitter for relation id "
+            + std::to_string(relation.relation_id)
+         );
+      } else if(owner_count > 1 and policy != FlatUnownedRelationPolicy::broadcast) {
+         throw std::invalid_argument(
+            "Flat composition relation id " + std::to_string(relation.relation_id)
+            + " has multiple declaring emitters; choose an explicit owner or enable broadcast"
+         );
+      }
+   }
+}
+
 }  // namespace
 
 const FlatExternalModeContract& flat_external_mode_contract(FlatExternalMode mode)
@@ -266,6 +323,18 @@ int64_t FlatNodePlan::index(FlatNodeTypeId type, std::string_view key) const
    return it->second;
 }
 
+int64_t FlatNodePlan::index_from_source(FlatNodeTypeId type, int64_t source_index) const
+{
+   if(schema_ == nullptr) {
+      throw std::logic_error("Flat node plan is not initialized");
+   }
+   validate_node_type_id(*schema_, type);
+   if(source_index < 0 or source_index >= count(type)) {
+      throw std::invalid_argument("Flat source node index is out of range");
+   }
+   return source_index;
+}
+
 int64_t FlatNodePlan::count(FlatNodeTypeId type) const
 {
    if(schema_ == nullptr) {
@@ -292,6 +361,18 @@ FlatSlotResolver FlatSlotResolver::source(int slot)
    return FlatSlotResolver{.kind = FlatSlotResolverKind::source_slot, .source_slot = slot};
 }
 
+FlatSlotResolver FlatSlotResolver::source_node(int slot, FlatNodeTypeId node_type)
+{
+   if(slot < 0 or node_type < 0) {
+      throw std::invalid_argument("Flat source-node resolver requires valid slots and node types");
+   }
+   return FlatSlotResolver{
+      .kind = FlatSlotResolverKind::source_node,
+      .source_slot = slot,
+      .source_node_type = node_type,
+   };
+}
+
 FlatSlotResolver FlatSlotResolver::constant_value(int64_t value)
 {
    return FlatSlotResolver{.kind = FlatSlotResolverKind::constant, .constant = value};
@@ -310,8 +391,21 @@ std::vector< int64_t > CompiledFlatRelationProjection::project(
    const FlatNodePlan& nodes
 ) const
 {
-   std::vector< int64_t > output;
-   output.reserve(slots.size());
+   std::vector< int64_t > output(slots.size());
+   project_into(output, source_args, nodes);
+   return output;
+}
+
+void CompiledFlatRelationProjection::project_into(
+   std::span< int64_t > output,
+   std::span< const int64_t > source_args,
+   const FlatNodePlan& nodes
+) const
+{
+   if(output.size() != slots.size()) {
+      throw std::invalid_argument("Flat relation projection output buffer has wrong size");
+   }
+   size_t output_index = 0;
    for(const auto& slot : slots) {
       switch(slot.kind) {
          case FlatSlotResolverKind::source_slot:
@@ -319,13 +413,21 @@ std::vector< int64_t > CompiledFlatRelationProjection::project(
                or static_cast< size_t >(slot.source_slot) >= source_args.size()) {
                throw std::invalid_argument("Flat relation projection source slot is out of range");
             }
-            output.push_back(source_args[static_cast< size_t >(slot.source_slot)]);
+            output[output_index++] = source_args[static_cast< size_t >(slot.source_slot)];
             break;
-         case FlatSlotResolverKind::constant: output.push_back(slot.constant); break;
-         case FlatSlotResolverKind::node: output.push_back(nodes.index(slot.node)); break;
+         case FlatSlotResolverKind::source_node:
+            if(slot.source_slot < 0
+               or static_cast< size_t >(slot.source_slot) >= source_args.size()) {
+               throw std::invalid_argument("Flat source-node resolver source slot is out of range");
+            }
+            output[output_index++] = nodes.index_from_source(
+               slot.source_node_type, source_args[static_cast< size_t >(slot.source_slot)]
+            );
+            break;
+         case FlatSlotResolverKind::constant: output[output_index++] = slot.constant; break;
+         case FlatSlotResolverKind::node: output[output_index++] = nodes.index(slot.node); break;
       }
    }
-   return output;
 }
 
 void FlatFieldPlanBuilder::register_field(std::string key, GraphFieldSpec spec)
@@ -398,13 +500,28 @@ void FlatMetadataPlanBuilder::claim_graph_attr(std::string key)
    }
 }
 
+void FlatSchemaPlanBuilder::begin_component(std::string component)
+{
+   current_component_ = std::move(component);
+   if(current_component_.empty()) {
+      throw std::invalid_argument("Flat schema component name must not be empty");
+   }
+}
+
 void FlatSchemaPlanBuilder::register_relation(
    RelationKey key,
    FlatTupleLayout layout,
    RelationUsage usage
 )
 {
+   if(current_component_.empty()) {
+      throw std::logic_error("Flat relation registration requires an active component");
+   }
+   const auto relation_key = key;
    relation_schema_.register_relation(std::move(key), std::move(layout), usage);
+   relation_declarations_.push_back(
+      FlatRelationDeclaration{.component = current_component_, .key = relation_key}
+   );
 }
 
 void FlatSchemaPlanBuilder::register_relation_alias(RelationKey alias, RelationKey target)
@@ -422,12 +539,26 @@ void FlatSchemaPlanBuilder::register_relation_alias(RelationKey alias, RelationK
    );
 }
 
-void FlatSchemaPlanBuilder::add_projection(FlatRelationProjection projection)
+FlatProjectionHandle FlatSchemaPlanBuilder::add_projection(FlatRelationProjection projection)
 {
    if(projection.slots.empty()) {
       throw std::invalid_argument("Flat relation projection must declare at least one slot");
    }
+   if(current_component_.empty()) {
+      throw std::logic_error("Flat projection registration requires an active component");
+   }
+   const auto global_id = projections_.size();
+   const auto local_id = std::ranges::count_if(projections_, [&](const auto& existing) {
+      return existing.component == current_component_;
+   });
+   projection.component = current_component_;
+   projection.component_id = local_id;
    projections_.push_back(std::move(projection));
+   return FlatProjectionHandle{
+      .global_id = global_id,
+      .component_id = static_cast< size_t >(local_id),
+      .component = current_component_,
+   };
 }
 
 FlatNodeTypeId FlatSchemaPlanBuilder::declare_node_type(
@@ -463,6 +594,29 @@ int FlatGraphContext::relation_id(const RelationKey& key) const
    throw std::invalid_argument("Unknown flat relation key");
 }
 
+bool FlatGraphContext::component_owns_relation(std::string_view component, int relation_id) const
+{
+   const auto binding = std::ranges::find(
+      relation_bindings, component, &FlatRelationBinding::component
+   );
+   return binding != relation_bindings.end()
+          and std::ranges::find(binding->relation_ids, relation_id) != binding->relation_ids.end();
+}
+
+bool FlatGraphContext::should_emit_relation(std::string_view component, int relation_id) const
+{
+   if(not component_owns_relation(component, relation_id)) {
+      return false;
+   }
+   size_t owner_count = 0;
+   for(const auto& binding : relation_bindings) {
+      if(std::ranges::find(binding.relation_ids, relation_id) != binding.relation_ids.end()) {
+         ++owner_count;
+      }
+   }
+   return owner_count == 1 or unowned_relation_policy == FlatUnownedRelationPolicy::broadcast;
+}
+
 void FlatGraphContext::emit(int relation_id, std::span< const int64_t > args) const
 {
    if(relation_id < 0 or static_cast< size_t >(relation_id) >= schema.arities().size()) {
@@ -480,26 +634,31 @@ void FlatGraphContext::emit(const RelationKey& key, std::span< const int64_t > a
 }
 
 void FlatGraphContext::emit_projection(
-   size_t projection_id,
+   const FlatProjectionHandle& handle,
    std::span< const int64_t > source_args
 ) const
 {
-   if(projection_id >= projections.size()) {
-      throw std::invalid_argument("Flat relation projection id is out of range");
+   if(not handle.valid() or handle.global_id >= projections.size()) {
+      throw std::invalid_argument("Flat relation projection handle is invalid");
    }
-   const auto& projection = projections[projection_id];
+   const auto& projection = projections[handle.global_id];
+   if(projection.handle.component != handle.component
+      or projection.handle.component_id != handle.component_id) {
+      throw std::invalid_argument("Flat relation projection handle belongs to another component");
+   }
    if(source_args.size()
       != static_cast< size_t >(
          schema.arities()[static_cast< size_t >(projection.source_relation_id)]
       )) {
       throw std::invalid_argument("Flat relation projection source arity does not match schema");
    }
-   auto output = projection.project(source_args, nodes);
+   projection_buffer.resize(projection.slots.size());
+   projection.project_into(projection_buffer, source_args, nodes);
    const auto output_arity = schema.arities()[static_cast< size_t >(projection.output_relation_id)];
-   if(output.size() != static_cast< size_t >(output_arity)) {
+   if(projection_buffer.size() != static_cast< size_t >(output_arity)) {
       throw std::logic_error("Compiled flat relation projection output arity is inconsistent");
    }
-   relations.emit(projection.output_relation_id, output);
+   relations.emit(projection.output_relation_id, projection_buffer);
 }
 
 void FlatNodeFeatureWriter::set(
@@ -630,6 +789,7 @@ void FlatMetadataWriter::set_object_names(std::vector< std::string > names) cons
       );
    }
    builder_.set_object_names(std::move(names));
+   wrote_object_names_ = true;
 }
 
 void FlatMetadataWriter::set_graph_attr(
@@ -644,6 +804,19 @@ void FlatMetadataWriter::set_graph_attr(
          + "'"
       );
    }
+   if(not written_graph_attrs_.insert(std::string(key)).second) {
+      throw std::invalid_argument(
+         "Flat graph metadata key '" + std::string(key) + "' was written more than once per graph"
+      );
+   }
+   if(batch_constants_ != nullptr) {
+      const auto [constant_it, inserted] = batch_constants_->emplace(std::string(key), value);
+      if(not inserted and constant_it->second != value) {
+         throw std::invalid_argument(
+            "Flat graph metadata key '" + std::string(key) + "' must have one value across a batch"
+         );
+      }
+   }
    std::visit(
       [&](auto&& typed_value) {
          builder_.set_graph_attr(
@@ -652,6 +825,23 @@ void FlatMetadataWriter::set_graph_attr(
       },
       std::move(value)
    );
+}
+
+void FlatMetadataWriter::finish() const
+{
+   if(plan_.object_names_owner.has_value() and *plan_.object_names_owner == owner_
+      and not wrote_object_names_) {
+      throw std::invalid_argument(
+         "Flat object-name metadata was not written by component '" + owner_ + "'"
+      );
+   }
+   for(const auto& [key, owner] : plan_.graph_attr_owners) {
+      if(owner == owner_ and not written_graph_attrs_.contains(key)) {
+         throw std::invalid_argument(
+            "Flat graph metadata key '" + key + "' was not written by component '" + owner_ + "'"
+         );
+      }
+   }
 }
 
 void FlatMetadataWriter::set_graph_attr(std::string_view key, int64_t value) const
@@ -839,6 +1029,9 @@ void FlatRelationEmitterComponent::emit(const FlatInputView& input, FlatGraphCon
 {
    const auto& composition = input.get< FlatCompositionInput >();
    for(const auto& relation : composition.relations) {
+      if(not context.should_emit_relation(component_name_, relation.relation_id)) {
+         continue;
+      }
       if(not relation.component.empty() and relation.component != component_name_) {
          continue;
       }
@@ -939,7 +1132,11 @@ void FlatFieldWriter::set(std::string_view key, std::span< const float > values)
 
 void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
 {
-   set_flat_graph_attrs(builder, schema_plan_.relation_schema.as_metadata(), config_.graph_config);
+   auto graph_config = config_.graph_config;
+   graph_config.entity_node_type = config_.entity_node_type.value_or(
+      config_.relation_args_node_type
+   );
+   set_flat_graph_attrs(builder, schema_plan_.relation_schema.as_metadata(), graph_config);
    for(const auto& field : schema_plan_.fields) {
       builder.register_field(field.key, field.spec);
    }
@@ -950,8 +1147,20 @@ void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
    }
 }
 
-void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& builder) const
+void CompiledFlatPlan::encode_graph(
+   const FlatInputView& input,
+   BatchBuilder& builder,
+   std::unordered_map< std::string, BatchBuilder::GraphAttrValue >& batch_constants
+) const
 {
+   if(input.type() == std::type_index(typeid(FlatCompositionInput))) {
+      validate_composition_relations(
+         input.get< FlatCompositionInput >(),
+         schema_plan_.relation_schema,
+         schema_plan_.relation_bindings,
+         config_.unowned_relation_policy
+      );
+   }
    FlatNodePlanBuilder node_builder(schema_plan_.node_schema);
    for(const auto& component : components_) {
       component->plan_graph(input, node_builder);
@@ -977,15 +1186,17 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
       sink,
       schema_plan_.projections,
       schema_plan_.relation_aliases,
+      schema_plan_.relation_bindings,
+      config_.unowned_relation_policy,
    };
+   for(const auto& component : components_) {
+      component->prepare_graph(input, context);
+   }
    for(const auto& component : components_) {
       FlatNodeFeatureWriter writer(
          builder, schema_plan_.node_schema, node_plan, schema_plan_.node_features, component->name()
       );
       component->write_node_features(context, writer);
-   }
-   for(const auto& component : components_) {
-      component->prepare_graph(input, context);
    }
    for(const auto& component : components_) {
       component->emit(input, context);
@@ -995,8 +1206,11 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
       component->write_fields(context, writer);
    }
    for(const auto& component : components_) {
-      FlatMetadataWriter writer(builder, schema_plan_.metadata, component->name());
+      FlatMetadataWriter writer(
+         builder, schema_plan_.metadata, component->name(), &batch_constants
+      );
       component->write_metadata(context, writer);
+      writer.finish();
    }
 
    const auto& relation_counts = sink.relation_counts();
@@ -1013,14 +1227,16 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
 void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder) const
 {
    configure_builder(builder);
-   encode_graph(input, builder);
+   std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
+   encode_graph(input, builder, batch_constants);
 }
 
 BatchBuilder::BatchEncoding CompiledFlatPlan::encode(const FlatInputView& input) const
 {
    BatchBuilder builder;
    configure_builder(builder);
-   encode_graph(input, builder);
+   std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
+   encode_graph(input, builder, batch_constants);
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);
    return encoding;
@@ -1032,8 +1248,9 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
 {
    BatchBuilder builder;
    configure_builder(builder);
+   std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
    for(const auto& input : inputs) {
-      encode_graph(input, builder);
+      encode_graph(input, builder, batch_constants);
    }
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);
@@ -1265,6 +1482,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    std::unordered_map< std::string, FlatNodeFeaturePlanEntry > node_feature_declarations;
    FlatMetadataPlan metadata_plan;
    for(const auto& component : components_) {
+      schema_builder.begin_component(std::string(component->name()));
       component->declare_schema(schema_builder);
       FlatNodeFeaturePlanBuilder node_feature_builder(std::string(component->name()));
       component->declare_node_features(node_feature_builder);
@@ -1325,8 +1543,9 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       }
    }
 
-   const auto projection_declarations = schema_builder.projections();
+   const auto projection_declarations = schema_builder.projection_declarations();
    const auto alias_declarations = schema_builder.relation_aliases();
+   const auto relation_declarations = schema_builder.relation_declarations();
    auto schema = std::move(schema_builder).finalize_schema(config);
    auto node_schema = std::move(schema_builder).finalize_nodes();
    for(const auto& feature : node_features) {
@@ -1347,6 +1566,12 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       throw std::invalid_argument(
          "Flat composition relation_args_node_type is not declared: "
          + config.relation_args_node_type
+      );
+   }
+   const auto entity_node_type = config.entity_node_type.value_or(config.relation_args_node_type);
+   if(entity_node_type.empty() or not node_schema.try_id_for(entity_node_type).has_value()) {
+      throw std::invalid_argument(
+         "Flat composition entity_node_type is not declared: " + entity_node_type
       );
    }
    const auto is_runtime_field = [](std::string_view key) {
@@ -1416,7 +1641,9 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
 
    std::vector< CompiledFlatRelationProjection > projections;
    projections.reserve(projection_declarations.size());
-   for(const auto& declaration : projection_declarations) {
+   for(size_t projection_index = 0; projection_index < projection_declarations.size();
+       ++projection_index) {
+      const auto& declaration = projection_declarations[projection_index];
       const auto source_id = resolve_relation_id(declaration.source_relation);
       const auto output_id = resolve_relation_id(declaration.output_relation);
       const auto source_arity = schema.arities()[static_cast< size_t >(source_id)];
@@ -1434,14 +1661,47 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
          if(slot.kind == FlatSlotResolverKind::node) {
             validate_node_type_id(node_schema, slot.node.type);
          }
+         if(slot.kind == FlatSlotResolverKind::source_node) {
+            validate_node_type_id(node_schema, slot.source_node_type);
+         }
       }
       projections.push_back(
-         CompiledFlatRelationProjection{source_id, output_id, declaration.slots}
+         CompiledFlatRelationProjection{
+            .source_relation_id = source_id,
+            .output_relation_id = output_id,
+            .slots = declaration.slots,
+            .handle = FlatProjectionHandle{
+               .global_id = projection_index,
+               .component_id = declaration.component_id,
+               .component = declaration.component,
+            },
+         }
       );
    }
 
-   CompiledFlatPlan compiled;
-   compiled.schema_plan_ = FlatSchemaPlan{
+   std::vector< FlatRelationBinding > relation_bindings;
+   for(const auto& declaration : relation_declarations) {
+      const auto relation_id = schema.try_id_for(declaration.key);
+      if(not relation_id.has_value()) {
+         throw std::logic_error("Flat relation declaration disappeared during schema compilation");
+      }
+      auto binding = std::ranges::find(
+         relation_bindings, declaration.component, &FlatRelationBinding::component
+      );
+      if(binding == relation_bindings.end()) {
+         relation_bindings.push_back(
+            FlatRelationBinding{.component = declaration.component, .relation_ids = {*relation_id}}
+         );
+      } else if(std::ranges::find(binding->relation_ids, *relation_id)
+                == binding->relation_ids.end()) {
+         binding->relation_ids.push_back(*relation_id);
+      }
+   }
+
+   if(config.entity_node_type.has_value() and config.entity_node_type->empty()) {
+      throw std::invalid_argument("Flat composition entity_node_type must not be empty");
+   }
+   FlatSchemaPlan schema_plan{
       .relation_schema = std::move(schema),
       .node_schema = std::move(node_schema),
       .fields = std::move(fields),
@@ -1449,10 +1709,9 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       .projections = std::move(projections),
       .metadata = std::move(metadata_plan),
       .relation_aliases = std::move(relation_aliases),
+      .relation_bindings = std::move(relation_bindings),
    };
-   compiled.components_ = components_;
-   compiled.config_ = std::move(config);
-   return compiled;
+   return CompiledFlatPlan{std::move(schema_plan), components_, std::move(config)};
 }
 
 }  // namespace mifrost
