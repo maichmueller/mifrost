@@ -398,6 +398,75 @@ void FlatGraphContext::emit_projection(
 
 FlatEmitterComponent::~FlatEmitterComponent() = default;
 
+void FlatCompositionInputBuilder::add_object(std::string name)
+{
+   if(name.empty()) {
+      throw std::invalid_argument("Flat composition object name must not be empty");
+   }
+   if(std::ranges::find(input_.objects, name) != input_.objects.end()) {
+      throw std::invalid_argument("Flat composition object names must be unique");
+   }
+   input_.objects.push_back(std::move(name));
+}
+
+void FlatCompositionInputBuilder::add_node(std::string node_type, std::string key)
+{
+   if(node_type.empty() or key.empty()) {
+      throw std::invalid_argument("Flat composition node type and key must not be empty");
+   }
+   if(std::ranges::any_of(input_.nodes, [&](const auto& record) {
+         return record.node_type == node_type and record.key == key;
+      })) {
+      throw std::invalid_argument("Flat composition node keys must be unique per node type");
+   }
+   input_.nodes.push_back(
+      FlatCompositionNodeRecord{.node_type = std::move(node_type), .key = std::move(key)}
+   );
+}
+
+void FlatCompositionInputBuilder::add_relation(
+   int relation_id,
+   std::span< const int64_t > args,
+   std::string component
+)
+{
+   if(relation_id < 0 or static_cast< size_t >(relation_id) >= schema_.arities().size()) {
+      throw std::invalid_argument("Flat composition relation id is out of range");
+   }
+   if(args.size() != static_cast< size_t >(schema_.arities()[static_cast< size_t >(relation_id)])) {
+      throw std::invalid_argument("Flat composition relation arguments have wrong arity");
+   }
+   input_.relations.push_back(
+      FlatCompositionRelationRecord{
+         .relation_id = relation_id,
+         .args = std::vector< int64_t >(args.begin(), args.end()),
+         .component = std::move(component),
+      }
+   );
+}
+
+void FlatCompositionInputBuilder::add_relation(
+   const RelationKey& key,
+   std::span< const int64_t > args,
+   std::string component
+)
+{
+   add_relation(relation_id(key), args, std::move(component));
+}
+
+void FlatCompositionInputBuilder::set_field(std::string key, NumericColumnData values)
+{
+   if(key.empty()) {
+      throw std::invalid_argument("Flat composition field key must not be empty");
+   }
+   if(std::ranges::any_of(input_.fields, [&](const auto& record) { return record.key == key; })) {
+      throw std::invalid_argument("Flat composition field keys must be unique");
+   }
+   input_.fields.push_back(
+      FlatCompositionFieldRecord{.key = std::move(key), .values = std::move(values)}
+   );
+}
+
 FlatObjectNodeComponent::FlatObjectNodeComponent(
    std::string component_name,
    std::string node_type,

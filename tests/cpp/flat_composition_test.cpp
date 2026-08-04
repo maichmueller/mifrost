@@ -197,24 +197,13 @@ TEST(FlatCompositionTest, BuiltInComponentsComposeResolvedRelationsAndFields)
    );
 
    const auto compiled = plan.compile();
-   FlatCompositionInput input;
-   input.objects = {"a", "b"};
-   input.relations = {
-      {
-         compiled.schema().id_for(predicate_relation_key("fact")),
-         {0},
-      },
-      {
-         compiled.schema().id_for(predicate_relation_key("pair")),
-         {0, 1},
-      },
-   };
-   input.fields = {
-      {
-         "marker",
-         NumericColumnData{std::vector< int64_t >{17}},
-      },
-   };
+   FlatCompositionInputBuilder input_builder(compiled.schema());
+   input_builder.add_object("a");
+   input_builder.add_object("b");
+   input_builder.add_relation(predicate_relation_key("fact"), std::array< int64_t, 1 >{0});
+   input_builder.add_relation(predicate_relation_key("pair"), std::array< int64_t, 2 >{0, 1});
+   input_builder.set_field("marker", NumericColumnData{std::vector< int64_t >{17}});
+   auto input = std::move(input_builder).finish();
 
    const auto encoding = compiled.encode(FlatInputView::from(input));
    ASSERT_EQ(encoding.num_graphs, 1);
@@ -357,6 +346,29 @@ TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
       ),
       (std::vector< int64_t >{1, 1})
    );
+}
+
+TEST(FlatCompositionTest, InputBuilderPrevalidatesCarrierIdentityAndArity)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   const auto compiled = plan.compile();
+   FlatCompositionInputBuilder input(compiled.schema());
+   input.add_object("a");
+   EXPECT_THROW(input.add_object("a"), std::invalid_argument);
+   EXPECT_THROW(
+      input.add_relation(predicate_relation_key("fact"), std::array< int64_t, 2 >{0, 1}),
+      std::invalid_argument
+   );
+   EXPECT_THROW(input.add_relation(99, std::array< int64_t, 1 >{0}), std::invalid_argument);
 }
 
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)

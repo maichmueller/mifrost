@@ -52,6 +52,11 @@ record.  A record with an unknown id, wrong arity, missing field, or mismatched
 field dtype is rejected at the native boundary rather than silently producing
 an incompatible batch.
 
+`FlatCompositionInputBuilder` is the optional adapter-side convenience for this
+boundary.  Its relation-key overloads are setup operations; use
+`relation_id()` plus the integer overload when constructing a large relation
+stream, and call `finish()` only after all graph-local values have been added.
+
 `compare_flat_batch_encodings()` compares the native carrier, including node
 tables, columns, graph attributes/fields, pointers, schema metadata, and lazy
 target-name materializations.  Migration tests should run this comparator on a

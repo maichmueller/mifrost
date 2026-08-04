@@ -354,6 +354,34 @@ struct FlatCompositionRelationSpec {
    RelationUsage usage = RelationUsage::state;
 };
 
+/**
+ * Adapter-side builder for the backend-neutral composition carrier.
+ *
+ * Relation-key overloads are intended for setup code.  Hot loops should call
+ * `relation_id()` once and append records with the integer-id overload.
+ */
+class MIFROST_API FlatCompositionInputBuilder {
+  public:
+   explicit FlatCompositionInputBuilder(const FlatRelationSchema& schema) : schema_(schema) {}
+
+   [[nodiscard]] int relation_id(const RelationKey& key) const { return schema_.id_for(key); }
+   void add_object(std::string name);
+   void add_node(std::string node_type, std::string key);
+   void add_relation(int relation_id, std::span< const int64_t > args, std::string component = {});
+   void add_relation(
+      const RelationKey& key,
+      std::span< const int64_t > args,
+      std::string component = {}
+   );
+   void set_field(std::string key, NumericColumnData values);
+
+   [[nodiscard]] FlatCompositionInput finish() && { return std::move(input_); }
+
+  private:
+   const FlatRelationSchema& schema_;
+   FlatCompositionInput input_;
+};
+
 struct FlatGraphContext {
    const FlatInputView& input;
    const FlatRelationSchema& schema;
