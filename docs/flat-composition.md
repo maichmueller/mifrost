@@ -51,7 +51,9 @@ carrier operations:
 - `FlatRelationEmitterComponent` declares a set of relation keys/layouts and
   emits `FlatCompositionInput::relations` using already-resolved integer ids.
   Set a relation record's optional `component` owner when several relation
-  emitters share one input; an empty owner is a deliberate broadcast.
+  emitters declare the same relation. With the default `unique_owner` policy,
+  an empty owner is valid only when exactly one component declares that
+  relation; `broadcast` must be selected explicitly to duplicate it.
 - `FlatFieldEmitterComponent` declares owned graph fields and writes typed
   `FlatCompositionInput::fields` values with the same shape checks as
   `BatchBuilder`.
@@ -136,7 +138,8 @@ downstream repository.
 ## Compatibility and performance rules
 
 - Compile a plan once per encoder configuration and cache it.
-- Use `FlatBatchRuntime` per worker; components must keep compiled state
+- Share a `std::shared_ptr<const CompiledFlatPlan>` with one `FlatBatchRuntime`
+  per worker; components must keep compiled state
   immutable (graph-local state belongs in the graph context), and do not append
   already-materialized `BatchEncoding` values to compose components.
 - Keep relation ordering, tuple arity, node identity, and graph-field ownership

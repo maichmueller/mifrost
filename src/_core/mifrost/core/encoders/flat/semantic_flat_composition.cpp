@@ -19,8 +19,11 @@ void SemanticFlatEntityComponent::plan_graph(
    FlatNodePlanBuilder& builder
 ) const
 {
-   for(const auto& object : input.get< SemanticFlatCompositionInput >().composition.objects) {
-      (void) builder.add_node(std::string(kFlatEntityNodeType), object);
+   const auto& objects = input.get< SemanticFlatCompositionInput >().composition.objects;
+   for(size_t index = 0; index < objects.size(); ++index) {
+      (void) builder.add_node_from_source(
+         std::string(kFlatEntityNodeType), static_cast< int64_t >(index), objects[index]
+      );
    }
 }
 
@@ -43,8 +46,7 @@ SemanticFlatMetadataComponent::SemanticFlatMetadataComponent(
    std::vector< std::string > graph_attrs,
    std::vector< std::string > optional_graph_attrs
 )
-    : graph_attrs_(std::move(graph_attrs)),
-      optional_graph_attrs_(std::move(optional_graph_attrs))
+    : graph_attrs_(std::move(graph_attrs)), optional_graph_attrs_(std::move(optional_graph_attrs))
 {
    std::ranges::sort(graph_attrs_);
    graph_attrs_.erase(std::ranges::unique(graph_attrs_).begin(), graph_attrs_.end());
@@ -107,8 +109,10 @@ void SemanticFlatRelationComponent::declare_schema(FlatSchemaPlanBuilder& builde
    }
 }
 
-void SemanticFlatRelationComponent::emit(const FlatInputView& input, FlatGraphContext& context)
-   const
+void SemanticFlatRelationComponent::emit(
+   const FlatInputView& input,
+   FlatGraphContext& context
+) const
 {
    const auto& carrier = input.get< SemanticFlatCompositionInput >();
    const auto group = carrier.relation_indices_by_component.find(component_name_);

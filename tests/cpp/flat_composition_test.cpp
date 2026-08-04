@@ -100,6 +100,29 @@ class ProjectionComponent final: public FlatEmitterComponent {
    mutable FlatProjectionHandle projection_;
 };
 
+class PaddingProjectionComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override { return "padding_projection"; }
+
+   void declare_schema(FlatSchemaPlanBuilder& builder) const override
+   {
+      (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+      builder.register_relation(
+         predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+      );
+      builder.register_relation(
+         predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
+      );
+      (void) builder.add_projection(
+         FlatRelationProjection{
+            .source_relation = predicate_relation_key("fact"),
+            .output_relation = predicate_relation_key("anchor"),
+            .slots = {FlatSlotResolver::source(0)},
+         }
+      );
+   }
+};
+
 class ConflictingFieldComponent final: public FlatEmitterComponent {
   public:
    [[nodiscard]] std::string_view name() const noexcept override { return "conflict"; }
@@ -121,15 +144,15 @@ TEST(FlatCompositionTest, CompilesSharedNodesAndRunsOneNativeBatch)
 
    FlatCompositionConfig config;
    config.goal_derivations = {GoalDerivation::plain};
-   auto compiled = plan.compile(config);
+   auto compiled = std::make_shared< CompiledFlatPlan >(plan.compile(config));
 
-   ASSERT_EQ(compiled.schema().size(), 2u);
-   ASSERT_EQ(compiled.node_schema().id_for("entity"), 0);
+   ASSERT_EQ(compiled->schema().size(), 2u);
+   ASSERT_EQ(compiled->node_schema().id_for("entity"), 0);
 
    const DemoInput first{{"a", "b"}, 7};
    const DemoInput second{{"a"}, 9};
    const std::array inputs{FlatInputView::from(first), FlatInputView::from(second)};
-   const auto encoding = compiled.encode_batch(inputs);
+   const auto encoding = compiled->encode_batch(inputs);
    const FlatBatchRuntime runtime(compiled);
    const auto runtime_encoding = runtime.encode_batch(inputs);
 
@@ -166,6 +189,30 @@ TEST(FlatCompositionTest, CompilesSharedNodesAndRunsOneNativeBatch)
    EXPECT_EQ(
       std::get< std::string >(encoding.graph_attrs.at(std::string(kRelationArgsLayoutAttr))),
       std::string(kRelationArgsRelationMajorLayout)
+   );
+}
+
+TEST(FlatCompositionTest, ProjectionHandlesRemainStableAcrossPlanRecompilation)
+{
+   auto projection = std::make_shared< ProjectionComponent >();
+   FlatEncoderPlan first_plan;
+   first_plan.emplace_component< FactsComponent >();
+   first_plan.add_component(projection);
+   const auto first = first_plan.compile();
+
+   FlatEncoderPlan second_plan;
+   second_plan.emplace_component< FactsComponent >();
+   second_plan.emplace_component< PaddingProjectionComponent >();
+   second_plan.add_component(projection);
+   (void) second_plan.compile();
+
+   const DemoInput input{{"a"}, 1};
+   const auto encoding = first.encode(FlatInputView::from(input));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      (std::vector< int64_t >{0, 0})
    );
 }
 
@@ -472,7 +519,8 @@ TEST(FlatCompositionTest, ComposedCarrierMatchesMinimalSemanticRelationBaseline)
    input_builder.set_field(std::string(kTargetEntitySizesField), std::vector< int64_t >{0});
    input_builder.set_field(std::string(kTargetEntityIndicesField), std::vector< int64_t >{});
    input_builder.set_field(std::string(kTargetEntityGroupIdsField), std::vector< int64_t >{});
-   const auto actual = compiled.encode(FlatInputView::from(std::move(input_builder).finish()));
+   const auto composition_input = std::move(input_builder).finish();
+   const auto actual = compiled.encode(FlatInputView::from(composition_input));
 
    const auto parity = compare_flat_batch_encodings(expected, actual);
    ASSERT_TRUE(parity.equal) << parity.mismatch;
@@ -930,7 +978,8 @@ TEST(FlatCompositionTest, ComposedMetadataWriterSupportsTypedGraphAttributeWrite
 
    FlatEncoderPlan plan;
    plan.emplace_component< MetadataComponent >();
-   const auto encoding = plan.compile().encode(FlatInputView::from(FlatCompositionInput{}));
+   const FlatCompositionInput input;
+   const auto encoding = plan.compile().encode(FlatInputView::from(input));
    EXPECT_EQ(std::get< int64_t >(encoding.graph_attrs.at("count")), 3);
    EXPECT_EQ(std::get< std::string >(encoding.graph_attrs.at("label")), "typed");
    EXPECT_EQ(
@@ -1006,7 +1055,8 @@ TEST(FlatCompositionTest, PreparationUsesGraphLocalScratchWithoutComponentMutati
    FlatEncoderPlan plan;
    plan.emplace_component< PreparedComponent >();
    const auto compiled = plan.compile();
-   const auto encoding = compiled.encode(FlatInputView::from(FlatCompositionInput{}));
+   const FlatCompositionInput input;
+   const auto encoding = compiled.encode(FlatInputView::from(input));
    EXPECT_EQ(
       std::get< std::vector< int64_t > >(
          encoding.graph_fields.at(std::string(kRelationArgsField)).values
@@ -1059,7 +1109,8 @@ TEST(FlatCompositionTest, PreparedScratchIsAvailableToNodeFeatureWriters)
 
    FlatEncoderPlan plan;
    plan.emplace_component< PreparedFeatureComponent >();
-   const auto encoding = plan.compile().encode(FlatInputView::from(FlatCompositionInput{}));
+   const FlatCompositionInput input;
+   const auto encoding = plan.compile().encode(FlatInputView::from(input));
    EXPECT_EQ(
       std::get< std::vector< float > >(encoding.columns.at("entity/prepared").data),
       (std::vector< float >{7.0F})
@@ -1102,6 +1153,10 @@ TEST(FlatCompositionTest, GraphMetadataMustRemainConstantAcrossBatch)
    const MetadataInput second{2};
    const std::array inputs{FlatInputView::from(first), FlatInputView::from(second)};
    EXPECT_THROW((void) compiled.encode_batch(inputs), std::invalid_argument);
+
+   BatchBuilder builder;
+   compiled.encode(FlatInputView::from(first), builder);
+   EXPECT_THROW(compiled.encode(FlatInputView::from(second), builder), std::invalid_argument);
 }
 
 TEST(FlatCompositionTest, RelationArgumentNodeTypeIsExportedConsistently)
@@ -1120,7 +1175,8 @@ TEST(FlatCompositionTest, RelationArgumentNodeTypeIsExportedConsistently)
    );
    FlatCompositionConfig config;
    config.relation_args_node_type = "vertex";
-   const auto encoding = plan.compile(config).encode(FlatInputView::from(FlatCompositionInput{}));
+   const FlatCompositionInput input;
+   const auto encoding = plan.compile(config).encode(FlatInputView::from(input));
    EXPECT_EQ(
       std::get< std::string >(encoding.graph_attrs.at(std::string(kFlatEntityTypeAttr))), "vertex"
    );
@@ -1316,14 +1372,14 @@ TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)
    );
 }
 
-TEST(FlatCompositionTest, ProjectionCanInterpretSourceIdentityAsNodeIndex)
+TEST(FlatCompositionTest, ProjectionMapsSourceIdentityToPlannedNodeIndex)
 {
    FlatNodeSchemaBuilder schema_builder;
    const auto entity_type = schema_builder.declare_node_type("entity");
    const auto schema = std::move(schema_builder).finalize();
    FlatNodePlanBuilder node_builder(schema);
-   (void) node_builder.add_node(entity_type, "a");
-   (void) node_builder.add_node(entity_type, "b");
+   (void) node_builder.add_node_from_source(entity_type, 42, "b");
+   (void) node_builder.add_node_from_source(entity_type, 7, "a");
    const auto nodes = std::move(node_builder).finish();
 
    const CompiledFlatRelationProjection projection{
@@ -1331,9 +1387,9 @@ TEST(FlatCompositionTest, ProjectionCanInterpretSourceIdentityAsNodeIndex)
       .output_relation_id = 1,
       .slots = {FlatSlotResolver::source_node(0, entity_type)},
    };
-   EXPECT_EQ(projection.project(std::array< int64_t, 1 >{1}, nodes), (std::vector< int64_t >{1}));
+   EXPECT_EQ(projection.project(std::array< int64_t, 1 >{7}, nodes), (std::vector< int64_t >{1}));
    EXPECT_THROW(
-      (void) projection.project(std::array< int64_t, 1 >{2}, nodes), std::invalid_argument
+      (void) projection.project(std::array< int64_t, 1 >{1}, nodes), std::invalid_argument
    );
 }
 

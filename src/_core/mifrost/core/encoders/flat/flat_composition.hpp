@@ -164,21 +164,28 @@ class MIFROST_API FlatNodePlan {
    const FlatNodeSchema* schema_ = nullptr;
    std::vector< std::vector< std::string > > names_;
    std::vector< std::unordered_map< std::string, int64_t > > indices_;
+   std::vector< std::unordered_map< int64_t, int64_t > > indices_by_source_;
 };
 
 /** Mutable graph-local node layout builder. */
 class MIFROST_API FlatNodePlanBuilder {
   public:
    explicit FlatNodePlanBuilder(const FlatNodeSchema& schema) : schema_(schema) {}
+   FlatNodePlanBuilder(const FlatNodeSchema&&) = delete;
 
    [[nodiscard]] FlatNodeRef add_node(FlatNodeTypeId type, std::string key);
    [[nodiscard]] FlatNodeRef add_node(std::string_view type_name, std::string key);
+   [[nodiscard]] FlatNodeRef
+   add_node_from_source(FlatNodeTypeId type, int64_t source_index, std::string key);
+   [[nodiscard]] FlatNodeRef
+   add_node_from_source(std::string_view type_name, int64_t source_index, std::string key);
    [[nodiscard]] FlatNodePlan finish() &&;
 
   private:
    const FlatNodeSchema& schema_;
    std::vector< std::vector< std::string > > names_;
    std::vector< std::unordered_map< std::string, int64_t > > indices_;
+   std::vector< std::unordered_map< int64_t, int64_t > > indices_by_source_;
 };
 
 enum class FlatSlotResolverKind : int8_t {
@@ -194,13 +201,12 @@ enum class FlatUnownedRelationPolicy : int8_t {
 };
 
 struct FlatProjectionHandle {
-   size_t global_id = std::numeric_limits< size_t >::max();
    size_t component_id = std::numeric_limits< size_t >::max();
    std::string component;
 
    [[nodiscard]] bool valid() const noexcept
    {
-      return global_id != std::numeric_limits< size_t >::max() and not component.empty();
+      return component_id != std::numeric_limits< size_t >::max() and not component.empty();
    }
 };
 
@@ -415,6 +421,9 @@ class MIFROST_API FlatInputView {
    }
 
    template < typename T >
+   static FlatInputView from(const T&&) = delete;
+
+   template < typename T >
    [[nodiscard]] const T& get() const
    {
       if(type_ != std::type_index(typeid(T)) or data_ == nullptr) {
@@ -445,13 +454,14 @@ class FlatNodeFeaturePlanBuilder;
 struct FlatCompositionNodeRecord {
    std::string node_type;
    std::string key;
+   std::optional< int64_t > source_index;
 };
 
 /** One already-resolved relation tuple supplied to a native emitter. */
 struct FlatCompositionRelationRecord {
    int relation_id = -1;
    std::vector< int64_t > args;
-   /** Optional emitter owner; empty means the record is available to all emitters. */
+   /** Optional emitter owner; an empty owner is resolved by the configured ownership policy. */
    std::string component;
 };
 
@@ -530,6 +540,7 @@ class MIFROST_API FlatGraphScratch {
 class MIFROST_API FlatCompositionInputBuilder {
   public:
    explicit FlatCompositionInputBuilder(const FlatRelationSchema& schema) : schema_(schema) {}
+   FlatCompositionInputBuilder(const FlatRelationSchema&&) = delete;
    explicit FlatCompositionInputBuilder(const FlatSchemaPlan& plan)
        : schema_(plan.relation_schema), aliases_(plan.relation_aliases)
    {
@@ -539,6 +550,7 @@ class MIFROST_API FlatCompositionInputBuilder {
    [[nodiscard]] int relation_id(const RelationKey& key) const;
    void add_object(std::string name);
    void add_node(std::string node_type, std::string key);
+   void add_node(std::string node_type, int64_t source_index, std::string key);
    void add_relation(int relation_id, std::span< const int64_t > args, std::string component = {});
    void add_relation(
       const RelationKey& key,
@@ -815,13 +827,13 @@ class MIFROST_API CompiledFlatPlan {
  * Reusable executor façade for a compiled plan.
  *
  * Keeping execution separate from plan construction lets a downstream
- * encoder cache one compiled schema and create one runtime per worker without
- * recompiling relation projections or field ownership metadata.
+ * encoder share one compiled schema across worker runtimes without recompiling
+ * relation projections or field ownership metadata. The shared pointer makes
+ * the compiled plan's lifetime explicit.
  */
 class MIFROST_API FlatBatchRuntime {
   public:
-   explicit FlatBatchRuntime(const CompiledFlatPlan& plan) : plan_(plan) {}
-   FlatBatchRuntime(const CompiledFlatPlan&&) = delete;
+   explicit FlatBatchRuntime(std::shared_ptr< const CompiledFlatPlan > plan);
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const FlatInputView& input) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
@@ -831,7 +843,7 @@ class MIFROST_API FlatBatchRuntime {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
   private:
-   const CompiledFlatPlan& plan_;
+   std::shared_ptr< const CompiledFlatPlan > plan_;
 };
 
 /// Compatibility name used by the architectural design document.
