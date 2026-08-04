@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -329,6 +331,115 @@ TEST(FlatCompositionTest, ComparesNativeEncodingsForExactParity)
    const auto different = compare_flat_batch_encodings(expected, actual);
    EXPECT_FALSE(different.equal);
    EXPECT_EQ(different.mismatch, "graph_fields[marker]");
+}
+
+TEST(FlatCompositionTest, ComposedCarrierMatchesMinimalSemanticRelationBaseline)
+{
+   SemanticFlatRelationEncoderEngine::Config legacy_config;
+   legacy_config.goal_derivations.clear();
+   legacy_config.pack_relation_args_relation_major = false;
+   SemanticFlatRelationEncoderEngine legacy(
+      std::vector< SemanticPredicateSpec >{{
+         SemanticPredicateCategory::fluent,
+         "at",
+         1,
+      }},
+      {},
+      legacy_config
+   );
+   SemanticFlatRelationInput semantic_input;
+   semantic_input.objects = {"a", "b"};
+   semantic_input.state_facts = {{0, {0}}};
+   const auto expected = legacy.encode(semantic_input);
+
+   const auto entity_offset = GraphFieldInc{
+      .kind = GraphFieldInc::Kind::NODE_OFFSET,
+      .node_type = std::string(kFlatEntityNodeType),
+   };
+   const auto scalar_i64 = GraphFieldSpec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::STACK,
+      .dim = 1,
+   };
+   const auto vector_i64 = GraphFieldSpec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::CAT,
+      .dim = 1,
+   };
+   const auto indexed_i64 = GraphFieldSpec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::CAT,
+      .dim = 1,
+      .inc = entity_offset,
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "relations",
+      std::vector< FlatCompositionRelationSpec >{
+         {
+            .key = predicate_relation_key("at"),
+            .layout = make_predicate_tuple_layout(1, {}, false),
+            .usage = RelationUsage::state,
+         },
+         {
+            .key = predicate_relation_key("at", false, std::nullopt, std::nullopt, "[hist]"),
+            .layout = make_predicate_tuple_layout(1, {FlatSlotRole::history_slot}, false),
+            .usage = RelationUsage::history,
+         },
+         {
+            .key = predicate_relation_key("at", true, std::nullopt, std::nullopt, "[hist]"),
+            .layout = make_predicate_tuple_layout(1, {FlatSlotRole::history_slot}, false),
+            .usage = RelationUsage::history,
+         },
+      }
+   );
+   plan.emplace_component< FlatFieldEmitterComponent >(
+      "semantic_metadata",
+      std::vector< FlatFieldEmitterComponent::FieldDeclaration >{
+         {std::string(kNodeSizesField), scalar_i64},
+         {std::string(kObjectSizesField), scalar_i64},
+         {std::string(kObjectIndicesField), indexed_i64},
+         {std::string(kEntityRoleIdsField), vector_i64},
+         {std::string(kHistoryEntitySizesField), scalar_i64},
+         {std::string(kHistoryEntityIndicesField), indexed_i64},
+         {std::string(kHistoryEntityDtField), vector_i64},
+         {std::string(kTargetEntitySizesField), scalar_i64},
+         {std::string(kTargetEntityIndicesField), indexed_i64},
+         {std::string(kTargetEntityGroupIdsField), vector_i64},
+      }
+   );
+
+   FlatCompositionConfig composition_config;
+   composition_config.pack_relation_args_relation_major = false;
+   composition_config.graph_config.target_sources = std::vector< std::string >{};
+   composition_config.graph_config.lgan_anchor_sources = std::vector< std::string >{};
+   composition_config.graph_config.target_symbol_prefix = std::string(kDefaultTargetSymbolPrefix);
+   composition_config.graph_config.target_entity_group_names = {"action"};
+   composition_config.graph_config.lgan_tn_edge_pos = defaults::lgan_tn_edge_pos;
+   composition_config.graph_config.lgan_nn_edge_pos = defaults::lgan_nn_edge_pos;
+   composition_config.graph_config.lgan_rr_edge_pos = defaults::lgan_rr_edge_pos;
+   const auto compiled = plan.compile(composition_config);
+
+   FlatCompositionInputBuilder input_builder(compiled.schema_plan());
+   input_builder.add_object("a");
+   input_builder.add_object("b");
+   input_builder.add_relation(predicate_relation_key("at"), std::array< int64_t, 1 >{0});
+   input_builder.set_field(std::string(kNodeSizesField), std::vector< int64_t >{2});
+   input_builder.set_field(std::string(kObjectSizesField), std::vector< int64_t >{2});
+   input_builder.set_field(std::string(kObjectIndicesField), std::vector< int64_t >{0, 1});
+   input_builder.set_field(std::string(kEntityRoleIdsField), std::vector< int64_t >{0, 0});
+   input_builder.set_field(std::string(kHistoryEntitySizesField), std::vector< int64_t >{0});
+   input_builder.set_field(std::string(kHistoryEntityIndicesField), std::vector< int64_t >{});
+   input_builder.set_field(std::string(kHistoryEntityDtField), std::vector< int64_t >{});
+   input_builder.set_field(std::string(kTargetEntitySizesField), std::vector< int64_t >{0});
+   input_builder.set_field(std::string(kTargetEntityIndicesField), std::vector< int64_t >{});
+   input_builder.set_field(std::string(kTargetEntityGroupIdsField), std::vector< int64_t >{});
+   const auto actual = compiled.encode(FlatInputView::from(std::move(input_builder).finish()));
+
+   const auto parity = compare_flat_batch_encodings(expected, actual);
+   ASSERT_TRUE(parity.equal) << parity.mismatch;
 }
 
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)

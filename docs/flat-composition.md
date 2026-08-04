@@ -83,6 +83,10 @@ legacy encoding and a composed encoding and treat any non-empty `mismatch` path
 as a parity failure.  It is deliberately an exact comparison; normalization,
 sorting, or tolerance belongs in a test fixture only when the legacy contract
 explicitly permits it.
+The neutral C++ suite includes a minimal semantic relation encoder fixture that
+compares a composed state-fact carrier against the existing semantic engine
+field-for-field; larger semantic migrations should extend that fixture before
+switching their public path.
 
 `FlatRelationMajorWriter` is the shared finalization seam.  The semantic flat
 relation and horizon engines use the same writer as a composed plan, so
