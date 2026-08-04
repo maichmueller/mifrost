@@ -414,6 +414,9 @@ class MIFROST_API FlatBatchRuntime {
    const CompiledFlatPlan& plan_;
 };
 
+/// Compatibility name used by the architectural design document.
+using FlatCompositionKernel = FlatBatchRuntime;
+
 /** Mutable component assembly; compilation freezes all symbolic lookups. */
 class MIFROST_API FlatEncoderPlan {
   public:
