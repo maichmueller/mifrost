@@ -279,6 +279,24 @@ TEST(FlatCompositionTest, BuiltInComponentsRejectMissingOrMismatchedInputFields)
    EXPECT_THROW((void) compiled.encode(FlatInputView::from(duplicate)), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, FieldComponentRejectsDuplicateDeclarations)
+{
+   const GraphFieldSpec spec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::STACK,
+      .dim = 1,
+   };
+   EXPECT_THROW(
+      (void) FlatFieldEmitterComponent(
+         "fields",
+         std::vector< FlatFieldEmitterComponent::FieldDeclaration >{
+            {"marker", spec}, {"marker", spec}
+         }
+      ),
+      std::invalid_argument
+   );
+}
+
 TEST(FlatCompositionTest, BuiltInNodeRecordComponentPlansTypedRows)
 {
    FlatEncoderPlan plan;

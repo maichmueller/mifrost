@@ -858,6 +858,14 @@ FlatFieldEmitterComponent::FlatFieldEmitterComponent(
    if(fields_.empty()) {
       throw std::invalid_argument("Flat field component must declare at least one field");
    }
+   for(auto it = fields_.begin(); it != fields_.end(); ++it) {
+      if(std::ranges::find(
+            std::next(it), fields_.end(), it->first, [](const auto& field) { return field.first; }
+         )
+         != fields_.end()) {
+         throw std::invalid_argument("Flat field component field keys must be unique");
+      }
+   }
 }
 
 void FlatFieldEmitterComponent::declare_fields(FlatFieldPlanBuilder& builder) const
