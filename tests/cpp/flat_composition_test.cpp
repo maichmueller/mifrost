@@ -655,7 +655,7 @@ TEST(FlatCompositionTest, SemanticRelationBatchCompositionOmitsEmptyTargetNamesW
    EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
 }
 
-TEST(FlatCompositionTest, SemanticRelationDirectCarrierCoversSemanticMetadataLanes)
+TEST(FlatCompositionTest, SemanticRelationDirectComponentsCoverSemanticMetadataLanes)
 {
    SemanticFlatRelationEncoderEngine::Config config;
    config.include_lgan_edges = true;
