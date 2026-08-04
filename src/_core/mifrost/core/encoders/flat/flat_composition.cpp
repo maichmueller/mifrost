@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -746,6 +747,14 @@ void FlatFieldEmitterComponent::write_fields(
       if(it == composition.fields.end()) {
          throw std::invalid_argument(
             "Flat composition input is missing declared field '" + key + "'"
+         );
+      }
+      if(std::ranges::find(
+            std::next(it), composition.fields.end(), key, &FlatCompositionFieldRecord::key
+         )
+         != composition.fields.end()) {
+         throw std::invalid_argument(
+            "Flat composition input declares field '" + key + "' more than once"
          );
       }
       if(spec.dtype == GraphFieldDType::I64) {

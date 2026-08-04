@@ -264,6 +264,19 @@ TEST(FlatCompositionTest, BuiltInComponentsRejectMissingOrMismatchedInputFields)
       },
    };
    EXPECT_THROW((void) compiled.encode(FlatInputView::from(wrong)), std::invalid_argument);
+
+   FlatCompositionInput duplicate;
+   duplicate.fields = {
+      {
+         "score",
+         NumericColumnData{std::vector< float >{1.0F}},
+      },
+      {
+         "score",
+         NumericColumnData{std::vector< float >{2.0F}},
+      },
+   };
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(duplicate)), std::invalid_argument);
 }
 
 TEST(FlatCompositionTest, BuiltInNodeRecordComponentPlansTypedRows)
