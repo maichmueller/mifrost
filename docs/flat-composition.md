@@ -41,8 +41,9 @@ encoder test suites.
 ## Compatibility and performance rules
 
 - Compile a plan once per encoder configuration and cache it.
-- Use `FlatBatchRuntime` per worker; do not append already-materialized
-  `BatchEncoding` values to compose components.
+- Use `FlatBatchRuntime` per worker; components must keep compiled state
+  immutable (graph-local state belongs in the graph context), and do not append
+  already-materialized `BatchEncoding` values to compose components.
 - Keep relation ordering, tuple arity, node identity, and graph-field ownership
   deterministic.  Existing backend-specific encoders remain unchanged until a
   component migration has an exact carrier comparator.
