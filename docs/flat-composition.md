@@ -93,6 +93,10 @@ schema logic.  It intentionally does not assert output parity: exact parity
 must be tested in the downstream repository against its legacy fixtures.  The
 Mifrost baseline remains the existing relation/horizon native and semantic
 encoder test suites.
+`flat_external_mode_satisfied()` and
+`flat_external_mode_missing_components()` let that adapter reject an incomplete
+assembly before encoding; they do not instantiate or claim to implement the
+downstream modes.
 
 ## Compatibility and performance rules
 

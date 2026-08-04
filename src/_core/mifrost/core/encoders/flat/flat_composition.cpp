@@ -121,6 +121,16 @@ std::span< const FlatExternalModeContract > flat_external_mode_contracts()
    return kExternalModeContracts;
 }
 
+uint32_t flat_external_mode_missing_components(FlatExternalMode mode, uint32_t available_components)
+{
+   return flat_external_mode_contract(mode).required_components & ~available_components;
+}
+
+bool flat_external_mode_satisfied(FlatExternalMode mode, uint32_t available_components)
+{
+   return flat_external_mode_missing_components(mode, available_components) == 0U;
+}
+
 const FlatNodeTypeSpec& FlatNodeSchema::spec(FlatNodeTypeId id) const
 {
    validate_node_type_id(*this, id);

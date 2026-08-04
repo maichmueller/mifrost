@@ -592,6 +592,22 @@ TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
          & static_cast< uint32_t >(FlatExternalComponent::ground_actions),
       0U
    );
+   EXPECT_TRUE(flat_external_mode_satisfied(
+      FlatExternalMode::concurrent_internal,
+      static_cast< uint32_t >(FlatExternalComponent::state_facts)
+         | static_cast< uint32_t >(FlatExternalComponent::goal_facts)
+         | static_cast< uint32_t >(FlatExternalComponent::transition_effects)
+   ));
+   const auto missing = flat_external_mode_missing_components(
+      FlatExternalMode::concurrent_internal_tree,
+      static_cast< uint32_t >(FlatExternalComponent::state_facts)
+         | static_cast< uint32_t >(FlatExternalComponent::goal_facts)
+   );
+   EXPECT_EQ(
+      missing,
+      static_cast< uint32_t >(FlatExternalComponent::transition_effects)
+         | static_cast< uint32_t >(FlatExternalComponent::parent_relations)
+   );
 }
 
 TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)

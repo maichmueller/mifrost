@@ -95,6 +95,14 @@ struct FlatExternalModeContract {
 [[nodiscard]] MIFROST_API std::span< const FlatExternalModeContract >
 flat_external_mode_contracts();
 
+/** Return true when an external adapter has every capability required by a mode. */
+[[nodiscard]] MIFROST_API bool
+flat_external_mode_satisfied(FlatExternalMode mode, uint32_t available_components);
+
+/** Return the missing capability bits for an external mode assembly. */
+[[nodiscard]] MIFROST_API uint32_t
+flat_external_mode_missing_components(FlatExternalMode mode, uint32_t available_components);
+
 using FlatNodeTypeId = int32_t;
 
 /** A stable symbolic graph-local node reference. */
