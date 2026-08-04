@@ -505,6 +505,9 @@ void FlatRelationEmitterComponent::emit(const FlatInputView& input, FlatGraphCon
 {
    const auto& composition = input.get< FlatCompositionInput >();
    for(const auto& relation : composition.relations) {
+      if(not relation.component.empty() and relation.component != component_name_) {
+         continue;
+      }
       context.emit(relation.relation_id, relation.args);
    }
 }

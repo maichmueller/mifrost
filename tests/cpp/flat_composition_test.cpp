@@ -314,6 +314,51 @@ TEST(FlatCompositionTest, ComparesNativeEncodingsForExactParity)
    EXPECT_EQ(different.mismatch, "graph_fields[marker]");
 }
 
+TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "parents",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("parent"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::parent,
+      }}
+   );
+   const auto compiled = plan.compile();
+
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.relations = {
+      {
+         compiled.schema().id_for(predicate_relation_key("fact")),
+         {0},
+         "facts",
+      },
+      {
+         compiled.schema().id_for(predicate_relation_key("parent")),
+         {0},
+         "parents",
+      },
+   };
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationCountsField)).values
+      ),
+      (std::vector< int64_t >{1, 1})
+   );
+}
+
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
 {
    FlatEncoderPlan plan;

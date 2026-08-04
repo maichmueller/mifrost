@@ -324,6 +324,8 @@ struct FlatCompositionNodeRecord {
 struct FlatCompositionRelationRecord {
    int relation_id = -1;
    std::vector< int64_t > args;
+   /** Optional emitter owner; empty means the record is available to all emitters. */
+   std::string component;
 };
 
 /** One typed graph-field value supplied to a native field component. */

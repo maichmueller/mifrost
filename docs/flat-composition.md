@@ -38,6 +38,8 @@ carrier operations:
   `FlatCompositionInput::nodes` records.
 - `FlatRelationEmitterComponent` declares a set of relation keys/layouts and
   emits `FlatCompositionInput::relations` using already-resolved integer ids.
+  Set a relation record's optional `component` owner when several relation
+  emitters share one input; an empty owner is a deliberate broadcast.
 - `FlatFieldEmitterComponent` declares owned graph fields and writes typed
   `FlatCompositionInput::fields` values with the same shape checks as
   `BatchBuilder`.
