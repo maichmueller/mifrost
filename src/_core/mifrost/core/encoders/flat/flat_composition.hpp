@@ -20,6 +20,7 @@
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -241,6 +242,14 @@ struct FlatFieldPlanEntry {
    std::string owner;
 };
 
+/** One owner-declared node feature column. */
+struct FlatNodeFeaturePlanEntry {
+   std::string node_type;
+   std::string attr;
+   int feature_dim = 1;
+   std::string owner;
+};
+
 /** Immutable ownership declarations for non-field graph metadata. */
 struct FlatMetadataPlan {
    std::optional< std::string > object_names_owner;
@@ -252,6 +261,7 @@ struct FlatSchemaPlan {
    FlatRelationSchema relation_schema;
    FlatNodeSchema node_schema;
    std::vector< FlatFieldPlanEntry > fields;
+   std::vector< FlatNodeFeaturePlanEntry > node_features;
    std::vector< CompiledFlatRelationProjection > projections;
    FlatMetadataPlan metadata;
    std::vector< FlatRelationAlias > relation_aliases;
@@ -268,6 +278,20 @@ class MIFROST_API FlatFieldPlanBuilder {
   private:
    std::string owner_;
    std::vector< FlatFieldPlanEntry > entries_;
+   std::unordered_map< std::string, size_t > index_by_key_;
+};
+
+/** Compile-time ownership declarations for node feature columns. */
+class MIFROST_API FlatNodeFeaturePlanBuilder {
+  public:
+   explicit FlatNodeFeaturePlanBuilder(std::string owner) : owner_(std::move(owner)) {}
+
+   void register_feature(std::string node_type, std::string attr, int feature_dim);
+   [[nodiscard]] const std::vector< FlatNodeFeaturePlanEntry >& entries() const { return entries_; }
+
+  private:
+   std::string owner_;
+   std::vector< FlatNodeFeaturePlanEntry > entries_;
    std::unordered_map< std::string, size_t > index_by_key_;
 };
 
@@ -370,6 +394,7 @@ class FlatFieldWriter;
 class FlatMetadataWriter;
 class FlatMetadataPlanBuilder;
 class FlatNodeFeatureWriter;
+class FlatNodeFeaturePlanBuilder;
 
 /** One graph-local symbolic node supplied by a backend-neutral adapter. */
 struct FlatCompositionNodeRecord {
@@ -465,9 +490,10 @@ class MIFROST_API FlatNodeFeatureWriter {
       BatchBuilder& builder,
       const FlatNodeSchema& schema,
       const FlatNodePlan& nodes,
+      const std::vector< FlatNodeFeaturePlanEntry >& plan,
       std::string_view owner
    )
-       : builder_(builder), schema_(schema), nodes_(nodes), owner_(owner)
+       : builder_(builder), schema_(schema), nodes_(nodes), plan_(plan), owner_(owner)
    {
    }
 
@@ -478,7 +504,9 @@ class MIFROST_API FlatNodeFeatureWriter {
    BatchBuilder& builder_;
    const FlatNodeSchema& schema_;
    const FlatNodePlan& nodes_;
+   const std::vector< FlatNodeFeaturePlanEntry >& plan_;
    std::string owner_;
+   mutable std::unordered_set< std::string > written_;
 };
 
 /** Native component contract. Virtual dispatch occurs only once per phase/graph. */
@@ -488,6 +516,7 @@ class MIFROST_API FlatEmitterComponent {
    [[nodiscard]] virtual std::string_view name() const noexcept = 0;
    virtual void declare_schema(FlatSchemaPlanBuilder&) const {}
    virtual void declare_fields(FlatFieldPlanBuilder&) const {}
+   virtual void declare_node_features(FlatNodeFeaturePlanBuilder&) const {}
    virtual void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const {}
    virtual void prepare_graph(const FlatInputView&, FlatGraphContext&) const {}
    virtual void emit(const FlatInputView&, FlatGraphContext&) const {}
@@ -528,6 +557,7 @@ class MIFROST_API FlatObjectNodeComponent final: public FlatEmitterComponent {
    [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+   void declare_node_features(FlatNodeFeaturePlanBuilder&) const override;
    void declare_metadata(FlatMetadataPlanBuilder&) const override;
    void write_node_features(const FlatGraphContext&, FlatNodeFeatureWriter&) const override;
    void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const override;
@@ -554,6 +584,7 @@ class MIFROST_API FlatNodeRecordComponent final: public FlatEmitterComponent {
    [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+   void declare_node_features(FlatNodeFeaturePlanBuilder&) const override;
    void write_node_features(const FlatGraphContext&, FlatNodeFeatureWriter&) const override;
 
   private:

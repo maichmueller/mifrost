@@ -347,6 +347,37 @@ void FlatFieldPlanBuilder::register_field(std::string key, GraphFieldSpec spec)
    entries_.push_back(FlatFieldPlanEntry{std::move(key), spec, owner_});
 }
 
+void FlatNodeFeaturePlanBuilder::register_feature(
+   std::string node_type,
+   std::string attr,
+   int feature_dim
+)
+{
+   if(node_type.empty() or attr.empty()) {
+      throw std::invalid_argument("Flat node feature node type and attr must not be empty");
+   }
+   if(feature_dim <= 0) {
+      throw std::invalid_argument("Flat node feature dimension must be positive");
+   }
+   std::string key = node_type + "/" + attr;
+   if(const auto it = index_by_key_.find(key); it != index_by_key_.end()) {
+      const auto& existing = entries_[it->second];
+      if(existing.feature_dim != feature_dim) {
+         throw std::invalid_argument("Flat node feature was redeclared with a different dimension");
+      }
+      return;
+   }
+   index_by_key_.emplace(key, entries_.size());
+   entries_.push_back(
+      FlatNodeFeaturePlanEntry{
+         .node_type = std::move(node_type),
+         .attr = std::move(attr),
+         .feature_dim = feature_dim,
+         .owner = owner_,
+      }
+   );
+}
+
 void FlatMetadataPlanBuilder::claim_object_names()
 {
    if(object_names_claimed_) {
@@ -477,8 +508,26 @@ void FlatNodeFeatureWriter::set(
    std::span< const float > values
 ) const
 {
+   const auto plan_it = std::ranges::find(
+      plan_, std::pair{std::string_view(node_type), std::string_view(attr)}, [](const auto& entry) {
+         return std::pair{std::string_view(entry.node_type), std::string_view(entry.attr)};
+      }
+   );
+   if(plan_it == plan_.end() or plan_it->owner != owner_) {
+      throw std::invalid_argument(
+         "Flat node feature '" + std::string(node_type) + "/" + std::string(attr)
+         + "' is not owned by component '" + owner_ + "'"
+      );
+   }
+   const std::string write_key = std::string(node_type) + "/" + std::string(attr);
+   if(not written_.insert(write_key).second) {
+      throw std::invalid_argument("Flat node feature was written more than once per graph");
+   }
    const auto type_id = schema_.id_for(node_type);
    const auto& spec = schema_.spec(type_id);
+   if(spec.feature_dim != plan_it->feature_dim) {
+      throw std::logic_error("Flat node feature plan dimension does not match node schema");
+   }
    const auto count = nodes_.count(type_id);
    const auto expected = static_cast< size_t >(count) * static_cast< size_t >(spec.feature_dim);
    if(values.size() != expected) {
@@ -645,6 +694,11 @@ void FlatObjectNodeComponent::plan_graph(
    }
 }
 
+void FlatObjectNodeComponent::declare_node_features(FlatNodeFeaturePlanBuilder& builder) const
+{
+   builder.register_feature(node_type_, "x", feature_dim_);
+}
+
 void FlatObjectNodeComponent::declare_metadata(FlatMetadataPlanBuilder& builder) const
 {
    if(export_names_) {
@@ -716,6 +770,11 @@ void FlatNodeRecordComponent::plan_graph(
          (void) builder.add_node(node_type_, record.key);
       }
    }
+}
+
+void FlatNodeRecordComponent::declare_node_features(FlatNodeFeaturePlanBuilder& builder) const
+{
+   builder.register_feature(node_type_, "x", feature_dim_);
 }
 
 void FlatNodeRecordComponent::write_node_features(
@@ -889,7 +948,9 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
       schema_plan_.relation_aliases,
    };
    for(const auto& component : components_) {
-      FlatNodeFeatureWriter writer(builder, schema_plan_.node_schema, node_plan, component->name());
+      FlatNodeFeatureWriter writer(
+         builder, schema_plan_.node_schema, node_plan, schema_plan_.node_features, component->name()
+      );
       component->write_node_features(context, writer);
    }
    for(const auto& component : components_) {
@@ -1169,9 +1230,30 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    FlatSchemaPlanBuilder schema_builder;
    std::vector< FlatFieldPlanEntry > fields;
    std::unordered_map< std::string, std::string > field_owners;
+   std::vector< FlatNodeFeaturePlanEntry > node_features;
+   std::unordered_map< std::string, FlatNodeFeaturePlanEntry > node_feature_declarations;
    FlatMetadataPlan metadata_plan;
    for(const auto& component : components_) {
       component->declare_schema(schema_builder);
+      FlatNodeFeaturePlanBuilder node_feature_builder(std::string(component->name()));
+      component->declare_node_features(node_feature_builder);
+      for(const auto& entry : node_feature_builder.entries()) {
+         const auto key = entry.node_type + "/" + entry.attr;
+         if(const auto existing = node_feature_declarations.find(key);
+            existing != node_feature_declarations.end()) {
+            if(existing->second.feature_dim != entry.feature_dim) {
+               throw std::invalid_argument(
+                  "Flat node feature '" + key + "' has conflicting dimensions"
+               );
+            }
+            throw std::invalid_argument(
+               "Flat node feature '" + key + "' declared by both '" + existing->second.owner
+               + "' and '" + entry.owner + "'"
+            );
+         }
+         node_feature_declarations.emplace(key, entry);
+         node_features.push_back(entry);
+      }
       FlatFieldPlanBuilder field_builder(std::string(component->name()));
       component->declare_fields(field_builder);
       for(const auto& entry : field_builder.entries()) {
@@ -1216,6 +1298,19 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    const auto alias_declarations = schema_builder.relation_aliases();
    auto schema = std::move(schema_builder).finalize_schema(config);
    auto node_schema = std::move(schema_builder).finalize_nodes();
+   for(const auto& feature : node_features) {
+      const auto type_id = node_schema.try_id_for(feature.node_type);
+      if(not type_id.has_value()) {
+         throw std::invalid_argument(
+            "Flat node feature references undeclared node type '" + feature.node_type + "'"
+         );
+      }
+      if(node_schema.spec(*type_id).feature_dim != feature.feature_dim) {
+         throw std::invalid_argument(
+            "Flat node feature dimension does not match node type '" + feature.node_type + "'"
+         );
+      }
+   }
    if(config.relation_args_node_type.empty()
       or not node_schema.try_id_for(config.relation_args_node_type).has_value()) {
       throw std::invalid_argument(
@@ -1319,6 +1414,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       .relation_schema = std::move(schema),
       .node_schema = std::move(node_schema),
       .fields = std::move(fields),
+      .node_features = std::move(node_features),
       .projections = std::move(projections),
       .metadata = std::move(metadata_plan),
       .relation_aliases = std::move(relation_aliases),

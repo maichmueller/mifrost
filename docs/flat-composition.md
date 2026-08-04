@@ -59,7 +59,8 @@ Metadata declarations are compiled with single-owner checks, just like graph
 fields, so two components cannot silently overwrite object-name metadata.
 `write_node_features()` and `FlatNodeFeatureWriter` are the corresponding
 native path for node tensors; components may emit zeros or semantic features,
-but must use the preplanned row count.
+but must use the preplanned row count. Feature columns have compile-time
+single-owner declarations and cannot be appended twice for one graph.
 Graph attributes can be declared with
 `FlatMetadataPlanBuilder::claim_graph_attr()` and written through the variant
 overload on `FlatMetadataWriter`; duplicate attribute ownership is rejected at
