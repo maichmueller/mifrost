@@ -68,6 +68,30 @@ schema construction, graph emission, and batch collation stay in
 native behavior belongs in `core/` or `input_handling/`, not in multiple binding
 initializers.
 
+### Planning Views
+
+The canonical encoder algorithms use the operation-bearing concepts in
+`mifrost/core/views/concepts.hpp`. `AtomView`, `LiteralView`,
+`GroundActionView`, and `StateView` expose only the IDs, ranges, and predicates
+that an algorithm needs; they do not own repository objects and do not use a
+virtual base class. `mifrost/core/views/canonical.hpp` contains statically
+dispatched traversal and satisfaction primitives shared by backend
+instantiations.
+
+Each backend has a task-scoped context and lazy Views:
+
+- `backends/pytyr/views.hpp` borrows the PyTyr planning task and its compact
+  repository-index tables.
+- `backends/pymimir/views.hpp` borrows a Pymimir problem and builds compact
+  lookup tables for that problem.
+- `core/semantic/views.hpp` adapts retained semantic records for neutral
+  algorithms and tests without introducing another owning model.
+
+View values are cheap, copyable handles. The backend task/problem and the
+context must outlive every View and every lazy range derived from it. Native
+templates are instantiated separately in each adapter, preserving PyTyr and
+Pymimir ABI isolation while sharing the algorithm source.
+
 ## Adding an Encoder Family
 
 1. Add or reuse a native config and engine with a stable, batch-oriented entry

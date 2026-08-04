@@ -82,7 +82,7 @@ class Context {
       });
       auto& ids = predicate_ids(category);
       for(const auto predicate : predicates) {
-         ids.emplace(raw_index(predicate->get_index()), static_cast< std::int64_t >(ids.size()));
+         ids.emplace(raw_index(predicate->get_index()), predicate_count_++);
       }
    }
 
@@ -138,6 +138,7 @@ class Context {
    std::unordered_map< std::int64_t, std::int64_t > derived_predicate_ids_;
    std::unordered_map< std::int64_t, std::int64_t > action_ids_;
    std::unordered_map< std::int64_t, std::int64_t > object_ids_;
+   std::int64_t predicate_count_ = 0;
 };
 
 template < typename NativePredicate, Category PredicateCategory >
@@ -176,6 +177,28 @@ class ObjectView {
 
   private:
    NativeObject value_;
+   const Context* context_;
+};
+
+template < typename NativeAction >
+class ActionSchemaView {
+  public:
+   ActionSchemaView(NativeAction value, const Context& context) : value_(value), context_(&context)
+   {
+   }
+
+   [[nodiscard]] auto id() const noexcept
+   {
+      return context_->action_id(raw_index(value_->get_index()));
+   }
+   [[nodiscard]] std::string_view name() const noexcept { return value_->get_name(); }
+   [[nodiscard]] std::size_t arity() const noexcept
+   {
+      return static_cast< std::size_t >(value_->get_arity());
+   }
+
+  private:
+   NativeAction value_;
    const Context* context_;
 };
 
@@ -240,6 +263,10 @@ class GroundActionView {
              });
    }
    [[nodiscard]] auto schema() const { return value_->get_action(); }
+   [[nodiscard]] auto action_schema() const
+   {
+      return ActionSchemaView{value_->get_action(), *context_};
+   }
 
   private:
    NativeAction value_;
@@ -279,6 +306,17 @@ class StateView {
    const Context* context_;
 };
 
+[[nodiscard]] inline Context make_context(const mimir::formalism::ProblemImpl& problem)
+{
+   return Context(problem);
+}
+
+[[nodiscard]] inline StateView
+make_state_view(const mimir::search::State& state, const Context& context)
+{
+   return StateView(state, context);
+}
+
 static_assert(
    mifrost::views::AtomView<
       AtomView< mimir::formalism::GroundAtom< mimir::formalism::FluentTag >, Category::fluent > >
@@ -288,6 +326,9 @@ static_assert(mifrost::views::LiteralView< LiteralView<
                  Category::fluent > >);
 static_assert(
    mifrost::views::GroundActionView< GroundActionView< mimir::formalism::GroundAction > >
+);
+static_assert(
+   mifrost::views::NamedActionSchemaView< ActionSchemaView< mimir::formalism::Action > >
 );
 static_assert(mifrost::views::StateView< StateView >);
 

@@ -76,10 +76,17 @@ overload on `FlatMetadataWriter`; duplicate attribute ownership is rejected at
 compile time.
 
 `FlatCompositionInput` is intentionally a generic carrier, not a semantic model.
-Backend adapters own object/action/goal interpretation and populate it.  They
-must resolve each relation key with the compiled schema once per plan (for
-example, with `compiled.schema().id_for(...)`) before filling a relation
-record.  A record with an unknown id, wrong arity, missing field, or mismatched
+Backend adapters own object/action/goal interpretation. New adapters should
+present that interpretation through the statically dispatched Views in
+`mifrost/core/views/concepts.hpp` and use the canonical traversal primitives in
+`mifrost/core/views/canonical.hpp`; they must not construct a second owning
+semantic object for every atom or action on the normal path. Legacy semantic
+snapshot adapters remain available for compatibility and explicit conversion
+APIs.
+
+Adapters must resolve each relation key with the compiled schema once per plan
+(for example, with `compiled.schema().id_for(...)`) before filling a relation
+record. A record with an unknown id, wrong arity, missing field, or mismatched
 field dtype is rejected at the native boundary rather than silently producing
 an incompatible batch.
 
@@ -102,9 +109,11 @@ explicitly permits it.
 
 The semantic relation encoder compiles entity, fact, goal/derivation, action,
 history, field, target-metadata, and LGAN components. Its graph plan contains
-only graph-local semantic lookup state and target/node identities. Relation
-components iterate the original `SemanticFlatRelationInput` and emit directly
-into the runtime's single `FlatRelationSink`; they do not construct
+only graph-local semantic lookup state and target/node identities. The
+canonical View traversal primitives are available to backend-specific
+instantiations; the current semantic engine retains
+`SemanticFlatRelationInput` as its explicit compatibility input. It emits
+directly into the runtime's single `FlatRelationSink` and does not construct
 `FlatCompositionInput`, per-tuple vectors, or an intermediate encoding.
 
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
@@ -130,7 +139,7 @@ once for one-shot and batch results. Caller-owned `BatchBuilder` paths invoke
 the same writer through the public `finalize_batch_encoding()` operation after
 the caller commits and builds the batch.
 
-## Backend boundary
+## Backend boundary and Views
 
 The reusable implementation lives in the planner-neutral core:
 
@@ -139,19 +148,25 @@ The reusable implementation lives in the planner-neutral core:
 - `SemanticFlatRelationEncoderEngine` and `SemanticFlatHorizonEncoderEngine`
   are the canonical built-in assemblies. Both execute direct semantic
   components through a compiled plan.
-- Planner adapters translate stable backend identities to
-  `SemanticFlatRelationInput` and `SemanticTransitionDAG`; they do not own
-  schema compilation, relation packing, target metadata, or batch
-  finalization.
+- Planner adapters provide task-scoped contexts and granular non-owning Views.
+  The same canonical algorithms are instantiated once for PyTyr and once for
+  Pymimir, keeping native types and nanobind ABI domains isolated. Semantic
+  snapshot adapters remain an explicit compatibility boundary for callers that
+  request owned records; they are not required by the View contract.
 
 The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
-remain compatibility implementations for the historical advanced-Pymimir C++
-and streaming APIs. They are not the extension seam for new encoders and are
-not evidence for or against parity of downstream composite modes. Removing or
-redirecting those compatibility classes is a separate API migration because
-their constructors, stream update semantics, and accepted Mimir object types
-are public contracts. New backend-neutral and downstream encoders must use the
-core composition API above.
+retain their historical constructors and streaming contracts while their
+backend boundary is being redirected to the same View concepts. They are not
+the extension seam for new encoders. New backend-neutral and downstream
+encoders must use the core composition API and a backend View context.
+
+### View lifetime and streaming
+
+Streams retain only backend values and context references until a graph is
+flushed. A caller must keep the planning task/problem and its View context alive
+through `flush()`; a stream must not retain a lazy range after its source state
+has been destroyed. Deferred flush tests should exercise both mutable removal
+and replacement so a stale View cannot be observed.
 
 ## Generic composition capabilities
 

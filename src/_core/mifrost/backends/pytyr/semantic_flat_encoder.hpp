@@ -50,6 +50,12 @@ class MIFROST_API SemanticPlanningTaskAdapter {
 
    [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const;
    [[nodiscard]] const views::Context& get_view_context() const noexcept;
+   [[nodiscard]] views::
+      StateView< tyr::planning::StateView< tyr::planning::LiftedTag >, tyr::planning::LiftedTag >
+      make_view(const tyr::planning::StateView< tyr::planning::LiftedTag >& state) const;
+   [[nodiscard]] views::
+      StateView< tyr::planning::StateView< tyr::planning::GroundTag >, tyr::planning::GroundTag >
+      make_view(const tyr::planning::StateView< tyr::planning::GroundTag >& state) const;
 
   private:
    struct Impl;

@@ -27,7 +27,8 @@ using Category = mifrost::views::PredicateCategory;
 template < typename Index >
 [[nodiscard]] std::size_t raw_index(const Index& index) noexcept
 {
-   return index.is_max() ? 0U : static_cast< std::size_t >(index.get_value());
+   return index.is_max() ? static_cast< std::size_t >(-1)
+                         : static_cast< std::size_t >(index.get_value());
 }
 
 /**
@@ -64,17 +65,19 @@ class Context {
    predicate_id(Category category, std::size_t raw) const noexcept
    {
       const auto* ids = predicate_ids(category);
-      return ids == nullptr or raw >= ids->size() ? -1 : (*ids)[raw];
+      return ids == nullptr or raw == static_cast< std::size_t >(-1) or raw >= ids->size()
+                ? -1
+                : (*ids)[raw];
    }
 
    [[nodiscard]] mifrost::views::ActionSchemaId action_id(std::size_t raw) const noexcept
    {
-      return lookup(action_ids_, raw);
+      return raw == static_cast< std::size_t >(-1) ? -1 : lookup(action_ids_, raw);
    }
 
    [[nodiscard]] mifrost::views::ObjectId object_id(std::size_t raw) const noexcept
    {
-      return lookup(object_ids_, raw);
+      return raw == static_cast< std::size_t >(-1) ? -1 : lookup(object_ids_, raw);
    }
 
   private:
@@ -197,6 +200,29 @@ class LiteralView {
 };
 
 template < typename NativeAction >
+class ActionSchemaView {
+  public:
+   ActionSchemaView(NativeAction value, const Context& context)
+       : value_(std::move(value)), context_(&context)
+   {
+   }
+
+   [[nodiscard]] auto id() const noexcept
+   {
+      return context_->action_id(raw_index(value_.get_index()));
+   }
+   [[nodiscard]] std::string_view name() const noexcept { return value_.get_name(); }
+   [[nodiscard]] std::size_t arity() const noexcept
+   {
+      return static_cast< std::size_t >(value_.get_original_arity());
+   }
+
+  private:
+   NativeAction value_;
+   const Context* context_;
+};
+
+template < typename NativeAction >
 class GroundActionView {
   public:
    GroundActionView(NativeAction value, const Context& context)
@@ -214,7 +240,7 @@ class GroundActionView {
                 return context->object_id(raw_index(object.get_index()));
              });
    }
-   [[nodiscard]] auto schema() const { return value_.get_action(); }
+   [[nodiscard]] auto schema() const { return ActionSchemaView{value_.get_action(), *context_}; }
 
   private:
    NativeAction value_;
@@ -259,6 +285,9 @@ static_assert(
    mifrost::views::PredicateView<
       PredicateView< decltype(std::declval< tyr::formalism::planning::DomainView >()
                                  .template get_predicates< tyr::formalism::FluentTag >()[0]) > >
+);
+static_assert(
+   mifrost::views::NamedActionSchemaView< ActionSchemaView< tyr::formalism::planning::ActionView > >
 );
 
 }  // namespace mifrost::pytyr::views

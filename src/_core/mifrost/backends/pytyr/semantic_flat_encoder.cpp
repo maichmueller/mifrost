@@ -503,4 +503,20 @@ const views::Context& SemanticPlanningTaskAdapter::get_view_context() const noex
    return impl_->view_context;
 }
 
+views::StateView< tyr::planning::StateView< tyr::planning::LiftedTag >, tyr::planning::LiftedTag >
+SemanticPlanningTaskAdapter::make_view(
+   const tyr::planning::StateView< tyr::planning::LiftedTag >& state
+) const
+{
+   return {state, impl_->view_context};
+}
+
+views::StateView< tyr::planning::StateView< tyr::planning::GroundTag >, tyr::planning::GroundTag >
+SemanticPlanningTaskAdapter::make_view(
+   const tyr::planning::StateView< tyr::planning::GroundTag >& state
+) const
+{
+   return {state, impl_->view_context};
+}
+
 }  // namespace mifrost::pytyr
