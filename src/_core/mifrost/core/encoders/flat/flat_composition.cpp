@@ -592,6 +592,11 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       return std::ranges::any_of(fields, [&](const auto& field) { return field.key == key; });
    };
    for(const auto& field : fields) {
+      if(is_runtime_field(field.key)) {
+         throw std::invalid_argument(
+            "Flat composition field '" + field.key + "' is reserved for the relation writer"
+         );
+      }
       if(field.spec.inc.kind == GraphFieldInc::Kind::NODE_OFFSET
          and (field.spec.inc.node_type.empty()
              or not node_schema.try_id_for(field.spec.inc.node_type).has_value())) {
