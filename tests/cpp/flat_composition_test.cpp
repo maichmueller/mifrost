@@ -295,6 +295,7 @@ TEST(FlatCompositionTest, BuiltInNodeRecordComponentPlansTypedRows)
       }}
    );
    const auto compiled = plan.compile();
+   ASSERT_EQ(compiled.node_features().size(), 2u);
    FlatCompositionInput input;
    input.objects = {"a"};
    input.nodes = {{"action", "move"}};

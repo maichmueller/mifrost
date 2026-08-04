@@ -661,6 +661,10 @@ class MIFROST_API CompiledFlatPlan {
    {
       return schema_plan_.fields;
    }
+   [[nodiscard]] const std::vector< FlatNodeFeaturePlanEntry >& node_features() const
+   {
+      return schema_plan_.node_features;
+   }
    [[nodiscard]] const std::vector< CompiledFlatRelationProjection >& projections() const
    {
       return schema_plan_.projections;
