@@ -50,6 +50,14 @@ record.  A record with an unknown id, wrong arity, missing field, or mismatched
 field dtype is rejected at the native boundary rather than silently producing
 an incompatible batch.
 
+`compare_flat_batch_encodings()` compares the native carrier, including node
+tables, columns, graph attributes/fields, pointers, schema metadata, and lazy
+target-name materializations.  Migration tests should run this comparator on a
+legacy encoding and a composed encoding and treat any non-empty `mismatch` path
+as a parity failure.  It is deliberately an exact comparison; normalization,
+sorting, or tolerance belongs in a test fixture only when the legacy contract
+explicitly permits it.
+
 ## External downstream modes
 
 The six `concurrent_internal_*` modes and `FlatCompositeEncoderEngine` that

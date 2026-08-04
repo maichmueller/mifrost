@@ -537,6 +537,25 @@ class MIFROST_API FlatBatchRuntime {
 /// Compatibility name used by the architectural design document.
 using FlatCompositionKernel = FlatBatchRuntime;
 
+/**
+ * Result of an exact native carrier comparison.
+ *
+ * A non-empty `mismatch` identifies the first field whose value, dtype, shape,
+ * or metadata differs.  This is intended for migration fixtures: an adapter
+ * can compare its composed output with the legacy encoder before changing the
+ * public path, without relying on Python tensor conversion.
+ */
+struct MIFROST_API FlatBatchParityResult {
+   bool equal = true;
+   std::string mismatch;
+};
+
+/** Compare two fully materialized native encodings field-for-field. */
+[[nodiscard]] MIFROST_API FlatBatchParityResult compare_flat_batch_encodings(
+   const BatchBuilder::BatchEncoding& expected,
+   const BatchBuilder::BatchEncoding& actual
+);
+
 /** Mutable component assembly; compilation freezes all symbolic lookups. */
 class MIFROST_API FlatEncoderPlan {
   public:

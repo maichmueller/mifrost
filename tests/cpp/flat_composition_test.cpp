@@ -273,6 +273,47 @@ TEST(FlatCompositionTest, BuiltInComponentsRejectMissingOrMismatchedInputFields)
    EXPECT_THROW((void) compiled.encode(FlatInputView::from(wrong)), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, ComparesNativeEncodingsForExactParity)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   plan.emplace_component< FlatFieldEmitterComponent >(
+      "metadata",
+      std::vector< FlatFieldEmitterComponent::FieldDeclaration >{{
+         "marker",
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+         },
+      }}
+   );
+   const auto compiled = plan.compile();
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.relations = {{compiled.schema().id_for(predicate_relation_key("fact")), {0}}};
+   input.fields = {{"marker", NumericColumnData{std::vector< int64_t >{3}}}};
+
+   const auto expected = compiled.encode(FlatInputView::from(input));
+   const auto same = compare_flat_batch_encodings(expected, expected);
+   EXPECT_TRUE(same.equal);
+   EXPECT_TRUE(same.mismatch.empty());
+
+   auto actual = expected;
+   actual.graph_fields.at("marker").values = std::vector< int64_t >{4};
+   const auto different = compare_flat_batch_encodings(expected, actual);
+   EXPECT_FALSE(different.equal);
+   EXPECT_EQ(different.mismatch, "graph_fields[marker]");
+}
+
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
 {
    FlatEncoderPlan plan;

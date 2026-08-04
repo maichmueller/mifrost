@@ -696,6 +696,164 @@ void FlatBatchRuntime::finalize_batch_encoding(BatchBuilder::BatchEncoding& enco
    plan_.finalize_batch_encoding(encoding);
 }
 
+namespace {
+
+FlatBatchParityResult parity_mismatch(std::string path)
+{
+   return FlatBatchParityResult{.equal = false, .mismatch = std::move(path)};
+}
+
+template < typename Map >
+std::set< std::string > map_keys(const Map& values)
+{
+   std::set< std::string > keys;
+   for(const auto& [key, _] : values) {
+      keys.insert(key);
+   }
+   return keys;
+}
+
+template < typename Map, typename ValueEqual >
+std::optional< std::string > compare_string_maps(
+   const Map& expected,
+   const Map& actual,
+   std::string_view prefix,
+   ValueEqual&& value_equal
+)
+{
+   const auto keys = [&] {
+      auto result = map_keys(expected);
+      const auto actual_keys = map_keys(actual);
+      result.insert(actual_keys.begin(), actual_keys.end());
+      return result;
+   }();
+   for(const auto& key : keys) {
+      const auto expected_it = expected.find(key);
+      const auto actual_it = actual.find(key);
+      if(expected_it == expected.end() or actual_it == actual.end()) {
+         return std::string(prefix) + "[" + key + "]";
+      }
+      if(not value_equal(expected_it->second, actual_it->second)) {
+         return std::string(prefix) + "[" + key + "]";
+      }
+   }
+   return std::nullopt;
+}
+
+bool equal_graph_field(const GraphField& expected, const GraphField& actual)
+{
+   return expected.spec == actual.spec and expected.values == actual.values
+          and expected.ptr == actual.ptr and expected.pending == actual.pending;
+}
+
+bool equal_column(const BatchBuilder::Column& expected, const BatchBuilder::Column& actual)
+{
+   return expected.dim == actual.dim and expected.data == actual.data;
+}
+
+bool equal_schema(const Schema& expected, const Schema& actual)
+{
+   const auto equal_node_tensors = [&] {
+      return expected.node_tensors.size() == actual.node_tensors.size()
+             and std::ranges::equal(
+                expected.node_tensors, actual.node_tensors, [](const auto& lhs, const auto& rhs) {
+                   return as_tuple(lhs) == as_tuple(rhs);
+                }
+             );
+   };
+   return expected.version == actual.version and expected.graph_kind == actual.graph_kind
+          and expected.node_types == actual.node_types and expected.edge_types == actual.edge_types
+          and equal_node_tensors() and expected.edge_tensors == actual.edge_tensors
+          and expected.graph_tensors == actual.graph_tensors and expected.flags == actual.flags;
+}
+
+bool equal_lazy_target_names(
+   const BatchBuilder::BatchEncoding& expected,
+   const BatchBuilder::BatchEncoding& actual
+)
+{
+   if(expected.lazy_target_name_strings != actual.lazy_target_name_strings
+      or expected.lazy_target_name_batches.size() != actual.lazy_target_name_batches.size()) {
+      return false;
+   }
+   for(size_t i = 0; i < expected.lazy_target_name_batches.size(); ++i) {
+      const auto& expected_batch = expected.lazy_target_name_batches[i];
+      const auto& actual_batch = actual.lazy_target_name_batches[i];
+      if(expected_batch == nullptr or actual_batch == nullptr) {
+         if(expected_batch != actual_batch) {
+            return false;
+         }
+         continue;
+      }
+      if(expected_batch->materialize() != actual_batch->materialize()) {
+         return false;
+      }
+   }
+   return true;
+}
+
+}  // namespace
+
+FlatBatchParityResult compare_flat_batch_encodings(
+   const BatchBuilder::BatchEncoding& expected,
+   const BatchBuilder::BatchEncoding& actual
+)
+{
+   if(expected.num_graphs != actual.num_graphs) {
+      return parity_mismatch("num_graphs");
+   }
+   if(expected.graph_kind != actual.graph_kind) {
+      return parity_mismatch("graph_kind");
+   }
+   if(expected.object_names != actual.object_names) {
+      return parity_mismatch("object_names");
+   }
+   if(expected.node_names != actual.node_names) {
+      return parity_mismatch("node_names");
+   }
+   if(expected.node_feature_dims != actual.node_feature_dims) {
+      return parity_mismatch("node_feature_dims");
+   }
+   if(expected.node_counts != actual.node_counts) {
+      return parity_mismatch("node_counts");
+   }
+   if(expected.ptrs != actual.ptrs) {
+      return parity_mismatch("ptrs");
+   }
+   if(expected.schema_flags != actual.schema_flags) {
+      return parity_mismatch("schema_flags");
+   }
+   if(not equal_schema(expected.schema, actual.schema)) {
+      return parity_mismatch("schema");
+   }
+   if(not equal_lazy_target_names(expected, actual)) {
+      return parity_mismatch("lazy_target_names");
+   }
+
+   if(const auto mismatch = compare_string_maps(
+         expected.columns, actual.columns, "columns", equal_column
+      );
+      mismatch.has_value()) {
+      return parity_mismatch(*mismatch);
+   }
+   if(const auto mismatch = compare_string_maps(
+         expected.graph_attrs,
+         actual.graph_attrs,
+         "graph_attrs",
+         [](const auto& lhs, const auto& rhs) { return lhs == rhs; }
+      );
+      mismatch.has_value()) {
+      return parity_mismatch(*mismatch);
+   }
+   if(const auto mismatch = compare_string_maps(
+         expected.graph_fields, actual.graph_fields, "graph_fields", equal_graph_field
+      );
+      mismatch.has_value()) {
+      return parity_mismatch(*mismatch);
+   }
+   return FlatBatchParityResult{};
+}
+
 void FlatEncoderPlan::add_component(std::shared_ptr< FlatEmitterComponent > component)
 {
    if(not component) {
