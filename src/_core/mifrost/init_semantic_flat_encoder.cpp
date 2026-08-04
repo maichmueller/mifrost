@@ -140,6 +140,18 @@ void init_semantic_flat_encoder(nb::module_& m)
       const auto contracts = flat_external_mode_contracts();
       return std::vector< FlatExternalModeContract >(contracts.begin(), contracts.end());
    });
+   m.def(
+      "flat_external_mode_satisfied",
+      &flat_external_mode_satisfied,
+      "mode"_a,
+      "available_components"_a
+   );
+   m.def(
+      "flat_external_mode_missing_components",
+      &flat_external_mode_missing_components,
+      "mode"_a,
+      "available_components"_a
+   );
 
    nb::enum_< GoalDerivation >(m, "GoalDerivation")
       .value("plain", GoalDerivation::plain)
