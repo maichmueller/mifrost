@@ -600,10 +600,8 @@ void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
    }
 }
 
-void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder) const
+void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& builder) const
 {
-   configure_builder(builder);
-
    FlatNodePlanBuilder node_builder(schema_plan_.node_schema);
    for(const auto& component : components_) {
       component->plan_graph(input, node_builder);
@@ -647,10 +645,17 @@ void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder)
    builder.next_graph();
 }
 
+void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder) const
+{
+   configure_builder(builder);
+   encode_graph(input, builder);
+}
+
 BatchBuilder::BatchEncoding CompiledFlatPlan::encode(const FlatInputView& input) const
 {
    BatchBuilder builder;
-   encode(input, builder);
+   configure_builder(builder);
+   encode_graph(input, builder);
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);
    return encoding;
@@ -663,7 +668,7 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
    BatchBuilder builder;
    configure_builder(builder);
    for(const auto& input : inputs) {
-      encode(input, builder);
+      encode_graph(input, builder);
    }
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);

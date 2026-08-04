@@ -512,6 +512,7 @@ class MIFROST_API CompiledFlatPlan {
    FlatCompositionConfig config_;
 
    void configure_builder(BatchBuilder& builder) const;
+   void encode_graph(const FlatInputView& input, BatchBuilder& builder) const;
 };
 
 /**
