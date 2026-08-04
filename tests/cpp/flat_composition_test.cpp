@@ -263,6 +263,31 @@ TEST(FlatCompositionTest, BuiltInComponentsRejectMissingOrMismatchedInputFields)
    EXPECT_THROW((void) compiled.encode(FlatInputView::from(wrong)), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, BuiltInNodeRecordComponentPlansTypedRows)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatNodeRecordComponent >(
+      "actions", "action", FlatNodeKind::action, 1, true
+   );
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   const auto compiled = plan.compile();
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   input.nodes = {{"action", "move"}};
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   EXPECT_EQ(encoding.node_counts.at("entity"), 1);
+   EXPECT_EQ(encoding.node_counts.at("action"), 1);
+   EXPECT_EQ(encoding.node_names.at("action"), (std::vector< std::string >{"move"}));
+}
+
 TEST(FlatCompositionTest, ComparesNativeEncodingsForExactParity)
 {
    FlatEncoderPlan plan;
