@@ -106,6 +106,20 @@ find_field(const std::vector< FlatFieldPlanEntry >& fields, std::string_view key
    return *it;
 }
 
+bool is_reserved_flat_graph_attr(std::string_view key)
+{
+   constexpr std::array< std::string_view, 19 > reserved = {
+      kFlatEntityTypeAttr,         kIncludeLGANEdgesAttr,   kTargetSourcesAttr,
+      kLGANAnchorSourcesAttr,      kEntityRoleNamesAttr,    kRelationNamesAttr,
+      kRelationAritiesAttr,        kRelationSourcesAttr,    kRelationLogicalAritiesAttr,
+      kRelationEncodedAritiesAttr, kRelationSlotRolesAttr,  kRelationSlotRoleOffsetsAttr,
+      kSlotRoleNamesAttr,          kTargetEntityGroupsAttr, kTargetSymbolPrefixAttr,
+      kLGANTNEdgePosAttr,          kLGANNNEdgePosAttr,      kLGANRREdgePosAttr,
+      kRelationArgsLayoutAttr,
+   };
+   return std::ranges::find(reserved, key) != reserved.end();
+}
+
 }  // namespace
 
 const FlatExternalModeContract& flat_external_mode_contract(FlatExternalMode mode)
@@ -340,6 +354,16 @@ void FlatMetadataPlanBuilder::claim_object_names()
    object_names_claimed_ = true;
 }
 
+void FlatMetadataPlanBuilder::claim_graph_attr(std::string key)
+{
+   if(key.empty()) {
+      throw std::invalid_argument("Flat graph metadata key must not be empty");
+   }
+   if(not graph_attrs_.emplace(key, owner_).second) {
+      throw std::invalid_argument("Flat graph metadata key was claimed more than once");
+   }
+}
+
 void FlatSchemaPlanBuilder::register_relation(
    RelationKey key,
    FlatTupleLayout layout,
@@ -554,6 +578,28 @@ void FlatMetadataWriter::set_object_names(std::vector< std::string > names) cons
       );
    }
    builder_.set_object_names(std::move(names));
+}
+
+void FlatMetadataWriter::set_graph_attr(
+   std::string_view key,
+   BatchBuilder::GraphAttrValue value
+) const
+{
+   const auto it = plan_.graph_attr_owners.find(std::string(key));
+   if(it == plan_.graph_attr_owners.end() or it->second != owner_) {
+      throw std::invalid_argument(
+         "Flat graph metadata key '" + std::string(key) + "' is not owned by component '" + owner_
+         + "'"
+      );
+   }
+   std::visit(
+      [&](auto&& typed_value) {
+         builder_.set_graph_attr(
+            std::string(key), std::forward< decltype(typed_value) >(typed_value)
+         );
+      },
+      std::move(value)
+   );
 }
 
 FlatObjectNodeComponent::FlatObjectNodeComponent(
@@ -1145,6 +1191,21 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
             );
          }
          metadata_plan.object_names_owner = std::string(component->name());
+      }
+      for(const auto& [key, owner] : metadata_builder.graph_attrs()) {
+         if(is_reserved_flat_graph_attr(key)) {
+            throw std::invalid_argument(
+               "Flat graph metadata key '" + key + "' is reserved by the graph schema"
+            );
+         }
+         if(const auto owner_it = metadata_plan.graph_attr_owners.find(key);
+            owner_it != metadata_plan.graph_attr_owners.end()) {
+            throw std::invalid_argument(
+               "Flat graph metadata key '" + key + "' declared by both '" + owner_it->second
+               + "' and '" + owner + "'"
+            );
+         }
+         metadata_plan.graph_attr_owners.emplace(key, owner);
       }
    }
 

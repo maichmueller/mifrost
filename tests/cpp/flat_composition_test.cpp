@@ -539,6 +539,39 @@ TEST(FlatCompositionTest, RejectsMultipleObjectNameMetadataOwners)
    EXPECT_THROW((void) plan.compile(), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, ComposedMetadataWriterEnforcesGraphAttributeOwnership)
+{
+   class MetadataComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "metadata"; }
+
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, false);
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+
+      void declare_metadata(FlatMetadataPlanBuilder& builder) const override
+      {
+         builder.claim_graph_attr("custom_metadata");
+      }
+
+      void write_metadata(const FlatGraphContext&, FlatMetadataWriter& writer) const override
+      {
+         writer.set_graph_attr("custom_metadata", std::string("native"));
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< MetadataComponent >();
+   const auto compiled = plan.compile();
+   FlatCompositionInput input;
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   EXPECT_EQ(std::get< std::string >(encoding.graph_attrs.at("custom_metadata")), "native");
+}
+
 TEST(FlatCompositionTest, ResolvesRelationAliasesBeforeEmission)
 {
    class AliasComponent final: public FlatEmitterComponent {

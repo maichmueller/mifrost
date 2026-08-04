@@ -244,6 +244,7 @@ struct FlatFieldPlanEntry {
 /** Immutable ownership declarations for non-field graph metadata. */
 struct FlatMetadataPlan {
    std::optional< std::string > object_names_owner;
+   std::unordered_map< std::string, std::string > graph_attr_owners;
 };
 
 /** Immutable compiled schema portion of a flat composition plan. */
@@ -276,11 +277,17 @@ class MIFROST_API FlatMetadataPlanBuilder {
    explicit FlatMetadataPlanBuilder(std::string owner) : owner_(std::move(owner)) {}
 
    void claim_object_names();
+   void claim_graph_attr(std::string key);
    [[nodiscard]] bool claims_object_names() const { return object_names_claimed_; }
+   [[nodiscard]] const std::unordered_map< std::string, std::string >& graph_attrs() const
+   {
+      return graph_attrs_;
+   }
 
   private:
    std::string owner_;
    bool object_names_claimed_ = false;
+   std::unordered_map< std::string, std::string > graph_attrs_;
 };
 
 struct FlatCompositionConfig {
@@ -499,6 +506,7 @@ class MIFROST_API FlatMetadataWriter {
    }
 
    void set_object_names(std::vector< std::string > names) const;
+   void set_graph_attr(std::string_view key, BatchBuilder::GraphAttrValue value) const;
 
   private:
    BatchBuilder& builder_;

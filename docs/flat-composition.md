@@ -60,6 +60,10 @@ fields, so two components cannot silently overwrite object-name metadata.
 `write_node_features()` and `FlatNodeFeatureWriter` are the corresponding
 native path for node tensors; components may emit zeros or semantic features,
 but must use the preplanned row count.
+Graph attributes can be declared with
+`FlatMetadataPlanBuilder::claim_graph_attr()` and written through the variant
+overload on `FlatMetadataWriter`; duplicate attribute ownership is rejected at
+compile time.
 
 `FlatCompositionInput` is intentionally a carrier, not a semantic model.
 Backend adapters own object/action/goal interpretation and populate it.  They
