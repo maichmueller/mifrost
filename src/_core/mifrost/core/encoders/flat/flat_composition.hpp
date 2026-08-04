@@ -9,6 +9,7 @@
  */
 #pragma once
 
+#include <any>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -436,6 +437,46 @@ struct FlatCompositionRelationSpec {
    RelationUsage usage = RelationUsage::state;
 };
 
+/** Graph-local preparation storage shared by all components for one graph. */
+class MIFROST_API FlatGraphScratch {
+  public:
+   template < typename T, typename... Args >
+   T& emplace(Args&&... args)
+   {
+      auto& value = values_[std::type_index(typeid(T))];
+      if(value.has_value()) {
+         throw std::invalid_argument("Flat graph scratch type was emplaced more than once");
+      }
+      value.emplace< T >(std::forward< Args >(args)...);
+      return std::any_cast< T& >(value);
+   }
+
+   template < typename T >
+   T& get()
+   {
+      const auto it = values_.find(std::type_index(typeid(T)));
+      if(it == values_.end() or not it->second.has_value()) {
+         throw std::invalid_argument("Flat graph scratch value is not prepared");
+      }
+      return std::any_cast< T& >(it->second);
+   }
+
+   template < typename T >
+   const T& get() const
+   {
+      const auto it = values_.find(std::type_index(typeid(T)));
+      if(it == values_.end() or not it->second.has_value()) {
+         throw std::invalid_argument("Flat graph scratch value is not prepared");
+      }
+      return std::any_cast< const T& >(it->second);
+   }
+
+   void clear() { values_.clear(); }
+
+  private:
+   std::unordered_map< std::type_index, std::any > values_;
+};
+
 /**
  * Adapter-side builder for the backend-neutral composition carrier.
  *
@@ -476,6 +517,7 @@ struct FlatGraphContext {
    FlatRelationSink& relations;
    std::span< const CompiledFlatRelationProjection > projections;
    std::span< const FlatRelationAlias > relation_aliases;
+   FlatGraphScratch scratch;
 
    [[nodiscard]] int relation_id(const RelationKey& key) const;
    void emit(int relation_id, std::span< const int64_t > args) const;

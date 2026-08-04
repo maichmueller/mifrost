@@ -34,6 +34,10 @@ once before their hot loop and call the integer-id overload of `emit`.
 `FlatSchemaPlanBuilder::register_relation_alias()` adds a non-exported symbolic
 alias; compilation resolves aliases to the canonical relation id, and both
 emission and projections use that compiled mapping.
+`FlatGraphScratch` is the graph-local preparation channel: a component can
+materialize expensive native lookup state in `prepare_graph()` and share it
+with later emit/field phases without mutating the compiled component or using
+Python callbacks.
 
 ## Native built-in components
 

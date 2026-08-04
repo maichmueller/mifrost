@@ -573,6 +573,53 @@ TEST(FlatCompositionTest, ComposedMetadataWriterEnforcesGraphAttributeOwnership)
    EXPECT_EQ(std::get< std::string >(encoding.graph_attrs.at("custom_metadata")), "native");
 }
 
+TEST(FlatCompositionTest, PreparationUsesGraphLocalScratchWithoutComponentMutation)
+{
+   struct PreparedNode {
+      int64_t index = -1;
+   };
+   class PreparedComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "prepared"; }
+
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, false);
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+
+      void plan_graph(const FlatInputView&, FlatNodePlanBuilder& builder) const override
+      {
+         (void) builder.add_node("entity", "a");
+      }
+
+      void prepare_graph(const FlatInputView&, FlatGraphContext& context) const override
+      {
+         context.scratch.emplace< PreparedNode >(0);
+      }
+
+      void emit(const FlatInputView&, FlatGraphContext& context) const override
+      {
+         const auto id = context.relation_id(predicate_relation_key("fact"));
+         const std::array args{context.scratch.get< PreparedNode >().index};
+         context.emit(id, args);
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< PreparedComponent >();
+   const auto compiled = plan.compile();
+   const auto encoding = compiled.encode(FlatInputView::from(FlatCompositionInput{}));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      (std::vector< int64_t >{0})
+   );
+}
+
 TEST(FlatCompositionTest, ResolvesRelationAliasesBeforeEmission)
 {
    class AliasComponent final: public FlatEmitterComponent {
