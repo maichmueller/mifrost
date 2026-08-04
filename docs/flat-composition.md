@@ -101,17 +101,15 @@ populate objects, resolved relation records, fields, and metadata directly
 from a `SemanticFlatRelationInput` or `SemanticTransitionDAG`, while the
 compiled plan owns native emission and finalization.
 
-The current semantic relation and horizon engines use this seam as a staged
-parity bridge.  The existing semantic extraction runs once to populate the
-carrier, then the compiled lane components re-emit that carrier.  This
-preserves the established target, history, topology, and LGAN contracts while
-the direct source adapter is not yet available; it does not claim that source
-extraction has migrated.  The bridge is explicit through
-`FlatInputView::from(SemanticFlatCompositionInput)`: composition or execution
-errors propagate, and only an exact parity mismatch may select the legacy
-result, with a diagnostic recorded by the semantic engine.  A future direct
-adapter can therefore replace only carrier population without changing the
-compiled plan or its component API.
+The semantic relation and horizon engines now populate this seam directly
+from their semantic inputs.  The legacy semantic encoder remains a parity
+oracle only; it is not used to construct the carrier.  The direct path is
+explicit through `FlatInputView::from(SemanticFlatCompositionInput)`:
+composition or execution errors propagate, and only an exact parity mismatch
+may select the legacy result, with a diagnostic recorded by the semantic
+engine.  This keeps the compiled plan and its component API independent of
+planner types while moving semantic extraction out of the legacy emission
+loop.
 
 The neutral C++ suite includes a minimal semantic relation encoder fixture that
 compares a composed state-fact carrier against the existing semantic engine

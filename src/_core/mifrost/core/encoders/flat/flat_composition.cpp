@@ -429,7 +429,17 @@ void FlatMetadataPlanBuilder::claim_graph_attr(std::string key)
    if(key.empty()) {
       throw std::invalid_argument("Flat graph metadata key must not be empty");
    }
-   if(not graph_attrs_.emplace(key, owner_).second) {
+   if(optional_graph_attrs_.contains(key) or not graph_attrs_.emplace(key, owner_).second) {
+      throw std::invalid_argument("Flat graph metadata key was claimed more than once");
+   }
+}
+
+void FlatMetadataPlanBuilder::claim_optional_graph_attr(std::string key)
+{
+   if(key.empty()) {
+      throw std::invalid_argument("Flat graph metadata key must not be empty");
+   }
+   if(graph_attrs_.contains(key) or not optional_graph_attrs_.emplace(key, owner_).second) {
       throw std::invalid_argument("Flat graph metadata key was claimed more than once");
    }
 }
@@ -737,7 +747,12 @@ void FlatMetadataWriter::set_graph_attr(
 ) const
 {
    const auto it = plan_.graph_attr_owners.find(std::string(key));
-   if(it == plan_.graph_attr_owners.end() or it->second != owner_) {
+   const auto optional_it = plan_.optional_graph_attr_owners.find(std::string(key));
+   const auto* owner = it != plan_.graph_attr_owners.end() ? &it->second
+                                                            : optional_it != plan_.optional_graph_attr_owners.end()
+                                                                 ? &optional_it->second
+                                                                 : nullptr;
+   if(owner == nullptr or *owner != owner_) {
       throw std::invalid_argument(
          "Flat graph metadata key '" + std::string(key) + "' is not owned by component '" + owner_
          + "'"
@@ -1479,6 +1494,20 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
             );
          }
          metadata_plan.graph_attr_owners.emplace(key, owner);
+      }
+      for(const auto& [key, owner] : metadata_builder.optional_graph_attrs()) {
+         if(is_reserved_flat_graph_attr(key)) {
+           throw std::invalid_argument(
+              "Flat graph metadata key '" + key + "' is reserved by the graph schema"
+           );
+         }
+         if(metadata_plan.graph_attr_owners.contains(key)
+           or metadata_plan.optional_graph_attr_owners.contains(key)) {
+           throw std::invalid_argument(
+              "Flat graph metadata key '" + key + "' was declared by multiple components"
+           );
+         }
+         metadata_plan.optional_graph_attr_owners.emplace(key, owner);
       }
    }
 

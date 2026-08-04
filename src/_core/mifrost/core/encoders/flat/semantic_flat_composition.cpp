@@ -39,11 +39,19 @@ void SemanticFlatEntityComponent::write_node_features(
    writer.set(std::string(kFlatEntityNodeType), "x", values);
 }
 
-SemanticFlatMetadataComponent::SemanticFlatMetadataComponent(std::vector< std::string > graph_attrs)
-    : graph_attrs_(std::move(graph_attrs))
+SemanticFlatMetadataComponent::SemanticFlatMetadataComponent(
+   std::vector< std::string > graph_attrs,
+   std::vector< std::string > optional_graph_attrs
+)
+    : graph_attrs_(std::move(graph_attrs)),
+      optional_graph_attrs_(std::move(optional_graph_attrs))
 {
    std::ranges::sort(graph_attrs_);
    graph_attrs_.erase(std::ranges::unique(graph_attrs_).begin(), graph_attrs_.end());
+   std::ranges::sort(optional_graph_attrs_);
+   optional_graph_attrs_.erase(
+      std::ranges::unique(optional_graph_attrs_).begin(), optional_graph_attrs_.end()
+   );
 }
 
 void SemanticFlatMetadataComponent::declare_metadata(FlatMetadataPlanBuilder& builder) const
@@ -51,6 +59,9 @@ void SemanticFlatMetadataComponent::declare_metadata(FlatMetadataPlanBuilder& bu
    builder.claim_object_names();
    for(const auto& key : graph_attrs_) {
       builder.claim_graph_attr(key);
+   }
+   for(const auto& key : optional_graph_attrs_) {
+      builder.claim_optional_graph_attr(key);
    }
 }
 
@@ -70,6 +81,11 @@ void SemanticFlatMetadataComponent::write_metadata(
          );
       }
       writer.set_graph_attr(key, it->second);
+   }
+   for(const auto& key : optional_graph_attrs_) {
+      if(const auto it = input.graph_attrs.find(key); it != input.graph_attrs.end()) {
+         writer.set_graph_attr(key, it->second);
+      }
    }
 }
 

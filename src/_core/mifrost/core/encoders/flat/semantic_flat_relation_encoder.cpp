@@ -470,37 +470,28 @@ std::vector< FlatCompositionRelationSpec > semantic_relation_specs(const FlatRel
    return specs;
 }
 
-SemanticFlatCompositionInput make_semantic_carrier(
-   const BatchBuilder::BatchEncoding& encoding,
-   const FlatRelationSchema& schema,
-   std::span< const std::string > metadata_keys
+void set_semantic_carrier_field(
+   SemanticFlatCompositionInput& carrier,
+   std::string_view key,
+   std::span< const int64_t > values
 )
 {
-   SemanticFlatCompositionInput carrier;
-   const auto names_it = encoding.node_names.find(std::string(kFlatEntityNodeType));
-   if(names_it != encoding.node_names.end()) {
-      carrier.composition.objects = names_it->second;
-   } else {
-      const auto count_it = encoding.node_counts.find(std::string(kFlatEntityNodeType));
-      const auto count = count_it == encoding.node_counts.end() ? 0 : count_it->second;
-      carrier.composition.objects.reserve(static_cast< size_t >(count));
-      for(int64_t index = 0; index < count; ++index) {
-         carrier.composition.objects.push_back("entity:" + std::to_string(index));
-      }
-   }
-   carrier.object_names = encoding.object_names;
-   carrier.lazy_target_name_strings = encoding.lazy_target_name_strings;
+   carrier.composition.fields.push_back(FlatCompositionFieldRecord{
+      .key = std::string(key),
+      .values = std::vector< int64_t >(values.begin(), values.end()),
+   });
+}
 
-   const auto counts_it = encoding.graph_fields.find(std::string(kRelationCountsField));
-   const auto args_it = encoding.graph_fields.find(std::string(kRelationArgsField));
-   if(counts_it == encoding.graph_fields.end() or args_it == encoding.graph_fields.end()) {
-      throw std::invalid_argument("legacy semantic flat encoding omitted relation runtime fields");
-   }
-   const auto& counts = std::get< std::vector< int64_t > >(counts_it->second.values);
-   const auto& args = std::get< std::vector< int64_t > >(args_it->second.values);
+void append_semantic_carrier_relations(
+   SemanticFlatCompositionInput& carrier,
+   const FlatRelationSchema& schema,
+   const FlatRelationSink& sink
+)
+{
+   const auto& args = sink.relation_args();
    size_t offset = 0;
    for(size_t relation = 0; relation < schema.size(); ++relation) {
-      const auto count = static_cast< size_t >(counts.at(relation));
+      const auto count = static_cast< size_t >(sink.relation_counts().at(relation));
       const auto arity = static_cast< size_t >(schema.arities().at(relation));
       for(size_t instance = 0; instance < count; ++instance) {
          const auto begin = args.begin() + static_cast< std::ptrdiff_t >(offset);
@@ -515,31 +506,22 @@ SemanticFlatCompositionInput make_semantic_carrier(
       }
    }
 
-   static const std::set< std::string, std::less<> > runtime_fields = {
-      std::string(kRelationInstanceSizesField),
-      std::string(kRelationCountsField),
-      std::string(kRelationArgsField),
-   };
-   for(const auto& [key, field] : encoding.graph_fields) {
-      if(not runtime_fields.contains(key)) {
-         carrier.composition.fields.push_back(
-            FlatCompositionFieldRecord{.key = key, .values = field.values}
-         );
-      }
+   if(offset != args.size()) {
+      throw std::invalid_argument("semantic flat relation sink emitted inconsistent argument data");
    }
-   for(const auto key : metadata_keys) {
-      if(const auto it = encoding.graph_attrs.find(std::string(key));
-         it != encoding.graph_attrs.end()) {
-         carrier.graph_attrs.emplace(std::string(key), it->second);
-      }
-   }
+}
+
+void rebuild_semantic_carrier_indexes(
+   SemanticFlatCompositionInput& carrier,
+   const FlatRelationSchema& schema
+)
+{
    carrier.rebuild_indexes();
    for(const auto& source : schema.as_metadata().relation_sources) {
       carrier.relation_indices_by_component.try_emplace(
          semantic_relation_component(semantic_relation_usage(source))
       );
    }
-   return carrier;
 }
 
 }  // namespace
@@ -700,14 +682,22 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          ));
       }
       std::vector< std::string > metadata_keys;
+      std::vector< std::string > optional_metadata_keys;
       if(target_metadata) {
          metadata_keys.emplace_back(kTargetGroupsAttr);
+         const bool export_names = horizon_config != nullptr ? horizon_config->export_node_names
+                                                              : config.export_node_names;
+         if(export_names) {
+            optional_metadata_keys.emplace_back(kTargetNamesAttr);
+         }
       }
       if(horizon_config != nullptr) {
          metadata_keys.emplace_back(kParentRelationAttr);
       }
-      plan.add_component(std::make_shared< SemanticFlatMetadataComponent >(std::move(metadata_keys))
-      );
+      plan.add_component(std::make_shared< SemanticFlatMetadataComponent >(
+         std::move(metadata_keys),
+         std::move(optional_metadata_keys)
+      ));
 
       FlatCompositionConfig composition_config;
       composition_config.max_goal_level = horizon_config != nullptr ? horizon_config->max_goal_level
@@ -745,6 +735,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          .target_symbol_prefix = horizon_config != nullptr
                                     ? std::optional{horizon_config->target_symbol_prefix}
                                     : std::optional{config.target_symbol_prefix};
+      composition_config.graph_config.use_predicate_virtual_nodes = horizon_config != nullptr
+                                                                       ? horizon_config
+                                                                            ->use_predicate_virtual_nodes
+                                                                       : config
+                                                                            .use_predicate_virtual_nodes;
       composition_config.graph_config.lgan_tn_edge_pos = horizon_config != nullptr
                                                             ? horizon_config->lgan_tn_edge_pos
                                                             : config.lgan_tn_edge_pos;
@@ -1676,7 +1671,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    void encode_into(
       const SemanticFlatRelationInput& input,
-      BatchBuilder& builder,
+      BatchBuilder* builder,
+      SemanticFlatCompositionInput* carrier,
       std::vector< std::string >& batch_target_names
    ) const
    {
@@ -1803,11 +1799,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
 
-      std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
-      builder.add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
-      if(config.export_node_names) {
-         builder.set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
-         builder.set_object_names(objects);
+      if(builder != nullptr) {
+         std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
+         builder->add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
+         if(config.export_node_names) {
+            builder->set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
+            builder->set_object_names(objects);
+         }
+      } else {
+         carrier->composition.objects = context.entity_names;
+         if(not config.export_node_names) {
+            carrier->composition.objects.clear();
+            carrier->composition.objects.reserve(static_cast< size_t >(context.entity_count));
+            for(int64_t index = 0; index < context.entity_count; ++index) {
+               carrier->composition.objects.push_back("entity:" + std::to_string(index));
+            }
+         } else {
+            carrier->object_names = objects;
+         }
       }
 
       const int64_t node_size = context.entity_count;
@@ -1816,28 +1825,27 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       const int64_t target_entity_size = static_cast< int64_t >(
          context.target_entity_indices.size()
       );
-      builder.set_field(std::string(kNodeSizesField), std::span{&node_size, size_t{1}});
-      builder.set_field(std::string(kObjectSizesField), std::span{&object_size, size_t{1}});
-      builder.set_field(std::string(kObjectIndicesField), std::span{context.object_indices});
-      builder.set_field(std::string(kEntityRoleIdsField), std::span{context.entity_role_ids});
-      builder.set_field(std::string(kHistoryEntitySizesField), std::span{&history_size, size_t{1}});
-      builder.set_field(
-         std::string(kHistoryEntityIndicesField), std::span{context.history_entity_indices}
-      );
-      builder.set_field(std::string(kHistoryEntityDtField), std::span{context.history_entity_dt});
-      builder.set_field(
-         std::string(kTargetEntitySizesField), std::span{&target_entity_size, size_t{1}}
-      );
-      builder.set_field(
-         std::string(kTargetEntityIndicesField), std::span{context.target_entity_indices}
-      );
-      builder.set_field(
-         std::string(kTargetEntityGroupIdsField), std::span{context.target_entity_group_ids}
-      );
+      auto set_field = [&](std::string_view key, std::span< const int64_t > values) {
+         if(builder != nullptr) {
+            builder->set_field(std::string(key), values);
+         } else {
+            set_semantic_carrier_field(*carrier, key, values);
+         }
+      };
+      set_field(kNodeSizesField, std::span{&node_size, size_t{1}});
+      set_field(kObjectSizesField, std::span{&object_size, size_t{1}});
+      set_field(kObjectIndicesField, std::span{context.object_indices});
+      set_field(kEntityRoleIdsField, std::span{context.entity_role_ids});
+      set_field(kHistoryEntitySizesField, std::span{&history_size, size_t{1}});
+      set_field(kHistoryEntityIndicesField, std::span{context.history_entity_indices});
+      set_field(kHistoryEntityDtField, std::span{context.history_entity_dt});
+      set_field(kTargetEntitySizesField, std::span{&target_entity_size, size_t{1}});
+      set_field(kTargetEntityIndicesField, std::span{context.target_entity_indices});
+      set_field(kTargetEntityGroupIdsField, std::span{context.target_entity_group_ids});
 
       if(not target_group_names.empty()) {
          const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
-         builder.set_field(std::string(kTargetSizesField), std::span{&target_size, size_t{1}});
+         set_field(kTargetSizesField, std::span{&target_size, size_t{1}});
          const TargetMetadataEmitConfig target_config{
             .position_node_type_id = std::string(kFlatEntityNodeType),
             .symbol_prefix = config.target_symbol_prefix,
@@ -1847,23 +1855,48 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             .groups = target_group_names,
             .parent_relation = std::nullopt,
          };
-         set_target_fields(builder, context.target_columns, target_config);
-         set_target_graph_attrs(builder, context.target_columns, target_config);
-         if(config.export_node_names) {
-            batch_target_names.insert(
-               batch_target_names.end(),
-               context.target_columns.names.begin(),
-               context.target_columns.names.end()
+         if(builder != nullptr) {
+            set_target_fields(*builder, context.target_columns, target_config);
+            set_target_graph_attrs(*builder, context.target_columns, target_config);
+         } else {
+            set_field(kTargetPositionsField, std::span{context.target_columns.positions});
+            set_field(kTargetIndicesField, std::span{context.target_columns.indices});
+            set_field(kTargetCandidateIdsField, std::span{context.target_columns.candidate_ids});
+            set_field(kTargetGroupIdsField, std::span{context.target_columns.group_ids});
+            carrier->graph_attrs.emplace(
+               std::string(kTargetSymbolPrefixAttr), config.target_symbol_prefix
             );
+            carrier->graph_attrs.emplace(std::string(kTargetGroupsAttr), target_group_names);
+         }
+         if(config.export_node_names) {
+            if(builder != nullptr) {
+               batch_target_names.insert(
+                  batch_target_names.end(),
+                  context.target_columns.names.begin(),
+                  context.target_columns.names.end()
+               );
+            } else {
+               if(context.target_columns.names.empty()) {
+                  carrier->graph_attrs.emplace(
+                     std::string(kTargetNamesAttr), std::vector< std::string >{}
+                  );
+               } else {
+                  carrier->lazy_target_name_strings = context.target_columns.names;
+               }
+            }
          }
       }
 
-      builder.set_field(std::string(kRelationCountsField), std::span{sink.relation_counts()});
-      const int64_t relation_instance_size = sink.relation_instance_count();
-      builder.set_field(
-         std::string(kRelationInstanceSizesField), std::span{&relation_instance_size, size_t{1}}
-      );
-      builder.set_field(std::string(kRelationArgsField), std::span{sink.relation_args()});
+      if(builder != nullptr) {
+         builder->set_field(std::string(kRelationCountsField), std::span{sink.relation_counts()});
+         const int64_t relation_instance_size = sink.relation_instance_count();
+         builder->set_field(
+            std::string(kRelationInstanceSizesField), std::span{&relation_instance_size, size_t{1}}
+         );
+         builder->set_field(std::string(kRelationArgsField), std::span{sink.relation_args()});
+      } else {
+         append_semantic_carrier_relations(*carrier, schema_, sink);
+      }
 
       if(config.include_lgan_edges) {
          if(context.target_entity_indices.empty()) {
@@ -1875,34 +1908,23 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          const int64_t tn_size = static_cast< int64_t >(lgan.tn_relation_indices.size());
          const int64_t nn_size = static_cast< int64_t >(lgan.nn_relation_indices.size());
          const int64_t rr_size = static_cast< int64_t >(lgan.rr_src_relation_indices.size());
-         builder.set_field(std::string(kLGANTNSizesField), std::span{&tn_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANTNRelationIndicesField), std::span{lgan.tn_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANTNEntityIndicesField), std::span{lgan.tn_entity_indices}
-         );
-         builder.set_field(std::string(kLGANNNSizesField), std::span{&nn_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANNNRelationIndicesField), std::span{lgan.nn_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANNNEntityIndicesField), std::span{lgan.nn_entity_indices}
-         );
-         builder.set_field(std::string(kLGANRRSizesField), std::span{&rr_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANRRSrcRelationIndicesField), std::span{lgan.rr_src_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANRRDstRelationIndicesField), std::span{lgan.rr_dst_relation_indices}
-         );
+         set_field(kLGANTNSizesField, std::span{&tn_size, size_t{1}});
+         set_field(kLGANTNRelationIndicesField, std::span{lgan.tn_relation_indices});
+         set_field(kLGANTNEntityIndicesField, std::span{lgan.tn_entity_indices});
+         set_field(kLGANNNSizesField, std::span{&nn_size, size_t{1}});
+         set_field(kLGANNNRelationIndicesField, std::span{lgan.nn_relation_indices});
+         set_field(kLGANNNEntityIndicesField, std::span{lgan.nn_entity_indices});
+         set_field(kLGANRRSizesField, std::span{&rr_size, size_t{1}});
+         set_field(kLGANRRSrcRelationIndicesField, std::span{lgan.rr_src_relation_indices});
+         set_field(kLGANRRDstRelationIndicesField, std::span{lgan.rr_dst_relation_indices});
       }
    }
 
    void encode_horizon(
       const SemanticTransitionDAG& dag,
       const SemanticFlatHorizonEncoderConfig& horizon,
-      BatchBuilder& builder
+      BatchBuilder* builder,
+      SemanticFlatCompositionInput* carrier
    ) const
    {
       if(dag.predicates() != predicates or dag.actions() != actions) {
@@ -2320,11 +2342,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
 
-      std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
-      builder.add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
-      if(horizon.export_node_names) {
-         builder.set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
-         builder.set_object_names(root_objects);
+      if(builder != nullptr) {
+         std::vector< float > zeros(static_cast< size_t >(context.entity_count), 0.0F);
+         builder->add_node_features(std::string(kFlatEntityNodeType), "x", std::span{zeros}, 1);
+         if(horizon.export_node_names) {
+            builder->set_node_names(std::string(kFlatEntityNodeType), context.entity_names);
+            builder->set_object_names(root_objects);
+         }
+      } else {
+         carrier->composition.objects = context.entity_names;
+         if(not horizon.export_node_names) {
+            carrier->composition.objects.clear();
+            carrier->composition.objects.reserve(static_cast< size_t >(context.entity_count));
+            for(int64_t index = 0; index < context.entity_count; ++index) {
+               carrier->composition.objects.push_back("entity:" + std::to_string(index));
+            }
+         } else {
+            carrier->object_names = root_objects;
+         }
       }
       const int64_t node_size = context.entity_count;
       const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
@@ -2332,20 +2367,21 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          context.target_entity_indices.size()
       );
       const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
-      builder.set_field(std::string(kNodeSizesField), std::span{&node_size, size_t{1}});
-      builder.set_field(std::string(kObjectSizesField), std::span{&object_size, size_t{1}});
-      builder.set_field(std::string(kObjectIndicesField), std::span{context.object_indices});
-      builder.set_field(std::string(kEntityRoleIdsField), std::span{context.entity_role_ids});
-      builder.set_field(
-         std::string(kTargetEntitySizesField), std::span{&target_entity_size, size_t{1}}
-      );
-      builder.set_field(
-         std::string(kTargetEntityIndicesField), std::span{context.target_entity_indices}
-      );
-      builder.set_field(
-         std::string(kTargetEntityGroupIdsField), std::span{context.target_entity_group_ids}
-      );
-      builder.set_field(std::string(kTargetSizesField), std::span{&target_size, size_t{1}});
+      auto set_field = [&](std::string_view key, std::span< const int64_t > values) {
+         if(builder != nullptr) {
+            builder->set_field(std::string(key), values);
+         } else {
+            set_semantic_carrier_field(*carrier, key, values);
+         }
+      };
+      set_field(kNodeSizesField, std::span{&node_size, size_t{1}});
+      set_field(kObjectSizesField, std::span{&object_size, size_t{1}});
+      set_field(kObjectIndicesField, std::span{context.object_indices});
+      set_field(kEntityRoleIdsField, std::span{context.entity_role_ids});
+      set_field(kTargetEntitySizesField, std::span{&target_entity_size, size_t{1}});
+      set_field(kTargetEntityIndicesField, std::span{context.target_entity_indices});
+      set_field(kTargetEntityGroupIdsField, std::span{context.target_entity_group_ids});
+      set_field(kTargetSizesField, std::span{&target_size, size_t{1}});
       const std::vector< std::string > groups = {
          std::string(target_source_group_name(TargetSource::states))
       };
@@ -2358,21 +2394,45 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          .groups = groups,
          .parent_relation = horizon.parent_relation,
       };
-      set_target_fields(builder, context.target_columns, target_config);
-      set_target_graph_attrs(builder, context.target_columns, target_config);
+      if(builder != nullptr) {
+         set_target_fields(*builder, context.target_columns, target_config);
+         set_target_graph_attrs(*builder, context.target_columns, target_config);
+      } else {
+         set_field(kTargetPositionsField, std::span{context.target_columns.positions});
+         set_field(kTargetIndicesField, std::span{context.target_columns.indices});
+         set_field(kTargetCandidateIdsField, std::span{context.target_columns.candidate_ids});
+         set_field(kTargetDepthsField, std::span{context.target_columns.depths});
+         set_field(kTargetGroupIdsField, std::span{context.target_columns.group_ids});
+         carrier->graph_attrs.emplace(std::string(kTargetGroupsAttr), groups);
+         carrier->graph_attrs.emplace(std::string(kParentRelationAttr), horizon.parent_relation);
+      }
       if(horizon.export_node_names) {
          if(context.target_columns.names.empty()) {
-            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+            if(builder != nullptr) {
+               builder->set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+            } else {
+               carrier->graph_attrs.emplace(
+                  std::string(kTargetNamesAttr), std::vector< std::string >{}
+               );
+            }
          } else {
-            builder.add_lazy_target_names(std::span{context.target_columns.names});
+            if(builder != nullptr) {
+               builder->add_lazy_target_names(std::span{context.target_columns.names});
+            } else {
+               carrier->lazy_target_name_strings = context.target_columns.names;
+            }
          }
       }
-      builder.set_field(std::string(kRelationCountsField), std::span{sink.relation_counts()});
-      const int64_t relation_size = sink.relation_instance_count();
-      builder.set_field(
-         std::string(kRelationInstanceSizesField), std::span{&relation_size, size_t{1}}
-      );
-      builder.set_field(std::string(kRelationArgsField), std::span{sink.relation_args()});
+      if(builder != nullptr) {
+         builder->set_field(std::string(kRelationCountsField), std::span{sink.relation_counts()});
+         const int64_t relation_size = sink.relation_instance_count();
+         builder->set_field(
+            std::string(kRelationInstanceSizesField), std::span{&relation_size, size_t{1}}
+         );
+         builder->set_field(std::string(kRelationArgsField), std::span{sink.relation_args()});
+      } else {
+         append_semantic_carrier_relations(*carrier, schema_, sink);
+      }
 
       if(horizon.include_lgan_edges) {
          if(context.target_columns.positions.empty()) {
@@ -2386,27 +2446,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          const int64_t tn_size = static_cast< int64_t >(lgan.tn_relation_indices.size());
          const int64_t nn_size = static_cast< int64_t >(lgan.nn_relation_indices.size());
          const int64_t rr_size = static_cast< int64_t >(lgan.rr_src_relation_indices.size());
-         builder.set_field(std::string(kLGANTNSizesField), std::span{&tn_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANTNRelationIndicesField), std::span{lgan.tn_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANTNEntityIndicesField), std::span{lgan.tn_entity_indices}
-         );
-         builder.set_field(std::string(kLGANNNSizesField), std::span{&nn_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANNNRelationIndicesField), std::span{lgan.nn_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANNNEntityIndicesField), std::span{lgan.nn_entity_indices}
-         );
-         builder.set_field(std::string(kLGANRRSizesField), std::span{&rr_size, size_t{1}});
-         builder.set_field(
-            std::string(kLGANRRSrcRelationIndicesField), std::span{lgan.rr_src_relation_indices}
-         );
-         builder.set_field(
-            std::string(kLGANRRDstRelationIndicesField), std::span{lgan.rr_dst_relation_indices}
-         );
+         set_field(kLGANTNSizesField, std::span{&tn_size, size_t{1}});
+         set_field(kLGANTNRelationIndicesField, std::span{lgan.tn_relation_indices});
+         set_field(kLGANTNEntityIndicesField, std::span{lgan.tn_entity_indices});
+         set_field(kLGANNNSizesField, std::span{&nn_size, size_t{1}});
+         set_field(kLGANNNRelationIndicesField, std::span{lgan.nn_relation_indices});
+         set_field(kLGANNNEntityIndicesField, std::span{lgan.nn_entity_indices});
+         set_field(kLGANRRSizesField, std::span{&rr_size, size_t{1}});
+         set_field(kLGANRRSrcRelationIndicesField, std::span{lgan.rr_src_relation_indices});
+         set_field(kLGANRRDstRelationIndicesField, std::span{lgan.rr_dst_relation_indices});
       }
    }
 
@@ -2418,7 +2466,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       BatchBuilder legacy_builder;
       legacy_builder.set_graph_kind("flat");
       prepare_horizon_builder(legacy_builder, horizon);
-      encode_horizon(dag, horizon, legacy_builder);
+      encode_horizon(dag, horizon, &legacy_builder, nullptr);
       legacy_builder.next_graph();
       auto expected = legacy_builder.build();
       finalize_horizon_encoding(expected, horizon);
@@ -2426,17 +2474,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          mark_composed_path(false, "semantic flat composition plan is not available");
          return expected;
       }
-      BatchBuilder raw_builder;
-      raw_builder.set_graph_kind("flat");
-      prepare_horizon_builder(raw_builder, horizon);
-      encode_horizon(dag, horizon, raw_builder);
-      raw_builder.next_graph();
-      auto raw = raw_builder.build();
-      const std::array metadata_keys = {
-         std::string(kTargetGroupsAttr),
-         std::string(kParentRelationAttr),
-      };
-      auto carrier = make_semantic_carrier(raw, schema_, std::span{metadata_keys});
+      SemanticFlatCompositionInput carrier;
+      encode_horizon(dag, horizon, nullptr, &carrier);
+      rebuild_semantic_carrier_indexes(carrier, schema_);
       auto actual = composition_plan->encode(FlatInputView::from(carrier));
       finalize_horizon_encoding(actual, horizon);
       const auto comparison = compare_flat_batch_encodings(expected, actual);
@@ -2461,7 +2501,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       expected_builder.set_graph_kind("flat");
       prepare_horizon_builder(expected_builder, horizon);
       for(const auto& dag : dags) {
-         encode_horizon(dag, horizon, expected_builder);
+         encode_horizon(dag, horizon, &expected_builder, nullptr);
          expected_builder.next_graph();
       }
       auto expected = expected_builder.build();
@@ -2474,18 +2514,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       std::vector< SemanticFlatCompositionInput > carriers;
       carriers.reserve(dags.size());
-      const std::array metadata_keys = {
-         std::string(kTargetGroupsAttr),
-         std::string(kParentRelationAttr),
-      };
       for(const auto& dag : dags) {
-         BatchBuilder raw_builder;
-         raw_builder.set_graph_kind("flat");
-         prepare_horizon_builder(raw_builder, horizon);
-         encode_horizon(dag, horizon, raw_builder);
-         raw_builder.next_graph();
-         auto raw = raw_builder.build();
-         carriers.push_back(make_semantic_carrier(raw, schema_, std::span{metadata_keys}));
+         SemanticFlatCompositionInput carrier;
+         encode_horizon(dag, horizon, nullptr, &carrier);
+         rebuild_semantic_carrier_indexes(carrier, schema_);
+         carriers.push_back(std::move(carrier));
       }
 
       std::vector< FlatInputView > views;
@@ -2527,7 +2560,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       prepare_builder(builder);
       std::vector< std::string > target_names;
       for(const auto& input : inputs) {
-         encode_into(input, builder, target_names);
+         encode_into(input, &builder, nullptr, target_names);
          builder.next_graph();
       }
       if(not target_group_names.empty() and config.export_node_names) {
@@ -2546,7 +2579,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    {
       prepare_builder(builder);
       std::vector< std::string > target_names;
-      encode_into(input, builder, target_names);
+      encode_into(input, &builder, nullptr, target_names);
       if(not target_group_names.empty() and config.export_node_names) {
          if(target_names.empty()) {
             builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
@@ -2575,18 +2608,19 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
       std::vector< SemanticFlatCompositionInput > carriers;
       carriers.reserve(inputs.size());
-      const std::vector< std::string > metadata_keys = target_group_names.empty()
-                                                          ? std::vector< std::string >{}
-                                                          : std::vector< std::string >{
-                                                             std::string(kTargetGroupsAttr),
-                                                             std::string(kTargetSymbolPrefixAttr),
-                                                          };
-      std::vector< BatchBuilder::BatchEncoding > legacy;
-      legacy.reserve(inputs.size());
       for(const auto& input : inputs) {
-         legacy.push_back(legacy_one(input));
-         carriers.push_back(make_semantic_carrier(legacy.back(), schema_, std::span{metadata_keys})
-         );
+         SemanticFlatCompositionInput carrier;
+         encode_into(input, nullptr, &carrier, carrier.lazy_target_name_strings);
+         rebuild_semantic_carrier_indexes(carrier, schema_);
+         carriers.push_back(std::move(carrier));
+      }
+      if(not target_group_names.empty() and config.export_node_names
+         and std::ranges::any_of(carriers, [](const auto& carrier) {
+               return not carrier.lazy_target_name_strings.empty();
+            })) {
+         for(auto& carrier : carriers) {
+            carrier.graph_attrs.erase(std::string(kTargetNamesAttr));
+         }
       }
       std::vector< FlatInputView > views;
       views.reserve(carriers.size());
@@ -2774,7 +2808,7 @@ void SemanticFlatRelationEncoderEngine::encode_horizon(
    BatchBuilder& builder
 ) const
 {
-   impl_->encode_horizon(dag, config, builder);
+   impl_->encode_horizon(dag, config, &builder, nullptr);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_horizon_composed(

@@ -267,6 +267,7 @@ struct FlatNodeFeaturePlanEntry {
 struct FlatMetadataPlan {
    std::optional< std::string > object_names_owner;
    std::unordered_map< std::string, std::string > graph_attr_owners;
+   std::unordered_map< std::string, std::string > optional_graph_attr_owners;
 };
 
 struct FlatRelationBinding {
@@ -326,16 +327,22 @@ class MIFROST_API FlatMetadataPlanBuilder {
 
    void claim_object_names();
    void claim_graph_attr(std::string key);
+   void claim_optional_graph_attr(std::string key);
    [[nodiscard]] bool claims_object_names() const { return object_names_claimed_; }
    [[nodiscard]] const std::unordered_map< std::string, std::string >& graph_attrs() const
    {
       return graph_attrs_;
+   }
+   [[nodiscard]] const std::unordered_map< std::string, std::string >& optional_graph_attrs() const
+   {
+      return optional_graph_attrs_;
    }
 
   private:
    std::string owner_;
    bool object_names_claimed_ = false;
    std::unordered_map< std::string, std::string > graph_attrs_;
+   std::unordered_map< std::string, std::string > optional_graph_attrs_;
 };
 
 struct FlatCompositionConfig {

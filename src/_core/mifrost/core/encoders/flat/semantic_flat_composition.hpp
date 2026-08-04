@@ -22,12 +22,10 @@ namespace mifrost {
  * populate it directly from a semantic input, without exposing planner types
  * to the composition runtime.
  *
- * The current semantic engines intentionally use a staged parity bridge:
- * their legacy semantic extraction populates this carrier once, and the
- * compiled plan owns the subsequent native emission.  This keeps the
- * extraction contract exact while the source-side adapter is introduced;
- * parity mismatches are reported by the engine and are not hidden by
- * exception-based fallback.
+ * Semantic engines populate this carrier directly from their owned semantic
+ * inputs.  A legacy encoding is still built as a parity oracle, but it is not
+ * used to construct the carrier; mismatches are reported by the engine and
+ * are not hidden by exception-based fallback.
  */
 struct SemanticFlatCompositionInput {
    FlatCompositionInput composition;
@@ -75,7 +73,10 @@ class MIFROST_API SemanticFlatEntityComponent final: public FlatEmitterComponent
  */
 class MIFROST_API SemanticFlatMetadataComponent final: public FlatEmitterComponent {
   public:
-   explicit SemanticFlatMetadataComponent(std::vector< std::string > graph_attrs);
+   explicit SemanticFlatMetadataComponent(
+      std::vector< std::string > graph_attrs,
+      std::vector< std::string > optional_graph_attrs = {}
+   );
 
    [[nodiscard]] std::string_view name() const noexcept override { return "semantic_metadata"; }
    void declare_metadata(FlatMetadataPlanBuilder&) const override;
@@ -83,6 +84,7 @@ class MIFROST_API SemanticFlatMetadataComponent final: public FlatEmitterCompone
 
   private:
    std::vector< std::string > graph_attrs_;
+  std::vector< std::string > optional_graph_attrs_;
 };
 
 class MIFROST_API SemanticFlatRelationComponent final: public FlatEmitterComponent {

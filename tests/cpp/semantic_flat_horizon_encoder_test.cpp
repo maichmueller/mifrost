@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mifrost {
@@ -74,6 +75,13 @@ SemanticTransitionDAG make_dag()
    return SemanticTransitionDAG(predicates(), actions(), sample_nodes(), sample_edges());
 }
 
+SemanticTransitionDAG make_root_only_dag()
+{
+   auto nodes = sample_nodes();
+   nodes.resize(1);
+   return SemanticTransitionDAG(predicates(), actions(), std::move(nodes), {});
+}
+
 bool contains(const std::vector< std::string >& names, const std::string& name)
 {
    return std::ranges::find(names, name) != names.end();
@@ -93,6 +101,20 @@ TEST(SemanticFlatHorizonEncoderEngineTest, FullModeDefaultConfigEncodesWithoutTh
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
    EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+}
+
+TEST(SemanticFlatHorizonEncoderEngineTest, RootOnlyGraphPreservesEmptyTargetNames)
+{
+   SemanticFlatHorizonEncoderEngine engine(predicates(), actions());
+
+   const auto encoding = engine.encode(make_root_only_dag());
+
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   ASSERT_TRUE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
+   EXPECT_TRUE(
+      std::get< std::vector< std::string > >(encoding.graph_attrs.at(std::string(kTargetNamesAttr)))
+         .empty()
+   );
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, DeltaModeRegistersLiteralCandidateRelations)

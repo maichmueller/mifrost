@@ -498,6 +498,30 @@ TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
    EXPECT_TRUE(engine.last_composition_diagnostic().empty());
 }
 
+TEST(FlatCompositionTest, SemanticRelationCompositionPreservesPredicateVirtualNodeMetadata)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.use_predicate_virtual_nodes = true;
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{
+         SemanticPredicateCategory::fluent,
+         "at",
+         1,
+      }},
+      {},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a"};
+   input.state_facts = {{0, {0}}};
+
+   const auto encoding = engine.encode(input);
+
+   EXPECT_EQ(encoding.num_graphs, 1);
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   EXPECT_TRUE(engine.last_composition_diagnostic().empty());
+}
+
 TEST(FlatCompositionTest, SemanticRelationBatchParityCoversRelationArgumentLayouts)
 {
    for(const bool relation_major : {false, true}) {
@@ -544,6 +568,81 @@ TEST(FlatCompositionTest, SemanticRelationCompositionPreservesLazyTargetNames)
    EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    ASSERT_FALSE(encoding.lazy_target_name_strings.empty());
    EXPECT_EQ(encoding.lazy_target_name_strings.front(), "(move a)");
+}
+
+TEST(FlatCompositionTest, SemanticRelationCompositionPreservesEmptyTargetNames)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.target_sources = {TargetSource::actions};
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}},
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a"};
+   input.state_facts = {{0, {0}}};
+
+   const auto encoding = engine.encode(input);
+
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   ASSERT_TRUE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
+   EXPECT_TRUE(
+      std::get< std::vector< std::string > >(encoding.graph_attrs.at(std::string(kTargetNamesAttr)))
+         .empty()
+   );
+}
+
+TEST(FlatCompositionTest, SemanticRelationBatchCompositionOmitsEmptyTargetNamesWhenMixed)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.target_sources = {TargetSource::actions};
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}},
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput without_action;
+   without_action.objects = {"a"};
+   without_action.state_facts = {{0, {0}}};
+   SemanticFlatRelationInput with_action = without_action;
+   with_action.actions = {{0, {0}}};
+
+   const auto encoding = engine.encode_batch({without_action, with_action});
+
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   EXPECT_FALSE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
+   EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
+}
+
+TEST(FlatCompositionTest, SemanticRelationDirectCarrierCoversSemanticMetadataLanes)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.include_lgan_edges = true;
+   config.target_sources = {
+      TargetSource::goals,
+      TargetSource::actions,
+      TargetSource::history,
+   };
+   config.lgan_anchor_sources = config.target_sources;
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}},
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a"};
+   input.state_facts = {{0, {0}}};
+   input.goals = {{SemanticAtom{0, {0}}, true}};
+   input.actions = {{0, {0}}};
+   input.history = {{-1, {{{SemanticAtom{0, {0}}, true}}}}};
+
+   const auto encoding = engine.encode(input);
+
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   EXPECT_TRUE(encoding.node_names.contains("entity"));
+   EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
+   EXPECT_TRUE(encoding.graph_fields.contains(std::string(kLGANTNSizesField)));
 }
 
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
