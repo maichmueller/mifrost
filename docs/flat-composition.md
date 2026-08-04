@@ -16,7 +16,9 @@ The lifecycle is deliberately fixed:
    relation tuples, and write their owned fields.
 4. One `BatchBuilder` receives the graph and the runtime writes relation counts,
    relation arguments, and relation-instance sizes exactly once.
-5. `finalize_batch_encoding()` optionally performs the existing relation-major
+5. Components write owner-scoped non-field metadata; the object component
+   publishes object names without a second materialized encoding.
+6. `finalize_batch_encoding()` optionally performs the existing relation-major
    collation pass.
 
 Virtual dispatch is limited to the component/graph lifecycle.  Fact, action,
@@ -43,6 +45,10 @@ carrier operations:
 - `FlatFieldEmitterComponent` declares owned graph fields and writes typed
   `FlatCompositionInput::fields` values with the same shape checks as
   `BatchBuilder`.
+
+Components can also implement `write_metadata()` through
+`FlatMetadataWriter`; this is the native path for object names and future
+graph-level metadata that is not a numeric graph field.
 
 `FlatCompositionInput` is intentionally a carrier, not a semantic model.
 Backend adapters own object/action/goal interpretation and populate it.  They

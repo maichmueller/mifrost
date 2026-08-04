@@ -207,6 +207,7 @@ TEST(FlatCompositionTest, BuiltInComponentsComposeResolvedRelationsAndFields)
 
    const auto encoding = compiled.encode(FlatInputView::from(input));
    ASSERT_EQ(encoding.num_graphs, 1);
+   EXPECT_EQ(encoding.object_names, (std::vector< std::string >{"a", "b"}));
    ASSERT_EQ(encoding.node_names.at("entity"), (std::vector< std::string >{"a", "b"}));
    EXPECT_EQ(encoding.node_counts.at("entity"), 2);
    EXPECT_EQ(

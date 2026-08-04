@@ -313,6 +313,7 @@ class FlatSchemaPlanBuilder;
 class FlatFieldPlanBuilder;
 class FlatNodePlanBuilder;
 class FlatFieldWriter;
+class FlatMetadataWriter;
 
 /** One graph-local symbolic node supplied by a backend-neutral adapter. */
 struct FlatCompositionNodeRecord {
@@ -406,6 +407,22 @@ class MIFROST_API FlatEmitterComponent {
    virtual void prepare_graph(const FlatInputView&, FlatGraphContext&) const {}
    virtual void emit(const FlatInputView&, FlatGraphContext&) const {}
    virtual void write_fields(const FlatGraphContext&, FlatFieldWriter&) const {}
+   virtual void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const {}
+};
+
+/** Owner-scoped writer for non-field graph metadata emitted by a component. */
+class MIFROST_API FlatMetadataWriter {
+  public:
+   FlatMetadataWriter(BatchBuilder& builder, std::string_view owner)
+       : builder_(builder), owner_(owner)
+   {
+   }
+
+   void set_object_names(std::vector< std::string > names) const;
+
+  private:
+   BatchBuilder& builder_;
+   std::string owner_;
 };
 
 /** Adds graph-local object rows from `FlatCompositionInput::objects`. */
@@ -422,6 +439,7 @@ class MIFROST_API FlatObjectNodeComponent final: public FlatEmitterComponent {
    [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+   void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const override;
 
   private:
    std::string component_name_;

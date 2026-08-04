@@ -467,6 +467,11 @@ void FlatCompositionInputBuilder::set_field(std::string key, NumericColumnData v
    );
 }
 
+void FlatMetadataWriter::set_object_names(std::vector< std::string > names) const
+{
+   builder_.set_object_names(std::move(names));
+}
+
 FlatObjectNodeComponent::FlatObjectNodeComponent(
    std::string component_name,
    std::string node_type,
@@ -504,6 +509,16 @@ void FlatObjectNodeComponent::plan_graph(
    const auto& composition = input.get< FlatCompositionInput >();
    for(const auto& object : composition.objects) {
       (void) builder.add_node(node_type_, object);
+   }
+}
+
+void FlatObjectNodeComponent::write_metadata(
+   const FlatGraphContext& context,
+   FlatMetadataWriter& writer
+) const
+{
+   if(export_names_) {
+      writer.set_object_names(context.input.get< FlatCompositionInput >().objects);
    }
 }
 
@@ -701,6 +716,10 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
    for(const auto& component : components_) {
       FlatFieldWriter writer(builder, schema_plan_.fields, component->name());
       component->write_fields(context, writer);
+   }
+   for(const auto& component : components_) {
+      FlatMetadataWriter writer(builder, component->name());
+      component->write_metadata(context, writer);
    }
 
    const auto& relation_counts = sink.relation_counts();
