@@ -71,7 +71,7 @@ mifrost::SemanticFlatRelationEncoderEngine make_engine()
    );
 }
 
-void BM_SemanticFlatEncodeComposed(benchmark::State& state)
+void BM_SemanticFlatEncodeOneShot(benchmark::State& state)
 {
    auto engine = make_engine();
    const auto input = make_input();
@@ -81,7 +81,7 @@ void BM_SemanticFlatEncodeComposed(benchmark::State& state)
    }
 }
 
-void BM_SemanticFlatEncodeLegacy(benchmark::State& state)
+void BM_SemanticFlatEncodeBuilderAppend(benchmark::State& state)
 {
    auto engine = make_engine();
    const auto input = make_input();
@@ -97,8 +97,20 @@ void BM_SemanticFlatEncodeLegacy(benchmark::State& state)
 
 }  // namespace
 
-BENCHMARK(BM_SemanticFlatEncodeComposed);
-BENCHMARK(BM_SemanticFlatEncodeLegacy);
+void BM_SemanticFlatEncodeBatch32(benchmark::State& state)
+{
+   auto engine = make_engine();
+   const std::vector< mifrost::SemanticFlatRelationInput > inputs(32, make_input());
+   for(auto _ : state) {
+      const auto encoding = engine.encode_batch(inputs);
+      benchmark::DoNotOptimize(encoding.columns.size());
+   }
+   state.SetItemsProcessed(state.iterations() * static_cast< int64_t >(inputs.size()));
+}
+
+BENCHMARK(BM_SemanticFlatEncodeOneShot);
+BENCHMARK(BM_SemanticFlatEncodeBuilderAppend);
+BENCHMARK(BM_SemanticFlatEncodeBatch32);
 
 int main(int argc, char** argv)
 {

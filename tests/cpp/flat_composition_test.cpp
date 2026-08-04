@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <future>
 #include <memory>
 #include <set>
 #include <string>
@@ -791,6 +792,37 @@ TEST(FlatCompositionTest, SemanticRelationBuilderPathMatchesOneShotComposition)
 
    const auto parity = compare_flat_batch_encodings(expected, actual);
    ASSERT_TRUE(parity.equal) << parity.mismatch;
+}
+
+TEST(FlatCompositionTest, SemanticRelationCompiledPlanIsSafeForConcurrentEncodes)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.target_sources = {TargetSource::actions, TargetSource::goals};
+   config.lgan_anchor_sources = config.target_sources;
+   config.include_lgan_edges = true;
+   config.use_predicate_virtual_nodes = true;
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}},
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a", "b"};
+   input.state_facts = {{0, {0}}};
+   input.goals = {{{0, {1}}, true}};
+   input.actions = {{0, {0}}, {0, {1}}};
+   const auto expected = engine.encode(input);
+
+   std::vector< std::future< BatchBuilder::BatchEncoding > > jobs;
+   for(size_t index = 0; index < 8; ++index) {
+      jobs.push_back(std::async(std::launch::async, [&engine, &input] {
+         return engine.encode(input);
+      }));
+   }
+   for(auto& job : jobs) {
+      const auto parity = compare_flat_batch_encodings(expected, job.get());
+      ASSERT_TRUE(parity.equal) << parity.mismatch;
+   }
 }
 
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)

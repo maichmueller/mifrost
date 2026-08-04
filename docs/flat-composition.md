@@ -72,7 +72,7 @@ Graph attributes can be declared with
 overload on `FlatMetadataWriter`; duplicate attribute ownership is rejected at
 compile time.
 
-`FlatCompositionInput` is intentionally a carrier, not a semantic model.
+`FlatCompositionInput` is intentionally a generic carrier, not a semantic model.
 Backend adapters own object/action/goal interpretation and populate it.  They
 must resolve each relation key with the compiled schema once per plan (for
 example, with `compiled.schema().id_for(...)`) before filling a relation
@@ -95,31 +95,31 @@ as a parity failure.  It is deliberately an exact comparison; normalization,
 sorting, or tolerance belongs in a test fixture only when the legacy contract
 explicitly permits it.
 
-### Semantic flat migration seam
+### Semantic flat components
 
-`SemanticFlatCompositionInput` is the source-side seam for semantic flat
-composition.  It is deliberately backend-neutral: a semantic adapter can
-populate objects, resolved relation records, fields, and metadata directly
-from a `SemanticFlatRelationInput` or `SemanticTransitionDAG`, while the
-compiled plan owns native emission and finalization.
+The semantic relation encoder compiles entity, fact, goal/derivation, action,
+history, field, target-metadata, and LGAN components. Its graph plan contains
+only graph-local semantic lookup state and target/node identities. Relation
+components iterate the original `SemanticFlatRelationInput` and emit directly
+into the runtime's single `FlatRelationSink`; they do not construct
+`FlatCompositionInput`, per-tuple vectors, or an intermediate encoding.
 
-The semantic relation and horizon engines populate this seam directly from
-their semantic inputs. Production encoding executes only the compiled path;
-legacy encoders are independent parity oracles used by tests and benchmarks.
-The direct path is explicit through
-`FlatInputView::from(SemanticFlatCompositionInput)`, and composition or
-execution errors propagate to the caller.
+The semantic horizon encoder uses the same runtime. Its graph plan prepares
+candidate identities, exact transition deltas, and goal-membership sets. A
+transition-semantic component emits state, goal, action, and effect tuples;
+the topology component independently emits parent, sibling, and cousin tuples.
+Fields and LGAN edges are derived after those components have populated the
+same final sink. One-shot, caller-owned builder, and batch APIs all execute
+these compiled plans.
 
-The neutral C++ suite includes a minimal semantic relation encoder fixture that
-compares a composed state-fact carrier against the existing semantic engine
-field-for-field; larger semantic migrations should extend that fixture before
-switching their public path.
-
-`mifrost_bench_semantic_flat_composition` compares the composed semantic path
-with its legacy-only carrier path on a representative input. The composed
-measurement currently includes the legacy parity oracle; it is therefore a
-regression baseline for the migration, not a claim of the eventual oracle-free
-speedup.
+The neutral C++ suite covers exact output parity between public execution
+forms, the full semantic policy matrix, mixed target-name metadata, relation
+argument layouts, and concurrent reuse of one immutable compiled engine.
+`mifrost_bench_semantic_flat_composition` reports one-shot, caller-owned builder,
+and 32-graph batch throughput for a representative semantic workload. It is a
+stable regression benchmark; compare results to a recorded build from the
+pre-refactor commit rather than treating two public wrappers as independent
+implementations.
 
 `FlatRelationMajorWriter` is the shared finalization seam.  The semantic flat
 relation and horizon engines use the same writer as a composed plan, so
@@ -143,8 +143,8 @@ downstream repository.
   immutable (graph-local state belongs in the graph context), and do not append
   already-materialized `BatchEncoding` values to compose components.
 - Keep relation ordering, tuple arity, node identity, and graph-field ownership
-  deterministic.  Existing backend-specific encoders remain unchanged until a
-  component migration has an exact carrier comparator.
+  deterministic. Backend adapters should translate to semantic inputs once;
+  they must not rebuild relation carriers or append materialized encodings.
 - Set `FlatCompositionConfig::relation_args_node_type` when the composed plan
   uses a node table other than `entity`; relation argument fields then receive
   the correct graph offset source.

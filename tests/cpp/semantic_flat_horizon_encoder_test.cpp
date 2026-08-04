@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <future>
 #include <string>
 #include <utility>
 #include <vector>
@@ -261,6 +262,29 @@ TEST(SemanticFlatHorizonEncoderEngineTest, BuilderPathMatchesOneShotComposition)
 
    const auto parity = compare_flat_batch_encodings(expected, actual);
    ASSERT_TRUE(parity.equal) << parity.mismatch;
+}
+
+TEST(SemanticFlatHorizonEncoderEngineTest, CompiledPlanIsSafeForConcurrentEncodes)
+{
+   SemanticFlatHorizonEncoderEngine::Config config;
+   config.transition_mode = SemanticHorizonMode::delta;
+   config.include_lgan_edges = true;
+   config.enable_parent_relation = true;
+   config.use_predicate_virtual_nodes = true;
+   SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
+   const auto dag = make_dag();
+   const auto expected = engine.encode(dag);
+
+   std::vector< std::future< BatchBuilder::BatchEncoding > > jobs;
+   for(size_t index = 0; index < 8; ++index) {
+      jobs.push_back(std::async(std::launch::async, [&engine, &dag] {
+         return engine.encode(dag);
+      }));
+   }
+   for(auto& job : jobs) {
+      const auto parity = compare_flat_batch_encodings(expected, job.get());
+      ASSERT_TRUE(parity.equal) << parity.mismatch;
+   }
 }
 
 }  // namespace
