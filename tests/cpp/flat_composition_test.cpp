@@ -299,5 +299,32 @@ TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
    );
 }
 
+TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)
+{
+   FlatNodeSchemaBuilder schema_builder;
+   const auto entity_type = schema_builder.declare_node_type("entity");
+   const auto schema = std::move(schema_builder).finalize();
+   FlatNodePlanBuilder node_builder(schema);
+   (void) node_builder.add_node(entity_type, "a");
+   const auto nodes = std::move(node_builder).finish();
+
+   const CompiledFlatRelationProjection projection{
+      .source_relation_id = 0,
+      .output_relation_id = 1,
+      .slots = {FlatSlotResolver::source(1), FlatSlotResolver::constant_value(7)},
+   };
+   EXPECT_EQ(
+      projection.project(std::array< int64_t, 2 >{2, 3}, nodes), (std::vector< int64_t >{3, 7})
+   );
+   const CompiledFlatRelationProjection invalid{
+      .source_relation_id = 0,
+      .output_relation_id = 1,
+      .slots = {FlatSlotResolver::source(2)},
+   };
+   EXPECT_THROW(
+      (void) invalid.project(std::array< int64_t, 2 >{2, 3}, nodes), std::invalid_argument
+   );
+}
+
 }  // namespace
 }  // namespace mifrost
