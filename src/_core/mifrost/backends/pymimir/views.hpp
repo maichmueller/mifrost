@@ -286,9 +286,13 @@ class StateView {
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          state_->get_atoms< mimir::formalism::FluentTag >()
       );
-      return atoms | std::views::transform([context = context_](const auto atom) {
-                return AtomView< decltype(atom), Category::fluent >{atom, *context};
-             });
+      std::vector<
+         AtomView< mimir::formalism::GroundAtom< mimir::formalism::FluentTag >, Category::fluent > >
+         result;
+      for(const auto atom : atoms) {
+         result.emplace_back(atom, *context_);
+      }
+      return result;
    }
    [[nodiscard]] auto derived_atoms() const
    {
@@ -296,9 +300,14 @@ class StateView {
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
          state_->get_atoms< mimir::formalism::DerivedTag >()
       );
-      return atoms | std::views::transform([context = context_](const auto atom) {
-                return AtomView< decltype(atom), Category::derived >{atom, *context};
-             });
+      std::vector< AtomView<
+         mimir::formalism::GroundAtom< mimir::formalism::DerivedTag >,
+         Category::derived > >
+         result;
+      for(const auto atom : atoms) {
+         result.emplace_back(atom, *context_);
+      }
+      return result;
    }
 
   private:

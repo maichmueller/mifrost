@@ -116,6 +116,24 @@ template < views::StateView State, views::GroundActionRange Actions >
 
 }  // namespace detail
 
+template < views::AtomView Atom >
+[[nodiscard]] SemanticAtom materialize_semantic_atom(const Atom& atom)
+{
+   return detail::materialize_atom(atom);
+}
+
+template < views::LiteralView Literal >
+[[nodiscard]] SemanticLiteral materialize_semantic_literal(const Literal& literal)
+{
+   return detail::materialize_literal(literal);
+}
+
+template < views::GroundActionView Action >
+[[nodiscard]] SemanticGroundAction materialize_semantic_action(const Action& action)
+{
+   return detail::materialize_action(action);
+}
+
 /**
  * Materialize a state, explicit goals, and ground actions into the compact
  * transport consumed by every semantic encoder. Backend values never cross

@@ -57,11 +57,8 @@ struct FlatBatchInputs;
  *    shared formatter/schema helpers
  *  - it does not manage batch merging beyond writing into `BatchBuilder`
  *
- * Invariants:
- *  - `schema_` is the single persistent source of truth for relation ids, names, arities, slot
- *    roles, and sources; `RelationComponent::declare_schema()`/`emit()` pairs build the same
- *    structured `RelationKey` for a given relation, so schema declaration and emission cannot
- *    independently drift on the exported name.
+ * Relation metadata and graph composition are delegated to the backend-neutral
+ * semantic flat encoder; this class only adapts the Pymimir API and views.
  */
 class MIFROST_API FlatRelationEncoderEngine {
   public:
@@ -117,39 +114,15 @@ class MIFROST_API FlatRelationEncoderEngine {
    /// Return the effective immutable encoder config.
    [[nodiscard]] const Config& get_config() const { return config_; }
    /// Return the exported relation dictionary keyed by relation name.
-   [[nodiscard]] const RelationDict& get_relation_dict() const { return schema_.relation_dict(); }
-   [[nodiscard]] const std::vector< std::string >& get_relation_names() const
-   {
-      return schema_.names();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const
-   {
-      return schema_.arities();
-   }
-   [[nodiscard]] const std::vector< std::string >& get_relation_sources() const
-   {
-      return schema_.sources();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
-   {
-      return schema_.logical_arities();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
-   {
-      return schema_.encoded_arities();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
-   {
-      return schema_.slot_roles();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
-   {
-      return schema_.slot_role_offsets();
-   }
-   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
-   {
-      return schema_.slot_role_names();
-   }
+   [[nodiscard]] const RelationDict& get_relation_dict() const;
+   [[nodiscard]] const std::vector< std::string >& get_relation_names() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const;
+   [[nodiscard]] const std::vector< std::string >& get_relation_sources() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const;
+   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const;
 
    /**
     * @brief Shared per-graph state assembled before relation emission.
@@ -182,29 +155,6 @@ class MIFROST_API FlatRelationEncoderEngine {
    };
 
   private:
-   struct PredicateSpec {
-      std::string name;
-      int arity = 0;
-   };
-
-   class RelationComponent;
-   class StateFactsComponent;
-   class GoalFactsComponent;
-   class GoalDerivationComponent;
-   class GroundActionsComponent;
-   class HistoryFactsComponent;
-
-   void validate_config() const;
-   void initialize_from_domain();
-   void rebuild_schema();
-   void prepare_builder(BatchBuilder& builder) const;
-   void encode_default_goals(
-      const mimir::search::State& state,
-      std::span< const mimir::formalism::GroundAction > actions,
-      std::span< const HistorySubgoal > history_subgoals,
-      std::optional< int > history_max_steps,
-      BatchBuilder& builder
-   );
    void encode_impl(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -215,33 +165,21 @@ class MIFROST_API FlatRelationEncoderEngine {
       std::vector< std::string >* batch_target_names = nullptr,
       bool prepare_builder = true
    );
-   EncodingContext make_context(
+   void encode_default_goals(
       const mimir::search::State& state,
-      const GoalInputs& goals,
       std::span< const mimir::formalism::GroundAction > actions,
       std::span< const HistorySubgoal > history_subgoals,
-      std::optional< int > history_max_steps
-   ) const;
-   int relation_id_for(const RelationKey& key) const;
-   [[nodiscard]] bool has_target_source(TargetSource source) const;
-   [[nodiscard]] bool has_lgan_anchor_source(TargetSource source) const;
-   [[nodiscard]] bool has_anchor_entity_source(TargetSource source) const;
-   [[nodiscard]] bool supports_target_metadata() const;
-   [[nodiscard]] int64_t target_entity_group_id(TargetSource source) const;
-   [[nodiscard]] int64_t target_metadata_group_id(TargetSource source) const;
+      std::optional< int > history_max_steps,
+      BatchBuilder& builder
+   );
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    Config config_;
-   FlatRelationSchema schema_;
-   std::vector< PredicateSpec > predicate_specs_;
-   std::vector< PredicateSpec > regular_predicate_specs_;
-   std::vector< PredicateSpec > action_specs_;
-   std::vector< std::unique_ptr< RelationComponent > > components_;
-   std::vector< std::string > target_entity_group_names_;
-   std::map< TargetSource, int64_t > target_entity_group_ids_;
-   std::vector< std::string > target_metadata_group_names_;
-   std::map< TargetSource, int64_t > target_metadata_group_ids_;
+   RelationDict relation_dict_;
+
+   struct SemanticImpl;
+   std::unique_ptr< SemanticImpl > semantic_;
 };
 
 struct FlatRelationStepInput {

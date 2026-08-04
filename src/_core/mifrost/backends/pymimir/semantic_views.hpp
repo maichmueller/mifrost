@@ -129,6 +129,19 @@ class SemanticProblemAdapter {
       auto context = std::make_shared< SemanticTaskContext >();
       const auto domain = problem.get_domain();
       context->predicates = make_semantic_predicates(*domain);
+      auto actions = domain->get_actions();
+      std::ranges::sort(actions, [](const auto lhs, const auto rhs) {
+         return std::tuple{lhs->get_name(), lhs->get_arity(), lhs->get_index()}
+                < std::tuple{rhs->get_name(), rhs->get_arity(), rhs->get_index()};
+      });
+      context->actions.reserve(actions.size());
+      for(const auto action : actions) {
+         context->actions.push_back(
+            SemanticActionSpec{
+               std::string(action->get_name()), static_cast< int64_t >(action->get_arity())
+            }
+         );
+      }
 
       auto objects = problem.get_problem_and_domain_objects();
       std::ranges::sort(objects, [](const auto lhs, const auto rhs) {

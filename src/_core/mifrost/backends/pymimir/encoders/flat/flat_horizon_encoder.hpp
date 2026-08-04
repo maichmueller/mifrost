@@ -9,6 +9,7 @@
 
 #include <boost/describe.hpp>
 #include <map>
+#include <memory>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/search/state.hpp>
 #include <optional>
@@ -28,7 +29,7 @@
 #include "mifrost/core/encoders/common/stream_encoder_base.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/encoders/common/target_source.hpp"
-#include "mifrost/core/encoders/flat/flat_relation_schema.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 
 namespace mifrost {
 
@@ -106,39 +107,15 @@ class MIFROST_API FlatHorizonEncoderEngine {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const { return config_; }
-   [[nodiscard]] const RelationDict& get_relation_dict() const { return schema_.relation_dict(); }
-   [[nodiscard]] const std::vector< std::string >& get_relation_names() const
-   {
-      return schema_.names();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const
-   {
-      return schema_.arities();
-   }
-   [[nodiscard]] const std::vector< std::string >& get_relation_sources() const
-   {
-      return schema_.sources();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const
-   {
-      return schema_.logical_arities();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const
-   {
-      return schema_.encoded_arities();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const
-   {
-      return schema_.slot_roles();
-   }
-   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const
-   {
-      return schema_.slot_role_offsets();
-   }
-   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const
-   {
-      return schema_.slot_role_names();
-   }
+   [[nodiscard]] const RelationDict& get_relation_dict() const;
+   [[nodiscard]] const std::vector< std::string >& get_relation_names() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_arities() const;
+   [[nodiscard]] const std::vector< std::string >& get_relation_sources() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_logical_arities() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_encoded_arities() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const;
+   [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const;
+   [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const;
 
    /**
     * @brief Per-graph flat entity state for horizon encoding.
@@ -166,31 +143,12 @@ class MIFROST_API FlatHorizonEncoderEngine {
       int arity = 0;
    };
 
-   void initialize_from_domain();
-   void prepare_builder(BatchBuilder& builder) const;
-   void encode_impl(
-      const mimir::search::State& root,
-      const TransitionDAG& dag,
-      const GoalInputs& goals,
-      BatchBuilder& builder,
-      std::vector< mimir::search::State >* batch_target_name_states = nullptr,
-      bool prepare_builder = true
-   );
-   [[nodiscard]] EncodingContext
-   make_context(const mimir::search::State& root, const TransitionDAG& dag) const;
-   [[nodiscard]] int relation_id_for(const RelationKey& key) const;
-   [[nodiscard]] int64_t
-   state_entity_index_for(const EncodingContext& context, int64_t node_index) const;
+   struct SemanticImpl;
 
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    Config config_;
-   FlatRelationSchema schema_;
-   std::vector< PredicateSpec > predicate_specs_;
-   std::vector< PredicateSpec > regular_predicate_specs_;
-   std::vector< PredicateSpec > action_specs_;
-   std::vector< std::string > target_entity_group_names_;
-   std::vector< std::string > target_metadata_group_names_;
+   std::unique_ptr< SemanticImpl > semantic_;
 };
 
 BOOST_DESCRIBE_STRUCT(
