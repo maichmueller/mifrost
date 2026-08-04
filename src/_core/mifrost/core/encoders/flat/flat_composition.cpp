@@ -497,6 +497,28 @@ void CompiledFlatPlan::finalize_batch_encoding(BatchBuilder::BatchEncoding& enco
    }
 }
 
+BatchBuilder::BatchEncoding FlatBatchRuntime::encode(const FlatInputView& input) const
+{
+   return plan_.encode(input);
+}
+
+BatchBuilder::BatchEncoding FlatBatchRuntime::encode_batch(
+   std::span< const FlatInputView > inputs
+) const
+{
+   return plan_.encode_batch(inputs);
+}
+
+void FlatBatchRuntime::encode(const FlatInputView& input, BatchBuilder& builder) const
+{
+   plan_.encode(input, builder);
+}
+
+void FlatBatchRuntime::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
+{
+   plan_.finalize_batch_encoding(encoding);
+}
+
 void FlatEncoderPlan::add_component(std::shared_ptr< FlatEmitterComponent > component)
 {
    if(not component) {

@@ -124,8 +124,19 @@ TEST(FlatCompositionTest, CompilesSharedNodesAndRunsOneNativeBatch)
    const DemoInput second{{"a"}, 9};
    const std::array inputs{FlatInputView::from(first), FlatInputView::from(second)};
    const auto encoding = compiled.encode_batch(inputs);
+   const FlatBatchRuntime runtime(compiled);
+   const auto runtime_encoding = runtime.encode_batch(inputs);
 
    EXPECT_EQ(encoding.num_graphs, 2);
+   EXPECT_EQ(runtime_encoding.num_graphs, encoding.num_graphs);
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         runtime_encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      )
+   );
    ASSERT_TRUE(encoding.graph_fields.contains(std::string(kRelationCountsField)));
    ASSERT_TRUE(encoding.graph_fields.contains(std::string(kRelationArgsField)));
    ASSERT_TRUE(encoding.graph_fields.contains("marker"));

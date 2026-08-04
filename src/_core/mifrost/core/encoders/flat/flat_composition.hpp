@@ -383,6 +383,28 @@ class MIFROST_API CompiledFlatPlan {
    void configure_builder(BatchBuilder& builder) const;
 };
 
+/**
+ * Reusable executor façade for a compiled plan.
+ *
+ * Keeping execution separate from plan construction lets a downstream
+ * encoder cache one compiled schema and create one runtime per worker without
+ * recompiling relation projections or field ownership metadata.
+ */
+class MIFROST_API FlatBatchRuntime {
+  public:
+   explicit FlatBatchRuntime(const CompiledFlatPlan& plan) : plan_(plan) {}
+
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const FlatInputView& input) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const FlatInputView > inputs
+   ) const;
+   void encode(const FlatInputView& input, BatchBuilder& builder) const;
+   void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
+
+  private:
+   const CompiledFlatPlan& plan_;
+};
+
 /** Mutable component assembly; compilation freezes all symbolic lookups. */
 class MIFROST_API FlatEncoderPlan {
   public:
