@@ -214,6 +214,24 @@ TEST(FlatCompositionTest, RequiresConfiguredRelationArgumentOffsetNode)
    EXPECT_THROW((void) plan.compile(config), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, EmptyBatchStillCarriesCompiledSchemaMetadata)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FactsComponent >();
+   auto compiled = plan.compile();
+
+   const std::vector< FlatInputView > inputs;
+   const auto encoding = compiled.encode_batch(inputs);
+   EXPECT_EQ(encoding.num_graphs, 0);
+   EXPECT_EQ(
+      std::get< std::vector< std::string > >(
+         encoding.graph_attrs.at(std::string(kRelationNamesAttr))
+      ),
+      (std::vector< std::string >{"fact"})
+   );
+   EXPECT_TRUE(encoding.graph_fields.contains(std::string(kRelationCountsField)));
+}
+
 TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
 {
    const auto contracts = flat_external_mode_contracts();

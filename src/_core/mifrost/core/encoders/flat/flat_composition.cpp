@@ -419,9 +419,6 @@ void FlatFieldWriter::set(std::string_view key, std::span< const float > values)
 void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
 {
    set_flat_graph_attrs(builder, schema_plan_.relation_schema.as_metadata(), config_.graph_config);
-   for(const auto& spec : schema_plan_.node_schema.specs()) {
-      builder.set_node_feature_dim(spec.name, spec.feature_dim);
-   }
    for(const auto& field : schema_plan_.fields) {
       builder.register_field(field.key, field.spec);
    }
@@ -443,6 +440,7 @@ void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder)
    auto node_plan = std::move(node_builder).finish();
    for(size_t node_type = 0; node_type < schema_plan_.node_schema.size(); ++node_type) {
       const auto& spec = schema_plan_.node_schema.spec(static_cast< FlatNodeTypeId >(node_type));
+      builder.set_node_feature_dim(spec.name, spec.feature_dim);
       builder.add_nodes(spec.name, node_plan.count(static_cast< FlatNodeTypeId >(node_type)));
       if(spec.export_names
          and not node_plan.names(static_cast< FlatNodeTypeId >(node_type)).empty()) {
@@ -492,6 +490,7 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
 ) const
 {
    BatchBuilder builder;
+   configure_builder(builder);
    for(const auto& input : inputs) {
       encode(input, builder);
    }
