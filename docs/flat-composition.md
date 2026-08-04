@@ -155,10 +155,11 @@ The reusable implementation lives in the planner-neutral core:
   request owned records; they are not required by the View contract.
 
 The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
-retain their historical constructors and streaming contracts while their
-backend boundary is being redirected to the same View concepts. They are not
-the extension seam for new encoders. New backend-neutral and downstream
-encoders must use the core composition API and a backend View context.
+retain their historical constructors and streaming contracts while adapting
+native values through the same task-scoped View concepts and canonical
+semantic engines. They are not the extension seam for new encoders. New
+backend-neutral and downstream encoders must use the core composition API and
+a backend View context.
 
 ### View lifetime and streaming
 

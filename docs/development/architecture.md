@@ -112,9 +112,9 @@ The repository has strong native/Python separation and broad behavior tests.
 The remaining architectural risk is concentrated in a few large modules rather
 than spread across the package. Priorities are:
 
-1. Complete the visualization-boundary migration for the flat and color
-   families. HGraph and Horizon NetworkX conversion, drawing, and specialized
-   target-tree layout now use a private data-only context boundary while their
+1. Keep the visualization and encoder boundaries aligned. Flat, Color, HGraph,
+   Horizon HGraph, successor, and transition families now adapt Pymimir and
+   PyTyr through task-scoped Views and canonical semantic engines while their
    public method signatures remain stable.
 2. Decompose the largest native encoder translation units by stable concepts:
    schema construction, traversal/planning, and graph emission. Keep the engine
