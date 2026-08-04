@@ -152,6 +152,23 @@ SemanticTransitionDAG::SemanticTransitionDAG(
    std::vector< Node > nodes,
    std::vector< Edge > edges
 )
+    : SemanticTransitionDAG(
+         std::move(predicates),
+         std::move(actions),
+         std::move(nodes),
+         std::move(edges),
+         false
+      )
+{
+}
+
+SemanticTransitionDAG::SemanticTransitionDAG(
+   std::vector< SemanticPredicateSpec > predicates,
+   std::vector< SemanticActionSpec > actions,
+   std::vector< Node > nodes,
+   std::vector< Edge > edges,
+   bool allow_non_dag_topology
+)
     : predicates_(std::move(predicates)),
       actions_(std::move(actions)),
       nodes_(std::move(nodes)),
@@ -230,7 +247,7 @@ SemanticTransitionDAG::SemanticTransitionDAG(
          or static_cast< size_t >(child) >= nodes_.size()) {
          throw std::invalid_argument("SemanticTransitionDAG edge endpoint out of range");
       }
-      if(parent == child) {
+      if(parent == child and not allow_non_dag_topology) {
          throw std::invalid_argument("SemanticTransitionDAG self edges are not allowed");
       }
       if(not unique_edges.emplace(parent, child).second) {
@@ -266,7 +283,7 @@ SemanticTransitionDAG::SemanticTransitionDAG(
          }
       }
    }
-   if(topological_count != nodes_.size()) {
+   if(not allow_non_dag_topology and topological_count != nodes_.size()) {
       throw std::invalid_argument("SemanticTransitionDAG edges must be acyclic");
    }
 

@@ -1,272 +1,179 @@
-/**
- * @file horizon_hgraph_encoder.cpp
- * @brief Pymimir heterogeneous Horizon encoder implementation.
- *
- * This file adds transition-DAG topology, root handling, and state-target
- * export on top of the shared hetero base encoder.
- */
 #include "horizon_hgraph_encoder.hpp"
 
-#include <fmt/format.h>
-
-#include <algorithm>
-#include <array>
 #include <mimir/search/formatter.hpp>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
-#include "hetero_relation_keys.hpp"
-#include "mifrost/backends/pymimir/deferred_state_names.hpp"
-#include "mifrost/backends/pymimir/transition_target_metadata.hpp"
-#include "mifrost/core/schema_key_separators.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
-
 namespace {
 
-constexpr std::string_view kHiddenRootPrefix = "_root|";
+class OwnedTargetNameBatch final: public DeferredStringBatch {
+  public:
+   explicit OwnedTargetNameBatch(std::vector< std::string > names) : names_(std::move(names)) {}
 
-bool split_full_state_relations(const HorizonHGraphEncoderEngine::Config& config)
-{
-   return config.transition_mode == HorizonHGraphEncoderEngine::Mode::full
-          && root_uses_split_state_relations(config.root_policy);
-}
+   std::vector< std::string > materialize() const override { return names_; }
 
-HorizonHGraphEncoderEngine::Config normalize_horizon_config(
-   HorizonHGraphEncoderEngine::Config config
-)
+  private:
+   std::vector< std::string > names_;
+};
+
+HGraphEncoderEngine::Config base_config(const HorizonHGraphEncoderEngine::Config& config)
 {
-   if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta
-      and not config.support_literals) {
-      config.support_literals = true;
+   HGraphEncoderEngine::Config result = config;
+   if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta) {
+      result.support_literals = true;
    }
-   return config;
-}
-
-HeteroRelationSchema build_horizon_schema(
-   const mimir::formalism::DomainImpl& domain,
-   const HorizonHGraphEncoderEngine::Config& config
-)
-{
-   HeteroRelationSchemaBuilder builder;
-
-   const std::set< std::string > top_type_predicates = {
-      "object",
-      "number",
-      defaults::symbol_type_id,
-      "_action_",
-      config.symbol_type_id,
-   };
-   const bool root_relations_use_state_slot = root_in_state_relations(config.root_policy);
-   const bool split_candidate_relations = split_full_state_relations(config);
-
-   auto register_relation = [&](RelationKey key, int64_t arity, RelationUsage usage) {
-      builder.register_relation(std::move(key), HeteroRelationLayout{arity}, usage);
-   };
-   auto add_root_only_relation =
-      [&](const RelationKey& key, int64_t base_arity, RelationUsage usage) {
-         register_relation(key, root_relations_use_state_slot ? base_arity + 1 : base_arity, usage);
-      };
-   auto add_full_state_relation =
-      [&](const RelationKey& key, int64_t base_arity, RelationUsage usage) {
-         add_root_only_relation(key, base_arity, usage);
-         if(split_candidate_relations) {
-            RelationKey anchored = key;
-            anchored.state_anchored = true;
-            register_relation(std::move(anchored), base_arity + 1, usage);
-         }
-      };
-   auto add_delta_candidate_relation =
-      [&](const RelationKey& key, int64_t base_arity, RelationUsage usage) {
-         register_relation(key, base_arity + 1, usage);
-      };
-
-   auto collect_predicates = [&]< typename Tag >(Tag) {
-      for(const auto predicate : domain.get_predicates< Tag >()) {
-         const auto base_arity = static_cast< int64_t >(predicate->get_arity());
-         add_full_state_relation(
-            predicate_relation_key(predicate), base_arity, RelationUsage::state
-         );
-         if(top_type_predicates.contains(predicate->get_name())) {
-            continue;
-         }
-         if(includes_plain_goal_derivation(config.goal_derivations)) {
-            for(size_t level = 0; level <= config.max_goal_level; ++level) {
-               const GoalLevel goal_level(level);
-               for(bool polarity : {true, false}) {
-                  add_root_only_relation(
-                     predicate_relation_key(predicate, polarity, goal_level),
-                     base_arity,
-                     RelationUsage::goal
-                  );
-               }
-            }
-         }
-         if(config.support_literals) {
-            for(bool polarity : {true, false}) {
-               auto relation_key = predicate_relation_key(predicate, polarity);
-               if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta) {
-                  add_delta_candidate_relation(relation_key, base_arity, RelationUsage::state);
-               } else {
-                  add_root_only_relation(relation_key, base_arity, RelationUsage::state);
-               }
-            }
-         }
-         for(const auto derivation : goal_satisfaction_derivations(config.goal_derivations)) {
-            const bool emitted_on_root = derivation == GoalDerivation::satisfied
-                                         || derivation == GoalDerivation::unsatisfied;
-            const bool emitted_on_delta_candidate = derivation == GoalDerivation::added_satisfied
-                                                    || derivation
-                                                          == GoalDerivation::added_unsatisfied;
-            const bool emitted_on_full_candidate = derivation == GoalDerivation::satisfied
-                                                   || derivation == GoalDerivation::unsatisfied;
-            if(emitted_on_root) {
-               for(size_t level = 0; level <= config.max_goal_level; ++level) {
-                  const GoalLevel goal_level(level);
-                  for(bool polarity : {true, false}) {
-                     add_root_only_relation(
-                        predicate_relation_key(predicate, polarity, goal_level, derivation),
-                        base_arity,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-               if(config.support_literals) {
-                  for(bool polarity : {true, false}) {
-                     add_root_only_relation(
-                        predicate_relation_key(predicate, polarity, std::nullopt, derivation),
-                        base_arity,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-            }
-            if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::full
-               && emitted_on_full_candidate && split_candidate_relations) {
-               for(size_t level = 0; level <= config.max_goal_level; ++level) {
-                  const GoalLevel goal_level(level);
-                  for(bool polarity : {true, false}) {
-                     register_relation(
-                        predicate_relation_key(
-                           predicate,
-                           polarity,
-                           goal_level,
-                           derivation,
-                           /*modifier=*/"",
-                           /*state_anchored=*/true
-                        ),
-                        base_arity + 1,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-               if(config.support_literals) {
-                  for(bool polarity : {true, false}) {
-                     register_relation(
-                        predicate_relation_key(
-                           predicate,
-                           polarity,
-                           std::nullopt,
-                           derivation,
-                           /*modifier=*/"",
-                           /*state_anchored=*/true
-                        ),
-                        base_arity + 1,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-            }
-            if(config.transition_mode == HorizonHGraphEncoderEngine::Mode::delta
-               && emitted_on_delta_candidate) {
-               for(size_t level = 0; level <= config.max_goal_level; ++level) {
-                  const GoalLevel goal_level(level);
-                  for(bool polarity : {true, false}) {
-                     add_delta_candidate_relation(
-                        predicate_relation_key(predicate, polarity, goal_level, derivation),
-                        base_arity,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-               if(config.support_literals) {
-                  for(bool polarity : {true, false}) {
-                     add_delta_candidate_relation(
-                        predicate_relation_key(predicate, polarity, std::nullopt, derivation),
-                        base_arity,
-                        RelationUsage::goal_satisfaction
-                     );
-                  }
-               }
-            }
-         }
-      }
-   };
-
-   collect_predicates(mimir::formalism::StaticTag{});
-   collect_predicates(mimir::formalism::FluentTag{});
-   collect_predicates(mimir::formalism::DerivedTag{});
-
-   if(not config.ignore_actions) {
-      for(const auto& action : domain.get_actions()) {
-         const auto arity = std::max< int64_t >(0, static_cast< int64_t >(action->get_arity()) + 1);
-         register_relation(action_schema_relation_key(*action), arity, RelationUsage::action);
-      }
-   }
-
-   return std::move(builder).finalize(
-      static_cast< int >(config.max_goal_level),
-      config.support_literals,
-      config.goal_derivations,
-      "HorizonHGraphEncoderEngine did not derive any relation types for this domain/config"
-   );
+   return result;
 }
 
 }  // namespace
 
-HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
-    : HGraphEncoderEngine(domain, normalize_horizon_config(Config{})),
-      horizon_config_(normalize_horizon_config(Config{}))
+SemanticHorizonHGraphEncoderConfig HorizonHGraphEncoderEngine::semantic_config(const Config& config)
 {
-   schema_ = build_horizon_schema(domain_, horizon_config_);
-   relation_dict_ = schema_.relation_dict();
-   configure_relations();
+   const auto base = base_config(config);
+   SemanticHorizonHGraphEncoderConfig result;
+   result.symbol_type_id = base.symbol_type_id;
+   result.target_symbol_prefix = base.target_symbol_prefix;
+   result.nullary_object_name = base.nullary_object_name;
+   result.lgan_tn_edge_pos = base.lgan_tn_edge_pos;
+   result.lgan_nn_edge_pos = base.lgan_nn_edge_pos;
+   result.lgan_rr_edge_pos = base.lgan_rr_edge_pos;
+   result.history_link_relation = base.history_link_relation;
+   result.max_goal_level = base.max_goal_level;
+   result.support_literals = base.support_literals;
+   result.add_nullary_predicates = base.add_nullary_predicates;
+   result.ignore_actions = base.ignore_actions;
+   result.include_lgan_edges = base.include_lgan_edges;
+   result.include_static = base.include_static;
+   result.include_empty_edge_types = base.include_empty_edge_types;
+   result.export_node_names = base.export_node_names;
+   result.allow_subgoal_layers_beyond_max_goal_level = true;
+   result.lgan_anchor_sources = base.lgan_anchor_sources;
+   result.target_sources = base.target_sources;
+   result.goal_derivations = base.goal_derivations;
+   result.transition_mode = config.transition_mode == Mode::delta    ? SemanticHorizonMode::delta
+                            : config.transition_mode == Mode::action ? SemanticHorizonMode::action
+                                                                     : SemanticHorizonMode::full;
+   result.parent_relation = config.parent_relation;
+   result.sibling_relation = config.sibling_relation;
+   result.cousin_relation = config.cousin_relation;
+   result.enable_parent_relation = config.enable_parent_relation;
+   result.enable_sibling_relation = config.enable_sibling_relation;
+   result.enable_cousin_relation = config.enable_cousin_relation;
+   result.root_policy = config.root_policy;
+   return result;
+}
+
+HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(const mimir::formalism::DomainImpl& domain)
+    : HorizonHGraphEncoderEngine(domain, Config{})
+{
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
-      horizon_config_(normalize_horizon_config(std::move(config)))
+    : HGraphEncoderEngine(domain, base_config(config)),
+      horizon_config_(std::move(config)),
+      semantic_horizon_(
+         std::make_unique< SemanticHorizonHGraphEncoderEngine >(
+            schema_.predicates,
+            schema_.actions,
+            semantic_config(horizon_config_)
+         )
+      )
 {
-   schema_ = build_horizon_schema(domain_, horizon_config_);
-   relation_dict_ = schema_.relation_dict();
-   configure_relations();
+   const auto base = base_config(horizon_config_);
+   relation_dict_.arity = semantic_horizon_->get_relation_arities();
+   relation_dict_.max_goal_level = static_cast< int >(base.max_goal_level);
+   relation_dict_.support_literals = base.support_literals;
+   relation_dict_.goal_derivations = base.goal_derivations;
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(mimir::formalism::Domain domain)
-    : HGraphEncoderEngine(std::move(domain), normalize_horizon_config(Config{})),
-      horizon_config_(normalize_horizon_config(Config{}))
+    : HorizonHGraphEncoderEngine(std::move(domain), Config{})
 {
-   schema_ = build_horizon_schema(domain_, horizon_config_);
-   relation_dict_ = schema_.relation_dict();
-   configure_relations();
 }
 
 HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
    mimir::formalism::Domain domain,
    Config config
 )
-    : HGraphEncoderEngine(domain, normalize_horizon_config(config)),
-      horizon_config_(normalize_horizon_config(std::move(config)))
+    : HGraphEncoderEngine(std::move(domain), base_config(config)),
+      horizon_config_(std::move(config)),
+      semantic_horizon_(
+         std::make_unique< SemanticHorizonHGraphEncoderEngine >(
+            schema_.predicates,
+            schema_.actions,
+            semantic_config(horizon_config_)
+         )
+      )
 {
-   schema_ = build_horizon_schema(domain_, horizon_config_);
-   relation_dict_ = schema_.relation_dict();
-   configure_relations();
+   const auto base = base_config(horizon_config_);
+   relation_dict_.arity = semantic_horizon_->get_relation_arities();
+   relation_dict_.max_goal_level = static_cast< int >(base.max_goal_level);
+   relation_dict_.support_literals = base.support_literals;
+   relation_dict_.goal_derivations = base.goal_derivations;
+}
+
+SemanticTransitionDAG HorizonHGraphEncoderEngine::materialize_dag(
+   const TransitionDAG& dag,
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const pymimir::hetero_bridge::Schema& schema,
+   const GoalInputs& goals
+)
+{
+   std::vector< SemanticTransitionDAG::Node > nodes;
+   nodes.reserve(dag.nodes().size());
+   const auto root_view_context = pymimir::views::make_context(dag.root().get_problem());
+   for(const auto& node : dag.nodes()) {
+      auto input = pymimir::hetero_bridge::state_input(context, node.state);
+      if(node.index == dag.root_index()) {
+         input = pymimir::hetero_bridge::input(context, node.state, goals);
+      }
+      SemanticTransitionDAG::Node semantic_node;
+      semantic_node.state = std::move(input);
+      semantic_node.index = node.index;
+      semantic_node.depth = node.depth;
+      std::ostringstream display_name;
+      display_name << node.state;
+      semantic_node.display_name = display_name.str();
+      if(node.action.has_value() and node.index != dag.root_index()) {
+         semantic_node.incoming_action = pymimir::hetero_bridge::materialize_action(
+            *node.action, root_view_context
+         );
+      }
+      semantic_node.candidate_id = node.candidate_id;
+      if(node.delta_literals.has_value()) {
+         std::vector< SemanticLiteral > literals;
+         for(const auto& literal : *node.delta_literals) {
+            std::visit(
+               [&](const auto& native) {
+                  literals.push_back(
+                     pymimir::hetero_bridge::materialize_literal(native, root_view_context)
+                  );
+               },
+               literal
+            );
+         }
+         semantic_node.delta_literals = std::move(literals);
+      }
+      nodes.push_back(std::move(semantic_node));
+   }
+   std::vector< SemanticTransitionDAG::Edge > edges;
+   for(const auto [parent, child] : dag.transitions()) {
+      edges.emplace_back(parent, child);
+   }
+   return SemanticTransitionDAG{
+      schema.predicates,
+      schema.actions,
+      std::move(nodes),
+      std::move(edges),
+      true,
+   };
 }
 
 void HorizonHGraphEncoderEngine::encode(
@@ -276,1249 +183,122 @@ void HorizonHGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   if(dag.root() != root) {
-      throw std::invalid_argument("dag root must match root state");
-   }
-   encode_impl(root, dag, goals, builder);
-}
-
-void HorizonHGraphEncoderEngine::update_relations(RelationDict relation_dict)
-{
-   HGraphEncoderEngine::update_relations(std::move(relation_dict));
-   configure_relations();
-}
-
-void HorizonHGraphEncoderEngine::encode_impl(
-   const mimir::search::State& root,
-   const TransitionDAG& dag,
-   const GoalInputs& goals,
-   BatchBuilder& builder,
-   std::vector< mimir::search::State >* batch_target_name_states
-)
-{
-   // Summary:
-   // 1. Create one target node per DAG node and encode each requested state view.
-   // 2. Add topology edges, target metadata, and optional LGAN edges.
-   // 3. Finalize the hetero graph while keeping plain objects separate from state targets.
-   auto& workspace = init_hetero_workspace(builder);
-   auto& node_indices = workspace.node_indices;
-   auto& node_names = workspace.node_names;
-   auto& relation_to_symbols = workspace.relation_to_symbols;
-   auto& symbol_to_relations = workspace.symbol_to_relations;
-
-   if(horizon_config_.transition_mode == Mode::delta and not config_.support_literals) {
-      throw std::invalid_argument("Delta horizon encoding requires support_literals=true.");
-   }
-   if(horizon_config_.transition_mode == Mode::action and config_.ignore_actions) {
-      throw std::invalid_argument("Action horizon encoding requires ignore_actions=false.");
-   }
-
-   // Phase 1: define the local helpers that emit one prefixed state view at a time.
-   auto make_prefix = [](const std::string& target_key) {
-      std::string prefix = target_key;
-      prefix.push_back(schema_key::kEdgeTypeSeparator);
-      return prefix;
-   };
-
-   // Helpers for horizon-specific encoding (extra_objects first, prefixed node keys)
-   auto encode_atoms_with_prefix = [&](
-                                      auto atoms,
-                                      int target_idx,
-                                      const std::string& prefix,
-                                      std::span< const std::string > extra_objects
-                                   ) {
-      hash_set< uint64_t > fact_keys;
-      for(const auto& atom : atoms) {
-         const auto predicate = atom->get_predicate();
-         if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
-            continue;
-         }
-         const std::string node_type = schema_.name_for(predicate_relation_key(
-            predicate,
-            std::nullopt,
-            std::nullopt,
-            std::nullopt,
-            /*modifier=*/"",
-            split_full_state_relations(horizon_config_) and not extra_objects.empty()
-         ));
-         const uint64_t node_key = pack_u32_u32(
-            static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
-         );
-         const std::string node_name = config_.export_node_names
-                                          ? (prefix + RelationFormatter::format_atom(atom))
-                                          : "";
-         const auto relation_idx = get_or_add_relation_node_u64(
-            node_type, node_key, builder, node_indices, node_names, node_name
-         );
-
-         std::vector< int64_t > object_symbol_ids;
-         if(predicate->get_arity() == 0) {
-            const auto nullary_idx = get_or_add_symbol_special_node(
-               config_.nullary_object_name, config_.nullary_object_name, builder, node_names
-            );
-            (void) nullary_idx;
-            object_symbol_ids.emplace_back(
-               get_or_assign_special_symbol_id(config_.nullary_object_name)
-            );
-         } else {
-            for(const auto& obj : atom->get_objects()) {
-               const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
-               (void) obj_idx;
-               object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
-            }
-         }
-
-         size_t pos = 0;
-         std::vector< int64_t > extra_symbol_ids;
-         extra_symbol_ids.reserve(extra_objects.size());
-         for(const auto& obj_key : extra_objects) {
-            const auto obj_idx = get_or_add_symbol_special_node(
-               obj_key, obj_key, builder, node_names
-            );
-            const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
-            extra_symbol_ids.emplace_back(symbol_id);
-            const std::string pos_str = std::to_string(pos++);
-            append_edges(
-               builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-            );
-            append_edges(
-               builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-            );
-         }
-
-         for(const auto symbol_id : object_symbol_ids) {
-            const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
-            const std::string pos_str = std::to_string(pos++);
-            append_edges(
-               builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-            );
-            append_edges(
-               builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-            );
-         }
-
-         const auto rel_ref = relation_ref_for(node_type, relation_idx);
-         track_relation_symbols_if_enabled(
-            rel_ref,
-            std::span{object_symbol_ids},
-            std::span{extra_symbol_ids},
-            relation_to_symbols,
-            symbol_to_relations
-         );
-         fact_keys.insert(node_key);
-      }
-      return fact_keys;
-   };
-
-   auto encode_state_facts_with_prefix = [&](
-                                            const mimir::search::State& state,
-                                            int target_idx,
-                                            const std::string& prefix,
-                                            std::span< const std::string > extra_objects,
-                                            bool include_static
-                                         ) {
-      hash_set< uint64_t > fact_keys;
-      const auto& problem = state.get_problem();
-      const auto& repos = problem.get_repositories();
-
-      if(include_static) {
-         const auto& literals = problem.get_initial_literals< mimir::formalism::StaticTag >();
-         for(const auto& literal : literals) {
-            if(not literal->get_polarity()) {
-               continue;
-            }
-            auto atom = literal->get_atom();
-            std::array< decltype(atom), 1 > atoms{atom};
-            auto keys = encode_atoms_with_prefix(
-               std::span{atoms}, target_idx, prefix, extra_objects
-            );
-            for(const auto& key : keys) {
-               fact_keys.insert(key);
-            }
-         }
-      }
-
-      const auto fluent_atoms = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-         state.get_atoms< mimir::formalism::FluentTag >()
-      );
-      auto fluent_keys = encode_atoms_with_prefix(
-         std::span{fluent_atoms}, target_idx, prefix, extra_objects
-      );
-      for(const auto& key : fluent_keys) {
-         fact_keys.insert(key);
-      }
-
-      const auto derived_atoms = repos
-                                    .get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-                                       state.get_atoms< mimir::formalism::DerivedTag >()
-                                    );
-      auto derived_keys = encode_atoms_with_prefix(
-         std::span{derived_atoms}, target_idx, prefix, extra_objects
-      );
-      for(const auto& key : derived_keys) {
-         fact_keys.insert(key);
-      }
-
-      return fact_keys;
-   };
-
-   auto encode_literals_with_prefix =
-      [&]< typename GoalTag >(
-         std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
-         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-         int target_idx,
-         const std::string& prefix,
-         std::span< const std::string > extra_objects,
-         std::optional< GoalDerivation > satisfaction_override = std::nullopt
-      ) {
-         for(const auto& literal : literals) {
-            const auto atom = literal->get_atom();
-            const auto predicate = atom->get_predicate();
-            const std::optional< size_t > goal_level = goal_levels.contains(literal)
-                                                          ? std::optional< size_t >(
-                                                               goal_levels.at(literal)
-                                                            )
-                                                          : std::nullopt;
-
-            const bool state_anchored = split_full_state_relations(horizon_config_)
-                                        and not extra_objects.empty();
-            std::string node_type;
-            std::string literal_name;
-            auto format_with = [&](auto level_arg, auto satisfaction_arg) {
-               node_type = schema_.name_for(predicate_relation_key(
-                  predicate,
-                  literal->get_polarity(),
-                  level_arg,
-                  satisfaction_arg,
-                  /*modifier=*/"",
-                  state_anchored
-               ));
-               if(config_.export_node_names) {
-                  literal_name = prefix
-                                 + RelationFormatter::format_literal< GoalTag >(
-                                    literal, level_arg, satisfaction_arg
-                                 );
-               }
-            };
-
-            if(goal_level.has_value()) {
-               const GoalLevel level(*goal_level);
-               if(satisfaction_override.has_value()) {
-                  format_with(level, *satisfaction_override);
-               } else {
-                  format_with(level, std::nullopt);
-               }
-            } else {
-               if(satisfaction_override.has_value()) {
-                  format_with(std::nullopt, *satisfaction_override);
-               } else {
-                  format_with(std::nullopt, std::nullopt);
-               }
-            }
-
-            const uint64_t relation_key = pack_u32_u32(
-               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
-            );
-            const auto relation_idx = get_or_add_relation_node_u64(
-               node_type, relation_key, builder, node_indices, node_names, literal_name
-            );
-
-            std::vector< int64_t > object_symbol_ids;
-            if(predicate->get_arity() == 0) {
-               if(not config_.add_nullary_predicates) {
-                  continue;
-               }
-               const auto nullary_idx = get_or_add_symbol_special_node(
-                  config_.nullary_object_name, config_.nullary_object_name, builder, node_names
-               );
-               (void) nullary_idx;
-               object_symbol_ids.emplace_back(
-                  get_or_assign_special_symbol_id(config_.nullary_object_name)
-               );
-            } else {
-               for(const auto& obj : atom->get_objects()) {
-                  const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
-                  (void) obj_idx;
-                  object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
-               }
-            }
-
-            size_t pos = 0;
-            std::vector< int64_t > extra_symbol_ids;
-            extra_symbol_ids.reserve(extra_objects.size());
-            for(const auto& obj_key : extra_objects) {
-               const auto obj_idx = get_or_add_symbol_special_node(
-                  obj_key, obj_key, builder, node_names
-               );
-               const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
-               extra_symbol_ids.emplace_back(symbol_id);
-               const std::string pos_str = std::to_string(pos++);
-               append_edges(
-                  builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-               );
-               append_edges(
-                  builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-               );
-            }
-            for(const auto symbol_id : object_symbol_ids) {
-               const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
-               const std::string pos_str = std::to_string(pos++);
-               append_edges(
-                  builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-               );
-               append_edges(
-                  builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-               );
-            }
-
-            const auto rel_ref = relation_ref_for(node_type, relation_idx);
-            track_relation_symbols_if_enabled(
-               rel_ref,
-               std::span{object_symbol_ids},
-               std::span{extra_symbol_ids},
-               relation_to_symbols,
-               symbol_to_relations
-            );
-         }
-      };
-
-   auto encode_literal_atom_with_prefix = [&](
-                                             auto atom,
-                                             bool polarity,
-                                             int target_idx,
-                                             const std::string& prefix,
-                                             std::span< const std::string > extra_objects
-                                          ) {
-      const auto predicate = atom->get_predicate();
-      if(predicate->get_arity() == 0 and not config_.add_nullary_predicates) {
-         return;
-      }
-
-      const std::string node_type = schema_.name_for(predicate_relation_key(
-         predicate,
-         polarity,
-         std::nullopt,
-         std::nullopt,
-         /*modifier=*/"",
-         split_full_state_relations(horizon_config_) and not extra_objects.empty()
-      ));
-      const std::string atom_str = RelationFormatter::format_atom(atom);
-      const std::string literal_str = fmt::format(
-         "{}{}", RelationFormatter::polarity_prefix(polarity), atom_str
-      );
-      const std::string node_name = config_.export_node_names ? (prefix + literal_str) : "";
-
-      const uint64_t relation_key = pack_u32_u32(
-         static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
-      );
-      const auto relation_idx = get_or_add_relation_node_u64(
-         node_type, relation_key, builder, node_indices, node_names, node_name
-      );
-
-      std::vector< int64_t > object_symbol_ids;
-      if(predicate->get_arity() == 0) {
-         const auto nullary_idx = get_or_add_symbol_special_node(
-            config_.nullary_object_name, config_.nullary_object_name, builder, node_names
-         );
-         (void) nullary_idx;
-         object_symbol_ids.emplace_back(
-            get_or_assign_special_symbol_id(config_.nullary_object_name)
-         );
-      } else {
-         for(const auto& obj : atom->get_objects()) {
-            const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
-            (void) obj_idx;
-            object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
-         }
-      }
-
-      size_t pos = 0;
-      std::vector< int64_t > extra_symbol_ids;
-      extra_symbol_ids.reserve(extra_objects.size());
-      for(const auto& obj_key : extra_objects) {
-         const auto obj_idx = get_or_add_symbol_special_node(obj_key, obj_key, builder, node_names);
-         const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
-         extra_symbol_ids.emplace_back(symbol_id);
-         const std::string pos_str = std::to_string(pos++);
-         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
-         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
-      }
-      for(const auto symbol_id : object_symbol_ids) {
-         const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
-         const std::string pos_str = std::to_string(pos++);
-         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
-         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
-      }
-
-      const auto rel_ref = relation_ref_for(node_type, relation_idx);
-      track_relation_symbols_if_enabled(
-         rel_ref,
-         std::span{object_symbol_ids},
-         std::span{extra_symbol_ids},
-         relation_to_symbols,
-         symbol_to_relations
-      );
-   };
-
-   auto encode_goal_satisfaction_with_prefix =
-      [&]< typename GoalTag >(
-         std::span< const mimir::formalism::GroundLiteral< GoalTag > > literals,
-         const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-         const hash_set< uint64_t >& fact_keys,
-         int target_idx,
-         const std::string& prefix,
-         std::span< const std::string > extra_objects
-      ) {
-         for(const auto& goal : literals) {
-            const auto atom = goal->get_atom();
-            const auto predicate = atom->get_predicate();
-            const auto key = pack_u32_u32(
-               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
-            );
-            const bool satisfied = fact_keys.contains(key) == goal->get_polarity();
-            const GoalDerivation sat = satisfied ? GoalDerivation::satisfied
-                                                 : GoalDerivation::unsatisfied;
-            if(not relation_dict_.goal_derivations.contains(sat)) {
-               continue;
-            }
-
-            std::optional< int > goal_level = goal_levels.contains(goal)
-                                                 ? std::optional< int >(goal_levels.at(goal))
-                                                 : std::nullopt;
-
-            const bool state_anchored = split_full_state_relations(horizon_config_)
-                                        and not extra_objects.empty();
-            std::string node_type;
-            std::string node_name;
-            if(goal_level.has_value()) {
-               const GoalLevel level(*goal_level);
-               node_type = schema_.name_for(predicate_relation_key(
-                  predicate, goal->get_polarity(), level, sat, "", state_anchored
-               ));
-               if(config_.export_node_names) {
-                  node_name = prefix
-                              + RelationFormatter::format_literal< GoalTag >(goal, level, sat);
-               }
-            } else {
-               node_type = schema_.name_for(predicate_relation_key(
-                  predicate, goal->get_polarity(), std::nullopt, sat, "", state_anchored
-               ));
-               if(config_.export_node_names) {
-                  node_name = prefix
-                              + RelationFormatter::format_literal< GoalTag >(
-                                 goal, std::nullopt, sat
-                              );
-               }
-            }
-
-            const uint64_t relation_key = pack_u32_u32(
-               static_cast< uint32_t >(target_idx), static_cast< uint32_t >(atom->get_index())
-            );
-            const auto relation_idx = get_or_add_relation_node_u64(
-               node_type, relation_key, builder, node_indices, node_names, node_name
-            );
-
-            std::vector< int64_t > object_symbol_ids;
-            if(predicate->get_arity() == 0) {
-               if(not config_.add_nullary_predicates) {
-                  continue;
-               }
-               const auto nullary_idx = get_or_add_symbol_special_node(
-                  config_.nullary_object_name, config_.nullary_object_name, builder, node_names
-               );
-               (void) nullary_idx;
-               object_symbol_ids.emplace_back(
-                  get_or_assign_special_symbol_id(config_.nullary_object_name)
-               );
-            } else {
-               for(const auto& obj : atom->get_objects()) {
-                  const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
-                  (void) obj_idx;
-                  object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
-               }
-            }
-
-            size_t pos = 0;
-            std::vector< int64_t > extra_symbol_ids;
-            extra_symbol_ids.reserve(extra_objects.size());
-            for(const auto& obj_key : extra_objects) {
-               const auto obj_idx = get_or_add_symbol_special_node(
-                  obj_key, obj_key, builder, node_names
-               );
-               const auto symbol_id = get_or_assign_special_symbol_id(obj_key);
-               extra_symbol_ids.emplace_back(symbol_id);
-               const std::string pos_str = std::to_string(pos++);
-               append_edges(
-                  builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-               );
-               append_edges(
-                  builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-               );
-            }
-            for(const auto symbol_id : object_symbol_ids) {
-               const auto obj_idx = workspace_.symbol_indices.at(symbol_id);
-               const std::string pos_str = std::to_string(pos++);
-               append_edges(
-                  builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx
-               );
-               append_edges(
-                  builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx
-               );
-            }
-
-            const auto rel_ref = relation_ref_for(node_type, relation_idx);
-            track_relation_symbols_if_enabled(
-               rel_ref,
-               std::span{object_symbol_ids},
-               std::span{extra_symbol_ids},
-               relation_to_symbols,
-               symbol_to_relations
-            );
-         }
-      };
-
-   auto encode_action_with_prefix = [&](
-                                       const mimir::formalism::GroundAction& action,
-                                       int target_idx,
-                                       const std::string& prefix,
-                                       std::span< const std::string > extra_objects
-                                    ) {
-      const std::string node_type = schema_.name_for(
-         action_schema_relation_key(*action->get_action())
-      );
-      const std::string node_name = config_.export_node_names
-                                       ? (prefix + RelationFormatter::format_action(action))
-                                       : "";
-      const uint64_t relation_key = pack_u32_u32(
-         static_cast< uint32_t >(target_idx), static_cast< uint32_t >(action->get_index())
-      );
-      const auto relation_idx = get_or_add_relation_node_u64(
-         node_type, relation_key, builder, node_indices, node_names, node_name
-      );
-
-      std::vector< int64_t > object_symbol_ids;
-      for(const auto& obj_key : extra_objects) {
-         const auto obj_idx = get_or_add_symbol_special_node(obj_key, obj_key, builder, node_names);
-         (void) obj_idx;
-         object_symbol_ids.emplace_back(get_or_assign_special_symbol_id(obj_key));
-      }
-      for(const auto& obj : action->get_objects()) {
-         const auto obj_idx = get_or_add_symbol_object_node(obj, builder, node_names);
-         (void) obj_idx;
-         object_symbol_ids.emplace_back(static_cast< int64_t >(obj->get_index()));
-      }
-
-      for(size_t pos = 0; pos < object_symbol_ids.size(); ++pos) {
-         const auto obj_idx = workspace_.symbol_indices.at(object_symbol_ids[pos]);
-         const std::string pos_str = std::to_string(pos);
-         append_edges(builder, config_.symbol_type_id, pos_str, node_type, obj_idx, relation_idx);
-         append_edges(builder, node_type, pos_str, config_.symbol_type_id, relation_idx, obj_idx);
-      }
-
-      const auto rel_ref = relation_ref_for(node_type, relation_idx);
-      track_relation_symbols_if_enabled(
-         rel_ref,
-         std::span{object_symbol_ids},
-         std::span< const int64_t >{},
-         relation_to_symbols,
-         symbol_to_relations
-      );
-   };
-
-   // Phase 2: create target nodes first, then encode the requested state views.
+   const bool include_root = root_in_target_metadata(horizon_config_.root_policy);
    const auto& nodes = dag.nodes();
-   const int root_index = dag.root_index();
-   std::vector< std::string > target_keys(nodes.size());
-   for(const auto& node : nodes) {
-      if(node.index >= static_cast< int >(target_keys.size())) {
-         target_keys.resize(node.index + 1);
-      }
-      const std::string key = target_node_key(node.index);
-      target_keys[node.index] = key;
-      get_or_add_symbol_special_node(key, key, builder, node_names);
-      if(config_.include_lgan_edges
-         and not(
-            not root_in_target_metadata(horizon_config_.root_policy) and node.index == root_index
-         )) {
-         const auto symbol_id_it = workspace.symbol_key_to_id.find(key);
-         if(symbol_id_it != workspace.symbol_key_to_id.end()) {
-            workspace.lgan_target_symbol_ids.insert(symbol_id_it->second);
-         }
-      }
+   const size_t first_target = include_root ? 0 : 1;
+   bool has_candidate_id = false;
+   for(size_t index = first_target; index < nodes.size(); ++index) {
+      has_candidate_id = has_candidate_id or nodes[index].candidate_id.has_value();
    }
-
-   // 2. Encode root state (objects then facts/goals)
-   encode_objects(root, builder, node_indices, node_names);
-   const bool attach_root_facts_to_root_symbol = root_in_state_relations(
-      horizon_config_.root_policy
-   );
-   const std::string root_prefix = attach_root_facts_to_root_symbol
-                                      ? make_prefix(target_keys[root_index])
-                                      : std::string(kHiddenRootPrefix);
-   const std::span< const std::string >
-      root_extra = attach_root_facts_to_root_symbol ? std::span{&target_keys[root_index], size_t{1}}
-                                                    : std::span< const std::string >{};
-
-   const auto root_fact_keys = encode_state_facts_with_prefix(
-      root, 0, root_prefix, root_extra, config_.include_static
-   );
-
-   if(includes_plain_goal_derivation(config_.goal_derivations)) {
-      encode_literals_with_prefix.template operator()< mimir::formalism::StaticTag >(
-         std::span{goals.static_goals}, goals.static_goal_levels, 0, root_prefix, root_extra
-      );
-      encode_literals_with_prefix.template operator()< mimir::formalism::FluentTag >(
-         std::span{goals.fluent_goals}, goals.fluent_goal_levels, 0, root_prefix, root_extra
-      );
-      encode_literals_with_prefix.template operator()< mimir::formalism::DerivedTag >(
-         std::span{goals.derived_goals}, goals.derived_goal_levels, 0, root_prefix, root_extra
-      );
-   }
-
-   if(has_non_plain_goal_derivations(config_.goal_derivations) and not goals.static_goals.empty()) {
-      encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
-         std::span{goals.static_goals},
-         goals.static_goal_levels,
-         root_fact_keys,
-         0,
-         root_prefix,
-         root_extra
-      );
-   }
-   if(has_non_plain_goal_derivations(config_.goal_derivations) and not goals.fluent_goals.empty()) {
-      encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
-         std::span{goals.fluent_goals},
-         goals.fluent_goal_levels,
-         root_fact_keys,
-         0,
-         root_prefix,
-         root_extra
-      );
-   }
-   if(has_non_plain_goal_derivations(config_.goal_derivations)
-      and not goals.derived_goals.empty()) {
-      encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::DerivedTag >(
-         std::span{goals.derived_goals},
-         goals.derived_goal_levels,
-         root_fact_keys,
-         0,
-         root_prefix,
-         root_extra
-      );
-   }
-
-   const bool encode_actions = (not config_.ignore_actions)
-                               or (horizon_config_.transition_mode == Mode::action);
-
-   // Precompute root atoms (no statics) for delta mode.
-   hash_set< int > root_fluent_indices;
-   hash_set< int > root_derived_indices;
-   const auto encode_provided_delta_literals = [&](
-                                                  const TransitionDAG::Node& node,
-                                                  const std::string& prefix,
-                                                  const auto& succ_extra,
-                                                  hash_set< int >& added_fluents,
-                                                  hash_set< int >& removed_fluents,
-                                                  hash_set< int >& added_derived,
-                                                  hash_set< int >& removed_derived
-                                               ) {
-      if(not node.delta_literals.has_value()) {
-         return false;
-      }
-      for(const auto& literal_variant : *node.delta_literals) {
-         std::visit(
-            [&]< typename Tag >(const mimir::formalism::GroundLiteral< Tag >& literal) {
-               const auto atom = literal->get_atom();
-               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
-                  return;
-               }
-               encode_literal_atom_with_prefix(
-                  atom, literal->get_polarity(), node.index, prefix, succ_extra
-               );
-               if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
-                  if(literal->get_polarity()) {
-                     added_fluents.insert(atom->get_index());
-                  } else {
-                     removed_fluents.insert(atom->get_index());
-                  }
-               } else if constexpr(std::is_same_v< Tag, mimir::formalism::DerivedTag >) {
-                  if(literal->get_polarity()) {
-                     added_derived.insert(atom->get_index());
-                  } else {
-                     removed_derived.insert(atom->get_index());
-                  }
-               }
-            },
-            literal_variant
-         );
-      }
-      return true;
-   };
-   if(horizon_config_.transition_mode == Mode::delta) {
-      const auto& repos = root.get_problem().get_repositories();
-      const auto root_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-         root.get_atoms< mimir::formalism::FluentTag >()
-      );
-      for(const auto& atom : root_fluents) {
-         root_fluent_indices.insert(atom->get_index());
-      }
-      const auto root_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-         root.get_atoms< mimir::formalism::DerivedTag >()
-      );
-      for(const auto& atom : root_derived) {
-         root_derived_indices.insert(atom->get_index());
-      }
-   }
-
-   // 3. Encode successors
-   for(const auto& node : nodes) {
-      if(node.index == 0) {
-         continue;
-      }
-      const std::string prefix = make_prefix(target_keys[node.index]);
-      const std::array< std::string, 1 > succ_extra{target_keys[node.index]};
-
-      if(horizon_config_.transition_mode == Mode::full) {
-         const auto succ_fact_keys = encode_state_facts_with_prefix(
-            node.state, node.index, prefix, succ_extra, false
-         );
-         if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
-         }
-         if(has_non_plain_goal_derivations(config_.goal_derivations)
-            and not goals.static_goals.empty()) {
-            encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::StaticTag >(
-               std::span{goals.static_goals},
-               goals.static_goal_levels,
-               succ_fact_keys,
-               node.index,
-               prefix,
-               succ_extra
+   if(has_candidate_id) {
+      for(size_t index = first_target; index < nodes.size(); ++index) {
+         if(not nodes[index].candidate_id.has_value()) {
+            throw std::invalid_argument(
+               "missing candidate_id for target node index " + std::to_string(nodes[index].index)
             );
          }
-         if(has_non_plain_goal_derivations(config_.goal_derivations)
-            and not goals.fluent_goals.empty()) {
-            encode_goal_satisfaction_with_prefix.template operator()< mimir::formalism::FluentTag >(
-               std::span{goals.fluent_goals},
-               goals.fluent_goal_levels,
-               succ_fact_keys,
-               node.index,
-               prefix,
-               succ_extra
-            );
-         }
-         if(has_non_plain_goal_derivations(config_.goal_derivations)
-            and not goals.derived_goals.empty()) {
-            encode_goal_satisfaction_with_prefix
-               .template operator()< mimir::formalism::DerivedTag >(
-                  std::span{goals.derived_goals},
-                  goals.derived_goal_levels,
-                  succ_fact_keys,
-                  node.index,
-                  prefix,
-                  succ_extra
-               );
-         }
-      } else if(horizon_config_.transition_mode == Mode::delta) {
-         hash_set< int > added_fluents;
-         hash_set< int > removed_fluents;
-         hash_set< int > added_derived;
-         hash_set< int > removed_derived;
-         const bool used_provided_delta = encode_provided_delta_literals(
-            node, prefix, succ_extra, added_fluents, removed_fluents, added_derived, removed_derived
-         );
-
-         if(not used_provided_delta) {
-            const auto& repos = node.state.get_problem().get_repositories();
-            const auto
-               succ_fluents = repos.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
-                  node.state.get_atoms< mimir::formalism::FluentTag >()
-               );
-            const auto
-               succ_derived = repos.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
-                  node.state.get_atoms< mimir::formalism::DerivedTag >()
-               );
-
-            hash_set< int > succ_fluent_indices;
-            for(const auto& atom : succ_fluents) {
-               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
-                  continue;
-               }
-               succ_fluent_indices.insert(atom->get_index());
-               if(not root_fluent_indices.contains(atom->get_index())) {
-                  added_fluents.insert(atom->get_index());
-                  encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
-               }
-            }
-            for(const auto& idx : root_fluent_indices) {
-               if(not succ_fluent_indices.contains(idx)) {
-                  removed_fluents.insert(idx);
-                  auto atom = repos.get_ground_atom< mimir::formalism::FluentTag >(idx);
-                  if(atom->get_predicate()->get_arity() == 0
-                     and not config_.add_nullary_predicates) {
-                     continue;
-                  }
-                  encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
-               }
-            }
-
-            hash_set< int > succ_derived_indices;
-            for(const auto& atom : succ_derived) {
-               if(atom->get_predicate()->get_arity() == 0 and not config_.add_nullary_predicates) {
-                  continue;
-               }
-               succ_derived_indices.insert(atom->get_index());
-               if(not root_derived_indices.contains(atom->get_index())) {
-                  added_derived.insert(atom->get_index());
-                  encode_literal_atom_with_prefix(atom, true, node.index, prefix, succ_extra);
-               }
-            }
-            for(const auto& idx : root_derived_indices) {
-               if(not succ_derived_indices.contains(idx)) {
-                  removed_derived.insert(idx);
-                  auto atom = repos.get_ground_atom< mimir::formalism::DerivedTag >(idx);
-                  if(atom->get_predicate()->get_arity() == 0
-                     and not config_.add_nullary_predicates) {
-                     continue;
-                  }
-                  encode_literal_atom_with_prefix(atom, false, node.index, prefix, succ_extra);
-               }
-            }
-         }
-
-         if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
-         }
-
-         if(has_non_plain_goal_derivations(relation_dict_.goal_derivations)) {
-            auto encode_delta_satisfaction =
-               [&]< typename GoalTag >(
-                  std::span< const mimir::formalism::GroundLiteral< GoalTag > > goal_list,
-                  const hash_map< mimir::formalism::GroundLiteral< GoalTag >, size_t >& goal_levels,
-                  const hash_set< int >& added_set,
-                  const hash_set< int >& removed_set
-               ) {
-                  for(const auto& goal : goal_list) {
-                     const auto atom = goal->get_atom();
-                     const auto idx = atom->get_index();
-                     const auto sat = delta_goal_satisfaction_derivation(
-                        goal->get_polarity(), added_set.contains(idx), removed_set.contains(idx)
-                     );
-                     if(not sat.has_value() or not relation_dict_.goal_derivations.contains(*sat)) {
-                        continue;
-                     }
-                     encode_literals_with_prefix.template operator()< GoalTag >(
-                        std::span{&goal, 1}, goal_levels, node.index, prefix, succ_extra, *sat
-                     );
-                  }
-               };
-
-            encode_delta_satisfaction.template operator()< mimir::formalism::StaticTag >(
-               std::span{goals.static_goals},
-               goals.static_goal_levels,
-               hash_set< int >{},
-               hash_set< int >{}
-            );
-            encode_delta_satisfaction.template operator()< mimir::formalism::FluentTag >(
-               std::span{goals.fluent_goals},
-               goals.fluent_goal_levels,
-               added_fluents,
-               removed_fluents
-            );
-            encode_delta_satisfaction.template operator()< mimir::formalism::DerivedTag >(
-               std::span{goals.derived_goals},
-               goals.derived_goal_levels,
-               added_derived,
-               removed_derived
-            );
-         }
-      } else if(horizon_config_.transition_mode == Mode::action) {
-         if(encode_actions and node.action.has_value()) {
-            encode_action_with_prefix(*node.action, node.index, prefix, succ_extra);
-         }
       }
    }
 
-   const bool exclude_root_topology = horizon_config_.root_policy == RootPolicy::exclude;
+   auto context = make_task_context(root);
+   auto semantic_dag = materialize_dag(dag, context, schema_, goals);
+   semantic_horizon_->encode(semantic_dag, builder);
+   if(not builder.lazy_target_name_strings.empty()) {
+      auto names = std::move(builder.lazy_target_name_strings);
+      builder.lazy_target_name_strings.clear();
+      builder.add_lazy_target_name_batch(
+         std::make_shared< OwnedTargetNameBatch >(std::move(names))
+      );
+   }
+}
 
-   // Phase 3: add topology relations between the already-encoded state nodes.
+void HorizonHGraphEncoderEngine::update_relations(RelationDict relation_dict_value)
+{
    if(horizon_config_.enable_parent_relation) {
-      for(const auto& pair : dag.transitions()) {
-         const int parent_idx = pair.first;
-         const int child_idx = pair.second;
-         if(exclude_root_topology && parent_idx == root_index) {
-            continue;
-         }
-         const uint64_t rel_key = pack_u32_u32(
-            static_cast< uint32_t >(parent_idx), static_cast< uint32_t >(child_idx)
-         );
-         const std::string rel_name = config_.export_node_names
-                                         ? fmt::format(
-                                              "{}({}->{})",
-                                              horizon_config_.parent_relation,
-                                              parent_idx,
-                                              child_idx
-                                           )
-                                         : "";
-         const auto rel_idx = get_or_add_relation_node_u64(
-            horizon_config_.parent_relation, rel_key, builder, node_indices, node_names, rel_name
-         );
-         const auto p_node = get_or_add_symbol_special_node(
-            target_keys[parent_idx], target_keys[parent_idx], builder, node_names
-         );
-         const auto c_node = get_or_add_symbol_special_node(
-            target_keys[child_idx], target_keys[child_idx], builder, node_names
-         );
-         append_edges(
-            builder, config_.symbol_type_id, "0", horizon_config_.parent_relation, p_node, rel_idx
-         );
-         append_edges(
-            builder, horizon_config_.parent_relation, "0", config_.symbol_type_id, rel_idx, p_node
-         );
-         append_edges(
-            builder, config_.symbol_type_id, "1", horizon_config_.parent_relation, c_node, rel_idx
-         );
-         append_edges(
-            builder, horizon_config_.parent_relation, "1", config_.symbol_type_id, rel_idx, c_node
-         );
-         if(config_.include_lgan_edges) {
-            const auto parent_symbol_id_it = workspace.symbol_key_to_id.find(
-               target_keys[parent_idx]
-            );
-            const auto child_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[child_idx]);
-            if(parent_symbol_id_it != workspace.symbol_key_to_id.end()
-               and child_symbol_id_it != workspace.symbol_key_to_id.end()) {
-               const std::array< int64_t, 2 > object_symbol_ids = {
-                  parent_symbol_id_it->second,
-                  child_symbol_id_it->second,
-               };
-               track_relation_symbols_if_enabled(
-                  relation_ref_for(horizon_config_.parent_relation, rel_idx),
-                  std::span{object_symbol_ids},
-                  std::span< const int64_t >{},
-                  relation_to_symbols,
-                  symbol_to_relations
-               );
-            }
-         }
-      }
+      relation_dict_value.arity[horizon_config_.parent_relation] = 2;
    }
-
-   // Extend the topology view with sibling and cousin edges when requested.
-   if(horizon_config_.enable_sibling_relation or horizon_config_.enable_cousin_relation) {
-      hash_map< int, std::vector< int > > parent_to_children;
-      for(const auto& pair : dag.transitions()) {
-         if(exclude_root_topology && pair.first == root_index) {
-            continue;
-         }
-         parent_to_children[pair.first].push_back(pair.second);
-      }
-
-      auto emplace_symmetric_relation = [&](const std::string& relation, int a, int b) {
-         for(int dir = 0; dir < 2; ++dir) {
-            int src = dir == 0 ? a : b;
-            int dst = dir == 0 ? b : a;
-            const uint64_t rel_key = pack_u32_u32(
-               static_cast< uint32_t >(src), static_cast< uint32_t >(dst)
-            );
-            const std::string rel_name = config_.export_node_names
-                                            ? fmt::format("{}({}->{})", relation, src, dst)
-                                            : "";
-            const auto rel_idx = get_or_add_relation_node_u64(
-               relation, rel_key, builder, node_indices, node_names, rel_name
-            );
-            const auto a_node = get_or_add_symbol_special_node(
-               target_keys[src], target_keys[src], builder, node_names
-            );
-            const auto b_node = get_or_add_symbol_special_node(
-               target_keys[dst], target_keys[dst], builder, node_names
-            );
-            append_edges(builder, config_.symbol_type_id, "0", relation, a_node, rel_idx);
-            append_edges(builder, relation, "0", config_.symbol_type_id, rel_idx, a_node);
-            append_edges(builder, config_.symbol_type_id, "1", relation, b_node, rel_idx);
-            append_edges(builder, relation, "1", config_.symbol_type_id, rel_idx, b_node);
-            if(config_.include_lgan_edges) {
-               const auto src_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[src]);
-               const auto dst_symbol_id_it = workspace.symbol_key_to_id.find(target_keys[dst]);
-               if(src_symbol_id_it != workspace.symbol_key_to_id.end()
-                  and dst_symbol_id_it != workspace.symbol_key_to_id.end()) {
-                  const std::array< int64_t, 2 > object_symbol_ids = {
-                     src_symbol_id_it->second,
-                     dst_symbol_id_it->second,
-                  };
-                  track_relation_symbols_if_enabled(
-                     relation_ref_for(relation, rel_idx),
-                     std::span{object_symbol_ids},
-                     std::span< const int64_t >{},
-                     relation_to_symbols,
-                     symbol_to_relations
-                  );
-               }
-            }
-         }
-      };
-
-      std::set< std::pair< int, int > > siblings_seen;
-      if(horizon_config_.enable_sibling_relation) {
-         for(auto& [_, children] : parent_to_children) {
-            std::sort(children.begin(), children.end());
-            for(size_t i = 0; i < children.size(); ++i) {
-               for(size_t j = i + 1; j < children.size(); ++j) {
-                  const int a = children[i];
-                  const int b = children[j];
-                  const auto pair = std::pair{a, b};
-                  if(siblings_seen.contains(pair)) {
-                     continue;
-                  }
-                  siblings_seen.insert(pair);
-                  emplace_symmetric_relation(horizon_config_.sibling_relation, a, b);
-               }
-            }
-         }
-      }
-
-      if(horizon_config_.enable_cousin_relation) {
-         std::set< std::pair< int, int > > cousins_seen;
-         for(const auto& [g, parents] : parent_to_children) {
-            std::vector< int > par = parents;
-            std::sort(par.begin(), par.end());
-            for(size_t i = 0; i < par.size(); ++i) {
-               for(size_t j = i + 1; j < par.size(); ++j) {
-                  const int pu = par[i];
-                  const int pv = par[j];
-                  const auto cu_it = parent_to_children.find(pu);
-                  const auto cv_it = parent_to_children.find(pv);
-                  if(cu_it == parent_to_children.end() or cv_it == parent_to_children.end()) {
-                     continue;
-                  }
-                  const auto& cu = cu_it->second;
-                  const auto& cv = cv_it->second;
-                  for(int u : cu) {
-                     for(int v : cv) {
-                        if(u == v) {
-                           continue;
-                        }
-                        const int a = std::min(u, v);
-                        const int b = std::max(u, v);
-                        const auto pair = std::pair{a, b};
-                        if(cousins_seen.contains(pair) or siblings_seen.contains(pair)) {
-                           continue;
-                        }
-                        cousins_seen.insert(pair);
-                        emplace_symmetric_relation(horizon_config_.cousin_relation, a, b);
-                     }
-                  }
-               }
-            }
-         }
-      }
+   if(horizon_config_.enable_sibling_relation) {
+      relation_dict_value.arity[horizon_config_.sibling_relation] = 2;
    }
-
-   // Phase 4: derive LGAN helper edges before target metadata is written.
-   maybe_add_lgan_edges(builder, workspace);
-
-   // Phase 5: collect state-target rows from the already-created symbol nodes.
-   TargetColumns target_columns;
-   std::vector< mimir::search::State > target_name_states;
-   const bool export_state_targets = has_target_source(TargetSource::states);
-   if(not nodes.empty()) {
-      const std::optional< int64_t > state_target_group_id = export_state_targets
-                                                                ? std::optional< int64_t >(
-                                                                     get_or_assign_target_group_id(
-                                                                        TargetSource::states
-                                                                     )
-                                                                  )
-                                                                : std::nullopt;
-      hash_map< int64_t, int64_t > target_positions_by_index;
-      target_positions_by_index.reserve(nodes.size());
-
-      for(const auto& node : nodes) {
-         if(not root_in_target_metadata(horizon_config_.root_policy) and node.index == root_index) {
-            continue;
-         }
-         const auto key = target_keys[node.index];
-         const auto id_it = workspace.symbol_key_to_id.find(key);
-         if(id_it == workspace.symbol_key_to_id.end()) {
-            continue;
-         }
-         const auto it = workspace.symbol_indices.find(id_it->second);
-         if(it == workspace.symbol_indices.end()) {
-            continue;
-         }
-         target_positions_by_index.emplace(node.index, it->second);
-      }
-
-      if(export_state_targets) {
-         const auto candidate_rows = pymimir_backend::collect_transition_dag_target_candidate_rows(
-            dag,
-            target_positions_by_index,
-            horizon_config_.root_policy,
-            state_target_group_id,
-            /*include_names=*/false
-         );
-         append_target_candidate_rows(
-            target_columns,
-            candidate_rows,
-            TargetCandidateAppendConfig{
-               .include_depth = true,
-               .include_group = true,
-               .missing_candidate_id_prefix = "missing candidate_id for target node index ",
-               .duplicate_candidate_id_prefix = "duplicate candidate_id ",
-            }
-         );
-         if(config_.export_node_names) {
-            target_name_states.reserve(candidate_rows.size());
-            for(const auto& node : nodes) {
-               if(not root_in_target_metadata(horizon_config_.root_policy)
-                  and node.index == root_index) {
-                  continue;
-               }
-               if(not target_positions_by_index.contains(node.index)) {
-                  continue;
-               }
-               target_name_states.push_back(node.state);
-            }
-         }
-      }
+   if(horizon_config_.enable_cousin_relation) {
+      relation_dict_value.arity[horizon_config_.cousin_relation] = 2;
    }
-
-   if(export_state_targets) {
-      // The target positions point at state symbol rows. Readout should gather the
-      // target embeddings from these positions instead of assuming a fixed tuple slot.
-      const TargetMetadataEmitConfig target_emit_config{
-         .position_node_type_id = config_.symbol_type_id,
-         .symbol_prefix = config_.target_symbol_prefix,
-         .include_depth = true,
-         .include_group = true,
-         .include_names = false,
-         .groups = workspace.target_groups,
-         .parent_relation = horizon_config_.parent_relation,
-      };
-      emit_target_metadata(builder, target_columns, target_emit_config);
-      if(config_.export_node_names) {
-         if(batch_target_name_states != nullptr) {
-            if(not target_name_states.empty()) {
-               batch_target_name_states->insert(
-                  batch_target_name_states->end(),
-                  target_name_states.begin(),
-                  target_name_states.end()
-               );
-            }
-         } else if(target_name_states.empty()) {
-            builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
-         } else {
-            pymimir_backend::add_deferred_state_names(builder, std::span(target_name_states));
-         }
-      }
-   }
-
-   // Phase 6: finalize the graph and keep plain objects separate from state-target rows.
-   std::vector< std::string > object_names_override;
-   const std::vector< std::string >* object_names_override_ptr = nullptr;
-   if(node_names.contains(config_.symbol_type_id)) {
-      const auto& symbol_names = node_names[config_.symbol_type_id];
-      if(target_keys.empty()) {
-         object_names_override = symbol_names;
-      } else {
-         hash_set< std::string > target_set;
-         target_set.reserve(target_keys.size());
-         for(const auto& key : target_keys) {
-            if(not key.empty()) {
-               target_set.insert(key);
-            }
-         }
-         object_names_override.reserve(symbol_names.size());
-         for(const auto& name : symbol_names) {
-            if(not target_set.contains(name)) {
-               object_names_override.push_back(name);
-            }
-         }
-      }
-      object_names_override_ptr = &object_names_override;
-   }
-
-   finalize_hetero_encoding(builder, workspace, object_names_override_ptr);
+   semantic_horizon_->update_relations(relation_dict_value.arity);
+   HGraphEncoderEngine::update_relations(std::move(relation_dict_value));
 }
 
 BatchBuilder::BatchEncoding HorizonHGraphEncoderEngine::encode_batch(
    const batch_input::parsed::HorizonBatchInputs& inputs
 )
 {
-   // Summary:
-   // 1. Read one batch item at a time and choose the given DAG or a default one-node DAG.
-   // 2. Normalize goals for the root state.
-   // 3. Encode each horizon graph into the shared hetero batch builder.
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
-   std::vector< mimir::search::State > batch_target_name_states;
-
-   const size_t state_count = inputs.roots.states.size();
-   for(size_t idx = 0; idx < state_count; ++idx) {
-      // Phase 1: collect one root state, one DAG, and the optional goal payloads.
-      const auto& root_entry = inputs.roots.states[idx];
-      const auto& dag_entry = inputs.dags.at(idx);
-      const auto& goals_entry = inputs.goals.at(idx);
-      const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
-
-      const TransitionDAG default_dag(root_entry.state);
-      const TransitionDAG& dag_ref = dag_entry.has_value() ? *dag_entry : default_dag;
-
-      // Phase 2: normalize goals for this root state.
-      GoalInputs goal_inputs;
-      if(goals_entry.has_value()) {
-         const auto* layers_ptr = subgoal_layers_entry.has_value() ? &(*subgoal_layers_entry)
-                                                                   : nullptr;
-         goal_inputs = batch_input::compose_goal_inputs(*goals_entry, layers_ptr);
-      } else {
-         goal_inputs = batch_input::default_goal_inputs_for_batch_state(root_entry);
-         if(subgoal_layers_entry.has_value()) {
-            size_t level = 1;
-            for(const auto& layer : *subgoal_layers_entry) {
-               goal_inputs.extend(layer, level);
-               ++level;
-            }
-         }
-      }
-
-      // Phase 3: encode one horizon graph and move to the next graph in the batch.
-      encode_impl(root_entry.state, dag_ref, goal_inputs, builder, &batch_target_name_states);
+   for(size_t index = 0; index < inputs.roots.states.size(); ++index) {
+      const auto& root = inputs.roots.states[index];
+      const auto dag_payload = inputs.dags.at(index);
+      TransitionDAG dag = dag_payload ? *dag_payload : TransitionDAG(root.state);
+      const auto goals_payload = inputs.goals.at(index);
+      const auto layers_payload = inputs.subgoal_layers.at(index);
+      const GoalInputs goals = goals_payload
+                                  ? batch_input::compose_goal_inputs(
+                                       *goals_payload, layers_payload ? &*layers_payload : nullptr
+                                    )
+                                  : batch_input::default_goal_inputs_for_batch_state(root);
+      encode(root.state, dag, goals, builder);
       builder.next_graph();
    }
-
-   if(config_.export_node_names) {
-      if(batch_target_name_states.empty()) {
-         builder.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
-      } else {
-         pymimir_backend::add_deferred_state_names(builder, std::span(batch_target_name_states));
-      }
-   }
-
    return builder.build();
 }
 
-void HorizonHGraphEncoderEngine::configure_relations()
+int64_t HorizonStreamEncoder::append(
+   const mimir::search::State& root,
+   const TransitionDAG& dag,
+   const GoalInputs& goals
+)
 {
-   if(horizon_config_.enable_parent_relation) {
-      register_relation_type(horizon_config_.parent_relation);
-   }
-   if(horizon_config_.enable_sibling_relation) {
-      register_relation_type(horizon_config_.sibling_relation);
-   }
-   if(horizon_config_.enable_cousin_relation) {
-      register_relation_type(horizon_config_.cousin_relation);
-   }
-
-   rebuild_all_edge_types();
+   return StreamEncoderBase::append(HorizonStepInput{.root = &root, .dag = &dag, .goals = &goals});
 }
 
-void HorizonHGraphEncoderEngine::register_relation_type(const std::string& relation)
+int64_t HorizonStreamEncoder::append(const mimir::search::State& root, const GoalInputs& goals)
 {
-   relation_dict_.arity[relation] = 2;
+   auto dag = std::make_shared< TransitionDAG >(root);
+   auto step = HorizonStepInput{
+      .root = &root, .dag = dag.get(), .goals = &goals, .owned_dag = std::move(dag)
+   };
+   return StreamEncoderBase::append(step);
 }
 
-std::string HorizonHGraphEncoderEngine::target_node_key(int idx) const
+void HorizonStreamEncoder::update(
+   int64_t id,
+   const mimir::search::State& root,
+   const TransitionDAG& dag,
+   const GoalInputs& goals
+)
 {
-   return fmt::format("{}{}", config_.target_symbol_prefix, idx);
+   StreamEncoderBase::update(id, HorizonStepInput{.root = &root, .dag = &dag, .goals = &goals});
+}
+
+void HorizonStreamEncoder::update(
+   int64_t id,
+   const mimir::search::State& root,
+   const GoalInputs& goals
+)
+{
+   auto dag = std::make_shared< TransitionDAG >(root);
+   StreamEncoderBase::update(
+      id,
+      HorizonStepInput{
+         .root = &root, .dag = dag.get(), .goals = &goals, .owned_dag = std::move(dag)
+      }
+   );
+}
+
+void HorizonStreamEncoder::encode_step(const HorizonStepInput& step, BatchBuilder& builder)
+{
+   if(engine_ == nullptr or step.root == nullptr or step.dag == nullptr or step.goals == nullptr) {
+      throw std::invalid_argument("HorizonStreamEncoder requires root/dag/goals");
+   }
+   engine_->encode(*step.root, *step.dag, *step.goals, builder);
 }
 
 }  // namespace mifrost

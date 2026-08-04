@@ -182,7 +182,8 @@ void validate_input(
    const auto& objects = semantic_objects(input);
    const auto& goals = semantic_goals(input);
    const auto& static_facts = semantic_static_facts(input);
-   if(input.subgoal_layers.size() > config.max_goal_level) {
+   if(not config.allow_subgoal_layers_beyond_max_goal_level
+      and input.subgoal_layers.size() > config.max_goal_level) {
       throw std::invalid_argument("subgoal layer exceeds max_goal_level");
    }
    std::set< std::string > object_names;
@@ -1537,22 +1538,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       const auto& root_objects = semantic_objects(root_input);
       const auto& root_static_facts = semantic_static_facts(root_input);
       auto workspace = initialize_workspace(builder);
-      for(size_t object = 0; object < root_objects.size(); ++object) {
-         object_node(workspace, static_cast< int64_t >(object), root_input, builder);
-      }
-      if(config.add_nullary_predicates) {
-         special_node(workspace, config.nullary_object_name, config.nullary_object_name, builder);
-      }
-      const std::vector< std::string >
-         physical_object_names = config.export_node_names
-                                    ? workspace.node_names[config.symbol_type_id]
-                                    : std::vector< std::string >{};
-
       const auto target_key = [&](int64_t index) {
          return config.target_symbol_prefix + std::to_string(index);
-      };
-      const auto prefix_for = [&](int64_t index) {
-         return target_key(index) + std::string(1, schema_key::kEdgeTypeSeparator);
       };
       for(const auto& node : nodes) {
          const auto key = target_key(node.index);
@@ -1562,6 +1549,25 @@ struct SemanticHGraphEncoderEngine::Impl {
             workspace.lgan_target_symbol_ids.insert(special_symbol_id(workspace, key));
          }
       }
+      for(size_t object = 0; object < root_objects.size(); ++object) {
+         object_node(workspace, static_cast< int64_t >(object), root_input, builder);
+      }
+      if(config.add_nullary_predicates) {
+         special_node(workspace, config.nullary_object_name, config.nullary_object_name, builder);
+      }
+      std::vector< std::string > physical_object_names;
+      if(config.export_node_names) {
+         physical_object_names.reserve(root_objects.size());
+         for(const auto& object : root_objects) {
+            physical_object_names.push_back(object);
+         }
+         if(config.add_nullary_predicates) {
+            physical_object_names.push_back(config.nullary_object_name);
+         }
+      }
+      const auto prefix_for = [&](int64_t index) {
+         return target_key(index) + std::string(1, schema_key::kEdgeTypeSeparator);
+      };
 
       const auto relation_node =
          [&](const std::string& type, const std::string& key, const std::string& name) {

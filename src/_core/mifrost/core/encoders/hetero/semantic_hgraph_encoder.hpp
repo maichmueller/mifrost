@@ -42,6 +42,7 @@ struct SemanticHGraphEncoderConfig {
    bool include_static = true;
    bool include_empty_edge_types = true;
    bool export_node_names = true;
+   bool allow_subgoal_layers_beyond_max_goal_level = false;
    std::set< TargetSource > lgan_anchor_sources = {};
    std::set< TargetSource > target_sources = {};
    std::set< GoalDerivation > goal_derivations = {
@@ -68,6 +69,7 @@ BOOST_DESCRIBE_STRUCT(
     include_static,
     include_empty_edge_types,
     export_node_names,
+    allow_subgoal_layers_beyond_max_goal_level,
     lgan_anchor_sources,
     target_sources,
     goal_derivations)

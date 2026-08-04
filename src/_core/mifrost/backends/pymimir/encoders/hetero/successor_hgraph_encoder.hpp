@@ -1,13 +1,12 @@
-/**
- * @file successor_hgraph_encoder.hpp
- * @brief Pymimir immediate-successor compatibility encoder.
- *
- * This file specializes the hetero encoder for a current state plus one
- * successor state instead of a full transition DAG.
- */
+/** Pymimir compatibility facade for the semantic successor HGraph engine. */
 #pragma once
 
+#include <boost/describe.hpp>
+#include <memory>
+#include <string>
+
 #include "hgraph_stream_encoder.hpp"
+#include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
 
 namespace mifrost {
 
@@ -17,19 +16,9 @@ struct SuccessorBatchInputs;
 }
 }  // namespace batch_input
 
-/**
- * @brief Encoder that handles state + immediate successor with delta or full representation.
- *
- * Logic mirrors plangolin.encoding.transition_hetero_encoder.TransitionHGraphEncoder.
- */
 class MIFROST_API SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
-   enum class Mode {
-      full,  ///< Successor encodes full state.
-      delta  ///< Successor encodes only changed literals (add/delete).
-   };
-
-   /// Runtime config for successor transition encoding.
+   enum class Mode { full, delta };
    struct Config: HGraphEncoderEngine::Config {
       Mode successor_mode = Mode::full;
       std::string successor_suffix = "[suc]";
@@ -41,35 +30,22 @@ class MIFROST_API SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
    SuccessorHGraphEncoderEngine(mimir::formalism::Domain domain);
    SuccessorHGraphEncoderEngine(mimir::formalism::Domain domain, Config config);
 
-   /**
-    * @brief Encode current state and its immediate successor.
-    */
    void encode(
       const mimir::search::State& current,
       const mimir::search::State& successor,
       const GoalInputs& goals,
       BatchBuilder& builder
    );
-
-   /// Encode a parsed batch input plan into one batch encoding.
    BatchBuilder::BatchEncoding encode_batch(
       const batch_input::parsed::SuccessorBatchInputs& inputs
    );
-
-   /// Return effective successor config (includes inherited hgraph fields).
-   const Config& get_config() const { return successor_config_; }
+   [[nodiscard]] const Config& get_config() const { return successor_config_; }
+   void update_relations(RelationDict relation_dict) override;
 
   private:
-   /// Effective successor-specific config.
+   static SemanticSuccessorHGraphEncoderConfig semantic_config(const Config& config);
    Config successor_config_;
-
-   /// Internal transition encode implementation.
-   void encode_impl(
-      const mimir::search::State& current,
-      const mimir::search::State& successor,
-      const GoalInputs& goals,
-      BatchBuilder& builder
-   );
+   std::unique_ptr< SemanticSuccessorHGraphEncoderEngine > semantic_successor_;
 };
 
 BOOST_DESCRIBE_STRUCT(
@@ -78,64 +54,32 @@ BOOST_DESCRIBE_STRUCT(
    (successor_mode, successor_suffix, include_successor_goal_satisfaction)
 )
 
-/**
- * @brief Payload for one streaming transition encode step.
- */
 struct TransitionStepInput {
    const mimir::search::State* current = nullptr;
    const mimir::search::State* successor = nullptr;
    const GoalInputs* goals = nullptr;
 };
 
-/**
- * @brief Streaming transition encoder with static dispatch.
- */
 class TransitionStreamEncoder:
     public StreamEncoderBase< TransitionStreamEncoder, TransitionStepInput > {
   public:
    static constexpr std::string_view graph_kind() { return "hetero"; }
-
    explicit TransitionStreamEncoder(SuccessorHGraphEncoderEngine& engine) : engine_(&engine)
    {
       reset();
    }
-
    int64_t append(
       const mimir::search::State& current,
       const mimir::search::State& successor,
       const GoalInputs& goals
-   )
-   {
-      TransitionStepInput step;
-      step.current = &current;
-      step.successor = &successor;
-      step.goals = &goals;
-      return StreamEncoderBase::append(step);
-   }
-
+   );
    void update(
       int64_t id,
       const mimir::search::State& current,
       const mimir::search::State& successor,
       const GoalInputs& goals
-   )
-   {
-      TransitionStepInput step;
-      step.current = &current;
-      step.successor = &successor;
-      step.goals = &goals;
-      StreamEncoderBase::update(id, step);
-   }
-
-   void encode_step(const TransitionStepInput& step, BatchBuilder& builder)
-   {
-      if(engine_ == nullptr or step.current == nullptr or step.successor == nullptr
-         or step.goals == nullptr) {
-         throw std::invalid_argument("TransitionStreamEncoder requires current/successor/goals");
-      }
-      // Successor streaming always needs both states and normalized goals.
-      engine_->encode(*step.current, *step.successor, *step.goals, builder);
-   }
+   );
+   void encode_step(const TransitionStepInput& step, BatchBuilder& builder);
 
   private:
    SuccessorHGraphEncoderEngine* engine_ = nullptr;

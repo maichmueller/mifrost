@@ -50,6 +50,13 @@ class MIFROST_API SemanticTransitionDAG {
       std::vector< Node > nodes,
       std::vector< Edge > edges
    );
+   SemanticTransitionDAG(
+      std::vector< SemanticPredicateSpec > predicates,
+      std::vector< SemanticActionSpec > actions,
+      std::vector< Node > nodes,
+      std::vector< Edge > edges,
+      bool allow_non_dag_topology
+   );
 
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& predicates() const
    {

@@ -47,6 +47,10 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       .def_rw("include_static", &SemanticHGraphEncoderConfig::include_static)
       .def_rw("include_empty_edge_types", &SemanticHGraphEncoderConfig::include_empty_edge_types)
       .def_rw("export_node_names", &SemanticHGraphEncoderConfig::export_node_names)
+      .def_rw(
+         "allow_subgoal_layers_beyond_max_goal_level",
+         &SemanticHGraphEncoderConfig::allow_subgoal_layers_beyond_max_goal_level
+      )
       .def_rw("lgan_anchor_sources", &SemanticHGraphEncoderConfig::lgan_anchor_sources)
       .def_rw("target_sources", &SemanticHGraphEncoderConfig::target_sources)
       .def_rw("goal_derivations", &SemanticHGraphEncoderConfig::goal_derivations);

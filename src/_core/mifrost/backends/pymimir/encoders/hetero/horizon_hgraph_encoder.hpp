@@ -1,16 +1,14 @@
-/**
- * @file horizon_hgraph_encoder.hpp
- * @brief Pymimir heterogeneous Horizon compatibility encoder.
- *
- * This file adds transition-DAG relations, root handling, and optional
- * topology edges between successor states.
- */
+/** Pymimir compatibility facade for the semantic Horizon HGraph engine. */
 #pragma once
+
+#include <boost/describe.hpp>
+#include <memory>
+#include <string>
 
 #include "hgraph_stream_encoder.hpp"
 #include "mifrost/backends/pymimir/encoders/common/transition_dag.hpp"
-#include "mifrost/core/encoders/common/default_relations.hpp"
 #include "mifrost/core/encoders/common/root_policy.hpp"
+#include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 
 namespace mifrost {
 
@@ -20,20 +18,9 @@ struct HorizonBatchInputs;
 }
 }  // namespace batch_input
 
-/**
- * @brief Encoder for lookahead transition graphs using the hetero graph format.
- *
- * Logic mirrors plangolin.encoding.horizon_hetero_encoder.HorizonHGraphEncoder.
- */
 class MIFROST_API HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
   public:
-   enum class Mode {
-      full,  ///< Each transition encodes full successor state.
-      delta,  ///< Each transition encodes only changed literals vs root.
-      action  ///< Only encodes actions, no state atoms for transitions.
-   };
-
-   /// Runtime config for horizon lookahead encoding.
+   enum class Mode { full, delta, action };
    struct Config: HGraphEncoderEngine::Config {
       Config() { target_sources = {TargetSource::states}; }
       Mode transition_mode = Mode::full;
@@ -51,45 +38,26 @@ class MIFROST_API HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    HorizonHGraphEncoderEngine(mimir::formalism::Domain domain);
    HorizonHGraphEncoderEngine(mimir::formalism::Domain domain, Config config);
 
-   /**
-    * @brief Encode a state and a DAG of lookahead transitions.
-    */
    void encode(
       const mimir::search::State& root,
       const TransitionDAG& dag,
       const GoalInputs& goals,
       BatchBuilder& builder
    );
-
-   /// Encode a parsed batch input plan into one batch encoding.
    BatchBuilder::BatchEncoding encode_batch(const batch_input::parsed::HorizonBatchInputs& inputs);
-
-   /// Return effective horizon config (includes inherited hgraph fields).
-   const Config& get_config() const { return horizon_config_; }
-
-   /// Replace relation dictionary and re-apply horizon-specific relation registrations.
-   void update_relations(RelationDict relation_dict);
+   [[nodiscard]] const Config& get_config() const { return horizon_config_; }
+   void update_relations(RelationDict relation_dict) override;
 
   private:
-   /// Effective horizon-specific config.
-   Config horizon_config_;
-
-   /// Internal lookahead encode implementation.
-   void encode_impl(
-      const mimir::search::State& root,
+   static SemanticHorizonHGraphEncoderConfig semantic_config(const Config& config);
+   static SemanticTransitionDAG materialize_dag(
       const TransitionDAG& dag,
-      const GoalInputs& goals,
-      BatchBuilder& builder,
-      std::vector< mimir::search::State >* batch_target_name_states = nullptr
+      const std::shared_ptr< const SemanticTaskContext >& context,
+      const pymimir::hetero_bridge::Schema& schema,
+      const GoalInputs& goals
    );
-
-   /// Register transition relation types based on config flags.
-   void configure_relations();
-   /// Register one transition relation in relation metadata.
-   void register_relation_type(const std::string& relation);
-
-   /// Build target-symbol node key for one transition node index.
-   [[nodiscard]] std::string target_node_key(int idx) const;
+   Config horizon_config_;
+   std::unique_ptr< SemanticHorizonHGraphEncoderEngine > semantic_horizon_;
 };
 
 BOOST_DESCRIBE_STRUCT(
@@ -105,76 +73,28 @@ BOOST_DESCRIBE_STRUCT(
     root_policy)
 )
 
-/**
- * @brief Payload for one streaming horizon encode step.
- */
 struct HorizonStepInput {
    const mimir::search::State* root = nullptr;
    const TransitionDAG* dag = nullptr;
    const GoalInputs* goals = nullptr;
+   std::shared_ptr< TransitionDAG > owned_dag;
 };
 
-/**
- * @brief Streaming horizon encoder with static dispatch.
- */
 class HorizonStreamEncoder: public StreamEncoderBase< HorizonStreamEncoder, HorizonStepInput > {
   public:
    static constexpr std::string_view graph_kind() { return "hetero"; }
-
    explicit HorizonStreamEncoder(HorizonHGraphEncoderEngine& engine) : engine_(&engine) { reset(); }
-
    int64_t
-   append(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
-   {
-      HorizonStepInput step;
-      step.root = &root;
-      step.dag = &dag;
-      step.goals = &goals;
-      return StreamEncoderBase::append(step);
-   }
-
-   int64_t append(const mimir::search::State& root, const GoalInputs& goals)
-   {
-      TransitionDAG dag(root);
-      HorizonStepInput step;
-      step.root = &root;
-      step.dag = &dag;
-      step.goals = &goals;
-      return StreamEncoderBase::append(step);
-   }
-
+   append(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals);
+   int64_t append(const mimir::search::State& root, const GoalInputs& goals);
    void update(
       int64_t id,
       const mimir::search::State& root,
       const TransitionDAG& dag,
       const GoalInputs& goals
-   )
-   {
-      HorizonStepInput step;
-      step.root = &root;
-      step.dag = &dag;
-      step.goals = &goals;
-      StreamEncoderBase::update(id, step);
-   }
-
-   void update(int64_t id, const mimir::search::State& root, const GoalInputs& goals)
-   {
-      TransitionDAG dag(root);
-      HorizonStepInput step;
-      step.root = &root;
-      step.dag = &dag;
-      step.goals = &goals;
-      StreamEncoderBase::update(id, step);
-   }
-
-   void encode_step(const HorizonStepInput& step, BatchBuilder& builder)
-   {
-      if(engine_ == nullptr or step.root == nullptr or step.dag == nullptr
-         or step.goals == nullptr) {
-         throw std::invalid_argument("HorizonStreamEncoder requires root/dag/goals");
-      }
-      engine_->encode(*step.root, *step.dag, *step.goals, builder);
-   }
+   );
+   void update(int64_t id, const mimir::search::State& root, const GoalInputs& goals);
+   void encode_step(const HorizonStepInput& step, BatchBuilder& builder);
 
   private:
    HorizonHGraphEncoderEngine* engine_ = nullptr;
