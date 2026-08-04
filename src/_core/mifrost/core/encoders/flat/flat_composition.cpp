@@ -746,9 +746,10 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
 
 void CompiledFlatPlan::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
 {
-   if(config_.pack_relation_args_relation_major) {
-      pack_flat_relation_args_relation_major(encoding, schema_plan_.relation_schema.arities());
-   }
+   FlatRelationMajorWriter writer(
+      schema_plan_.relation_schema.arities(), config_.pack_relation_args_relation_major
+   );
+   writer.finalize(encoding);
 }
 
 BatchBuilder::BatchEncoding FlatBatchRuntime::encode(const FlatInputView& input) const
@@ -929,6 +930,13 @@ FlatBatchParityResult compare_flat_batch_encodings(
       return parity_mismatch(*mismatch);
    }
    return FlatBatchParityResult{};
+}
+
+void FlatRelationMajorWriter::finalize(BatchBuilder::BatchEncoding& encoding) const
+{
+   if(enabled_) {
+      pack_flat_relation_args_relation_major(encoding, relation_arities_);
+   }
 }
 
 void FlatEncoderPlan::add_component(std::shared_ptr< FlatEmitterComponent > component)

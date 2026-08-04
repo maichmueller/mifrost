@@ -65,6 +65,11 @@ as a parity failure.  It is deliberately an exact comparison; normalization,
 sorting, or tolerance belongs in a test fixture only when the legacy contract
 explicitly permits it.
 
+`FlatRelationMajorWriter` is the shared finalization seam.  The semantic flat
+relation and horizon engines use the same writer as a composed plan, so
+relation-argument collation is not a second, subtly different implementation
+during migration.
+
 ## External downstream modes
 
 The six `concurrent_internal_*` modes and `FlatCompositeEncoderEngine` that

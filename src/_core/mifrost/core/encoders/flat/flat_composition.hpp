@@ -587,6 +587,26 @@ struct MIFROST_API FlatBatchParityResult {
    const BatchBuilder::BatchEncoding& actual
 );
 
+/**
+ * Shared relation-major finalizer used by composed and legacy flat encoders.
+ *
+ * It owns a copy of the compiled encoded arities, so a writer can be retained
+ * alongside an encoder plan without depending on a temporary schema view.
+ */
+class MIFROST_API FlatRelationMajorWriter {
+  public:
+   FlatRelationMajorWriter(std::span< const int64_t > relation_arities, bool enabled = true)
+       : relation_arities_(relation_arities.begin(), relation_arities.end()), enabled_(enabled)
+   {
+   }
+
+   void finalize(BatchBuilder::BatchEncoding& encoding) const;
+
+  private:
+   std::vector< int64_t > relation_arities_;
+   bool enabled_ = true;
+};
+
 /** Mutable component assembly; compilation freezes all symbolic lookups. */
 class MIFROST_API FlatEncoderPlan {
   public:

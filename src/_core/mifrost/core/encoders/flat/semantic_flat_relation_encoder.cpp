@@ -24,6 +24,7 @@
 #include "flat_tuple_layout.hpp"
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
+#include "mifrost/core/encoders/flat/flat_composition.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/semantic/semantic_transition_dag.hpp"
 
@@ -2042,9 +2043,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
    {
-      if(config.pack_relation_args_relation_major) {
-         pack_flat_relation_args_relation_major(encoding, std::span{schema_.arities()});
-      }
+      FlatRelationMajorWriter writer(
+         std::span{schema_.arities()}, config.pack_relation_args_relation_major
+      );
+      writer.finalize(encoding);
    }
 };
 
