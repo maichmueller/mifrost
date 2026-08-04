@@ -237,12 +237,18 @@ int64_t FlatNodePlan::index(FlatNodeTypeId type, std::string_view key) const
 
 int64_t FlatNodePlan::count(FlatNodeTypeId type) const
 {
+   if(schema_ == nullptr) {
+      throw std::logic_error("Flat node plan is not initialized");
+   }
    validate_node_type_id(*schema_, type);
    return static_cast< int64_t >(names_[static_cast< size_t >(type)].size());
 }
 
 const std::vector< std::string >& FlatNodePlan::names(FlatNodeTypeId type) const
 {
+   if(schema_ == nullptr) {
+      throw std::logic_error("Flat node plan is not initialized");
+   }
    validate_node_type_id(*schema_, type);
    return names_[static_cast< size_t >(type)];
 }

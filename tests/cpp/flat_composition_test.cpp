@@ -205,6 +205,15 @@ TEST(FlatCompositionTest, RejectsEmptyPlans)
    EXPECT_THROW((void) plan.compile(), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, RequiresConfiguredRelationArgumentOffsetNode)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FactsComponent >();
+   FlatCompositionConfig config;
+   config.relation_args_node_type = "vertex";
+   EXPECT_THROW((void) plan.compile(config), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
 {
    const auto contracts = flat_external_mode_contracts();
