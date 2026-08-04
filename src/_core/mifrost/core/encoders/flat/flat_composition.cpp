@@ -108,14 +108,17 @@ find_field(const std::vector< FlatFieldPlanEntry >& fields, std::string_view key
 
 bool is_reserved_flat_graph_attr(std::string_view key)
 {
-   constexpr std::array< std::string_view, 19 > reserved = {
-      kFlatEntityTypeAttr,         kIncludeLGANEdgesAttr,   kTargetSourcesAttr,
-      kLGANAnchorSourcesAttr,      kEntityRoleNamesAttr,    kRelationNamesAttr,
-      kRelationAritiesAttr,        kRelationSourcesAttr,    kRelationLogicalAritiesAttr,
-      kRelationEncodedAritiesAttr, kRelationSlotRolesAttr,  kRelationSlotRoleOffsetsAttr,
-      kSlotRoleNamesAttr,          kTargetEntityGroupsAttr, kTargetSymbolPrefixAttr,
-      kLGANTNEdgePosAttr,          kLGANNNEdgePosAttr,      kLGANRREdgePosAttr,
-      kRelationArgsLayoutAttr,
+   constexpr std::array< std::string_view, 20 > reserved = {
+      kFlatEntityTypeAttr,         kIncludeLGANEdgesAttr,
+      kTargetSourcesAttr,          kLGANAnchorSourcesAttr,
+      kEntityRoleNamesAttr,        kRelationNamesAttr,
+      kRelationAritiesAttr,        kRelationSourcesAttr,
+      kRelationLogicalAritiesAttr, kRelationEncodedAritiesAttr,
+      kRelationSlotRolesAttr,      kRelationSlotRoleOffsetsAttr,
+      kSlotRoleNamesAttr,          kTargetEntityGroupsAttr,
+      kTargetSymbolPrefixAttr,     kLGANTNEdgePosAttr,
+      kLGANNNEdgePosAttr,          kLGANRREdgePosAttr,
+      kRelationArgsLayoutAttr,     kUsePredicateVirtualNodesAttr,
    };
    return std::ranges::find(reserved, key) != reserved.end();
 }
