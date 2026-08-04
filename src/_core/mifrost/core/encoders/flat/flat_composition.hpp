@@ -432,7 +432,7 @@ class MIFROST_API FlatCompositionInputBuilder {
 
   private:
    const FlatRelationSchema& schema_;
-   std::span< const FlatRelationAlias > aliases_;
+   std::vector< FlatRelationAlias > aliases_;
    FlatCompositionInput input_;
 };
 
