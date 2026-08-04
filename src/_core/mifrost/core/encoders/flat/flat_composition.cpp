@@ -654,6 +654,29 @@ void FlatMetadataWriter::set_graph_attr(
    );
 }
 
+void FlatMetadataWriter::set_graph_attr(std::string_view key, int64_t value) const
+{
+   set_graph_attr(key, BatchBuilder::GraphAttrValue{value});
+}
+
+void FlatMetadataWriter::set_graph_attr(std::string_view key, std::string value) const
+{
+   set_graph_attr(key, BatchBuilder::GraphAttrValue{std::move(value)});
+}
+
+void FlatMetadataWriter::set_graph_attr(std::string_view key, std::vector< int64_t > value) const
+{
+   set_graph_attr(key, BatchBuilder::GraphAttrValue{std::move(value)});
+}
+
+void FlatMetadataWriter::set_graph_attr(
+   std::string_view key,
+   std::vector< std::string > value
+) const
+{
+   set_graph_attr(key, BatchBuilder::GraphAttrValue{std::move(value)});
+}
+
 FlatObjectNodeComponent::FlatObjectNodeComponent(
    std::string component_name,
    std::string node_type,
