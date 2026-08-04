@@ -1,6 +1,7 @@
 #include "flat_composition.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -10,6 +11,48 @@ namespace mifrost {
 
 namespace {
 
+constexpr std::array< FlatExternalModeContract, 6 > kExternalModeContracts = {{
+   {
+      FlatExternalMode::concurrent_internal,
+      "concurrent_internal",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::transition_effects,
+   },
+   {
+      FlatExternalMode::concurrent_internal_tree,
+      "concurrent_internal_tree",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::transition_effects | FlatExternalComponent::parent_relations,
+   },
+   {
+      FlatExternalMode::concurrent_internal_tree_rooted,
+      "concurrent_internal_tree_rooted",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::ground_actions | FlatExternalComponent::transition_effects
+         | FlatExternalComponent::parent_relations | FlatExternalComponent::root_action_nodes,
+   },
+   {
+      FlatExternalMode::concurrent_internal_comparison_tree,
+      "concurrent_internal_comparison_tree",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::transition_effects | FlatExternalComponent::parent_relations
+         | FlatExternalComponent::shared_state,
+   },
+   {
+      FlatExternalMode::concurrent_internal_action_tree,
+      "concurrent_internal_action_tree",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::ground_actions | FlatExternalComponent::parent_relations,
+   },
+   {
+      FlatExternalMode::concurrent_internal_action_hybrid_tree,
+      "concurrent_internal_action_hybrid_tree",
+      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
+         | FlatExternalComponent::ground_actions | FlatExternalComponent::transition_effects
+         | FlatExternalComponent::parent_relations,
+   },
+}};
+
 void validate_node_type_id(const FlatNodeSchema& schema, FlatNodeTypeId id)
 {
    if(id < 0 or static_cast< size_t >(id) >= schema.size()) {
@@ -17,7 +60,11 @@ void validate_node_type_id(const FlatNodeSchema& schema, FlatNodeTypeId id)
    }
 }
 
-void register_relation_runtime_fields(BatchBuilder& builder, size_t relation_count)
+void register_relation_runtime_fields(
+   BatchBuilder& builder,
+   size_t relation_count,
+   std::string_view relation_args_node_type
+)
 {
    builder.register_field(
       std::string(kRelationInstanceSizesField),
@@ -39,7 +86,7 @@ void register_relation_runtime_fields(BatchBuilder& builder, size_t relation_cou
          .dim = 1,
          .inc = GraphFieldInc{
             .kind = GraphFieldInc::Kind::NODE_OFFSET,
-            .node_type = std::string(kFlatEntityNodeType),
+            .node_type = std::string(relation_args_node_type),
          },
       }
    );
@@ -56,6 +103,20 @@ find_field(const std::vector< FlatFieldPlanEntry >& fields, std::string_view key
 }
 
 }  // namespace
+
+const FlatExternalModeContract& flat_external_mode_contract(FlatExternalMode mode)
+{
+   const auto it = std::ranges::find(kExternalModeContracts, mode, &FlatExternalModeContract::mode);
+   if(it == kExternalModeContracts.end()) {
+      throw std::invalid_argument("Unknown flat external mode");
+   }
+   return *it;
+}
+
+std::span< const FlatExternalModeContract > flat_external_mode_contracts()
+{
+   return kExternalModeContracts;
+}
 
 const FlatNodeTypeSpec& FlatNodeSchema::spec(FlatNodeTypeId id) const
 {
@@ -359,7 +420,7 @@ void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
       builder.register_field(field.key, field.spec);
    }
    if(config_.track_relation_instances or not schema_.names().empty()) {
-      register_relation_runtime_fields(builder, schema_.size());
+      register_relation_runtime_fields(builder, schema_.size(), config_.relation_args_node_type);
    }
 }
 
@@ -480,6 +541,13 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
 
    auto schema = std::move(schema_builder).finalize_schema(config);
    auto node_schema = std::move(schema_builder).finalize_nodes();
+   if(config.relation_args_node_type.empty()
+      or not node_schema.try_id_for(config.relation_args_node_type).has_value()) {
+      throw std::invalid_argument(
+         "Flat composition relation_args_node_type is not declared: "
+         + config.relation_args_node_type
+      );
+   }
 
    std::vector< CompiledFlatRelationProjection > projections;
    projections.reserve(schema_builder.projections().size());

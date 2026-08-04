@@ -194,5 +194,39 @@ TEST(FlatCompositionTest, RejectsEmptyPlans)
    EXPECT_THROW((void) plan.compile(), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
+{
+   const auto contracts = flat_external_mode_contracts();
+   ASSERT_EQ(contracts.size(), 6u);
+   EXPECT_EQ(contracts.front().name, "concurrent_internal");
+   EXPECT_EQ(contracts.back().name, "concurrent_internal_action_hybrid_tree");
+
+   const auto& rooted = flat_external_mode_contract(
+      FlatExternalMode::concurrent_internal_tree_rooted
+   );
+   EXPECT_NE(
+      rooted.required_components
+         & static_cast< uint32_t >(FlatExternalComponent::root_action_nodes),
+      0U
+   );
+   EXPECT_NE(
+      rooted.required_components & static_cast< uint32_t >(FlatExternalComponent::ground_actions),
+      0U
+   );
+
+   const auto& comparison = flat_external_mode_contract(
+      FlatExternalMode::concurrent_internal_comparison_tree
+   );
+   EXPECT_NE(
+      comparison.required_components & static_cast< uint32_t >(FlatExternalComponent::shared_state),
+      0U
+   );
+   EXPECT_EQ(
+      comparison.required_components
+         & static_cast< uint32_t >(FlatExternalComponent::ground_actions),
+      0U
+   );
+}
+
 }  // namespace
 }  // namespace mifrost

@@ -39,6 +39,61 @@ enum class FlatNodeKind : int8_t {
    depth,
 };
 
+/**
+ * Capability vocabulary used by the downstream composite-mode contract.
+ *
+ * These names describe what a downstream plan requires from Mifrost; they do
+ * not implement or claim ownership of the downstream encoders themselves.
+ */
+enum class FlatExternalComponent : uint32_t {
+   state_facts = 1U << 0U,
+   goal_facts = 1U << 1U,
+   ground_actions = 1U << 2U,
+   transition_effects = 1U << 3U,
+   parent_relations = 1U << 4U,
+   root_action_nodes = 1U << 5U,
+   shared_state = 1U << 6U,
+};
+
+[[nodiscard]] constexpr uint32_t operator|(FlatExternalComponent lhs, FlatExternalComponent rhs)
+{
+   return static_cast< uint32_t >(lhs) | static_cast< uint32_t >(rhs);
+}
+
+[[nodiscard]] constexpr uint32_t operator|(uint32_t lhs, FlatExternalComponent rhs)
+{
+   return lhs | static_cast< uint32_t >(rhs);
+}
+
+[[nodiscard]] constexpr uint32_t operator|(FlatExternalComponent lhs, uint32_t rhs)
+{
+   return static_cast< uint32_t >(lhs) | rhs;
+}
+
+enum class FlatExternalMode : int8_t {
+   concurrent_internal,
+   concurrent_internal_tree,
+   concurrent_internal_tree_rooted,
+   concurrent_internal_comparison_tree,
+   concurrent_internal_action_tree,
+   concurrent_internal_action_hybrid_tree,
+};
+
+struct FlatExternalModeContract {
+   FlatExternalMode mode;
+   std::string_view name;
+   uint32_t required_components;
+};
+
+/** Return the capability contract for one downstream composite mode. */
+[[nodiscard]] MIFROST_API const FlatExternalModeContract& flat_external_mode_contract(
+   FlatExternalMode mode
+);
+
+/** Return all six contracts in their stable downstream declaration order. */
+[[nodiscard]] MIFROST_API std::span< const FlatExternalModeContract >
+flat_external_mode_contracts();
+
 using FlatNodeTypeId = int32_t;
 
 /** A stable symbolic graph-local node reference. */
@@ -184,6 +239,8 @@ struct FlatCompositionConfig {
    std::set< GoalDerivation > goal_derivations;
    std::string empty_schema_error = "Flat composition plan declares no relations";
    FlatBuilderGraphConfig graph_config;
+   /// Node type whose graph-local offsets are applied to relation argument fields.
+   std::string relation_args_node_type = std::string(kFlatEntityNodeType);
    bool track_relation_instances = false;
    bool pack_relation_args_relation_major = true;
 };
