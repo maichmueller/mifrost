@@ -372,6 +372,22 @@ TEST(FlatCompositionTest, InputBuilderPrevalidatesCarrierIdentityAndArity)
    EXPECT_THROW(input.add_relation(99, std::array< int64_t, 1 >{0}), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, RejectsMultipleObjectNameMetadataOwners)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >("objects_a");
+   plan.emplace_component< FlatObjectNodeComponent >("objects_b");
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
 {
    FlatEncoderPlan plan;

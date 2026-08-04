@@ -220,12 +220,18 @@ struct FlatFieldPlanEntry {
    std::string owner;
 };
 
+/** Immutable ownership declarations for non-field graph metadata. */
+struct FlatMetadataPlan {
+   std::optional< std::string > object_names_owner;
+};
+
 /** Immutable compiled schema portion of a flat composition plan. */
 struct FlatSchemaPlan {
    FlatRelationSchema relation_schema;
    FlatNodeSchema node_schema;
    std::vector< FlatFieldPlanEntry > fields;
    std::vector< CompiledFlatRelationProjection > projections;
+   FlatMetadataPlan metadata;
 };
 
 /** Compile-time field declarations with explicit single-owner semantics. */
@@ -240,6 +246,19 @@ class MIFROST_API FlatFieldPlanBuilder {
    std::string owner_;
    std::vector< FlatFieldPlanEntry > entries_;
    std::unordered_map< std::string, size_t > index_by_key_;
+};
+
+/** Compile-time ownership declarations for non-field graph metadata. */
+class MIFROST_API FlatMetadataPlanBuilder {
+  public:
+   explicit FlatMetadataPlanBuilder(std::string owner) : owner_(std::move(owner)) {}
+
+   void claim_object_names();
+   [[nodiscard]] bool claims_object_names() const { return object_names_claimed_; }
+
+  private:
+   std::string owner_;
+   bool object_names_claimed_ = false;
 };
 
 struct FlatCompositionConfig {
@@ -314,6 +333,7 @@ class FlatFieldPlanBuilder;
 class FlatNodePlanBuilder;
 class FlatFieldWriter;
 class FlatMetadataWriter;
+class FlatMetadataPlanBuilder;
 
 /** One graph-local symbolic node supplied by a backend-neutral adapter. */
 struct FlatCompositionNodeRecord {
@@ -407,14 +427,15 @@ class MIFROST_API FlatEmitterComponent {
    virtual void prepare_graph(const FlatInputView&, FlatGraphContext&) const {}
    virtual void emit(const FlatInputView&, FlatGraphContext&) const {}
    virtual void write_fields(const FlatGraphContext&, FlatFieldWriter&) const {}
+   virtual void declare_metadata(FlatMetadataPlanBuilder&) const {}
    virtual void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const {}
 };
 
 /** Owner-scoped writer for non-field graph metadata emitted by a component. */
 class MIFROST_API FlatMetadataWriter {
   public:
-   FlatMetadataWriter(BatchBuilder& builder, std::string_view owner)
-       : builder_(builder), owner_(owner)
+   FlatMetadataWriter(BatchBuilder& builder, const FlatMetadataPlan& plan, std::string_view owner)
+       : builder_(builder), plan_(plan), owner_(owner)
    {
    }
 
@@ -422,6 +443,7 @@ class MIFROST_API FlatMetadataWriter {
 
   private:
    BatchBuilder& builder_;
+   const FlatMetadataPlan& plan_;
    std::string owner_;
 };
 
@@ -439,6 +461,7 @@ class MIFROST_API FlatObjectNodeComponent final: public FlatEmitterComponent {
    [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+   void declare_metadata(FlatMetadataPlanBuilder&) const override;
    void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const override;
 
   private:

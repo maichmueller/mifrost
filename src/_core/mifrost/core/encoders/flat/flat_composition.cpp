@@ -319,6 +319,16 @@ void FlatFieldPlanBuilder::register_field(std::string key, GraphFieldSpec spec)
    entries_.push_back(FlatFieldPlanEntry{std::move(key), spec, owner_});
 }
 
+void FlatMetadataPlanBuilder::claim_object_names()
+{
+   if(object_names_claimed_) {
+      throw std::invalid_argument(
+         "Flat object-name metadata was claimed twice by component '" + owner_ + "'"
+      );
+   }
+   object_names_claimed_ = true;
+}
+
 void FlatSchemaPlanBuilder::register_relation(
    RelationKey key,
    FlatTupleLayout layout,
@@ -469,6 +479,11 @@ void FlatCompositionInputBuilder::set_field(std::string key, NumericColumnData v
 
 void FlatMetadataWriter::set_object_names(std::vector< std::string > names) const
 {
+   if(not plan_.object_names_owner.has_value() or *plan_.object_names_owner != owner_) {
+      throw std::invalid_argument(
+         "Flat object-name metadata is not owned by component '" + owner_ + "'"
+      );
+   }
    builder_.set_object_names(std::move(names));
 }
 
@@ -509,6 +524,13 @@ void FlatObjectNodeComponent::plan_graph(
    const auto& composition = input.get< FlatCompositionInput >();
    for(const auto& object : composition.objects) {
       (void) builder.add_node(node_type_, object);
+   }
+}
+
+void FlatObjectNodeComponent::declare_metadata(FlatMetadataPlanBuilder& builder) const
+{
+   if(export_names_) {
+      builder.claim_object_names();
    }
 }
 
@@ -718,7 +740,7 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
       component->write_fields(context, writer);
    }
    for(const auto& component : components_) {
-      FlatMetadataWriter writer(builder, component->name());
+      FlatMetadataWriter writer(builder, schema_plan_.metadata, component->name());
       component->write_metadata(context, writer);
    }
 
@@ -984,6 +1006,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    FlatSchemaPlanBuilder schema_builder;
    std::vector< FlatFieldPlanEntry > fields;
    std::unordered_map< std::string, std::string > field_owners;
+   FlatMetadataPlan metadata_plan;
    for(const auto& component : components_) {
       component->declare_schema(schema_builder);
       FlatFieldPlanBuilder field_builder(std::string(component->name()));
@@ -997,6 +1020,17 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
          }
          field_owners.emplace(entry.key, entry.owner);
          fields.push_back(entry);
+      }
+      FlatMetadataPlanBuilder metadata_builder(std::string(component->name()));
+      component->declare_metadata(metadata_builder);
+      if(metadata_builder.claims_object_names()) {
+         if(metadata_plan.object_names_owner.has_value()) {
+            throw std::invalid_argument(
+               "Flat object-name metadata declared by both '" + *metadata_plan.object_names_owner
+               + "' and '" + std::string(component->name()) + "'"
+            );
+         }
+         metadata_plan.object_names_owner = std::string(component->name());
       }
    }
 
@@ -1074,6 +1108,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       .node_schema = std::move(node_schema),
       .fields = std::move(fields),
       .projections = std::move(projections),
+      .metadata = std::move(metadata_plan),
    };
    compiled.components_ = components_;
    compiled.config_ = std::move(config);

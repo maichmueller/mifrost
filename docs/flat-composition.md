@@ -49,6 +49,8 @@ carrier operations:
 Components can also implement `write_metadata()` through
 `FlatMetadataWriter`; this is the native path for object names and future
 graph-level metadata that is not a numeric graph field.
+Metadata declarations are compiled with single-owner checks, just like graph
+fields, so two components cannot silently overwrite object-name metadata.
 
 `FlatCompositionInput` is intentionally a carrier, not a semantic model.
 Backend adapters own object/action/goal interpretation and populate it.  They
