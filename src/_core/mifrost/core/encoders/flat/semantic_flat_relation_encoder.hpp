@@ -315,10 +315,6 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    friend class SemanticFlatHorizonEncoderEngine;
 
    void configure_horizon(const SemanticFlatHorizonEncoderConfig& config);
-   void prepare_horizon_builder(
-      BatchBuilder& builder,
-      const SemanticFlatHorizonEncoderConfig& config
-   ) const;
    void encode_horizon(
       const SemanticTransitionDAG& dag,
       const SemanticFlatHorizonEncoderConfig& config,

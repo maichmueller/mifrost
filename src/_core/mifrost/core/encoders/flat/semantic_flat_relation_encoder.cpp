@@ -1600,53 +1600,6 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                                       : -1;
    }
 
-   void prepare_horizon_builder(
-      BatchBuilder& builder,
-      const SemanticFlatHorizonEncoderConfig& horizon
-   ) const
-   {
-      const std::vector< std::string > groups = {
-         std::string(target_source_group_name(TargetSource::states))
-      };
-      set_flat_graph_attrs(
-         builder,
-         schema_.as_metadata(),
-         FlatBuilderGraphConfig{
-            .include_lgan_edges = horizon.include_lgan_edges,
-            .use_predicate_virtual_nodes = horizon.use_predicate_virtual_nodes,
-            .target_symbol_prefix = horizon.target_symbol_prefix,
-            .target_entity_group_names = groups,
-            .lgan_tn_edge_pos = horizon.lgan_tn_edge_pos,
-            .lgan_nn_edge_pos = horizon.lgan_nn_edge_pos,
-            .lgan_rr_edge_pos = horizon.lgan_rr_edge_pos,
-            .pack_relation_args_relation_major = horizon.pack_relation_args_relation_major,
-         }
-      );
-      register_flat_entity_fields(builder);
-      register_flat_target_entity_fields(builder);
-      builder.register_field(
-         std::string(kTargetSizesField),
-         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
-      );
-      const TargetMetadataEmitConfig target_config{
-         .position_node_type_id = std::string(kFlatEntityNodeType),
-         .symbol_prefix = horizon.target_symbol_prefix,
-         .include_depth = true,
-         .include_group = true,
-         .include_names = false,
-         .groups = groups,
-         .parent_relation = horizon.parent_relation,
-      };
-      register_target_fields(builder, target_config);
-      builder.set_graph_attr(std::string(kTargetGroupsAttr), groups);
-      builder.set_graph_attr(std::string(kTargetSymbolPrefixAttr), horizon.target_symbol_prefix);
-      builder.set_graph_attr(std::string(kParentRelationAttr), horizon.parent_relation);
-      register_flat_relation_instance_fields(builder, static_cast< int >(schema_.size()));
-      if(horizon.include_lgan_edges) {
-         register_flat_lgan_fields(builder);
-      }
-   }
-
    void validate_atom(const SemanticAtom& atom, size_t object_count, std::string_view lane) const
    {
       if(atom.predicate < 0 or static_cast< size_t >(atom.predicate) >= predicates.size()) {
@@ -3100,14 +3053,6 @@ void SemanticFlatRelationEncoderEngine::configure_horizon(
 )
 {
    impl_->configure_horizon(config);
-}
-
-void SemanticFlatRelationEncoderEngine::prepare_horizon_builder(
-   BatchBuilder& builder,
-   const SemanticFlatHorizonEncoderConfig& config
-) const
-{
-   impl_->prepare_horizon_builder(builder, config);
 }
 
 void SemanticFlatRelationEncoderEngine::encode_horizon(

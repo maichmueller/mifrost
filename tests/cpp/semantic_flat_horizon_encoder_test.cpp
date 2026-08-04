@@ -144,6 +144,31 @@ TEST(SemanticFlatHorizonEncoderEngineTest, BatchEncodingUsesCompiledPlanForRelat
    EXPECT_EQ(encoding.num_graphs, 2);
 }
 
+TEST(SemanticFlatHorizonEncoderEngineTest, EmptyBatchUsesCompiledSchemaPath)
+{
+   SemanticFlatHorizonEncoderEngine::Config config;
+   config.pack_relation_args_relation_major = true;
+   config.include_lgan_edges = true;
+   SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
+
+   const auto encoding = engine.encode_batch({});
+
+   EXPECT_EQ(encoding.num_graphs, 0);
+   EXPECT_EQ(
+      std::get< std::vector< std::string > >(
+         encoding.graph_attrs.at(std::string(kRelationNamesAttr))
+      ),
+      engine.get_relation_names()
+   );
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_attrs.at(std::string(kRelationAritiesAttr))
+      ),
+      engine.get_relation_arities()
+   );
+   EXPECT_TRUE(encoding.graph_fields.contains(std::string(kRelationCountsField)));
+}
+
 TEST(SemanticFlatHorizonEncoderEngineTest, ParityMatrixUsesCompiledPlanAcrossHorizonPolicies)
 {
    std::vector< SemanticFlatHorizonEncoderEngine::Config > configs;

@@ -97,14 +97,6 @@ BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode_batch(
    const std::vector< SemanticTransitionDAG >& dags
 ) const
 {
-   if(dags.empty()) {
-      BatchBuilder builder;
-      builder.set_graph_kind("flat");
-      impl_->flat.prepare_horizon_builder(builder, impl_->config);
-      auto encoding = builder.build();
-      finalize_batch_encoding(encoding);
-      return encoding;
-   }
    return impl_->flat.encode_horizon_composed_batch(dags, impl_->config);
 }
 
