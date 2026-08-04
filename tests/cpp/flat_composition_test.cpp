@@ -26,7 +26,7 @@ class FactsComponent final: public FlatEmitterComponent {
 
    void declare_schema(FlatSchemaPlanBuilder& builder) const override
    {
-      builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+      (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
       builder.register_relation(
          predicate_relation_key("fact"), unary_layout(), RelationUsage::state
       );
@@ -43,7 +43,7 @@ class FactsComponent final: public FlatEmitterComponent {
    void plan_graph(const FlatInputView& input, FlatNodePlanBuilder& builder) const override
    {
       for(const auto& object : input.get< DemoInput >().objects) {
-         builder.add_node("entity", object);
+         (void) builder.add_node("entity", object);
       }
    }
 
@@ -178,7 +178,7 @@ TEST(FlatCompositionTest, RejectsProjectionWithUnknownNodeType)
       [[nodiscard]] std::string_view name() const noexcept override { return "invalid"; }
       void declare_schema(FlatSchemaPlanBuilder& builder) const override
       {
-         builder.declare_node_type("entity");
+         (void) builder.declare_node_type("entity");
          builder.register_relation(
             predicate_relation_key("fact"), unary_layout(), RelationUsage::state
          );
