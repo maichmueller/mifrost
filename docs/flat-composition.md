@@ -102,20 +102,14 @@ relation and horizon engines use the same writer as a composed plan, so
 relation-argument collation is not a second, subtly different implementation
 during migration.
 
-## External downstream modes
+## Generic composition capabilities
 
-The six `concurrent_internal_*` modes and `FlatCompositeEncoderEngine` that
-motivated this layer are downstream consumers, not Mifrost classes.  The
-`FlatExternalModeContract` table records their required capabilities so a
-downstream adapter can compile a plan without reimplementing batching or
-schema logic.  It intentionally does not assert output parity: exact parity
-must be tested in the downstream repository against its legacy fixtures.  The
-Mifrost baseline remains the existing relation/horizon native and semantic
-encoder test suites.
-`flat_external_mode_satisfied()` and
-`flat_external_mode_missing_components()` let that adapter reject an incomplete
-assembly before encoding; they do not instantiate or claim to implement the
-downstream modes.
+Mifrost exposes only generic `FlatCompositionCapability` bits.  A downstream
+adapter may define its own named assemblies and validate them with
+`flat_composition_capabilities_satisfied()` or
+`flat_composition_missing_capabilities()`.  Mifrost does not publish
+downstream mode names or parity claims; exact mode parity belongs in the
+downstream repository.
 
 ## Compatibility and performance rules
 

@@ -1046,54 +1046,19 @@ TEST(FlatCompositionTest, EmptyBatchStillCarriesCompiledSchemaMetadata)
    EXPECT_TRUE(encoding.graph_fields.contains(std::string(kRelationCountsField)));
 }
 
-TEST(FlatCompositionTest, PublishesExternalModeCapabilityContract)
+TEST(FlatCompositionTest, ValidatesGenericCompositionCapabilities)
 {
-   const auto contracts = flat_external_mode_contracts();
-   ASSERT_EQ(contracts.size(), 6u);
-   EXPECT_EQ(contracts.front().name, "concurrent_internal");
-   EXPECT_EQ(contracts.back().name, "concurrent_internal_action_hybrid_tree");
-
-   const auto& rooted = flat_external_mode_contract(
-      FlatExternalMode::concurrent_internal_tree_rooted
-   );
-   EXPECT_NE(
-      rooted.required_components
-         & static_cast< uint32_t >(FlatExternalComponent::root_action_nodes),
-      0U
-   );
-   EXPECT_NE(
-      rooted.required_components & static_cast< uint32_t >(FlatExternalComponent::ground_actions),
-      0U
-   );
-
-   const auto& comparison = flat_external_mode_contract(
-      FlatExternalMode::concurrent_internal_comparison_tree
-   );
-   EXPECT_NE(
-      comparison.required_components & static_cast< uint32_t >(FlatExternalComponent::shared_state),
-      0U
-   );
-   EXPECT_EQ(
-      comparison.required_components
-         & static_cast< uint32_t >(FlatExternalComponent::ground_actions),
-      0U
-   );
-   EXPECT_TRUE(flat_external_mode_satisfied(
-      FlatExternalMode::concurrent_internal,
-      static_cast< uint32_t >(FlatExternalComponent::state_facts)
-         | static_cast< uint32_t >(FlatExternalComponent::goal_facts)
-         | static_cast< uint32_t >(FlatExternalComponent::transition_effects)
-   ));
-   const auto missing = flat_external_mode_missing_components(
-      FlatExternalMode::concurrent_internal_tree,
-      static_cast< uint32_t >(FlatExternalComponent::state_facts)
-         | static_cast< uint32_t >(FlatExternalComponent::goal_facts)
-   );
-   EXPECT_EQ(
-      missing,
-      static_cast< uint32_t >(FlatExternalComponent::transition_effects)
-         | static_cast< uint32_t >(FlatExternalComponent::parent_relations)
-   );
+   const auto required = static_cast< uint32_t >(FlatCompositionCapability::state_facts)
+                         | static_cast< uint32_t >(FlatCompositionCapability::goal_facts)
+                         | static_cast< uint32_t >(FlatCompositionCapability::transition_effects)
+                         | static_cast< uint32_t >(FlatCompositionCapability::parent_relations);
+   const auto available = static_cast< uint32_t >(FlatCompositionCapability::state_facts)
+                          | static_cast< uint32_t >(FlatCompositionCapability::goal_facts)
+                          | static_cast< uint32_t >(FlatCompositionCapability::transition_effects);
+   EXPECT_FALSE(flat_composition_capabilities_satisfied(required, available));
+   const auto missing = flat_composition_missing_capabilities(required, available);
+   EXPECT_EQ(missing, static_cast< uint32_t >(FlatCompositionCapability::parent_relations));
+   EXPECT_TRUE(flat_composition_capabilities_satisfied(required, required));
 }
 
 TEST(FlatCompositionTest, ProjectionResolvesSourceAndConstantSlots)

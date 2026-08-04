@@ -12,48 +12,6 @@ namespace mifrost {
 
 namespace {
 
-constexpr std::array< FlatExternalModeContract, 6 > kExternalModeContracts = {{
-   {
-      FlatExternalMode::concurrent_internal,
-      "concurrent_internal",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::transition_effects,
-   },
-   {
-      FlatExternalMode::concurrent_internal_tree,
-      "concurrent_internal_tree",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::transition_effects | FlatExternalComponent::parent_relations,
-   },
-   {
-      FlatExternalMode::concurrent_internal_tree_rooted,
-      "concurrent_internal_tree_rooted",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::ground_actions | FlatExternalComponent::transition_effects
-         | FlatExternalComponent::parent_relations | FlatExternalComponent::root_action_nodes,
-   },
-   {
-      FlatExternalMode::concurrent_internal_comparison_tree,
-      "concurrent_internal_comparison_tree",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::transition_effects | FlatExternalComponent::parent_relations
-         | FlatExternalComponent::shared_state,
-   },
-   {
-      FlatExternalMode::concurrent_internal_action_tree,
-      "concurrent_internal_action_tree",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::ground_actions | FlatExternalComponent::parent_relations,
-   },
-   {
-      FlatExternalMode::concurrent_internal_action_hybrid_tree,
-      "concurrent_internal_action_hybrid_tree",
-      FlatExternalComponent::state_facts | FlatExternalComponent::goal_facts
-         | FlatExternalComponent::ground_actions | FlatExternalComponent::transition_effects
-         | FlatExternalComponent::parent_relations,
-   },
-}};
-
 void validate_node_type_id(const FlatNodeSchema& schema, FlatNodeTypeId id)
 {
    if(id < 0 or static_cast< size_t >(id) >= schema.size()) {
@@ -181,30 +139,6 @@ void validate_composition_relations(
 }
 
 }  // namespace
-
-const FlatExternalModeContract& flat_external_mode_contract(FlatExternalMode mode)
-{
-   const auto it = std::ranges::find(kExternalModeContracts, mode, &FlatExternalModeContract::mode);
-   if(it == kExternalModeContracts.end()) {
-      throw std::invalid_argument("Unknown flat external mode");
-   }
-   return *it;
-}
-
-std::span< const FlatExternalModeContract > flat_external_mode_contracts()
-{
-   return kExternalModeContracts;
-}
-
-uint32_t flat_external_mode_missing_components(FlatExternalMode mode, uint32_t available_components)
-{
-   return flat_external_mode_contract(mode).required_components & ~available_components;
-}
-
-bool flat_external_mode_satisfied(FlatExternalMode mode, uint32_t available_components)
-{
-   return flat_external_mode_missing_components(mode, available_components) == 0U;
-}
 
 const FlatNodeTypeSpec& FlatNodeSchema::spec(FlatNodeTypeId id) const
 {

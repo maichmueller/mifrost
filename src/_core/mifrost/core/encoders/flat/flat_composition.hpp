@@ -44,12 +44,12 @@ enum class FlatNodeKind : int8_t {
 };
 
 /**
- * Capability vocabulary used by the downstream composite-mode contract.
+ * Generic capabilities that a composed flat encoder may provide or require.
  *
- * These names describe what a downstream plan requires from Mifrost; they do
- * not implement or claim ownership of the downstream encoders themselves.
+ * Named downstream modes are intentionally not part of this backend-neutral
+ * API. Adapters may define their own plans using these bits.
  */
-enum class FlatExternalComponent : uint32_t {
+enum class FlatCompositionCapability : uint32_t {
    state_facts = 1U << 0U,
    goal_facts = 1U << 1U,
    ground_actions = 1U << 2U,
@@ -59,52 +59,35 @@ enum class FlatExternalComponent : uint32_t {
    shared_state = 1U << 6U,
 };
 
-[[nodiscard]] constexpr uint32_t operator|(FlatExternalComponent lhs, FlatExternalComponent rhs)
+[[nodiscard]] constexpr uint32_t
+operator|(FlatCompositionCapability lhs, FlatCompositionCapability rhs)
 {
    return static_cast< uint32_t >(lhs) | static_cast< uint32_t >(rhs);
 }
 
-[[nodiscard]] constexpr uint32_t operator|(uint32_t lhs, FlatExternalComponent rhs)
+[[nodiscard]] constexpr uint32_t operator|(uint32_t lhs, FlatCompositionCapability rhs)
 {
    return lhs | static_cast< uint32_t >(rhs);
 }
 
-[[nodiscard]] constexpr uint32_t operator|(FlatExternalComponent lhs, uint32_t rhs)
+[[nodiscard]] constexpr uint32_t operator|(FlatCompositionCapability lhs, uint32_t rhs)
 {
    return static_cast< uint32_t >(lhs) | rhs;
 }
 
-enum class FlatExternalMode : int8_t {
-   concurrent_internal,
-   concurrent_internal_tree,
-   concurrent_internal_tree_rooted,
-   concurrent_internal_comparison_tree,
-   concurrent_internal_action_tree,
-   concurrent_internal_action_hybrid_tree,
-};
+/** Return capability bits required by a plan but not supplied by an adapter. */
+[[nodiscard]] constexpr uint32_t
+flat_composition_missing_capabilities(uint32_t required, uint32_t available)
+{
+   return required & ~available;
+}
 
-struct FlatExternalModeContract {
-   FlatExternalMode mode;
-   std::string_view name;
-   uint32_t required_components;
-};
-
-/** Return the capability contract for one downstream composite mode. */
-[[nodiscard]] MIFROST_API const FlatExternalModeContract& flat_external_mode_contract(
-   FlatExternalMode mode
-);
-
-/** Return all six contracts in their stable downstream declaration order. */
-[[nodiscard]] MIFROST_API std::span< const FlatExternalModeContract >
-flat_external_mode_contracts();
-
-/** Return true when an external adapter has every capability required by a mode. */
-[[nodiscard]] MIFROST_API bool
-flat_external_mode_satisfied(FlatExternalMode mode, uint32_t available_components);
-
-/** Return the missing capability bits for an external mode assembly. */
-[[nodiscard]] MIFROST_API uint32_t
-flat_external_mode_missing_components(FlatExternalMode mode, uint32_t available_components);
+/** Return true when an adapter supplies every capability required by a plan. */
+[[nodiscard]] constexpr bool
+flat_composition_capabilities_satisfied(uint32_t required, uint32_t available)
+{
+   return flat_composition_missing_capabilities(required, available) == 0U;
+}
 
 using FlatNodeTypeId = int32_t;
 

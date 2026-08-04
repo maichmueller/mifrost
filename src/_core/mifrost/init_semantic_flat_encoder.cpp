@@ -106,51 +106,26 @@ SemanticFlatRelationInput make_compact_semantic_input(
 
 void init_semantic_flat_encoder(nb::module_& m)
 {
-   nb::enum_< FlatExternalComponent >(m, "FlatExternalComponent")
-      .value("state_facts", FlatExternalComponent::state_facts)
-      .value("goal_facts", FlatExternalComponent::goal_facts)
-      .value("ground_actions", FlatExternalComponent::ground_actions)
-      .value("transition_effects", FlatExternalComponent::transition_effects)
-      .value("parent_relations", FlatExternalComponent::parent_relations)
-      .value("root_action_nodes", FlatExternalComponent::root_action_nodes)
-      .value("shared_state", FlatExternalComponent::shared_state);
+   nb::enum_< FlatCompositionCapability >(m, "FlatCompositionCapability")
+      .value("state_facts", FlatCompositionCapability::state_facts)
+      .value("goal_facts", FlatCompositionCapability::goal_facts)
+      .value("ground_actions", FlatCompositionCapability::ground_actions)
+      .value("transition_effects", FlatCompositionCapability::transition_effects)
+      .value("parent_relations", FlatCompositionCapability::parent_relations)
+      .value("root_action_nodes", FlatCompositionCapability::root_action_nodes)
+      .value("shared_state", FlatCompositionCapability::shared_state);
 
-   nb::enum_< FlatExternalMode >(m, "FlatExternalMode")
-      .value("concurrent_internal", FlatExternalMode::concurrent_internal)
-      .value("concurrent_internal_tree", FlatExternalMode::concurrent_internal_tree)
-      .value("concurrent_internal_tree_rooted", FlatExternalMode::concurrent_internal_tree_rooted)
-      .value(
-         "concurrent_internal_comparison_tree",
-         FlatExternalMode::concurrent_internal_comparison_tree
-      )
-      .value("concurrent_internal_action_tree", FlatExternalMode::concurrent_internal_action_tree)
-      .value(
-         "concurrent_internal_action_hybrid_tree",
-         FlatExternalMode::concurrent_internal_action_hybrid_tree
-      );
-
-   nb::class_< FlatExternalModeContract >(m, "FlatExternalModeContract")
-      .def_ro("mode", &FlatExternalModeContract::mode)
-      .def_prop_ro(
-         "name", [](const FlatExternalModeContract& contract) { return std::string(contract.name); }
-      )
-      .def_ro("required_components", &FlatExternalModeContract::required_components);
-   m.def("flat_external_mode_contract", &flat_external_mode_contract, "mode"_a);
-   m.def("flat_external_mode_contracts", [] {
-      const auto contracts = flat_external_mode_contracts();
-      return std::vector< FlatExternalModeContract >(contracts.begin(), contracts.end());
-   });
    m.def(
-      "flat_external_mode_satisfied",
-      &flat_external_mode_satisfied,
-      "mode"_a,
-      "available_components"_a
+      "flat_composition_capabilities_satisfied",
+      &flat_composition_capabilities_satisfied,
+      "required"_a,
+      "available"_a
    );
    m.def(
-      "flat_external_mode_missing_components",
-      &flat_external_mode_missing_components,
-      "mode"_a,
-      "available_components"_a
+      "flat_composition_missing_capabilities",
+      &flat_composition_missing_capabilities,
+      "required"_a,
+      "available"_a
    );
 
    nb::enum_< GoalDerivation >(m, "GoalDerivation")
