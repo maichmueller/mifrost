@@ -219,6 +219,14 @@ struct FlatFieldPlanEntry {
    std::string owner;
 };
 
+/** Immutable compiled schema portion of a flat composition plan. */
+struct FlatSchemaPlan {
+   FlatRelationSchema relation_schema;
+   FlatNodeSchema node_schema;
+   std::vector< FlatFieldPlanEntry > fields;
+   std::vector< CompiledFlatRelationProjection > projections;
+};
+
 /** Compile-time field declarations with explicit single-owner semantics. */
 class MIFROST_API FlatFieldPlanBuilder {
   public:
@@ -355,12 +363,16 @@ class MIFROST_API CompiledFlatPlan {
   public:
    CompiledFlatPlan() = default;
 
-   [[nodiscard]] const FlatRelationSchema& schema() const { return schema_; }
-   [[nodiscard]] const FlatNodeSchema& node_schema() const { return node_schema_; }
-   [[nodiscard]] const std::vector< FlatFieldPlanEntry >& fields() const { return fields_; }
+   [[nodiscard]] const FlatSchemaPlan& schema_plan() const { return schema_plan_; }
+   [[nodiscard]] const FlatRelationSchema& schema() const { return schema_plan_.relation_schema; }
+   [[nodiscard]] const FlatNodeSchema& node_schema() const { return schema_plan_.node_schema; }
+   [[nodiscard]] const std::vector< FlatFieldPlanEntry >& fields() const
+   {
+      return schema_plan_.fields;
+   }
    [[nodiscard]] const std::vector< CompiledFlatRelationProjection >& projections() const
    {
-      return projections_;
+      return schema_plan_.projections;
    }
    [[nodiscard]] const FlatCompositionConfig& config() const { return config_; }
 
@@ -373,11 +385,8 @@ class MIFROST_API CompiledFlatPlan {
 
   private:
    friend class FlatEncoderPlan;
-   FlatRelationSchema schema_;
-   FlatNodeSchema node_schema_;
-   std::vector< FlatFieldPlanEntry > fields_;
+   FlatSchemaPlan schema_plan_;
    std::vector< std::shared_ptr< FlatEmitterComponent > > components_;
-   std::vector< CompiledFlatRelationProjection > projections_;
    FlatCompositionConfig config_;
 
    void configure_builder(BatchBuilder& builder) const;

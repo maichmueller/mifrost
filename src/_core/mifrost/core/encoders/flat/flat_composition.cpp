@@ -412,15 +412,17 @@ void FlatFieldWriter::set(std::string_view key, std::span< const float > values)
 
 void CompiledFlatPlan::configure_builder(BatchBuilder& builder) const
 {
-   set_flat_graph_attrs(builder, schema_.as_metadata(), config_.graph_config);
-   for(const auto& spec : node_schema_.specs()) {
+   set_flat_graph_attrs(builder, schema_plan_.relation_schema.as_metadata(), config_.graph_config);
+   for(const auto& spec : schema_plan_.node_schema.specs()) {
       builder.set_node_feature_dim(spec.name, spec.feature_dim);
    }
-   for(const auto& field : fields_) {
+   for(const auto& field : schema_plan_.fields) {
       builder.register_field(field.key, field.spec);
    }
-   if(config_.track_relation_instances or not schema_.names().empty()) {
-      register_relation_runtime_fields(builder, schema_.size(), config_.relation_args_node_type);
+   if(config_.track_relation_instances or not schema_plan_.relation_schema.names().empty()) {
+      register_relation_runtime_fields(
+         builder, schema_plan_.relation_schema.size(), config_.relation_args_node_type
+      );
    }
 }
 
@@ -428,13 +430,13 @@ void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder)
 {
    configure_builder(builder);
 
-   FlatNodePlanBuilder node_builder(node_schema_);
+   FlatNodePlanBuilder node_builder(schema_plan_.node_schema);
    for(const auto& component : components_) {
       component->plan_graph(input, node_builder);
    }
    auto node_plan = std::move(node_builder).finish();
-   for(size_t node_type = 0; node_type < node_schema_.size(); ++node_type) {
-      const auto& spec = node_schema_.spec(static_cast< FlatNodeTypeId >(node_type));
+   for(size_t node_type = 0; node_type < schema_plan_.node_schema.size(); ++node_type) {
+      const auto& spec = schema_plan_.node_schema.spec(static_cast< FlatNodeTypeId >(node_type));
       builder.add_nodes(spec.name, node_plan.count(static_cast< FlatNodeTypeId >(node_type)));
       if(spec.export_names
          and not node_plan.names(static_cast< FlatNodeTypeId >(node_type)).empty()) {
@@ -444,8 +446,10 @@ void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder)
       }
    }
 
-   FlatRelationSink sink(schema_.size(), config_.track_relation_instances);
-   FlatGraphContext context{input, schema_, node_plan, sink, projections_};
+   FlatRelationSink sink(schema_plan_.relation_schema.size(), config_.track_relation_instances);
+   FlatGraphContext context{
+      input, schema_plan_.relation_schema, node_plan, sink, schema_plan_.projections
+   };
    for(const auto& component : components_) {
       component->prepare_graph(input, context);
    }
@@ -453,7 +457,7 @@ void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder)
       component->emit(input, context);
    }
    for(const auto& component : components_) {
-      FlatFieldWriter writer(builder, fields_, component->name());
+      FlatFieldWriter writer(builder, schema_plan_.fields, component->name());
       component->write_fields(context, writer);
    }
 
@@ -493,7 +497,7 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
 void CompiledFlatPlan::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
 {
    if(config_.pack_relation_args_relation_major) {
-      pack_flat_relation_args_relation_major(encoding, schema_.arities());
+      pack_flat_relation_args_relation_major(encoding, schema_plan_.relation_schema.arities());
    }
 }
 
@@ -561,6 +565,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       }
    }
 
+   const auto projection_declarations = schema_builder.projections();
    auto schema = std::move(schema_builder).finalize_schema(config);
    auto node_schema = std::move(schema_builder).finalize_nodes();
    if(config.relation_args_node_type.empty()
@@ -572,8 +577,8 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    }
 
    std::vector< CompiledFlatRelationProjection > projections;
-   projections.reserve(schema_builder.projections().size());
-   for(const auto& declaration : schema_builder.projections()) {
+   projections.reserve(projection_declarations.size());
+   for(const auto& declaration : projection_declarations) {
       const auto source_id = schema.id_for(declaration.source_relation);
       const auto output_id = schema.id_for(declaration.output_relation);
       const auto source_arity = schema.arities()[static_cast< size_t >(source_id)];
@@ -598,11 +603,13 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    }
 
    CompiledFlatPlan compiled;
-   compiled.schema_ = std::move(schema);
-   compiled.node_schema_ = std::move(node_schema);
-   compiled.fields_ = std::move(fields);
+   compiled.schema_plan_ = FlatSchemaPlan{
+      .relation_schema = std::move(schema),
+      .node_schema = std::move(node_schema),
+      .fields = std::move(fields),
+      .projections = std::move(projections),
+   };
    compiled.components_ = components_;
-   compiled.projections_ = std::move(projections);
    compiled.config_ = std::move(config);
    return compiled;
 }
