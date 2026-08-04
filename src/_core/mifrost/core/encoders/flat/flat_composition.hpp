@@ -186,6 +186,7 @@ class MIFROST_API FlatNodePlanBuilder {
    std::vector< std::vector< std::string > > names_;
    std::vector< std::unordered_map< std::string, int64_t > > indices_;
    std::vector< std::unordered_map< int64_t, int64_t > > indices_by_source_;
+   std::vector< std::vector< std::optional< int64_t > > > source_indices_by_node_;
 };
 
 enum class FlatSlotResolverKind : int8_t {
@@ -606,6 +607,8 @@ class MIFROST_API FlatNodeFeatureWriter {
 
    void
    set(std::string_view node_type, std::string_view attr, std::span< const float > values) const;
+   /** Reject a component that declared a feature column but did not write it. */
+   void finish() const;
 
   private:
    BatchBuilder& builder_;

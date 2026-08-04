@@ -210,6 +210,7 @@ FlatNodeRef FlatNodePlanBuilder::add_node(FlatNodeTypeId type, std::string key)
       names_.resize(schema_.size());
       indices_.resize(schema_.size());
       indices_by_source_.resize(schema_.size());
+      source_indices_by_node_.resize(schema_.size());
    }
    auto& index_by_key = indices_[type_index];
    if(const auto it = index_by_key.find(key); it != index_by_key.end()) {
@@ -218,6 +219,7 @@ FlatNodeRef FlatNodePlanBuilder::add_node(FlatNodeTypeId type, std::string key)
    const auto index = static_cast< int64_t >(names_[type_index].size());
    index_by_key.emplace(key, index);
    names_[type_index].push_back(key);
+   source_indices_by_node_[type_index].push_back(std::nullopt);
    return FlatNodeRef{type, std::move(key)};
 }
 
@@ -236,12 +238,18 @@ FlatNodeRef FlatNodePlanBuilder::add_node_from_source(
       throw std::invalid_argument("Flat source node identity must be non-negative");
    }
    const auto ref = add_node(type, std::move(key));
-   const auto local_index = indices_[static_cast< size_t >(type)].at(ref.key);
-   auto& source_indices = indices_by_source_[static_cast< size_t >(type)];
+   const auto type_index = static_cast< size_t >(type);
+   const auto local_index = indices_[type_index].at(ref.key);
+   auto& source_indices = indices_by_source_[type_index];
    const auto [it, inserted] = source_indices.emplace(source_index, local_index);
    if(not inserted and it->second != local_index) {
       throw std::invalid_argument("Flat source node identity maps to multiple graph-local nodes");
    }
+   auto& node_source = source_indices_by_node_[type_index].at(static_cast< size_t >(local_index));
+   if(node_source.has_value() and *node_source != source_index) {
+      throw std::invalid_argument("Flat graph-local node maps to multiple source identities");
+   }
+   node_source = source_index;
    return ref;
 }
 
@@ -260,6 +268,7 @@ FlatNodePlan FlatNodePlanBuilder::finish() &&
       names_.resize(schema_.size());
       indices_.resize(schema_.size());
       indices_by_source_.resize(schema_.size());
+      source_indices_by_node_.resize(schema_.size());
    }
    FlatNodePlan plan;
    plan.schema_ = &schema_;
@@ -676,6 +685,21 @@ void FlatNodeFeatureWriter::set(
    builder_.add_node_features(std::string(node_type), std::string(attr), values, spec.feature_dim);
 }
 
+void FlatNodeFeatureWriter::finish() const
+{
+   for(const auto& entry : plan_) {
+      if(entry.owner != owner_) {
+         continue;
+      }
+      const auto key = entry.node_type + "/" + entry.attr;
+      if(not written_.contains(key)) {
+         throw std::invalid_argument(
+            "Flat node feature '" + key + "' was not written by component '" + owner_ + "'"
+         );
+      }
+   }
+}
+
 FlatEmitterComponent::~FlatEmitterComponent() = default;
 
 int FlatCompositionInputBuilder::relation_id(const RelationKey& key) const
@@ -782,12 +806,29 @@ void FlatMetadataWriter::set_object_names(std::vector< std::string > names) cons
          "Flat object-name metadata is not owned by component '" + owner_ + "'"
       );
    }
+   if(wrote_object_names_) {
+      throw std::invalid_argument("Flat object-name metadata was written more than once per graph");
+   }
    builder_.set_object_names(std::move(names));
    wrote_object_names_ = true;
 }
 
 void FlatMetadataWriter::add_lazy_target_names(std::span< const std::string > names) const
 {
+   const std::string key(kTargetNamesAttr);
+   const auto required = plan_.graph_attr_owners.find(key);
+   const auto optional = plan_.optional_graph_attr_owners.find(key);
+   const auto* owner = required != plan_.graph_attr_owners.end()            ? &required->second
+                       : optional != plan_.optional_graph_attr_owners.end() ? &optional->second
+                                                                            : nullptr;
+   if(owner == nullptr or *owner != owner_) {
+      throw std::invalid_argument(
+         "Flat target-name metadata is not owned by component '" + owner_ + "'"
+      );
+   }
+   if(not written_graph_attrs_.insert(key).second) {
+      throw std::invalid_argument("Flat target-name metadata was written more than once per graph");
+   }
    builder_.add_lazy_target_names(names);
 }
 
@@ -1213,6 +1254,7 @@ void CompiledFlatPlan::encode_graph(
          builder, schema_plan_.node_schema, node_plan, schema_plan_.node_features, component->name()
       );
       component->write_node_features(context, writer);
+      writer.finish();
    }
    for(const auto& component : components_) {
       component->emit(input, context);
@@ -1704,7 +1746,8 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
          );
       }
       for(const auto& slot : declaration.slots) {
-         if(slot.kind == FlatSlotResolverKind::source_slot
+         if((slot.kind == FlatSlotResolverKind::source_slot
+             or slot.kind == FlatSlotResolverKind::source_node)
             and (slot.source_slot < 0 or slot.source_slot >= source_arity)) {
             throw std::invalid_argument("Flat relation projection source slot is out of range");
          }

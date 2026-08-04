@@ -1022,6 +1022,62 @@ TEST(FlatCompositionTest, ComposedMetadataWriterEnforcesGraphAttributeOwnership)
    EXPECT_EQ(std::get< std::string >(encoding.graph_attrs.at("custom_metadata")), "native");
 }
 
+TEST(FlatCompositionTest, LazyTargetNamesRequireDeclaredMetadataOwnership)
+{
+   class UnownedTargetNamesComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "unowned_names"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+      void write_metadata(const FlatGraphContext&, FlatMetadataWriter& writer) const override
+      {
+         const std::array names{std::string("target")};
+         writer.add_lazy_target_names(names);
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< UnownedTargetNamesComponent >();
+   const auto compiled = plan.compile();
+   const FlatCompositionInput input;
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(input)), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, ObjectNamesCanOnlyBeWrittenOncePerGraph)
+{
+   class DuplicateObjectNamesComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "duplicate_names"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+      void declare_metadata(FlatMetadataPlanBuilder& builder) const override
+      {
+         builder.claim_object_names();
+      }
+      void write_metadata(const FlatGraphContext&, FlatMetadataWriter& writer) const override
+      {
+         writer.set_object_names({"a"});
+         writer.set_object_names({"b"});
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< DuplicateObjectNamesComponent >();
+   const auto compiled = plan.compile();
+   const FlatCompositionInput input;
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(input)), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, ComposedMetadataWriterSupportsTypedGraphAttributeWrites)
 {
    class MetadataComponent final: public FlatEmitterComponent {
@@ -1194,6 +1250,35 @@ TEST(FlatCompositionTest, PreparedScratchIsAvailableToNodeFeatureWriters)
    );
 }
 
+TEST(FlatCompositionTest, DeclaredNodeFeaturesMustBeWrittenForEveryGraph)
+{
+   class MissingFeatureComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "missing_feature"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+      }
+      void declare_node_features(FlatNodeFeaturePlanBuilder& builder) const override
+      {
+         builder.register_feature("entity", "x", 1);
+      }
+      void plan_graph(const FlatInputView&, FlatNodePlanBuilder& builder) const override
+      {
+         (void) builder.add_node("entity", "a");
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< MissingFeatureComponent >();
+   const auto compiled = plan.compile();
+   const FlatCompositionInput input;
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(input)), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, GraphMetadataMustRemainConstantAcrossBatch)
 {
    struct MetadataInput {
@@ -1340,6 +1425,35 @@ TEST(FlatCompositionTest, RejectsProjectionWithUnknownNodeType)
    EXPECT_THROW((void) plan.compile(), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, RejectsOutOfRangeSourceNodeProjectionAtCompileTime)
+{
+   class InvalidSourceNodeProjection final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "invalid_source"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         const auto entity = builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+         builder.register_relation(
+            predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
+         );
+         (void) builder.add_projection(
+            FlatRelationProjection{
+               .source_relation = predicate_relation_key("fact"),
+               .output_relation = predicate_relation_key("anchor"),
+               .slots = {FlatSlotResolver::source_node(1, entity)},
+            }
+         );
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< InvalidSourceNodeProjection >();
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, RejectsEmptyPlans)
 {
    FlatEncoderPlan plan;
@@ -1467,6 +1581,18 @@ TEST(FlatCompositionTest, ProjectionMapsSourceIdentityToPlannedNodeIndex)
    EXPECT_EQ(projection.project(std::array< int64_t, 1 >{7}, nodes), (std::vector< int64_t >{1}));
    EXPECT_THROW(
       (void) projection.project(std::array< int64_t, 1 >{1}, nodes), std::invalid_argument
+   );
+}
+
+TEST(FlatCompositionTest, DistinctSourceIdentitiesCannotCollapseOntoOneNodeKey)
+{
+   FlatNodeSchemaBuilder schema_builder;
+   const auto entity_type = schema_builder.declare_node_type("entity");
+   const auto schema = std::move(schema_builder).finalize();
+   FlatNodePlanBuilder node_builder(schema);
+   (void) node_builder.add_node_from_source(entity_type, 1, "a");
+   EXPECT_THROW(
+      (void) node_builder.add_node_from_source(entity_type, 2, "a"), std::invalid_argument
    );
 }
 
