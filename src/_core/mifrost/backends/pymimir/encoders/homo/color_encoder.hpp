@@ -19,9 +19,11 @@
 
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_formatter.hpp"
+#include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/stream_encoder_base.hpp"
+#include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
 
 namespace mifrost {
 
@@ -107,6 +109,8 @@ class MIFROST_API ColorEncoderEngine {
    const mimir::formalism::DomainImpl& domain_;
    /// Effective runtime config.
    Config config_;
+   /// Backend-neutral semantic Color engine used for all Pymimir inputs.
+   SemanticColorEncoderEngine semantic_engine_;
 };
 
 /**
