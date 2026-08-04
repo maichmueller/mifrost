@@ -97,6 +97,7 @@ struct SemanticPlanningTaskAdapter::Impl {
    std::vector< int64_t > derived_predicate_ids;
    std::vector< int64_t > action_ids;
    std::vector< int64_t > object_ids;
+   views::Context view_context;
    std::vector< SemanticAtom > static_atoms;
    std::vector< SemanticAtom > fluent_atoms;
    std::vector< SemanticAtom > derived_atoms;
@@ -117,7 +118,16 @@ struct SemanticPlanningTaskAdapter::Impl {
       size_t raw;
    };
 
-   explicit Impl(const tyr::formalism::planning::PlanningTask& task_value) : task(task_value)
+   explicit Impl(const tyr::formalism::planning::PlanningTask& task_value)
+       : task(task_value),
+         view_context(
+            task,
+            static_predicate_ids,
+            fluent_predicate_ids,
+            derived_predicate_ids,
+            action_ids,
+            object_ids
+         )
    {
       build_schema();
       build_atom_caches();
@@ -486,6 +496,11 @@ SemanticFlatRelationInput SemanticPlanningTaskAdapter::make_input(
 std::shared_ptr< const SemanticTaskContext > SemanticPlanningTaskAdapter::get_task_context() const
 {
    return impl_->task_context;
+}
+
+const views::Context& SemanticPlanningTaskAdapter::get_view_context() const noexcept
+{
+   return impl_->view_context;
 }
 
 }  // namespace mifrost::pytyr

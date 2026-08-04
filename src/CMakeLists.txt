@@ -1312,6 +1312,7 @@ if (BUILD_TESTING)
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_schema_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/semantic_flat_horizon_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/semantic_transition_dag_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/views_test.cpp"
     )
     target_include_directories(mifrost_neutral_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/_core")
     target_link_libraries(mifrost_neutral_tests PRIVATE GTest::gtest_main mifrost_neutral_core)

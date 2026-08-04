@@ -12,6 +12,7 @@
 #include <tyr/planning/lifted/state_view.hpp>
 #include <vector>
 
+#include "mifrost/backends/pytyr/views.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 
@@ -48,6 +49,7 @@ class MIFROST_API SemanticPlanningTaskAdapter {
    ) const;
 
    [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const;
+   [[nodiscard]] const views::Context& get_view_context() const noexcept;
 
   private:
    struct Impl;
