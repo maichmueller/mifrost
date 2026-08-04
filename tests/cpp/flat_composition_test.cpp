@@ -792,6 +792,10 @@ TEST(FlatCompositionTest, SemanticRelationBuilderPathMatchesOneShotComposition)
 
    const auto parity = compare_flat_batch_encodings(expected, actual);
    ASSERT_TRUE(parity.equal) << parity.mismatch;
+   EXPECT_EQ(
+      std::get< std::vector< std::string > >(actual.graph_attrs.at(std::string(kTargetGroupsAttr))),
+      (std::vector< std::string >{"goal", "subgoal", "action", "history"})
+   );
 }
 
 TEST(FlatCompositionTest, SemanticRelationCompiledPlanIsSafeForConcurrentEncodes)

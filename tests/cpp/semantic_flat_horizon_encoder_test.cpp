@@ -287,6 +287,14 @@ TEST(SemanticFlatHorizonEncoderEngineTest, BuilderPathMatchesOneShotComposition)
 
    const auto parity = compare_flat_batch_encodings(expected, actual);
    ASSERT_TRUE(parity.equal) << parity.mismatch;
+   EXPECT_EQ(
+      std::get< std::string >(actual.graph_attrs.at(std::string(kParentRelationAttr))),
+      config.parent_relation
+   );
+   EXPECT_EQ(
+      std::get< std::vector< std::string > >(actual.graph_attrs.at(std::string(kTargetGroupsAttr))),
+      (std::vector< std::string >{"state"})
+   );
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, CompiledPlanIsSafeForConcurrentEncodes)

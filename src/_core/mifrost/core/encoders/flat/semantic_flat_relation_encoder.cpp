@@ -622,6 +622,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          if(owner_->config.export_node_names) {
             builder.claim_object_names();
          }
+         if(not owner_->target_group_names.empty()) {
+            builder.claim_graph_attr(std::string(kTargetGroupsAttr));
+         }
          if(not owner_->target_group_names.empty() and owner_->config.export_node_names) {
             builder.claim_optional_graph_attr(std::string(kTargetNamesAttr));
          }
@@ -774,6 +777,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       [[nodiscard]] std::string_view name() const noexcept override { return "semantic_metadata"; }
       void declare_metadata(FlatMetadataPlanBuilder& builder) const override
       {
+         builder.claim_graph_attr(std::string(kTargetGroupsAttr));
+         builder.claim_graph_attr(std::string(kParentRelationAttr));
          if(export_names_) {
             builder.claim_object_names();
             builder.claim_optional_graph_attr(std::string(kTargetNamesAttr));
@@ -2178,6 +2183,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       if(config.export_node_names) {
          writer.set_object_names(semantic_objects(*prepared.input));
       }
+      if(not target_group_names.empty()) {
+         writer.set_graph_attr(std::string(kTargetGroupsAttr), target_group_names);
+      }
       if(not target_group_names.empty() and config.export_node_names) {
          if(prepared.context.target_columns.names.empty()) {
             if(not prepared.suppress_empty_target_names) {
@@ -2789,6 +2797,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    void
    write_horizon_metadata(const PreparedHorizonGraph& prepared, FlatMetadataWriter& writer) const
    {
+      writer.set_graph_attr(
+         std::string(kTargetGroupsAttr),
+         std::vector< std::string >{std::string(target_source_group_name(TargetSource::states))}
+      );
+      writer.set_graph_attr(std::string(kParentRelationAttr), prepared.config->parent_relation);
       if(not prepared.config->export_node_names)
          return;
       writer.set_object_names(semantic_objects(prepared.dag->root().state));
