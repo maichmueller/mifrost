@@ -92,6 +92,7 @@ TEST(SemanticFlatHorizonEncoderEngineTest, FullModeDefaultConfigEncodesWithoutTh
 
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, DeltaModeRegistersLiteralCandidateRelations)
@@ -107,6 +108,18 @@ TEST(SemanticFlatHorizonEncoderEngineTest, DeltaModeRegistersLiteralCandidateRel
 
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
+}
+
+TEST(SemanticFlatHorizonEncoderEngineTest, BatchEncodingUsesCompiledPlanForRelationMajorPacking)
+{
+   SemanticFlatHorizonEncoderEngine::Config config;
+   config.pack_relation_args_relation_major = true;
+   SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
+
+   const auto encoding = engine.encode_batch({make_dag(), make_dag()});
+
+   EXPECT_EQ(encoding.num_graphs, 2);
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, TopologyRelationsUseConfiguredNamesVerbatim)

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "flat_composition.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -80,14 +82,7 @@ BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode(
    const SemanticTransitionDAG& dag
 ) const
 {
-   BatchBuilder builder;
-   builder.set_graph_kind("flat");
-   impl_->flat.prepare_horizon_builder(builder, impl_->config);
-   impl_->flat.encode_horizon(dag, impl_->config, builder);
-   builder.next_graph();
-   auto encoding = builder.build();
-   finalize_batch_encoding(encoding);
-   return encoding;
+   return impl_->flat.encode_horizon_composed(dag, impl_->config);
 }
 
 void SemanticFlatHorizonEncoderEngine::encode(
@@ -103,16 +98,15 @@ BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode_batch(
    const std::vector< SemanticTransitionDAG >& dags
 ) const
 {
-   BatchBuilder builder;
-   builder.set_graph_kind("flat");
-   impl_->flat.prepare_horizon_builder(builder, impl_->config);
-   for(const auto& dag : dags) {
-      impl_->flat.encode_horizon(dag, impl_->config, builder);
-      builder.next_graph();
+   if(dags.empty()) {
+      BatchBuilder builder;
+      builder.set_graph_kind("flat");
+      impl_->flat.prepare_horizon_builder(builder, impl_->config);
+      auto encoding = builder.build();
+      finalize_batch_encoding(encoding);
+      return encoding;
    }
-   auto encoding = builder.build();
-   finalize_batch_encoding(encoding);
-   return encoding;
+   return impl_->flat.encode_horizon_composed_batch(dags, impl_->config);
 }
 
 void SemanticFlatHorizonEncoderEngine::finalize_batch_encoding(
@@ -120,6 +114,16 @@ void SemanticFlatHorizonEncoderEngine::finalize_batch_encoding(
 ) const
 {
    impl_->flat.finalize_horizon_encoding(encoding, impl_->config);
+}
+
+bool SemanticFlatHorizonEncoderEngine::last_encoding_used_composed_plan() const
+{
+   return impl_->flat.last_encoding_used_composed_plan();
+}
+
+const std::string& SemanticFlatHorizonEncoderEngine::last_composition_diagnostic() const
+{
+   return impl_->flat.last_composition_diagnostic();
 }
 
 const SemanticFlatHorizonEncoderEngine::Config& SemanticFlatHorizonEncoderEngine::get_config() const

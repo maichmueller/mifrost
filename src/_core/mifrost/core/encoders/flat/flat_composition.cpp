@@ -726,6 +726,11 @@ void FlatMetadataWriter::set_object_names(std::vector< std::string > names) cons
    wrote_object_names_ = true;
 }
 
+void FlatMetadataWriter::add_lazy_target_names(std::span< const std::string > names) const
+{
+   builder_.add_lazy_target_names(names);
+}
+
 void FlatMetadataWriter::set_graph_attr(
    std::string_view key,
    BatchBuilder::GraphAttrValue value

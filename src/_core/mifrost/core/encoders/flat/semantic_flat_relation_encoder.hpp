@@ -297,6 +297,9 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
+   [[nodiscard]] bool last_encoding_used_composed_plan() const;
+   [[nodiscard]] const std::string& last_composition_diagnostic() const;
+   void note_composition_fallback(std::string diagnostic) const;
 
    [[nodiscard]] const Config& get_config() const;
    [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
@@ -323,6 +326,14 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       const SemanticTransitionDAG& dag,
       const SemanticFlatHorizonEncoderConfig& config,
       BatchBuilder& builder
+   ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_horizon_composed(
+      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonEncoderConfig& config
+   ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_horizon_composed_batch(
+      const std::vector< SemanticTransitionDAG >& dags,
+      const SemanticFlatHorizonEncoderConfig& config
    ) const;
    void finalize_horizon_encoding(
       BatchBuilder::BatchEncoding& encoding,

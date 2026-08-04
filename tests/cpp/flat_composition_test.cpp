@@ -477,6 +477,75 @@ TEST(FlatCompositionTest, ComposedCarrierMatchesMinimalSemanticRelationBaseline)
    ASSERT_TRUE(parity.equal) << parity.mismatch;
 }
 
+TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
+{
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{
+         SemanticPredicateCategory::fluent,
+         "at",
+         1,
+      }},
+      {}
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a"};
+   input.state_facts = {{0, {0}}};
+
+   const auto encoding = engine.encode(input);
+
+   EXPECT_EQ(encoding.num_graphs, 1);
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   EXPECT_TRUE(engine.last_composition_diagnostic().empty());
+}
+
+TEST(FlatCompositionTest, SemanticRelationBatchParityCoversRelationArgumentLayouts)
+{
+   for(const bool relation_major : {false, true}) {
+      SemanticFlatRelationEncoderEngine::Config config;
+      config.pack_relation_args_relation_major = relation_major;
+      SemanticFlatRelationEncoderEngine engine(
+         std::vector< SemanticPredicateSpec >{{
+            SemanticPredicateCategory::fluent,
+            "at",
+            1,
+         }},
+         {},
+         config
+      );
+      SemanticFlatRelationInput input;
+      input.objects = {"a", "b"};
+      input.state_facts = {{0, {0}}, {0, {1}}};
+
+      const auto encoding = engine.encode_batch({input, input});
+
+      EXPECT_EQ(encoding.num_graphs, 2);
+      EXPECT_TRUE(engine.last_encoding_used_composed_plan())
+         << engine.last_composition_diagnostic();
+      EXPECT_TRUE(engine.last_composition_diagnostic().empty());
+   }
+}
+
+TEST(FlatCompositionTest, SemanticRelationCompositionPreservesLazyTargetNames)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.target_sources = {TargetSource::actions};
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}},
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a"};
+   input.state_facts = {{0, {0}}};
+   input.actions = {{0, {0}}};
+
+   const auto encoding = engine.encode(input);
+
+   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
+   ASSERT_FALSE(encoding.lazy_target_name_strings.empty());
+   EXPECT_EQ(encoding.lazy_target_name_strings.front(), "(move a)");
+}
+
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
 {
    FlatEncoderPlan plan;

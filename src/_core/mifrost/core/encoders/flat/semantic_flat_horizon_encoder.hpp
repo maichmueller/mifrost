@@ -69,6 +69,8 @@ class MIFROST_API SemanticFlatHorizonEncoderEngine {
       const std::vector< SemanticTransitionDAG >& dags
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
+   [[nodiscard]] bool last_encoding_used_composed_plan() const;
+   [[nodiscard]] const std::string& last_composition_diagnostic() const;
 
    [[nodiscard]] const Config& get_config() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;

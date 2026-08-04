@@ -628,6 +628,7 @@ class MIFROST_API FlatMetadataWriter {
    }
 
    void set_object_names(std::vector< std::string > names) const;
+   void add_lazy_target_names(std::span< const std::string > names) const;
    void set_graph_attr(std::string_view key, BatchBuilder::GraphAttrValue value) const;
    void set_graph_attr(std::string_view key, int64_t value) const;
    void set_graph_attr(std::string_view key, std::string value) const;

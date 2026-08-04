@@ -25,6 +25,7 @@
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
 #include "mifrost/core/encoders/flat/flat_composition.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_composition.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/semantic/semantic_transition_dag.hpp"
 
@@ -273,6 +274,274 @@ bool split_full_state_relations(const SemanticFlatHorizonEncoderConfig& config)
           and root_uses_split_state_relations(config.root_policy);
 }
 
+GraphFieldSpec semantic_stack_field(int dim = 1)
+{
+   return GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = dim};
+}
+
+GraphFieldSpec semantic_cat_field(GraphFieldInc inc = {})
+{
+   return GraphFieldSpec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::CAT,
+      .dim = 1,
+      .inc = std::move(inc),
+   };
+}
+
+GraphFieldSpec semantic_ragged_cat_field()
+{
+   return GraphFieldSpec{
+      .dtype = GraphFieldDType::I64,
+      .mode = GraphFieldMode::RAGGED_CAT,
+      .dim = 1,
+      .cat_dim = 0,
+   };
+}
+
+GraphFieldInc semantic_entity_inc()
+{
+   return GraphFieldInc{.kind = GraphFieldInc::Kind::NODE_OFFSET, .node_type = "entity"};
+}
+
+GraphFieldInc semantic_relation_instance_inc()
+{
+   return GraphFieldInc{
+      .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+      .field_key = std::string(kRelationInstanceSizesField),
+   };
+}
+
+std::vector< SemanticFlatFieldComponent::FieldDeclaration >
+semantic_fields(bool horizon, bool target_metadata, bool include_lgan)
+{
+   using Field = SemanticFlatFieldComponent::FieldDeclaration;
+   std::vector< Field > fields{
+      {std::string(kNodeSizesField), semantic_stack_field()},
+      {std::string(kObjectSizesField), semantic_stack_field()},
+      {std::string(kObjectIndicesField), semantic_cat_field(semantic_entity_inc())},
+      {std::string(kEntityRoleIdsField), semantic_cat_field()},
+      {std::string(kTargetEntitySizesField), semantic_stack_field()},
+      {std::string(kTargetEntityIndicesField), semantic_cat_field(semantic_entity_inc())},
+      {std::string(kTargetEntityGroupIdsField), semantic_cat_field()},
+   };
+   if(not horizon) {
+      fields.emplace_back(std::string(kHistoryEntitySizesField), semantic_stack_field());
+      fields.emplace_back(
+         std::string(kHistoryEntityIndicesField), semantic_cat_field(semantic_entity_inc())
+      );
+      fields.emplace_back(std::string(kHistoryEntityDtField), semantic_cat_field());
+      if(target_metadata) {
+         fields.emplace_back(std::string(kTargetSizesField), semantic_stack_field());
+      }
+   } else {
+      fields.emplace_back(std::string(kTargetSizesField), semantic_stack_field());
+      fields.emplace_back(
+         std::string(kTargetPositionsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::RAGGED_CAT,
+            .dim = 1,
+            .cat_dim = 0,
+            .inc = semantic_entity_inc(),
+         }
+      );
+      fields.emplace_back(std::string(kTargetIndicesField), semantic_ragged_cat_field());
+      fields.emplace_back(std::string(kTargetCandidateIdsField), semantic_ragged_cat_field());
+      fields.emplace_back(std::string(kTargetDepthsField), semantic_ragged_cat_field());
+      fields.emplace_back(std::string(kTargetGroupIdsField), semantic_ragged_cat_field());
+   }
+   if(target_metadata and not horizon) {
+      fields.emplace_back(
+         std::string(kTargetPositionsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::RAGGED_CAT,
+            .dim = 1,
+            .cat_dim = 0,
+            .inc = semantic_entity_inc(),
+         }
+      );
+      fields.emplace_back(std::string(kTargetIndicesField), semantic_ragged_cat_field());
+      fields.emplace_back(std::string(kTargetCandidateIdsField), semantic_ragged_cat_field());
+      fields.emplace_back(std::string(kTargetGroupIdsField), semantic_ragged_cat_field());
+   }
+   if(include_lgan) {
+      fields.emplace_back(std::string(kLGANTNSizesField), semantic_stack_field());
+      fields.emplace_back(
+         std::string(kLGANTNRelationIndicesField),
+         semantic_cat_field(semantic_relation_instance_inc())
+      );
+      fields.emplace_back(
+         std::string(kLGANTNEntityIndicesField), semantic_cat_field(semantic_entity_inc())
+      );
+      fields.emplace_back(std::string(kLGANNNSizesField), semantic_stack_field());
+      fields.emplace_back(
+         std::string(kLGANNNRelationIndicesField),
+         semantic_cat_field(semantic_relation_instance_inc())
+      );
+      fields.emplace_back(
+         std::string(kLGANNNEntityIndicesField), semantic_cat_field(semantic_entity_inc())
+      );
+      fields.emplace_back(std::string(kLGANRRSizesField), semantic_stack_field());
+      fields.emplace_back(
+         std::string(kLGANRRSrcRelationIndicesField),
+         semantic_cat_field(semantic_relation_instance_inc())
+      );
+      fields.emplace_back(
+         std::string(kLGANRRDstRelationIndicesField),
+         semantic_cat_field(semantic_relation_instance_inc())
+      );
+   }
+   return fields;
+}
+
+RelationUsage semantic_relation_usage(std::string_view source)
+{
+   if(source == "state")
+      return RelationUsage::state;
+   if(source == "goal")
+      return RelationUsage::goal;
+   if(source == "goal_derivation")
+      return RelationUsage::goal_derivation;
+   if(source == "goal_satisfaction")
+      return RelationUsage::goal_satisfaction;
+   if(source == "action")
+      return RelationUsage::action;
+   if(source == "history")
+      return RelationUsage::history;
+   if(source == "parent")
+      return RelationUsage::parent;
+   if(source == "sibling")
+      return RelationUsage::sibling;
+   if(source == "cousin")
+      return RelationUsage::cousin;
+   return RelationUsage::state;
+}
+
+std::string semantic_relation_component(RelationUsage usage)
+{
+   switch(usage) {
+      case RelationUsage::state: return "semantic_facts";
+      case RelationUsage::goal: return "semantic_goals";
+      case RelationUsage::goal_derivation:
+      case RelationUsage::goal_satisfaction: return "semantic_derivations";
+      case RelationUsage::action: return "semantic_actions";
+      case RelationUsage::history: return "semantic_history";
+      case RelationUsage::parent:
+      case RelationUsage::sibling:
+      case RelationUsage::cousin: return "semantic_topology";
+   }
+   return "semantic_facts";
+}
+
+std::vector< FlatCompositionRelationSpec > semantic_relation_specs(const FlatRelationSchema& schema)
+{
+   std::vector< FlatCompositionRelationSpec > specs;
+   const auto& metadata = schema.as_metadata();
+   for(size_t id = 0; id < schema.size(); ++id) {
+      const auto offset = static_cast< size_t >(metadata.relation_slot_role_offsets[id]);
+      const auto encoded = static_cast< size_t >(metadata.relation_encoded_arities[id]);
+      const auto logical = static_cast< int >(metadata.relation_logical_arities[id]);
+      std::vector< FlatSlotRole > auxiliary;
+      bool predicate = false;
+      for(size_t slot = 0; slot < encoded; ++slot) {
+         const auto role = static_cast< FlatSlotRole >(metadata.relation_slot_roles[offset + slot]);
+         if(role == FlatSlotRole::argument_slot) {
+            continue;
+         }
+         if(role == FlatSlotRole::predicate_slot) {
+            predicate = true;
+         } else {
+            auxiliary.push_back(role);
+         }
+      }
+      specs.push_back(FlatCompositionRelationSpec{
+         .key = opaque_relation_key(metadata.relation_names[id]),
+         .layout =
+            FlatTupleLayout{
+               .logical_arity = logical,
+               .auxiliary_slot_roles = std::move(auxiliary),
+               .include_predicate_virtual_node = predicate,
+            },
+         .usage = semantic_relation_usage(metadata.relation_sources[id]),
+      });
+   }
+   return specs;
+}
+
+SemanticFlatCompositionInput make_semantic_carrier(
+   const BatchBuilder::BatchEncoding& encoding,
+   const FlatRelationSchema& schema,
+   std::span< const std::string > metadata_keys
+)
+{
+   SemanticFlatCompositionInput carrier;
+   const auto names_it = encoding.node_names.find(std::string(kFlatEntityNodeType));
+   if(names_it != encoding.node_names.end()) {
+      carrier.composition.objects = names_it->second;
+   } else {
+      const auto count_it = encoding.node_counts.find(std::string(kFlatEntityNodeType));
+      const auto count = count_it == encoding.node_counts.end() ? 0 : count_it->second;
+      carrier.composition.objects.reserve(static_cast< size_t >(count));
+      for(int64_t index = 0; index < count; ++index) {
+         carrier.composition.objects.push_back("entity:" + std::to_string(index));
+      }
+   }
+   carrier.object_names = encoding.object_names;
+   carrier.lazy_target_name_strings = encoding.lazy_target_name_strings;
+
+   const auto counts_it = encoding.graph_fields.find(std::string(kRelationCountsField));
+   const auto args_it = encoding.graph_fields.find(std::string(kRelationArgsField));
+   if(counts_it == encoding.graph_fields.end() or args_it == encoding.graph_fields.end()) {
+      throw std::invalid_argument("legacy semantic flat encoding omitted relation runtime fields");
+   }
+   const auto& counts = std::get< std::vector< int64_t > >(counts_it->second.values);
+   const auto& args = std::get< std::vector< int64_t > >(args_it->second.values);
+   size_t offset = 0;
+   for(size_t relation = 0; relation < schema.size(); ++relation) {
+      const auto count = static_cast< size_t >(counts.at(relation));
+      const auto arity = static_cast< size_t >(schema.arities().at(relation));
+      for(size_t instance = 0; instance < count; ++instance) {
+         const auto begin = args.begin() + static_cast< std::ptrdiff_t >(offset);
+         carrier.composition.relations.push_back(FlatCompositionRelationRecord{
+            .relation_id = static_cast< int >(relation),
+            .args = std::vector< int64_t >(begin, begin + arity),
+            .component = semantic_relation_component(
+               semantic_relation_usage(schema.as_metadata().relation_sources[relation])
+            ),
+         });
+         offset += arity;
+      }
+   }
+
+   static const std::set< std::string, std::less<> > runtime_fields = {
+      std::string(kRelationInstanceSizesField),
+      std::string(kRelationCountsField),
+      std::string(kRelationArgsField),
+   };
+   for(const auto& [key, field] : encoding.graph_fields) {
+      if(not runtime_fields.contains(key)) {
+         carrier.composition.fields.push_back(
+            FlatCompositionFieldRecord{.key = key, .values = field.values}
+         );
+      }
+   }
+   for(const auto key : metadata_keys) {
+      if(const auto it = encoding.graph_attrs.find(std::string(key));
+         it != encoding.graph_attrs.end()) {
+         carrier.graph_attrs.emplace(std::string(key), it->second);
+      }
+   }
+   carrier.rebuild_indexes();
+   for(const auto& source : schema.as_metadata().relation_sources) {
+      carrier.relation_indices_by_component.try_emplace(
+         semantic_relation_component(semantic_relation_usage(source))
+      );
+   }
+   return carrier;
+}
+
 }  // namespace
 
 struct SemanticFlatRelationEncoderEngine::Impl {
@@ -314,6 +583,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    int horizon_parent_relation_id = -1;
    int horizon_sibling_relation_id = -1;
    int horizon_cousin_relation_id = -1;
+   std::unique_ptr< CompiledFlatPlan > composition_plan;
+   mutable bool composed_path_used = false;
+   mutable std::string composition_diagnostic;
+
+   void mark_composed_path(bool used, std::string diagnostic = {}) const
+   {
+      composed_path_used = used;
+      composition_diagnostic = std::move(diagnostic);
+   }
 
    Impl(
       std::vector< SemanticPredicateSpec > predicate_specs,
@@ -342,6 +620,143 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       build_groups();
       build_schema();
       build_relation_ids();
+      build_composition_plan(false, nullptr);
+   }
+
+   void build_composition_plan(bool horizon, const SemanticFlatHorizonEncoderConfig* horizon_config)
+   {
+      FlatEncoderPlan plan;
+      plan.emplace_component< SemanticFlatEntityComponent >(
+         horizon_config != nullptr ? horizon_config->export_node_names : config.export_node_names
+      );
+      const auto specs = semantic_relation_specs(schema_);
+      std::array< std::vector< FlatCompositionRelationSpec >, 6 > lanes;
+      for(const auto& spec : specs) {
+         const auto component = semantic_relation_component(spec.usage);
+         const auto index = component == "semantic_facts"         ? 0
+                            : component == "semantic_goals"       ? 1
+                            : component == "semantic_derivations" ? 2
+                            : component == "semantic_actions"     ? 3
+                            : component == "semantic_history"     ? 4
+                                                                  : 5;
+         lanes.at(index).push_back(spec);
+      }
+      constexpr std::array< std::string_view, 6 > names = {
+         "semantic_facts",
+         "semantic_goals",
+         "semantic_derivations",
+         "semantic_actions",
+         "semantic_history",
+         "semantic_topology",
+      };
+      for(size_t index = 0; index < lanes.size(); ++index) {
+         if(not lanes[index].empty()) {
+            plan.add_component(std::make_shared< SemanticFlatRelationComponent >(
+               std::string(names[index]), std::move(lanes[index])
+            ));
+         }
+      }
+
+      const bool target_metadata = horizon or not target_group_names.empty();
+      auto fields = semantic_fields(
+         horizon,
+         target_metadata,
+         horizon_config != nullptr ? horizon_config->include_lgan_edges : config.include_lgan_edges
+      );
+      std::vector< SemanticFlatFieldComponent::FieldDeclaration > history_fields;
+      std::vector< SemanticFlatFieldComponent::FieldDeclaration > target_fields;
+      std::vector< SemanticFlatFieldComponent::FieldDeclaration > lgan_fields;
+      std::vector< SemanticFlatFieldComponent::FieldDeclaration > effect_fields;
+      for(auto& field : fields) {
+         const auto& key = field.first;
+         if(key.starts_with("history_")) {
+            history_fields.push_back(std::move(field));
+         } else if(key.starts_with("target_")) {
+            target_fields.push_back(std::move(field));
+         } else if(key.starts_with("lgan_")) {
+            lgan_fields.push_back(std::move(field));
+         } else {
+            effect_fields.push_back(std::move(field));
+         }
+      }
+      if(not effect_fields.empty()) {
+         plan.add_component(std::make_shared< SemanticFlatFieldComponent >(
+            "semantic_effects", std::move(effect_fields)
+         ));
+      }
+      if(not history_fields.empty()) {
+         plan.add_component(std::make_shared< SemanticFlatFieldComponent >(
+            "semantic_history_fields", std::move(history_fields)
+         ));
+      }
+      if(not target_fields.empty()) {
+         plan.add_component(std::make_shared< SemanticFlatFieldComponent >(
+            "semantic_targets", std::move(target_fields)
+         ));
+      }
+      if(not lgan_fields.empty()) {
+         plan.add_component(std::make_shared< SemanticFlatFieldComponent >(
+            "semantic_lgan_fields", std::move(lgan_fields)
+         ));
+      }
+      std::vector< std::string > metadata_keys;
+      if(target_metadata) {
+         metadata_keys.emplace_back(kTargetGroupsAttr);
+      }
+      if(horizon_config != nullptr) {
+         metadata_keys.emplace_back(kParentRelationAttr);
+      }
+      plan.add_component(std::make_shared< SemanticFlatMetadataComponent >(std::move(metadata_keys))
+      );
+
+      FlatCompositionConfig composition_config;
+      composition_config.max_goal_level = horizon_config != nullptr ? horizon_config->max_goal_level
+                                                                    : config.max_goal_level;
+      composition_config.support_literals = horizon_config != nullptr
+                                               ? horizon_config->support_literals
+                                               : config.support_literals;
+      composition_config.goal_derivations = horizon_config != nullptr
+                                               ? horizon_config->goal_derivations
+                                               : config.goal_derivations;
+      composition_config.relation_args_node_type = std::string(kFlatEntityNodeType);
+      composition_config.entity_node_type = std::string(kFlatEntityNodeType);
+      composition_config.track_relation_instances = horizon_config != nullptr
+                                                       ? horizon_config->include_lgan_edges
+                                                       : config.include_lgan_edges;
+      composition_config
+         .pack_relation_args_relation_major = horizon_config != nullptr
+                                                 ? horizon_config->pack_relation_args_relation_major
+                                                 : config.pack_relation_args_relation_major;
+      composition_config.graph_config.include_lgan_edges = composition_config
+                                                              .track_relation_instances;
+      if(horizon_config == nullptr) {
+         composition_config.graph_config.target_sources = source_names_for(config.target_sources);
+         composition_config.graph_config.lgan_anchor_sources = source_names_for(
+            config.lgan_anchor_sources
+         );
+      }
+      composition_config.graph_config
+         .target_entity_group_names = horizon_config != nullptr
+                                         ? std::vector< std::string >{std::string(
+                                            target_source_group_name(TargetSource::states)
+                                         )}
+                                         : target_entity_group_names;
+      composition_config.graph_config
+         .target_symbol_prefix = horizon_config != nullptr
+                                    ? std::optional{horizon_config->target_symbol_prefix}
+                                    : std::optional{config.target_symbol_prefix};
+      composition_config.graph_config.lgan_tn_edge_pos = horizon_config != nullptr
+                                                            ? horizon_config->lgan_tn_edge_pos
+                                                            : config.lgan_tn_edge_pos;
+      composition_config.graph_config.lgan_nn_edge_pos = horizon_config != nullptr
+                                                            ? horizon_config->lgan_nn_edge_pos
+                                                            : config.lgan_nn_edge_pos;
+      composition_config.graph_config.lgan_rr_edge_pos = horizon_config != nullptr
+                                                            ? horizon_config->lgan_rr_edge_pos
+                                                            : config.lgan_rr_edge_pos;
+      composition_plan = std::make_unique< CompiledFlatPlan >(
+         std::move(plan).compile(composition_config)
+      );
    }
 
    static size_t goal_derivation_index(std::optional< GoalDerivation > derivation)
@@ -774,6 +1189,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          "SemanticFlatHorizonEncoderEngine requires at least one relation"
       );
       build_horizon_relation_ids(horizon);
+      build_composition_plan(true, &horizon);
    }
 
    void build_horizon_relation_ids(const SemanticFlatHorizonEncoderConfig& horizon)
@@ -1994,6 +2410,104 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
    }
 
+   BatchBuilder::BatchEncoding encode_horizon_composed(
+      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonEncoderConfig& horizon
+   ) const
+   {
+      BatchBuilder legacy_builder;
+      legacy_builder.set_graph_kind("flat");
+      prepare_horizon_builder(legacy_builder, horizon);
+      encode_horizon(dag, horizon, legacy_builder);
+      legacy_builder.next_graph();
+      auto expected = legacy_builder.build();
+      finalize_horizon_encoding(expected, horizon);
+      if(composition_plan == nullptr) {
+         mark_composed_path(false, "semantic flat composition plan is not available");
+         return expected;
+      }
+      BatchBuilder raw_builder;
+      raw_builder.set_graph_kind("flat");
+      prepare_horizon_builder(raw_builder, horizon);
+      encode_horizon(dag, horizon, raw_builder);
+      raw_builder.next_graph();
+      auto raw = raw_builder.build();
+      const std::array metadata_keys = {
+         std::string(kTargetGroupsAttr),
+         std::string(kParentRelationAttr),
+      };
+      auto carrier = make_semantic_carrier(raw, schema_, std::span{metadata_keys});
+      auto actual = composition_plan->encode(FlatInputView::from(carrier));
+      finalize_horizon_encoding(actual, horizon);
+      const auto comparison = compare_flat_batch_encodings(expected, actual);
+      if(comparison.equal) {
+         mark_composed_path(true);
+         return actual;
+      }
+      mark_composed_path(
+         false,
+         "compiled semantic flat horizon plan failed parity with the legacy oracle: "
+            + comparison.mismatch
+      );
+      return expected;
+   }
+
+   BatchBuilder::BatchEncoding encode_horizon_composed_batch(
+      const std::vector< SemanticTransitionDAG >& dags,
+      const SemanticFlatHorizonEncoderConfig& horizon
+   ) const
+   {
+      BatchBuilder expected_builder;
+      expected_builder.set_graph_kind("flat");
+      prepare_horizon_builder(expected_builder, horizon);
+      for(const auto& dag : dags) {
+         encode_horizon(dag, horizon, expected_builder);
+         expected_builder.next_graph();
+      }
+      auto expected = expected_builder.build();
+      finalize_horizon_encoding(expected, horizon);
+
+      if(composition_plan == nullptr) {
+         mark_composed_path(false, "semantic flat composition plan is not available");
+         return expected;
+      }
+
+      std::vector< SemanticFlatCompositionInput > carriers;
+      carriers.reserve(dags.size());
+      const std::array metadata_keys = {
+         std::string(kTargetGroupsAttr),
+         std::string(kParentRelationAttr),
+      };
+      for(const auto& dag : dags) {
+         BatchBuilder raw_builder;
+         raw_builder.set_graph_kind("flat");
+         prepare_horizon_builder(raw_builder, horizon);
+         encode_horizon(dag, horizon, raw_builder);
+         raw_builder.next_graph();
+         auto raw = raw_builder.build();
+         carriers.push_back(make_semantic_carrier(raw, schema_, std::span{metadata_keys}));
+      }
+
+      std::vector< FlatInputView > views;
+      views.reserve(carriers.size());
+      for(const auto& carrier : carriers) {
+         views.push_back(FlatInputView::from(carrier));
+      }
+      auto actual = composition_plan->encode_batch(std::span{views});
+      finalize_horizon_encoding(actual, horizon);
+      const auto comparison = compare_flat_batch_encodings(expected, actual);
+      if(comparison.equal) {
+         mark_composed_path(true);
+         return actual;
+      }
+      mark_composed_path(
+         false,
+         "compiled semantic flat horizon batch plan failed parity with the legacy oracle: "
+            + comparison.mismatch
+      );
+      return expected;
+   }
+
    void finalize_horizon_encoding(
       BatchBuilder::BatchEncoding& encoding,
       const SemanticFlatHorizonEncoderConfig& horizon
@@ -2025,7 +2539,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
       auto encoding = builder.build();
       finalize_batch_encoding(encoding);
-      return encoding;
+      return compose_many(inputs, encoding);
    }
 
    void encode_one_into(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
@@ -2040,6 +2554,57 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             builder.add_lazy_target_names(std::span{target_names});
          }
       }
+   }
+
+   BatchBuilder::BatchEncoding legacy_one(const SemanticFlatRelationInput& input) const
+   {
+      BatchBuilder builder;
+      encode_one_into(input, builder);
+      builder.next_graph();
+      return builder.build();
+   }
+
+   BatchBuilder::BatchEncoding compose_many(
+      std::span< const SemanticFlatRelationInput > inputs,
+      const BatchBuilder::BatchEncoding& expected
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         mark_composed_path(false, "semantic flat composition plan is not available");
+         return expected;
+      }
+      std::vector< SemanticFlatCompositionInput > carriers;
+      carriers.reserve(inputs.size());
+      const std::vector< std::string > metadata_keys = target_group_names.empty()
+                                                          ? std::vector< std::string >{}
+                                                          : std::vector< std::string >{
+                                                             std::string(kTargetGroupsAttr),
+                                                             std::string(kTargetSymbolPrefixAttr),
+                                                          };
+      std::vector< BatchBuilder::BatchEncoding > legacy;
+      legacy.reserve(inputs.size());
+      for(const auto& input : inputs) {
+         legacy.push_back(legacy_one(input));
+         carriers.push_back(make_semantic_carrier(legacy.back(), schema_, std::span{metadata_keys})
+         );
+      }
+      std::vector< FlatInputView > views;
+      views.reserve(carriers.size());
+      for(const auto& carrier : carriers) {
+         views.push_back(FlatInputView::from(carrier));
+      }
+      auto actual = composition_plan->encode_batch(std::span{views});
+      finalize_batch_encoding(actual);
+      const auto comparison = compare_flat_batch_encodings(expected, actual);
+      if(comparison.equal) {
+         mark_composed_path(true);
+         return actual;
+      }
+      mark_composed_path(
+         false,
+         "compiled semantic flat plan failed parity with the legacy oracle: " + comparison.mismatch
+      );
+      return expected;
    }
 
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
@@ -2105,6 +2670,21 @@ void SemanticFlatRelationEncoderEngine::finalize_batch_encoding(
 ) const
 {
    impl_->finalize_batch_encoding(encoding);
+}
+
+bool SemanticFlatRelationEncoderEngine::last_encoding_used_composed_plan() const
+{
+   return impl_->composed_path_used;
+}
+
+const std::string& SemanticFlatRelationEncoderEngine::last_composition_diagnostic() const
+{
+   return impl_->composition_diagnostic;
+}
+
+void SemanticFlatRelationEncoderEngine::note_composition_fallback(std::string diagnostic) const
+{
+   impl_->mark_composed_path(false, std::move(diagnostic));
 }
 
 const SemanticFlatRelationEncoderEngine::Config&
@@ -2195,6 +2775,22 @@ void SemanticFlatRelationEncoderEngine::encode_horizon(
 ) const
 {
    impl_->encode_horizon(dag, config, builder);
+}
+
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_horizon_composed(
+   const SemanticTransitionDAG& dag,
+   const SemanticFlatHorizonEncoderConfig& config
+) const
+{
+   return impl_->encode_horizon_composed(dag, config);
+}
+
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_horizon_composed_batch(
+   const std::vector< SemanticTransitionDAG >& dags,
+   const SemanticFlatHorizonEncoderConfig& config
+) const
+{
+   return impl_->encode_horizon_composed_batch(dags, config);
 }
 
 void SemanticFlatRelationEncoderEngine::finalize_horizon_encoding(
