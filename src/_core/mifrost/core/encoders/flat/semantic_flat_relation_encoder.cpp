@@ -550,6 +550,149 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       };
    };
 
+   struct PreparedRelationGraph {
+      const SemanticFlatRelationInput* input = nullptr;
+      std::vector< SemanticGoalLevel > goal_levels;
+      std::vector< SemanticLiteral > grouped_goals;
+      hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
+      mutable SemanticEncodingContext context;
+      bool suppress_empty_target_names = false;
+   };
+
+   enum class RelationLane {
+      facts,
+      goals,
+      actions,
+      history,
+   };
+
+   class RelationEntityComponent final: public FlatEmitterComponent {
+     public:
+      explicit RelationEntityComponent(const Impl* owner) : owner_(owner) {}
+      [[nodiscard]] std::string_view name() const noexcept override { return "semantic_entities"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type(
+            std::string(kFlatEntityNodeType),
+            FlatNodeKind::object,
+            1,
+            owner_->config.export_node_names
+         );
+      }
+      void plan_graph(const FlatInputView& input, FlatNodePlanBuilder& builder) const override
+      {
+         const auto& prepared = input.get< PreparedRelationGraph >();
+         for(int64_t index = 0; index < prepared.context.entity_count; ++index) {
+            const auto key = owner_->config.export_node_names
+                                ? prepared.context.entity_names.at(static_cast< size_t >(index))
+                                : "entity:" + std::to_string(index);
+            (void) builder.add_node_from_source(std::string(kFlatEntityNodeType), index, key);
+         }
+      }
+      void declare_node_features(FlatNodeFeaturePlanBuilder& builder) const override
+      {
+         builder.register_feature(std::string(kFlatEntityNodeType), "x", 1);
+      }
+      void write_node_features(
+         const FlatGraphContext& context,
+         FlatNodeFeatureWriter& writer
+      ) const override
+      {
+         const auto type = context.nodes.schema().id_for(std::string(kFlatEntityNodeType));
+         const std::vector< float > values(static_cast< size_t >(context.nodes.count(type)), 0.0F);
+         writer.set(std::string(kFlatEntityNodeType), "x", values);
+      }
+
+     private:
+      const Impl* owner_;
+   };
+
+   class RelationLaneComponent final: public FlatEmitterComponent {
+     public:
+      RelationLaneComponent(
+         const Impl* owner,
+         RelationLane lane,
+         std::string component_name,
+         std::vector< FlatCompositionRelationSpec > relations
+      )
+          : owner_(owner),
+            lane_(lane),
+            component_name_(std::move(component_name)),
+            relations_(std::move(relations))
+      {
+      }
+      [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         for(const auto& relation : relations_) {
+            builder.register_relation(relation.key, relation.layout, relation.usage);
+         }
+      }
+      void emit(const FlatInputView& input, FlatGraphContext& context) const override
+      {
+         owner_->emit_relation_lane(input.get< PreparedRelationGraph >(), lane_, context);
+      }
+
+     private:
+      const Impl* owner_;
+      RelationLane lane_;
+      std::string component_name_;
+      std::vector< FlatCompositionRelationSpec > relations_;
+   };
+
+   class RelationFieldComponent final: public FlatEmitterComponent {
+     public:
+      RelationFieldComponent(
+         const Impl* owner,
+         std::string component_name,
+         std::vector< SemanticFlatFieldComponent::FieldDeclaration > fields
+      )
+          : owner_(owner), component_name_(std::move(component_name)), fields_(std::move(fields))
+      {
+      }
+      [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+      void declare_fields(FlatFieldPlanBuilder& builder) const override
+      {
+         for(const auto& [key, spec] : fields_) {
+            builder.register_field(key, spec);
+         }
+      }
+      void write_fields(const FlatGraphContext& context, FlatFieldWriter& writer) const override
+      {
+         owner_->write_relation_fields(
+            context.input.get< PreparedRelationGraph >(), fields_, context, writer
+         );
+      }
+
+     private:
+      const Impl* owner_;
+      std::string component_name_;
+      std::vector< SemanticFlatFieldComponent::FieldDeclaration > fields_;
+   };
+
+   class RelationMetadataComponent final: public FlatEmitterComponent {
+     public:
+      explicit RelationMetadataComponent(const Impl* owner) : owner_(owner) {}
+      [[nodiscard]] std::string_view name() const noexcept override { return "semantic_metadata"; }
+      void declare_metadata(FlatMetadataPlanBuilder& builder) const override
+      {
+         if(owner_->config.export_node_names) {
+            builder.claim_object_names();
+         }
+         if(not owner_->target_group_names.empty() and owner_->config.export_node_names) {
+            builder.claim_optional_graph_attr(std::string(kTargetNamesAttr));
+         }
+      }
+      void
+      write_metadata(const FlatGraphContext& context, FlatMetadataWriter& writer) const override
+      {
+         owner_->write_relation_metadata(context.input.get< PreparedRelationGraph >(), writer);
+      }
+
+     private:
+      const Impl* owner_;
+   };
+
    Config config;
    std::shared_ptr< const SemanticTaskContext > task_context;
    const std::vector< SemanticPredicateSpec >& predicates;
@@ -606,9 +749,13 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    void build_composition_plan(bool horizon, const SemanticFlatHorizonEncoderConfig* horizon_config)
    {
       FlatEncoderPlan plan;
-      plan.emplace_component< SemanticFlatEntityComponent >(
-         horizon_config != nullptr ? horizon_config->export_node_names : config.export_node_names
-      );
+      if(horizon) {
+         plan.emplace_component< SemanticFlatEntityComponent >(
+            horizon_config != nullptr ? horizon_config->export_node_names : config.export_node_names
+         );
+      } else {
+         plan.add_component(std::make_shared< RelationEntityComponent >(this));
+      }
       const auto specs = semantic_relation_specs(schema_);
       std::array< std::vector< FlatCompositionRelationSpec >, 6 > lanes;
       for(const auto& spec : specs) {
@@ -629,13 +776,33 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          "semantic_history",
          "semantic_topology",
       };
+      if(not horizon) {
+         lanes[1].insert(
+            lanes[1].end(),
+            std::make_move_iterator(lanes[2].begin()),
+            std::make_move_iterator(lanes[2].end())
+         );
+         lanes[2].clear();
+      }
       for(size_t index = 0; index < lanes.size(); ++index) {
          if(not lanes[index].empty()) {
-            plan.add_component(
-               std::make_shared< SemanticFlatRelationComponent >(
-                  std::string(names[index]), std::move(lanes[index])
-               )
-            );
+            if(horizon) {
+               plan.add_component(
+                  std::make_shared< SemanticFlatRelationComponent >(
+                     std::string(names[index]), std::move(lanes[index])
+                  )
+               );
+            } else {
+               const auto lane = index == 0                 ? RelationLane::facts
+                                 : index == 1 or index == 2 ? RelationLane::goals
+                                 : index == 3               ? RelationLane::actions
+                                                            : RelationLane::history;
+               plan.add_component(
+                  std::make_shared< RelationLaneComponent >(
+                     this, lane, std::string(names[index]), std::move(lanes[index])
+                  )
+               );
+            }
          }
       }
 
@@ -662,32 +829,64 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
       if(not effect_fields.empty()) {
-         plan.add_component(
-            std::make_shared< SemanticFlatFieldComponent >(
-               "semantic_effects", std::move(effect_fields)
-            )
-         );
+         if(horizon) {
+            plan.add_component(
+               std::make_shared< SemanticFlatFieldComponent >(
+                  "semantic_effects", std::move(effect_fields)
+               )
+            );
+         } else {
+            plan.add_component(
+               std::make_shared< RelationFieldComponent >(
+                  this, "semantic_effects", std::move(effect_fields)
+               )
+            );
+         }
       }
       if(not history_fields.empty()) {
-         plan.add_component(
-            std::make_shared< SemanticFlatFieldComponent >(
-               "semantic_history_fields", std::move(history_fields)
-            )
-         );
+         if(horizon) {
+            plan.add_component(
+               std::make_shared< SemanticFlatFieldComponent >(
+                  "semantic_history_fields", std::move(history_fields)
+               )
+            );
+         } else {
+            plan.add_component(
+               std::make_shared< RelationFieldComponent >(
+                  this, "semantic_history_fields", std::move(history_fields)
+               )
+            );
+         }
       }
       if(not target_fields.empty()) {
-         plan.add_component(
-            std::make_shared< SemanticFlatFieldComponent >(
-               "semantic_targets", std::move(target_fields)
-            )
-         );
+         if(horizon) {
+            plan.add_component(
+               std::make_shared< SemanticFlatFieldComponent >(
+                  "semantic_targets", std::move(target_fields)
+               )
+            );
+         } else {
+            plan.add_component(
+               std::make_shared< RelationFieldComponent >(
+                  this, "semantic_targets", std::move(target_fields)
+               )
+            );
+         }
       }
       if(not lgan_fields.empty()) {
-         plan.add_component(
-            std::make_shared< SemanticFlatFieldComponent >(
-               "semantic_lgan_fields", std::move(lgan_fields)
-            )
-         );
+         if(horizon) {
+            plan.add_component(
+               std::make_shared< SemanticFlatFieldComponent >(
+                  "semantic_lgan_fields", std::move(lgan_fields)
+               )
+            );
+         } else {
+            plan.add_component(
+               std::make_shared< RelationFieldComponent >(
+                  this, "semantic_lgan_fields", std::move(lgan_fields)
+               )
+            );
+         }
       }
       std::vector< std::string > metadata_keys;
       std::vector< std::string > optional_metadata_keys;
@@ -702,11 +901,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       if(horizon_config != nullptr) {
          metadata_keys.emplace_back(kParentRelationAttr);
       }
-      plan.add_component(
-         std::make_shared< SemanticFlatMetadataComponent >(
-            std::move(metadata_keys), std::move(optional_metadata_keys)
-         )
-      );
+      if(horizon) {
+         plan.add_component(
+            std::make_shared< SemanticFlatMetadataComponent >(
+               std::move(metadata_keys), std::move(optional_metadata_keys)
+            )
+         );
+      } else {
+         plan.add_component(std::make_shared< RelationMetadataComponent >(this));
+      }
 
       FlatCompositionConfig composition_config;
       composition_config.max_goal_level = horizon_config != nullptr ? horizon_config->max_goal_level
@@ -1677,6 +1880,300 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return context;
    }
 
+   PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
+   {
+      validate_input(input);
+      PreparedRelationGraph prepared;
+      prepared.input = &input;
+      prepared.goal_levels = semantic_goal_levels(input);
+      const auto& goals = semantic_goals(input);
+      for(const auto category : kCategoryOrder) {
+         const auto append_category = [&](const std::vector< SemanticLiteral >& literals) {
+            for(const auto& literal : literals) {
+               if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category
+                  == category) {
+                  prepared.grouped_goals.push_back(literal);
+               }
+            }
+         };
+         append_category(goals);
+         for(const auto& layer : input.subgoal_layers) {
+            append_category(layer);
+         }
+      }
+      prepared.context = make_context(input, prepared.grouped_goals, prepared.goal_levels);
+
+      const auto& static_facts = semantic_static_facts(input);
+      const auto
+         record_facts =
+            [&](const std::vector< SemanticAtom >& facts, bool emit_facts) {
+               for(const auto& fact : facts) {
+                  const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
+                  if(emit_facts
+               and (predicate.category != SemanticPredicateCategory::static_predicate
+                    or config.include_static)
+               and not(config.ignore_zero_arity_relations and predicate.arity == 0)
+               and config.use_predicate_virtual_nodes) {
+                     (void) ensure_predicate_entity(prepared.context, fact.predicate);
+                  }
+                  prepared.fact_keys.emplace(fact);
+               }
+            };
+      record_facts(static_facts, config.include_static);
+      record_facts(input.state_facts, true);
+
+      for(const auto& literal : prepared.grouped_goals) {
+         const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
+         if(kTopTypePredicates.contains(predicate.name)
+            or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
+            continue;
+         }
+         const bool satisfied = prepared.fact_keys.contains(literal.atom) == literal.positive;
+         const bool emits = config.goal_derivations.contains(GoalDerivation::plain)
+                            or config.goal_derivations.contains(
+                               satisfied ? GoalDerivation::satisfied : GoalDerivation::unsatisfied
+                            );
+         if(emits and config.use_predicate_virtual_nodes) {
+            (void) ensure_predicate_entity(prepared.context, literal.atom.predicate);
+         }
+      }
+      if(config.use_predicate_virtual_nodes) {
+         for(const auto& entry : prepared.context.history_entries) {
+            for(const auto& literal : entry.literals) {
+               const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
+               if(not(config.ignore_zero_arity_relations and predicate.arity == 0)) {
+                  (void) ensure_predicate_entity(prepared.context, literal.atom.predicate);
+               }
+            }
+         }
+      }
+      return prepared;
+   }
+
+   void emit_relation_lane(
+      const PreparedRelationGraph& prepared,
+      RelationLane lane,
+      FlatGraphContext& graph
+   ) const
+   {
+      auto& context = prepared.context;
+      const auto emit_atom =
+         [&graph, &context, this](
+            int relation_id, const SemanticAtom& atom, std::span< const int64_t > auxiliary = {}
+         ) {
+            const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
+            if(config.ignore_zero_arity_relations and predicate.arity == 0) {
+               return;
+            }
+            const auto args = tuple_args(context, atom, auxiliary);
+            graph.emit(required_relation_id(relation_id), args);
+         };
+
+      if(lane == RelationLane::facts) {
+         const auto append = [&](const std::vector< SemanticAtom >& facts, bool emit_facts) {
+            for(const auto& fact : facts) {
+               const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
+               if(emit_facts
+                  and (category != SemanticPredicateCategory::static_predicate or config.include_static)) {
+                  emit_atom(state_relation_ids.at(static_cast< size_t >(fact.predicate)), fact);
+               }
+            }
+         };
+         append(semantic_static_facts(*prepared.input), config.include_static);
+         append(prepared.input->state_facts, true);
+         return;
+      }
+
+      if(lane == RelationLane::goals) {
+         for(const auto& literal : prepared.grouped_goals) {
+            const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
+            if(kTopTypePredicates.contains(predicate.name)
+               or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
+               continue;
+            }
+            const size_t level = semantic_goal_level(prepared.goal_levels, literal);
+            if(config.goal_derivations.contains(GoalDerivation::plain)) {
+               std::array< int64_t, 1 > auxiliary{};
+               std::span< const int64_t > auxiliary_span;
+               if(const auto source = source_for_goal_level(config, level); source.has_value()) {
+                  auxiliary[0] = context.goal_entity_indices.at(
+                     GoalEntityKey{*source, literal, level}
+                  );
+                  auxiliary_span = auxiliary;
+               }
+               emit_atom(
+                  goal_relation_ids.at(static_cast< size_t >(literal.atom.predicate))
+                     .at(level)
+                     .by_polarity[literal.positive ? 1 : 0][goal_derivation_index(std::nullopt)],
+                  literal.atom,
+                  auxiliary_span
+               );
+            }
+            const bool satisfied = prepared.fact_keys.contains(literal.atom) == literal.positive;
+            const auto derivation = satisfied ? GoalDerivation::satisfied
+                                              : GoalDerivation::unsatisfied;
+            if(config.goal_derivations.contains(derivation)) {
+               emit_atom(
+                  goal_relation_ids.at(static_cast< size_t >(literal.atom.predicate))
+                     .at(level)
+                     .by_polarity[literal.positive ? 1 : 0][goal_derivation_index(derivation)],
+                  literal.atom
+               );
+            }
+         }
+         return;
+      }
+
+      if(lane == RelationLane::actions) {
+         for(const auto& action : context.unique_actions) {
+            FlatTupleArguments args;
+            args.reserve(action.arguments.size() + 1);
+            args.push_back(context.action_entity_indices.at(action));
+            args.insert(args.end(), action.arguments.begin(), action.arguments.end());
+            graph.emit(
+               required_relation_id(action_relation_ids.at(static_cast< size_t >(action.action))),
+               args
+            );
+         }
+         return;
+      }
+
+      for(const auto& entry : context.history_entries) {
+         for(const auto& literal : entry.literals) {
+            const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
+            if(config.ignore_zero_arity_relations and predicate.arity == 0) {
+               continue;
+            }
+            std::array< int64_t, 2 > auxiliary{};
+            std::span< const int64_t > auxiliary_span;
+            if(has_anchor_entity_source(config, TargetSource::history)) {
+               auxiliary[0] = context.history_target_entity_indices.at(
+                  HistoryEntityKey{entry.dt, entry.entry_index, literal}
+               );
+               auxiliary[1] = entry.entity_index;
+               auxiliary_span = auxiliary;
+            } else {
+               auxiliary[0] = entry.entity_index;
+               auxiliary_span = std::span{auxiliary}.first(1);
+            }
+            emit_atom(
+               history_relation_ids.at(
+                  static_cast< size_t >(literal.atom.predicate)
+               )[literal.positive ? 1 : 0],
+               literal.atom,
+               auxiliary_span
+            );
+         }
+      }
+   }
+
+   void write_relation_fields(
+      const PreparedRelationGraph& prepared,
+      const std::vector< SemanticFlatFieldComponent::FieldDeclaration >& fields,
+      const FlatGraphContext& graph,
+      FlatFieldWriter& writer
+   ) const
+   {
+      const auto& context = prepared.context;
+      const int64_t node_size = context.entity_count;
+      const int64_t object_size = static_cast< int64_t >(context.object_indices.size());
+      const int64_t history_size = static_cast< int64_t >(context.history_entity_indices.size());
+      const int64_t target_entity_size = static_cast< int64_t >(
+         context.target_entity_indices.size()
+      );
+      const int64_t target_size = static_cast< int64_t >(context.target_columns.size());
+      std::optional< FlatLGANFields > lgan;
+      const auto values = [&](std::string_view key) -> std::span< const int64_t > {
+         if(key == kNodeSizesField)
+            return std::span{&node_size, size_t{1}};
+         if(key == kObjectSizesField)
+            return std::span{&object_size, size_t{1}};
+         if(key == kObjectIndicesField)
+            return context.object_indices;
+         if(key == kEntityRoleIdsField)
+            return context.entity_role_ids;
+         if(key == kHistoryEntitySizesField)
+            return std::span{&history_size, size_t{1}};
+         if(key == kHistoryEntityIndicesField)
+            return context.history_entity_indices;
+         if(key == kHistoryEntityDtField)
+            return context.history_entity_dt;
+         if(key == kTargetEntitySizesField)
+            return std::span{&target_entity_size, size_t{1}};
+         if(key == kTargetEntityIndicesField)
+            return context.target_entity_indices;
+         if(key == kTargetEntityGroupIdsField)
+            return context.target_entity_group_ids;
+         if(key == kTargetSizesField)
+            return std::span{&target_size, size_t{1}};
+         if(key == kTargetPositionsField)
+            return context.target_columns.positions;
+         if(key == kTargetIndicesField)
+            return context.target_columns.indices;
+         if(key == kTargetCandidateIdsField)
+            return context.target_columns.candidate_ids;
+         if(key == kTargetGroupIdsField)
+            return context.target_columns.group_ids;
+         throw std::logic_error("unknown direct semantic flat field '" + std::string(key) + "'");
+      };
+
+      for(const auto& [key, spec] : fields) {
+         if(not key.starts_with("lgan_")) {
+            writer.set(key, values(key));
+            continue;
+         }
+         if(not lgan.has_value()) {
+            if(context.target_entity_indices.empty()) {
+               throw std::invalid_argument(
+                  "Semantic flat include_lgan_edges=true requires LGAN anchor entity rows"
+               );
+            }
+            lgan = build_flat_lgan(graph.relations, context.target_entity_indices);
+         }
+         const int64_t tn_size = static_cast< int64_t >(lgan->tn_relation_indices.size());
+         const int64_t nn_size = static_cast< int64_t >(lgan->nn_relation_indices.size());
+         const int64_t rr_size = static_cast< int64_t >(lgan->rr_src_relation_indices.size());
+         if(key == kLGANTNSizesField)
+            writer.set(key, std::span{&tn_size, size_t{1}});
+         else if(key == kLGANTNRelationIndicesField)
+            writer.set(key, lgan->tn_relation_indices);
+         else if(key == kLGANTNEntityIndicesField)
+            writer.set(key, lgan->tn_entity_indices);
+         else if(key == kLGANNNSizesField)
+            writer.set(key, std::span{&nn_size, size_t{1}});
+         else if(key == kLGANNNRelationIndicesField)
+            writer.set(key, lgan->nn_relation_indices);
+         else if(key == kLGANNNEntityIndicesField)
+            writer.set(key, lgan->nn_entity_indices);
+         else if(key == kLGANRRSizesField)
+            writer.set(key, std::span{&rr_size, size_t{1}});
+         else if(key == kLGANRRSrcRelationIndicesField) {
+            writer.set(key, lgan->rr_src_relation_indices);
+         } else if(key == kLGANRRDstRelationIndicesField) {
+            writer.set(key, lgan->rr_dst_relation_indices);
+         } else {
+            throw std::logic_error("unknown direct semantic LGAN field '" + key + "'");
+         }
+      }
+   }
+
+   void
+   write_relation_metadata(const PreparedRelationGraph& prepared, FlatMetadataWriter& writer) const
+   {
+      if(config.export_node_names) {
+         writer.set_object_names(semantic_objects(*prepared.input));
+      }
+      if(not target_group_names.empty() and config.export_node_names) {
+         if(prepared.context.target_columns.names.empty()) {
+            if(not prepared.suppress_empty_target_names) {
+               writer.set_graph_attr(std::string(kTargetNamesAttr), std::vector< std::string >{});
+            }
+         } else {
+            writer.add_lazy_target_names(prepared.context.target_columns.names);
+         }
+      }
+   }
+
    void encode_into(
       const SemanticFlatRelationInput& input,
       BatchBuilder* builder,
@@ -2543,21 +3040,13 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return compose_many(inputs);
    }
 
-   SemanticFlatCompositionInput make_composition_input(const SemanticFlatRelationInput& input) const
-   {
-      SemanticFlatCompositionInput carrier;
-      encode_into(input, nullptr, &carrier, carrier.lazy_target_name_strings);
-      rebuild_semantic_carrier_indexes(carrier, schema_);
-      return carrier;
-   }
-
    void append_composed(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
    {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
       }
-      const auto carrier = make_composition_input(input);
-      composition_plan->append_graph(FlatInputView::from(carrier), builder);
+      const auto prepared = prepare_relation_graph(input);
+      composition_plan->append_graph(FlatInputView::from(prepared), builder);
    }
 
    void encode_one_into(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
@@ -2581,23 +3070,23 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
       }
-      std::vector< SemanticFlatCompositionInput > carriers;
-      carriers.reserve(inputs.size());
+      std::vector< PreparedRelationGraph > graphs;
+      graphs.reserve(inputs.size());
       for(const auto& input : inputs) {
-         carriers.push_back(make_composition_input(input));
+         graphs.push_back(prepare_relation_graph(input));
       }
       if(not target_group_names.empty() and config.export_node_names
-         and std::ranges::any_of(carriers, [](const auto& carrier) {
-                return not carrier.lazy_target_name_strings.empty();
+         and std::ranges::any_of(graphs, [](const auto& graph) {
+                return not graph.context.target_columns.names.empty();
              })) {
-         for(auto& carrier : carriers) {
-            carrier.graph_attrs.erase(std::string(kTargetNamesAttr));
+         for(auto& graph : graphs) {
+            graph.suppress_empty_target_names = true;
          }
       }
       std::vector< FlatInputView > views;
-      views.reserve(carriers.size());
-      for(const auto& carrier : carriers) {
-         views.push_back(FlatInputView::from(carrier));
+      views.reserve(graphs.size());
+      for(const auto& graph : graphs) {
+         views.push_back(FlatInputView::from(graph));
       }
       auto actual = composition_plan->encode_batch(std::span{views});
       finalize_batch_encoding(actual);
