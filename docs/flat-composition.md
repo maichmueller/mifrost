@@ -125,9 +125,33 @@ pre-refactor commit rather than treating two public wrappers as independent
 implementations.
 
 `FlatRelationMajorWriter` is the shared finalization seam.  The semantic flat
-relation and horizon engines use the same writer as a composed plan, so
-relation-argument collation is not a second, subtly different implementation
-during migration.
+relation and horizon engines let their compiled plan invoke this writer exactly
+once for one-shot and batch results. Caller-owned `BatchBuilder` paths invoke
+the same writer through the public `finalize_batch_encoding()` operation after
+the caller commits and builds the batch.
+
+## Backend boundary
+
+The reusable implementation lives in the planner-neutral core:
+
+- `FlatEncoderPlan`, `CompiledFlatPlan`, and `FlatBatchRuntime` are the public
+  C++ extension seam for new native flat encoders.
+- `SemanticFlatRelationEncoderEngine` and `SemanticFlatHorizonEncoderEngine`
+  are the canonical built-in assemblies. Both execute direct semantic
+  components through a compiled plan.
+- Planner adapters translate stable backend identities to
+  `SemanticFlatRelationInput` and `SemanticTransitionDAG`; they do not own
+  schema compilation, relation packing, target metadata, or batch
+  finalization.
+
+The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
+remain compatibility implementations for the historical advanced-Pymimir C++
+and streaming APIs. They are not the extension seam for new encoders and are
+not evidence for or against parity of downstream composite modes. Removing or
+redirecting those compatibility classes is a separate API migration because
+their constructors, stream update semantics, and accepted Mimir object types
+are public contracts. New backend-neutral and downstream encoders must use the
+core composition API above.
 
 ## Generic composition capabilities
 

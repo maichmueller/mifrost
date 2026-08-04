@@ -2828,9 +2828,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          throw std::logic_error("semantic flat composition plan is not available");
       }
       const auto prepared = prepare_horizon_graph(dag, horizon);
-      auto actual = composition_plan->encode(FlatInputView::from(prepared));
-      finalize_horizon_encoding(actual, horizon);
-      return actual;
+      return composition_plan->encode(FlatInputView::from(prepared));
    }
 
    void append_horizon_composed(
@@ -2873,9 +2871,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       for(const auto& graph : graphs) {
          views.push_back(FlatInputView::from(graph));
       }
-      auto actual = composition_plan->encode_batch(std::span{views});
-      finalize_horizon_encoding(actual, horizon);
-      return actual;
+      return composition_plan->encode_batch(std::span{views});
    }
 
    void finalize_horizon_encoding(
@@ -2930,9 +2926,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       for(const auto& graph : graphs) {
          views.push_back(FlatInputView::from(graph));
       }
-      auto actual = composition_plan->encode_batch(std::span{views});
-      finalize_batch_encoding(actual);
-      return actual;
+      return composition_plan->encode_batch(std::span{views});
    }
 
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
