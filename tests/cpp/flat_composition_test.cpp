@@ -1,0 +1,198 @@
+#include "mifrost/core/encoders/flat/flat_composition.hpp"
+
+#include <gtest/gtest.h>
+
+#include <array>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace mifrost {
+namespace {
+
+struct DemoInput {
+   std::vector< std::string > objects;
+   int64_t marker = 0;
+};
+
+FlatTupleLayout unary_layout()
+{
+   return make_predicate_tuple_layout(1, {}, false);
+}
+
+class FactsComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override { return "facts"; }
+
+   void declare_schema(FlatSchemaPlanBuilder& builder) const override
+   {
+      builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+      builder.register_relation(
+         predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+      );
+   }
+
+   void declare_fields(FlatFieldPlanBuilder& builder) const override
+   {
+      builder.register_field(
+         "marker",
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+      );
+   }
+
+   void plan_graph(const FlatInputView& input, FlatNodePlanBuilder& builder) const override
+   {
+      for(const auto& object : input.get< DemoInput >().objects) {
+         builder.add_node("entity", object);
+      }
+   }
+
+   void emit(const FlatInputView& input, FlatGraphContext& context) const override
+   {
+      const auto relation = predicate_relation_key("fact");
+      for(const auto& object : input.get< DemoInput >().objects) {
+         const auto node = context.nodes.index(
+            FlatNodeRef{context.nodes.schema().id_for("entity"), object}
+         );
+         const std::array args{node};
+         context.emit(relation, args);
+      }
+   }
+
+   void write_fields(const FlatGraphContext& context, FlatFieldWriter& writer) const override
+   {
+      writer.set("marker", std::span{&context.input.get< DemoInput >().marker, size_t{1}});
+   }
+};
+
+class ProjectionComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override { return "projections"; }
+
+   void declare_schema(FlatSchemaPlanBuilder& builder) const override
+   {
+      const auto entity_type = builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+      builder.register_relation(
+         predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+      );
+      builder.register_relation(
+         predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
+      );
+      builder.add_projection(
+         FlatRelationProjection{
+            .source_relation = predicate_relation_key("fact"),
+            .output_relation = predicate_relation_key("anchor"),
+            .slots = {FlatSlotResolver::node_ref(FlatNodeRef{entity_type, "a"})},
+         }
+      );
+   }
+
+   void emit(const FlatInputView&, FlatGraphContext& context) const override
+   {
+      const std::array source_args{int64_t{0}};
+      context.emit_projection(0, source_args);
+   }
+};
+
+class ConflictingFieldComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override { return "conflict"; }
+
+   void declare_fields(FlatFieldPlanBuilder& builder) const override
+   {
+      builder.register_field(
+         "marker",
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+      );
+   }
+};
+
+TEST(FlatCompositionTest, CompilesSharedNodesAndRunsOneNativeBatch)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FactsComponent >();
+   plan.emplace_component< ProjectionComponent >();
+
+   FlatCompositionConfig config;
+   config.goal_derivations = {GoalDerivation::plain};
+   auto compiled = plan.compile(config);
+
+   ASSERT_EQ(compiled.schema().size(), 2u);
+   ASSERT_EQ(compiled.node_schema().id_for("entity"), 0);
+
+   const DemoInput first{{"a", "b"}, 7};
+   const DemoInput second{{"a"}, 9};
+   const std::array inputs{FlatInputView::from(first), FlatInputView::from(second)};
+   const auto encoding = compiled.encode_batch(inputs);
+
+   EXPECT_EQ(encoding.num_graphs, 2);
+   ASSERT_TRUE(encoding.graph_fields.contains(std::string(kRelationCountsField)));
+   ASSERT_TRUE(encoding.graph_fields.contains(std::string(kRelationArgsField)));
+   ASSERT_TRUE(encoding.graph_fields.contains("marker"));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(encoding.graph_fields.at("marker").values),
+      (std::vector< int64_t >{7, 9})
+   );
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationCountsField)).values
+      )
+         .size(),
+      4u
+   );
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      (std::vector< int64_t >{0, 2, 0, 1, 2})
+   );
+   EXPECT_EQ(
+      std::get< std::string >(encoding.graph_attrs.at(std::string(kRelationArgsLayoutAttr))),
+      std::string(kRelationArgsRelationMajorLayout)
+   );
+}
+
+TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FactsComponent >();
+   plan.emplace_component< ConflictingFieldComponent >();
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, RejectsProjectionWithUnknownNodeType)
+{
+   class InvalidProjection final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "invalid"; }
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         builder.declare_node_type("entity");
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+         builder.register_relation(
+            predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
+         );
+         builder.add_projection(
+            FlatRelationProjection{
+               .source_relation = predicate_relation_key("fact"),
+               .output_relation = predicate_relation_key("anchor"),
+               .slots = {FlatSlotResolver::node_ref(FlatNodeRef{42, "a"})},
+            }
+         );
+      }
+   };
+   FlatEncoderPlan plan;
+   plan.emplace_component< InvalidProjection >();
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
+TEST(FlatCompositionTest, RejectsEmptyPlans)
+{
+   FlatEncoderPlan plan;
+   EXPECT_THROW((void) plan.compile(), std::invalid_argument);
+}
+
+}  // namespace
+}  // namespace mifrost

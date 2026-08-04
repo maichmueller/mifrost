@@ -407,6 +407,7 @@ add_library(
         "_core/mifrost/core/encoders/hetero/hetero_relation_schema.cpp"
         "_core/mifrost/core/encoders/flat/flat_encoder_common.cpp"
         "_core/mifrost/core/encoders/flat/flat_lgan.cpp"
+        "_core/mifrost/core/encoders/flat/flat_composition.cpp"
         "_core/mifrost/core/encoders/flat/flat_relation_schema.cpp"
         "_core/mifrost/core/encoders/flat/semantic_flat_relation_encoder.cpp"
         "_core/mifrost/core/encoders/flat/semantic_flat_horizon_encoder.cpp"
@@ -1069,6 +1070,7 @@ else ()
         "core/encoders/common/target_source.hpp"
         "core/encoders/flat/flat_encoder_common.hpp"
         "core/encoders/flat/flat_lgan.hpp"
+        "core/encoders/flat/flat_composition.hpp"
         "core/encoders/flat/flat_relation_config.hpp"
         "core/encoders/flat/flat_relation_schema.hpp"
         "core/encoders/flat/flat_tuple_layout.hpp"
@@ -1291,6 +1293,7 @@ if (BUILD_TESTING)
     add_executable(
             mifrost_neutral_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_composition_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/hetero_relation_schema_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_catalog_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/relation_key_test.cpp"
