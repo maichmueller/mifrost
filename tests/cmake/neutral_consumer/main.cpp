@@ -1,3 +1,4 @@
+#include <mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp>
 #include <mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp>
 
 int main()
@@ -7,5 +8,6 @@ int main()
       .name = "ready",
       .arity = 0,
    };
-   return predicate.name == "ready" ? 0 : 1;
+   const mifrost::SemanticFlatHorizonEncoderConfig horizon;
+   return predicate.name == "ready" && horizon.ignore_actions ? 0 : 1;
 }

@@ -1074,6 +1074,7 @@ else ()
         "core/encoders/flat/flat_relation_config.hpp"
         "core/encoders/flat/flat_relation_schema.hpp"
         "core/encoders/flat/flat_tuple_layout.hpp"
+        "core/encoders/flat/semantic_flat_horizon_encoder.hpp"
         "core/encoders/flat/semantic_flat_relation_encoder.hpp"
         "core/encoders/homo/semantic_color_encoder.hpp"
         "core/encoders/hetero/hetero_relation_schema.hpp"
