@@ -1999,9 +1999,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       const SemanticFlatHorizonEncoderConfig& horizon
    ) const
    {
-      if(horizon.pack_relation_args_relation_major) {
-         pack_flat_relation_args_relation_major(encoding, std::span{schema_.arities()});
-      }
+      FlatRelationMajorWriter writer(
+         std::span{schema_.arities()}, horizon.pack_relation_args_relation_major
+      );
+      writer.finalize(encoding);
    }
 
    BatchBuilder::BatchEncoding encode_many(
