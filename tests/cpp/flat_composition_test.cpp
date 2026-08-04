@@ -752,6 +752,47 @@ TEST(FlatCompositionTest, SemanticRelationParityMatrixUsesCompiledPlan)
    }
 }
 
+TEST(FlatCompositionTest, SemanticRelationBuilderPathMatchesOneShotComposition)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.max_goal_level = 1;
+   config.target_sources = {
+      TargetSource::actions,
+      TargetSource::goals,
+      TargetSource::subgoals,
+      TargetSource::history,
+   };
+   config.lgan_anchor_sources = config.target_sources;
+   config.include_lgan_edges = true;
+   config.support_literals = true;
+   config.use_predicate_virtual_nodes = true;
+   SemanticFlatRelationEncoderEngine engine(
+      std::vector< SemanticPredicateSpec >{
+         {SemanticPredicateCategory::static_predicate, "ready", 0},
+         {SemanticPredicateCategory::fluent, "at", 1},
+      },
+      std::vector< SemanticActionSpec >{{"move", 1}},
+      config
+   );
+   SemanticFlatRelationInput input;
+   input.objects = {"a", "b"};
+   input.state_facts = {{0, {}}, {1, {0}}};
+   input.goals = {{{1, {1}}, true}};
+   input.subgoal_layers = {{{{1, {0}}, false}}};
+   input.actions = {{0, {0}}};
+   input.history = {{-1, {{{1, {1}}, true}}}};
+
+   const auto expected = engine.encode(input);
+   BatchBuilder builder;
+   engine.encode(input, builder);
+   builder.next_graph();
+   auto actual = builder.build();
+   engine.finalize_batch_encoding(actual);
+
+   const auto parity = compare_flat_batch_encodings(expected, actual);
+   ASSERT_TRUE(parity.equal) << parity.mismatch;
+}
+
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)
 {
    FlatEncoderPlan plan;

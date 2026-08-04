@@ -90,7 +90,6 @@ void SemanticFlatHorizonEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   impl_->flat.prepare_horizon_builder(builder, impl_->config);
    impl_->flat.encode_horizon(dag, impl_->config, builder);
 }
 

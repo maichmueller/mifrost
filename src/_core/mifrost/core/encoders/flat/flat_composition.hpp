@@ -796,6 +796,8 @@ class MIFROST_API CompiledFlatPlan {
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       std::span< const FlatInputView > inputs
    ) const;
+   /** Write one graph without committing it; the caller owns `next_graph()`. */
+   void append_graph(const FlatInputView& input, BatchBuilder& builder) const;
    void encode(const FlatInputView& input, BatchBuilder& builder) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
@@ -839,6 +841,7 @@ class MIFROST_API FlatBatchRuntime {
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       std::span< const FlatInputView > inputs
    ) const;
+   void append_graph(const FlatInputView& input, BatchBuilder& builder) const;
    void encode(const FlatInputView& input, BatchBuilder& builder) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 

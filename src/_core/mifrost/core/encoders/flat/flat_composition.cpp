@@ -1237,14 +1237,19 @@ void CompiledFlatPlan::encode_graph(
    );
    builder.set_field(std::string(kRelationCountsField), relation_counts);
    builder.set_field(std::string(kRelationArgsField), relation_args);
-   builder.next_graph();
 }
 
-void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder) const
+void CompiledFlatPlan::append_graph(const FlatInputView& input, BatchBuilder& builder) const
 {
    configure_builder(builder);
    std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
    encode_graph(input, builder, batch_constants);
+}
+
+void CompiledFlatPlan::encode(const FlatInputView& input, BatchBuilder& builder) const
+{
+   append_graph(input, builder);
+   builder.next_graph();
 }
 
 BatchBuilder::BatchEncoding CompiledFlatPlan::encode(const FlatInputView& input) const
@@ -1253,6 +1258,7 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode(const FlatInputView& input)
    configure_builder(builder);
    std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
    encode_graph(input, builder, batch_constants);
+   builder.next_graph();
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);
    return encoding;
@@ -1267,6 +1273,7 @@ BatchBuilder::BatchEncoding CompiledFlatPlan::encode_batch(
    std::unordered_map< std::string, BatchBuilder::GraphAttrValue > batch_constants;
    for(const auto& input : inputs) {
       encode_graph(input, builder, batch_constants);
+      builder.next_graph();
    }
    auto encoding = builder.build();
    finalize_batch_encoding(encoding);
@@ -1304,6 +1311,11 @@ BatchBuilder::BatchEncoding FlatBatchRuntime::encode_batch(
 void FlatBatchRuntime::encode(const FlatInputView& input, BatchBuilder& builder) const
 {
    plan_->encode(input, builder);
+}
+
+void FlatBatchRuntime::append_graph(const FlatInputView& input, BatchBuilder& builder) const
+{
+   plan_->append_graph(input, builder);
 }
 
 void FlatBatchRuntime::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const

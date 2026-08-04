@@ -2482,6 +2482,21 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return actual;
    }
 
+   void append_horizon_composed(
+      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonEncoderConfig& horizon,
+      BatchBuilder& builder
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      SemanticFlatCompositionInput carrier;
+      encode_horizon(dag, horizon, nullptr, &carrier);
+      rebuild_semantic_carrier_indexes(carrier, schema_);
+      composition_plan->append_graph(FlatInputView::from(carrier), builder);
+   }
+
    BatchBuilder::BatchEncoding encode_horizon_composed_batch(
       const std::vector< SemanticTransitionDAG >& dags,
       const SemanticFlatHorizonEncoderConfig& horizon
@@ -2528,6 +2543,23 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return compose_many(inputs);
    }
 
+   SemanticFlatCompositionInput make_composition_input(const SemanticFlatRelationInput& input) const
+   {
+      SemanticFlatCompositionInput carrier;
+      encode_into(input, nullptr, &carrier, carrier.lazy_target_name_strings);
+      rebuild_semantic_carrier_indexes(carrier, schema_);
+      return carrier;
+   }
+
+   void append_composed(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      const auto carrier = make_composition_input(input);
+      composition_plan->append_graph(FlatInputView::from(carrier), builder);
+   }
+
    void encode_one_into(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
    {
       prepare_builder(builder);
@@ -2552,10 +2584,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       std::vector< SemanticFlatCompositionInput > carriers;
       carriers.reserve(inputs.size());
       for(const auto& input : inputs) {
-         SemanticFlatCompositionInput carrier;
-         encode_into(input, nullptr, &carrier, carrier.lazy_target_name_strings);
-         rebuild_semantic_carrier_indexes(carrier, schema_);
-         carriers.push_back(std::move(carrier));
+         carriers.push_back(make_composition_input(input));
       }
       if(not target_group_names.empty() and config.export_node_names
          and std::ranges::any_of(carriers, [](const auto& carrier) {
@@ -2623,7 +2652,7 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   impl_->encode_one_into(input, builder);
+   impl_->append_composed(input, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
@@ -2727,7 +2756,7 @@ void SemanticFlatRelationEncoderEngine::encode_horizon(
    BatchBuilder& builder
 ) const
 {
-   impl_->encode_horizon(dag, config, &builder, nullptr);
+   impl_->append_horizon_composed(dag, config, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_horizon_composed(

@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#include "mifrost/core/encoders/flat/flat_composition.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -236,6 +238,29 @@ TEST(SemanticFlatHorizonEncoderEngineTest, GoalSatisfactionDerivationsRegisterRo
 
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
+}
+
+TEST(SemanticFlatHorizonEncoderEngineTest, BuilderPathMatchesOneShotComposition)
+{
+   SemanticFlatHorizonEncoderEngine::Config config;
+   config.support_literals = true;
+   config.include_lgan_edges = true;
+   config.enable_parent_relation = true;
+   config.enable_sibling_relation = true;
+   config.enable_cousin_relation = true;
+   config.use_predicate_virtual_nodes = true;
+   SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
+   const auto dag = make_dag();
+
+   const auto expected = engine.encode(dag);
+   BatchBuilder builder;
+   engine.encode(dag, builder);
+   builder.next_graph();
+   auto actual = builder.build();
+   engine.finalize_batch_encoding(actual);
+
+   const auto parity = compare_flat_batch_encodings(expected, actual);
+   ASSERT_TRUE(parity.equal) << parity.mismatch;
 }
 
 }  // namespace
