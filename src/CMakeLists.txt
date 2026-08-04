@@ -1013,7 +1013,9 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
         install(TARGETS mifrost_pytyr_adapter_module LIBRARY DESTINATION "${MIFROST_PYTHON_PACKAGE_DIR}")
     endif ()
     install(
-        FILES "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/backends/pytyr/semantic_flat_encoder.hpp"
+        FILES
+            "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/backends/pytyr/semantic_flat_encoder.hpp"
+            "${CMAKE_CURRENT_LIST_DIR}/_core/mifrost/backends/pytyr/views.hpp"
         DESTINATION "${MIFROST_SDK_INCLUDE_DIR}/mifrost/backends/pytyr"
     )
 endif ()
@@ -1059,6 +1061,10 @@ else ()
         "core/schema_key_separators.hpp"
         "core/utils/macro.hpp"
         "core/utils/type_traits.hpp"
+        "core/views/concepts.hpp"
+        "core/views/ids.hpp"
+        "core/views/ranges.hpp"
+        "core/views/canonical.hpp"
         "core/encoders/common/default_relations.hpp"
         "core/encoders/common/goal_derivation.hpp"
         "core/encoders/common/goal_level.hpp"
@@ -1074,6 +1080,7 @@ else ()
         "core/encoders/flat/flat_relation_config.hpp"
         "core/encoders/flat/flat_relation_schema.hpp"
         "core/encoders/flat/flat_tuple_layout.hpp"
+        "core/encoders/flat/view_flat_relation_encoder.hpp"
         "core/encoders/flat/semantic_flat_horizon_encoder.hpp"
         "core/encoders/flat/semantic_flat_relation_encoder.hpp"
         "core/encoders/homo/semantic_color_encoder.hpp"
@@ -1082,6 +1089,7 @@ else ()
         "core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
         "core/semantic/semantic_transition_dag.hpp"
+        "core/semantic/views.hpp"
     )
     foreach (_mifrost_header IN LISTS _mifrost_neutral_public_headers)
         get_filename_component(_mifrost_header_dir "${_mifrost_header}" DIRECTORY)

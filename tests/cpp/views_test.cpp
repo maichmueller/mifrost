@@ -2,9 +2,11 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <span>
 #include <string>
 
+#include "mifrost/core/encoders/flat/view_flat_relation_encoder.hpp"
 #include "mifrost/core/views/canonical.hpp"
 
 namespace mifrost {
@@ -54,6 +56,33 @@ TEST(ViewsTest, CanonicalAlgorithmsOperateOnViews)
    EXPECT_FALSE(canonical::contains_atom(fluent, semantic::AtomView{&different}));
    EXPECT_TRUE(canonical::satisfies_literal(fluent, semantic::LiteralView{&positive}));
    EXPECT_TRUE(canonical::satisfies_literal(fluent, semantic::LiteralView{&negative}));
+}
+
+TEST(ViewsTest, CanonicalFlatTraversalVisitsEachLane)
+{
+   const SemanticAtom atom{3, {7}};
+   const SemanticLiteral goal{atom, true};
+   const SemanticGroundAction action{2, {7}};
+   const semantic::StateView state{
+      .fluent = semantic::AtomsView(std::span{&atom, 1}),
+      .derived = semantic::AtomsView(std::span< const SemanticAtom >{}),
+   };
+   const std::array lanes_expected{
+      canonical::FlatLane::state,
+      canonical::FlatLane::goal,
+      canonical::FlatLane::action,
+   };
+   std::array< canonical::FlatLane, 3 > lanes{};
+   std::size_t index = 0;
+
+   canonical::visit_flat_lanes(
+      state,
+      semantic::LiteralsView(std::span{&goal, 1}),
+      semantic::GroundActionsView(std::span{&action, 1}),
+      [&](const canonical::FlatLane lane, const auto&) { lanes[index++] = lane; }
+   );
+
+   EXPECT_EQ(lanes, lanes_expected);
 }
 
 TEST(ViewsTest, SemanticSchemaViewsUseExplicitCompactIds)
