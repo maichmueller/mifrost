@@ -138,6 +138,54 @@ void validate_composition_relations(
    }
 }
 
+void append_projection_identity_part(std::string& identity, std::string_view value)
+{
+   identity.append(std::to_string(value.size()));
+   identity.push_back(':');
+   identity.append(value);
+}
+
+std::string projection_identity(const FlatRelationProjection& projection)
+{
+   std::string identity;
+   append_projection_identity_part(identity, projection.component);
+   append_projection_identity_part(identity, format_relation_name(projection.source_relation));
+   append_projection_identity_part(identity, format_relation_name(projection.output_relation));
+   for(const auto& slot : projection.slots) {
+      identity.push_back('|');
+      append_projection_identity_part(identity, std::to_string(static_cast< int >(slot.kind)));
+      switch(slot.kind) {
+         case FlatSlotResolverKind::source_slot:
+         case FlatSlotResolverKind::source_node:
+            append_projection_identity_part(identity, std::to_string(slot.source_slot));
+            if(slot.kind == FlatSlotResolverKind::source_node) {
+               append_projection_identity_part(
+                  identity, std::to_string(static_cast< int >(slot.source_node_type))
+               );
+            }
+            break;
+         case FlatSlotResolverKind::constant:
+            append_projection_identity_part(identity, std::to_string(slot.constant));
+            break;
+         case FlatSlotResolverKind::node:
+            append_projection_identity_part(
+               identity, std::to_string(static_cast< int >(slot.node.type))
+            );
+            append_projection_identity_part(identity, slot.node.key);
+            break;
+      }
+   }
+   return identity;
+}
+
+std::string projection_identity(const FlatRelationProjection& projection, size_t occurrence)
+{
+   auto identity = projection_identity(projection);
+   identity.push_back('|');
+   append_projection_identity_part(identity, std::to_string(occurrence));
+   return identity;
+}
+
 }  // namespace
 
 const FlatNodeTypeSpec& FlatNodeSchema::spec(FlatNodeTypeId id) const
@@ -538,10 +586,16 @@ FlatProjectionHandle FlatSchemaPlanBuilder::add_projection(FlatRelationProjectio
    });
    projection.component = current_component_;
    projection.component_id = local_id;
+   const auto base_identity = projection_identity(projection);
+   const auto occurrence = std::ranges::count_if(projections_, [&](const auto& existing) {
+      return existing.component == current_component_
+             and projection_identity(existing) == base_identity;
+   });
    projections_.push_back(std::move(projection));
    return FlatProjectionHandle{
       .component_id = static_cast< size_t >(local_id),
       .component = current_component_,
+      .identity = projection_identity(projections_.back(), occurrence),
    };
 }
 
@@ -627,7 +681,7 @@ void FlatGraphContext::emit_projection(
    }
    const auto projection_it = std::ranges::find_if(projections, [&](const auto& projection) {
       return projection.handle.component == handle.component
-             and projection.handle.component_id == handle.component_id;
+             and projection.handle.identity == handle.identity;
    });
    if(projection_it == projections.end()) {
       throw std::invalid_argument("Flat relation projection handle belongs to another component");
@@ -1736,6 +1790,15 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    for(size_t projection_index = 0; projection_index < projection_declarations.size();
        ++projection_index) {
       const auto& declaration = projection_declarations[projection_index];
+      const auto base_identity = projection_identity(declaration);
+      const auto occurrence = std::ranges::count_if(
+         projection_declarations.begin(),
+         projection_declarations.begin() + static_cast< std::ptrdiff_t >(projection_index),
+         [&](const auto& existing) {
+            return existing.component == declaration.component
+                   and projection_identity(existing) == base_identity;
+         }
+      );
       const auto source_id = resolve_relation_id(declaration.source_relation);
       const auto output_id = resolve_relation_id(declaration.output_relation);
       const auto source_arity = schema.arities()[static_cast< size_t >(source_id)];
@@ -1766,6 +1829,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
             .handle = FlatProjectionHandle{
                .component_id = declaration.component_id,
                .component = declaration.component,
+               .identity = projection_identity(declaration, occurrence),
             },
          }
       );

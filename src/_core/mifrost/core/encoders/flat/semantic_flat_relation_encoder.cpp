@@ -1629,6 +1629,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    void validate_input(const SemanticFlatRelationInput& input) const
    {
+      if(input.task_context and input.task_context != task_context) {
+         throw std::invalid_argument(
+            "Semantic flat input belongs to a different task context than the encoder"
+         );
+      }
       const auto& objects = semantic_objects(input);
       const auto& goals = semantic_goals(input);
       const auto& static_facts = semantic_static_facts(input);

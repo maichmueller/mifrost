@@ -204,10 +204,13 @@ enum class FlatUnownedRelationPolicy : int8_t {
 struct FlatProjectionHandle {
    size_t component_id = std::numeric_limits< size_t >::max();
    std::string component;
+   /** Stable declaration identity; unlike component_id, it survives plan recompilation. */
+   std::string identity;
 
    [[nodiscard]] bool valid() const noexcept
    {
-      return component_id != std::numeric_limits< size_t >::max() and not component.empty();
+      return component_id != std::numeric_limits< size_t >::max() and not component.empty()
+             and not identity.empty();
    }
 };
 

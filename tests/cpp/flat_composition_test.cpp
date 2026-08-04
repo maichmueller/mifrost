@@ -124,6 +124,54 @@ class PaddingProjectionComponent final: public FlatEmitterComponent {
    }
 };
 
+class ReorderingProjectionComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override { return "reordering"; }
+
+   void add_leading_projection() { add_leading_projection_ = true; }
+
+   void declare_schema(FlatSchemaPlanBuilder& builder) const override
+   {
+      const auto entity_type = builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+      builder.register_relation(
+         predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+      );
+      builder.register_relation(
+         predicate_relation_key("anchor"), unary_layout(), RelationUsage::parent
+      );
+      if(add_leading_projection_) {
+         (void) builder.add_projection(
+            FlatRelationProjection{
+               .source_relation = predicate_relation_key("fact"),
+               .output_relation = predicate_relation_key("anchor"),
+               .slots = {FlatSlotResolver::source(0)},
+            }
+         );
+      }
+      primary_projection_ = builder.add_projection(
+         FlatRelationProjection{
+            .source_relation = predicate_relation_key("fact"),
+            .output_relation = predicate_relation_key("anchor"),
+            .slots = {FlatSlotResolver::node_ref(FlatNodeRef{entity_type, "a"})},
+         }
+      );
+   }
+
+   void plan_graph(const FlatInputView&, FlatNodePlanBuilder& builder) const override
+   {
+      (void) builder.add_node("entity", "a");
+   }
+
+   void emit(const FlatInputView&, FlatGraphContext& context) const override
+   {
+      context.emit_projection(primary_projection_, std::array< int64_t, 1 >{0});
+   }
+
+  private:
+   bool add_leading_projection_ = false;
+   mutable FlatProjectionHandle primary_projection_;
+};
+
 class ConflictingFieldComponent final: public FlatEmitterComponent {
   public:
    [[nodiscard]] std::string_view name() const noexcept override { return "conflict"; }
@@ -214,6 +262,28 @@ TEST(FlatCompositionTest, ProjectionHandlesRemainStableAcrossPlanRecompilation)
          encoding.graph_fields.at(std::string(kRelationArgsField)).values
       ),
       (std::vector< int64_t >{0, 0})
+   );
+}
+
+TEST(FlatCompositionTest, ProjectionHandlesSurviveLocalOrdinalChanges)
+{
+   auto projection = std::make_shared< ReorderingProjectionComponent >();
+   FlatEncoderPlan first_plan;
+   first_plan.add_component(projection);
+   const auto first = first_plan.compile();
+
+   projection->add_leading_projection();
+   FlatEncoderPlan second_plan;
+   second_plan.add_component(projection);
+   (void) second_plan.compile();
+
+   const DemoInput input{{"a"}, 1};
+   const auto encoding = first.encode(FlatInputView::from(input));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      (std::vector< int64_t >{0})
    );
 }
 
@@ -544,6 +614,21 @@ TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
    const auto encoding = engine.encode(input);
 
    EXPECT_EQ(encoding.num_graphs, 1);
+}
+
+TEST(FlatCompositionTest, SemanticRelationRejectsForeignTaskContext)
+{
+   const auto first_context = std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+      .predicates = {{SemanticPredicateCategory::fluent, "at", 1}},
+      .objects = {"a"},
+   });
+   const auto second_context = std::make_shared< SemanticTaskContext >(*first_context);
+   SemanticFlatRelationEncoderEngine engine(first_context);
+   SemanticFlatRelationInput input;
+   input.task_context = second_context;
+   input.state_facts = {{0, {0}}};
+
+   EXPECT_THROW((void) engine.encode(input), std::invalid_argument);
 }
 
 TEST(FlatCompositionTest, SemanticRelationCompositionPreservesPredicateVirtualNodeMetadata)
