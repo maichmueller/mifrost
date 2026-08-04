@@ -4,6 +4,7 @@
 
 #include <array>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -643,6 +644,78 @@ TEST(FlatCompositionTest, SemanticRelationDirectCarrierCoversSemanticMetadataLan
    EXPECT_TRUE(encoding.node_names.contains("entity"));
    EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
    EXPECT_TRUE(encoding.graph_fields.contains(std::string(kLGANTNSizesField)));
+}
+
+TEST(FlatCompositionTest, SemanticRelationParityMatrixUsesCompiledPlan)
+{
+   const std::vector< SemanticPredicateSpec > predicates = {
+      {SemanticPredicateCategory::static_predicate, "ready", 0},
+      {SemanticPredicateCategory::fluent, "at", 1},
+      {SemanticPredicateCategory::derived, "clear", 1},
+   };
+   const std::vector< SemanticActionSpec > actions = {{"move", 1}};
+   SemanticFlatRelationInput input;
+   input.objects = {"a", "b"};
+   input.state_facts = {{0, {}}, {1, {0}}, {2, {1}}};
+   input.goals = {
+      {{1, {1}}, true},
+      {{2, {0}}, false},
+   };
+   input.subgoal_layers = {{{{2, {1}}, true}}};
+   input.actions = {{0, {0}}, {0, {0}}};
+   input.history = {
+      SemanticHistoryEntry{
+         .dt = -1,
+         .literals = {
+            SemanticLiteral{SemanticAtom{1, {0}}, true},
+            SemanticLiteral{SemanticAtom{2, {1}}, false},
+         },
+      },
+      SemanticHistoryEntry{
+         .dt = -3,
+         .literals = {SemanticLiteral{SemanticAtom{1, {1}}, true}},
+      },
+   };
+   input.history_max_steps = 2;
+
+   std::vector< SemanticFlatRelationEncoderEngine::Config > configs;
+   configs.emplace_back();
+   configs.back().max_goal_level = 1;
+   configs.back().target_sources = {
+      TargetSource::actions,
+      TargetSource::goals,
+      TargetSource::subgoals,
+      TargetSource::history,
+   };
+   configs.back().lgan_anchor_sources = configs.back().target_sources;
+   configs.back().include_lgan_edges = true;
+   configs.back().support_literals = true;
+   configs.back().goal_derivations = {
+      GoalDerivation::plain,
+      GoalDerivation::satisfied,
+      GoalDerivation::unsatisfied,
+   };
+   configs.back().use_predicate_virtual_nodes = true;
+
+   configs.emplace_back();
+   configs.back().max_goal_level = 1;
+   configs.back().export_node_names = false;
+   configs.back().target_sources = {TargetSource::actions, TargetSource::history};
+   configs.back().goal_derivations = {GoalDerivation::plain};
+
+   for(auto config : configs) {
+      for(const bool relation_major : {false, true}) {
+         config.pack_relation_args_relation_major = relation_major;
+         SemanticFlatRelationEncoderEngine engine(predicates, actions, config);
+         const auto encoding = engine.encode_batch({input, input});
+
+         EXPECT_EQ(encoding.num_graphs, 2);
+         EXPECT_TRUE(engine.last_encoding_used_composed_plan())
+            << "relation_major=" << relation_major << ": "
+            << engine.last_composition_diagnostic();
+         EXPECT_TRUE(engine.last_composition_diagnostic().empty());
+      }
+   }
 }
 
 TEST(FlatCompositionTest, BuiltInRelationEmittersHonorExplicitRecordOwners)

@@ -121,7 +121,7 @@ bool SemanticFlatHorizonEncoderEngine::last_encoding_used_composed_plan() const
    return impl_->flat.last_encoding_used_composed_plan();
 }
 
-const std::string& SemanticFlatHorizonEncoderEngine::last_composition_diagnostic() const
+std::string SemanticFlatHorizonEncoderEngine::last_composition_diagnostic() const
 {
    return impl_->flat.last_composition_diagnostic();
 }

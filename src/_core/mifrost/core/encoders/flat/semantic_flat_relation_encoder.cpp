@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <numeric>
 #include <ranges>
 #include <set>
@@ -568,9 +569,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    std::unique_ptr< CompiledFlatPlan > composition_plan;
    mutable bool composed_path_used = false;
    mutable std::string composition_diagnostic;
+    mutable std::mutex composition_diagnostic_mutex;
 
    void mark_composed_path(bool used, std::string diagnostic = {}) const
    {
+      std::scoped_lock lock(composition_diagnostic_mutex);
       composed_path_used = used;
       composition_diagnostic = std::move(diagnostic);
    }
@@ -2708,11 +2711,13 @@ void SemanticFlatRelationEncoderEngine::finalize_batch_encoding(
 
 bool SemanticFlatRelationEncoderEngine::last_encoding_used_composed_plan() const
 {
+   std::scoped_lock lock(impl_->composition_diagnostic_mutex);
    return impl_->composed_path_used;
 }
 
-const std::string& SemanticFlatRelationEncoderEngine::last_composition_diagnostic() const
+std::string SemanticFlatRelationEncoderEngine::last_composition_diagnostic() const
 {
+   std::scoped_lock lock(impl_->composition_diagnostic_mutex);
    return impl_->composition_diagnostic;
 }
 

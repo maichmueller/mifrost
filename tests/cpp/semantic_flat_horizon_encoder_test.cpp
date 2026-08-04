@@ -144,6 +144,56 @@ TEST(SemanticFlatHorizonEncoderEngineTest, BatchEncodingUsesCompiledPlanForRelat
    EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
 }
 
+TEST(SemanticFlatHorizonEncoderEngineTest, ParityMatrixUsesCompiledPlanAcrossHorizonPolicies)
+{
+   std::vector< SemanticFlatHorizonEncoderEngine::Config > configs;
+   configs.emplace_back();
+   configs.back().root_policy = RootPolicy::include;
+   configs.back().support_literals = true;
+   configs.back().include_lgan_edges = true;
+   configs.back().enable_parent_relation = true;
+   configs.back().enable_sibling_relation = true;
+   configs.back().enable_cousin_relation = true;
+   configs.back().use_predicate_virtual_nodes = true;
+   configs.back().goal_derivations = {
+      GoalDerivation::plain,
+      GoalDerivation::satisfied,
+      GoalDerivation::unsatisfied,
+      GoalDerivation::added_satisfied,
+      GoalDerivation::added_unsatisfied,
+   };
+
+   configs.emplace_back();
+   configs.back().root_policy = RootPolicy::encode_only;
+   configs.back().pack_relation_args_relation_major = true;
+
+   configs.emplace_back();
+   configs.back().root_policy = RootPolicy::exclude;
+   configs.back().export_node_names = false;
+
+   configs.emplace_back();
+   configs.back().transition_mode = SemanticHorizonMode::delta;
+   configs.back().root_policy = RootPolicy::exclude;
+   configs.back().pack_relation_args_relation_major = true;
+
+   configs.emplace_back();
+   configs.back().transition_mode = SemanticHorizonMode::action;
+   configs.back().ignore_actions = false;
+   configs.back().root_policy = RootPolicy::include;
+
+   for(const auto& config : configs) {
+      SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
+      const auto encoding = engine.encode_batch({make_dag(), make_dag()});
+
+      EXPECT_EQ(encoding.num_graphs, 2);
+      EXPECT_TRUE(engine.last_encoding_used_composed_plan())
+         << "mode=" << static_cast< int >(config.transition_mode)
+         << ", root_policy=" << static_cast< int >(config.root_policy) << ": "
+         << engine.last_composition_diagnostic();
+      EXPECT_TRUE(engine.last_composition_diagnostic().empty());
+   }
+}
+
 TEST(SemanticFlatHorizonEncoderEngineTest, TopologyRelationsUseConfiguredNamesVerbatim)
 {
    SemanticFlatHorizonEncoderEngine::Config config;

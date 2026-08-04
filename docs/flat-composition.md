@@ -116,6 +116,12 @@ compares a composed state-fact carrier against the existing semantic engine
 field-for-field; larger semantic migrations should extend that fixture before
 switching their public path.
 
+`mifrost_bench_semantic_flat_composition` compares the composed semantic path
+with its legacy-only carrier path on a representative input. The composed
+measurement currently includes the legacy parity oracle; it is therefore a
+regression baseline for the migration, not a claim of the eventual oracle-free
+speedup.
+
 `FlatRelationMajorWriter` is the shared finalization seam.  The semantic flat
 relation and horizon engines use the same writer as a composed plan, so
 relation-argument collation is not a second, subtly different implementation

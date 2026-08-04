@@ -1287,6 +1287,17 @@ if (MIFROST_BUILD_BENCHMARKS)
     )
     target_compile_definitions(mifrost_bench_relation_encoders PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
     target_compile_definitions(mifrost_bench_relation_encoders PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
+
+    add_executable(
+            mifrost_bench_semantic_flat_composition
+            "${CMAKE_SOURCE_DIR}/bench/bench_semantic_flat_composition.cpp"
+    )
+    target_link_libraries(
+            mifrost_bench_semantic_flat_composition
+            PRIVATE
+            mifrost_neutral_core
+            benchmark::benchmark
+    )
 endif ()
 
 # --- Tests ---

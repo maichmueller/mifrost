@@ -298,7 +298,8 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
    [[nodiscard]] bool last_encoding_used_composed_plan() const;
-   [[nodiscard]] const std::string& last_composition_diagnostic() const;
+   /** Return a thread-safe snapshot of the latest composition diagnostic. */
+   [[nodiscard]] std::string last_composition_diagnostic() const;
    void note_composition_fallback(std::string diagnostic) const;
 
    [[nodiscard]] const Config& get_config() const;
