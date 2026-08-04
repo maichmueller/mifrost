@@ -398,6 +398,167 @@ void FlatGraphContext::emit_projection(
 
 FlatEmitterComponent::~FlatEmitterComponent() = default;
 
+FlatObjectNodeComponent::FlatObjectNodeComponent(
+   std::string component_name,
+   std::string node_type,
+   FlatNodeKind kind,
+   int feature_dim,
+   bool export_names
+)
+    : component_name_(std::move(component_name)),
+      node_type_(std::move(node_type)),
+      kind_(kind),
+      feature_dim_(feature_dim),
+      export_names_(export_names)
+{
+   if(component_name_.empty()) {
+      throw std::invalid_argument("Flat object component name must not be empty");
+   }
+   if(node_type_.empty()) {
+      throw std::invalid_argument("Flat object component node type must not be empty");
+   }
+   if(feature_dim_ <= 0) {
+      throw std::invalid_argument("Flat object component feature dimension must be positive");
+   }
+}
+
+void FlatObjectNodeComponent::declare_schema(FlatSchemaPlanBuilder& builder) const
+{
+   (void) builder.declare_node_type(node_type_, kind_, feature_dim_, export_names_);
+}
+
+void FlatObjectNodeComponent::plan_graph(
+   const FlatInputView& input,
+   FlatNodePlanBuilder& builder
+) const
+{
+   const auto& composition = input.get< FlatCompositionInput >();
+   for(const auto& object : composition.objects) {
+      (void) builder.add_node(node_type_, object);
+   }
+}
+
+FlatNodeRecordComponent::FlatNodeRecordComponent(
+   std::string component_name,
+   std::string node_type,
+   FlatNodeKind kind,
+   int feature_dim,
+   bool export_names
+)
+    : component_name_(std::move(component_name)),
+      node_type_(std::move(node_type)),
+      kind_(kind),
+      feature_dim_(feature_dim),
+      export_names_(export_names)
+{
+   if(component_name_.empty()) {
+      throw std::invalid_argument("Flat node-record component name must not be empty");
+   }
+   if(node_type_.empty()) {
+      throw std::invalid_argument("Flat node-record component node type must not be empty");
+   }
+   if(feature_dim_ <= 0) {
+      throw std::invalid_argument("Flat node-record component feature dimension must be positive");
+   }
+}
+
+void FlatNodeRecordComponent::declare_schema(FlatSchemaPlanBuilder& builder) const
+{
+   (void) builder.declare_node_type(node_type_, kind_, feature_dim_, export_names_);
+}
+
+void FlatNodeRecordComponent::plan_graph(
+   const FlatInputView& input,
+   FlatNodePlanBuilder& builder
+) const
+{
+   const auto& composition = input.get< FlatCompositionInput >();
+   for(const auto& record : composition.nodes) {
+      if(record.node_type == node_type_) {
+         (void) builder.add_node(node_type_, record.key);
+      }
+   }
+}
+
+FlatRelationEmitterComponent::FlatRelationEmitterComponent(
+   std::string component_name,
+   std::vector< FlatCompositionRelationSpec > relations
+)
+    : component_name_(std::move(component_name)), relations_(std::move(relations))
+{
+   if(component_name_.empty()) {
+      throw std::invalid_argument("Flat relation component name must not be empty");
+   }
+   if(relations_.empty()) {
+      throw std::invalid_argument("Flat relation component must declare at least one relation");
+   }
+}
+
+void FlatRelationEmitterComponent::declare_schema(FlatSchemaPlanBuilder& builder) const
+{
+   for(const auto& relation : relations_) {
+      builder.register_relation(relation.key, relation.layout, relation.usage);
+   }
+}
+
+void FlatRelationEmitterComponent::emit(const FlatInputView& input, FlatGraphContext& context) const
+{
+   const auto& composition = input.get< FlatCompositionInput >();
+   for(const auto& relation : composition.relations) {
+      context.emit(relation.relation_id, relation.args);
+   }
+}
+
+FlatFieldEmitterComponent::FlatFieldEmitterComponent(
+   std::string component_name,
+   std::vector< FieldDeclaration > fields
+)
+    : component_name_(std::move(component_name)), fields_(std::move(fields))
+{
+   if(component_name_.empty()) {
+      throw std::invalid_argument("Flat field component name must not be empty");
+   }
+   if(fields_.empty()) {
+      throw std::invalid_argument("Flat field component must declare at least one field");
+   }
+}
+
+void FlatFieldEmitterComponent::declare_fields(FlatFieldPlanBuilder& builder) const
+{
+   for(const auto& [key, spec] : fields_) {
+      builder.register_field(key, spec);
+   }
+}
+
+void FlatFieldEmitterComponent::write_fields(
+   const FlatGraphContext& context,
+   FlatFieldWriter& writer
+) const
+{
+   const auto& composition = context.input.get< FlatCompositionInput >();
+   for(const auto& [key, spec] : fields_) {
+      const auto it = std::ranges::find(composition.fields, key, &FlatCompositionFieldRecord::key);
+      if(it == composition.fields.end()) {
+         throw std::invalid_argument(
+            "Flat composition input is missing declared field '" + key + "'"
+         );
+      }
+      if(spec.dtype == GraphFieldDType::I64) {
+         const auto* values = std::get_if< std::vector< int64_t > >(&it->values);
+         if(values == nullptr) {
+            throw std::invalid_argument("Flat composition field '" + key + "' has wrong dtype");
+         }
+         writer.set(key, *values);
+      } else {
+         const auto* values = std::get_if< std::vector< float > >(&it->values);
+         if(values == nullptr) {
+            throw std::invalid_argument("Flat composition field '" + key + "' has wrong dtype");
+         }
+         writer.set(key, *values);
+      }
+   }
+}
+
 void FlatFieldWriter::validate(std::string_view key, GraphFieldDType dtype) const
 {
    const auto& entry = find_field(fields_, key);

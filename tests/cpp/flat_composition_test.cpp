@@ -163,6 +163,116 @@ TEST(FlatCompositionTest, CompilesSharedNodesAndRunsOneNativeBatch)
    );
 }
 
+TEST(FlatCompositionTest, BuiltInComponentsComposeResolvedRelationsAndFields)
+{
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{
+         FlatCompositionRelationSpec{
+            .key = predicate_relation_key("fact"),
+            .layout = unary_layout(),
+            .usage = RelationUsage::state,
+         },
+         FlatCompositionRelationSpec{
+            .key = predicate_relation_key("pair"),
+            .layout = make_predicate_tuple_layout(2, {}, false),
+            .usage = RelationUsage::parent,
+         },
+      }
+   );
+   plan.emplace_component< FlatFieldEmitterComponent >(
+      "metadata",
+      std::vector< FlatFieldEmitterComponent::FieldDeclaration >{
+         {
+            "marker",
+            GraphFieldSpec{
+               .dtype = GraphFieldDType::I64,
+               .mode = GraphFieldMode::STACK,
+               .dim = 1,
+            },
+         },
+      }
+   );
+
+   const auto compiled = plan.compile();
+   FlatCompositionInput input;
+   input.objects = {"a", "b"};
+   input.relations = {
+      {
+         compiled.schema().id_for(predicate_relation_key("fact")),
+         {0},
+      },
+      {
+         compiled.schema().id_for(predicate_relation_key("pair")),
+         {0, 1},
+      },
+   };
+   input.fields = {
+      {
+         "marker",
+         NumericColumnData{std::vector< int64_t >{17}},
+      },
+   };
+
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   ASSERT_EQ(encoding.num_graphs, 1);
+   ASSERT_EQ(encoding.node_names.at("entity"), (std::vector< std::string >{"a", "b"}));
+   EXPECT_EQ(encoding.node_counts.at("entity"), 2);
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationCountsField)).values
+      ),
+      (std::vector< int64_t >{1, 1})
+   );
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationArgsField)).values
+      ),
+      (std::vector< int64_t >{0, 0, 1})
+   );
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(encoding.graph_fields.at("marker").values),
+      (std::vector< int64_t >{17})
+   );
+}
+
+TEST(FlatCompositionTest, BuiltInComponentsRejectMissingOrMismatchedInputFields)
+{
+   const auto spec = GraphFieldSpec{
+      .dtype = GraphFieldDType::F32,
+      .mode = GraphFieldMode::STACK,
+      .dim = 1,
+   };
+   FlatEncoderPlan plan;
+   plan.emplace_component< FlatObjectNodeComponent >();
+   plan.emplace_component< FlatRelationEmitterComponent >(
+      "facts",
+      std::vector< FlatCompositionRelationSpec >{{
+         .key = predicate_relation_key("fact"),
+         .layout = unary_layout(),
+         .usage = RelationUsage::state,
+      }}
+   );
+   plan.emplace_component< FlatFieldEmitterComponent >(
+      "metadata", std::vector< FlatFieldEmitterComponent::FieldDeclaration >{{"score", spec}}
+   );
+   const auto compiled = plan.compile();
+
+   FlatCompositionInput missing;
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(missing)), std::invalid_argument);
+
+   FlatCompositionInput wrong;
+   wrong.fields = {
+      {
+         "score",
+         NumericColumnData{std::vector< int64_t >{1}},
+      },
+   };
+   EXPECT_THROW((void) compiled.encode(FlatInputView::from(wrong)), std::invalid_argument);
+}
+
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
 {
    FlatEncoderPlan plan;

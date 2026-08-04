@@ -21,6 +21,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "flat_encoder_common.hpp"
@@ -313,6 +314,44 @@ class FlatFieldPlanBuilder;
 class FlatNodePlanBuilder;
 class FlatFieldWriter;
 
+/** One graph-local symbolic node supplied by a backend-neutral adapter. */
+struct FlatCompositionNodeRecord {
+   std::string node_type;
+   std::string key;
+};
+
+/** One already-resolved relation tuple supplied to a native emitter. */
+struct FlatCompositionRelationRecord {
+   int relation_id = -1;
+   std::vector< int64_t > args;
+};
+
+/** One typed graph-field value supplied to a native field component. */
+struct FlatCompositionFieldRecord {
+   std::string key;
+   NumericColumnData values;
+};
+
+/**
+ * Minimal backend-neutral graph input for the built-in native components.
+ *
+ * Adapters resolve relation keys to ids once per compiled plan and populate
+ * `relations`; components never format names or search a relation dictionary
+ * inside a fact/action loop.
+ */
+struct FlatCompositionInput {
+   std::vector< std::string > objects;
+   std::vector< FlatCompositionNodeRecord > nodes;
+   std::vector< FlatCompositionRelationRecord > relations;
+   std::vector< FlatCompositionFieldRecord > fields;
+};
+
+struct FlatCompositionRelationSpec {
+   RelationKey key;
+   FlatTupleLayout layout;
+   RelationUsage usage = RelationUsage::state;
+};
+
 struct FlatGraphContext {
    const FlatInputView& input;
    const FlatRelationSchema& schema;
@@ -337,6 +376,85 @@ class MIFROST_API FlatEmitterComponent {
    virtual void prepare_graph(const FlatInputView&, FlatGraphContext&) const {}
    virtual void emit(const FlatInputView&, FlatGraphContext&) const {}
    virtual void write_fields(const FlatGraphContext&, FlatFieldWriter&) const {}
+};
+
+/** Adds graph-local object rows from `FlatCompositionInput::objects`. */
+class MIFROST_API FlatObjectNodeComponent final: public FlatEmitterComponent {
+  public:
+   explicit FlatObjectNodeComponent(
+      std::string component_name = "objects",
+      std::string node_type = std::string(kFlatEntityNodeType),
+      FlatNodeKind kind = FlatNodeKind::object,
+      int feature_dim = 1,
+      bool export_names = true
+   );
+
+   [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+   void declare_schema(FlatSchemaPlanBuilder&) const override;
+   void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+
+  private:
+   std::string component_name_;
+   std::string node_type_;
+   FlatNodeKind kind_;
+   int feature_dim_;
+   bool export_names_;
+};
+
+/** Adds typed transition/action/auxiliary rows from `FlatCompositionInput::nodes`. */
+class MIFROST_API FlatNodeRecordComponent final: public FlatEmitterComponent {
+  public:
+   FlatNodeRecordComponent(
+      std::string component_name,
+      std::string node_type,
+      FlatNodeKind kind,
+      int feature_dim = 1,
+      bool export_names = false
+   );
+
+   [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+   void declare_schema(FlatSchemaPlanBuilder&) const override;
+   void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+
+  private:
+   std::string component_name_;
+   std::string node_type_;
+   FlatNodeKind kind_;
+   int feature_dim_;
+   bool export_names_;
+};
+
+/** Emits pre-resolved relation records and declares their immutable schema. */
+class MIFROST_API FlatRelationEmitterComponent final: public FlatEmitterComponent {
+  public:
+   FlatRelationEmitterComponent(
+      std::string component_name,
+      std::vector< FlatCompositionRelationSpec > relations
+   );
+
+   [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+   void declare_schema(FlatSchemaPlanBuilder&) const override;
+   void emit(const FlatInputView&, FlatGraphContext&) const override;
+
+  private:
+   std::string component_name_;
+   std::vector< FlatCompositionRelationSpec > relations_;
+};
+
+/** Writes pre-resolved typed fields and enforces one component owner per key. */
+class MIFROST_API FlatFieldEmitterComponent final: public FlatEmitterComponent {
+  public:
+   using FieldDeclaration = std::pair< std::string, GraphFieldSpec >;
+
+   FlatFieldEmitterComponent(std::string component_name, std::vector< FieldDeclaration > fields);
+
+   [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
+   void declare_fields(FlatFieldPlanBuilder&) const override;
+   void write_fields(const FlatGraphContext&, FlatFieldWriter&) const override;
+
+  private:
+   std::string component_name_;
+   std::vector< FieldDeclaration > fields_;
 };
 
 /** Owner-checked writer for component-declared graph fields. */

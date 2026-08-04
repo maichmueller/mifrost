@@ -27,6 +27,29 @@ supports source slots, constants, and graph-local node references.
 Components that emit many tuples should resolve `FlatGraphContext::relation_id`
 once before their hot loop and call the integer-id overload of `emit`.
 
+## Native built-in components
+
+The header also includes small backend-neutral components for the common
+carrier operations:
+
+- `FlatObjectNodeComponent` declares one node type and adds the input object's
+  names in deterministic order.
+- `FlatNodeRecordComponent` declares one typed node table and selects matching
+  `FlatCompositionInput::nodes` records.
+- `FlatRelationEmitterComponent` declares a set of relation keys/layouts and
+  emits `FlatCompositionInput::relations` using already-resolved integer ids.
+- `FlatFieldEmitterComponent` declares owned graph fields and writes typed
+  `FlatCompositionInput::fields` values with the same shape checks as
+  `BatchBuilder`.
+
+`FlatCompositionInput` is intentionally a carrier, not a semantic model.
+Backend adapters own object/action/goal interpretation and populate it.  They
+must resolve each relation key with the compiled schema once per plan (for
+example, with `compiled.schema().id_for(...)`) before filling a relation
+record.  A record with an unknown id, wrong arity, missing field, or mismatched
+field dtype is rejected at the native boundary rather than silently producing
+an incompatible batch.
+
 ## External downstream modes
 
 The six `concurrent_internal_*` modes and `FlatCompositeEncoderEngine` that
