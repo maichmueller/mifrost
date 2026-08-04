@@ -388,6 +388,49 @@ TEST(FlatCompositionTest, RejectsMultipleObjectNameMetadataOwners)
    EXPECT_THROW((void) plan.compile(), std::invalid_argument);
 }
 
+TEST(FlatCompositionTest, ResolvesRelationAliasesBeforeEmission)
+{
+   class AliasComponent final: public FlatEmitterComponent {
+     public:
+      [[nodiscard]] std::string_view name() const noexcept override { return "alias"; }
+
+      void declare_schema(FlatSchemaPlanBuilder& builder) const override
+      {
+         (void) builder.declare_node_type("entity", FlatNodeKind::object, 1, true);
+         builder.register_relation(
+            predicate_relation_key("fact"), unary_layout(), RelationUsage::state
+         );
+         builder.register_relation_alias(
+            predicate_relation_key("state_fact"), predicate_relation_key("fact")
+         );
+      }
+
+      void plan_graph(const FlatInputView&, FlatNodePlanBuilder& builder) const override
+      {
+         (void) builder.add_node("entity", "a");
+      }
+
+      void emit(const FlatInputView&, FlatGraphContext& context) const override
+      {
+         const std::array args{int64_t{0}};
+         context.emit(predicate_relation_key("state_fact"), args);
+      }
+   };
+
+   FlatEncoderPlan plan;
+   plan.emplace_component< AliasComponent >();
+   const auto compiled = plan.compile();
+   FlatCompositionInput input;
+   input.objects = {"a"};
+   const auto encoding = compiled.encode(FlatInputView::from(input));
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(
+         encoding.graph_fields.at(std::string(kRelationCountsField)).values
+      ),
+      (std::vector< int64_t >{1})
+   );
+}
+
 TEST(FlatCompositionTest, RejectsFieldOwnershipCollision)
 {
    FlatEncoderPlan plan;

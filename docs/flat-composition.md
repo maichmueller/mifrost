@@ -28,6 +28,9 @@ there is no Python callback or per-relation component dispatch in this layer.
 supports source slots, constants, and graph-local node references.
 Components that emit many tuples should resolve `FlatGraphContext::relation_id`
 once before their hot loop and call the integer-id overload of `emit`.
+`FlatSchemaPlanBuilder::register_relation_alias()` adds a non-exported symbolic
+alias; compilation resolves aliases to the canonical relation id, and both
+emission and projections use that compiled mapping.
 
 ## Native built-in components
 

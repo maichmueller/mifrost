@@ -205,6 +205,13 @@ struct FlatRelationProjection {
    std::vector< FlatSlotResolver > slots;
 };
 
+/** Alternate symbolic relation key resolved to one canonical relation id. */
+struct FlatRelationAlias {
+   RelationKey alias;
+   RelationKey target;
+   int target_relation_id = -1;
+};
+
 struct CompiledFlatRelationProjection {
    int source_relation_id = -1;
    int output_relation_id = -1;
@@ -232,6 +239,7 @@ struct FlatSchemaPlan {
    std::vector< FlatFieldPlanEntry > fields;
    std::vector< CompiledFlatRelationProjection > projections;
    FlatMetadataPlan metadata;
+   std::vector< FlatRelationAlias > relation_aliases;
 };
 
 /** Compile-time field declarations with explicit single-owner semantics. */
@@ -276,6 +284,7 @@ struct FlatCompositionConfig {
 class MIFROST_API FlatSchemaPlanBuilder {
   public:
    void register_relation(RelationKey key, FlatTupleLayout layout, RelationUsage usage);
+   void register_relation_alias(RelationKey alias, RelationKey target);
    void add_projection(FlatRelationProjection projection);
    [[nodiscard]] FlatNodeTypeId declare_node_type(
       std::string name,
@@ -289,6 +298,10 @@ class MIFROST_API FlatSchemaPlanBuilder {
    {
       return projections_;
    }
+   [[nodiscard]] const std::vector< FlatRelationAlias >& relation_aliases() const
+   {
+      return relation_aliases_;
+   }
 
    [[nodiscard]] FlatRelationSchema finalize_schema(const FlatCompositionConfig& config) &&;
    [[nodiscard]] FlatNodeSchema finalize_nodes() && { return std::move(node_schema_).finalize(); }
@@ -297,6 +310,7 @@ class MIFROST_API FlatSchemaPlanBuilder {
    FlatRelationSchemaBuilder relation_schema_;
    FlatNodeSchemaBuilder node_schema_;
    std::vector< FlatRelationProjection > projections_;
+   std::vector< FlatRelationAlias > relation_aliases_;
 };
 
 /** A type-erased, checked view used at component boundaries. */
@@ -409,8 +423,9 @@ struct FlatGraphContext {
    const FlatNodePlan& nodes;
    FlatRelationSink& relations;
    std::span< const CompiledFlatRelationProjection > projections;
+   std::span< const FlatRelationAlias > relation_aliases;
 
-   [[nodiscard]] int relation_id(const RelationKey& key) const { return schema.id_for(key); }
+   [[nodiscard]] int relation_id(const RelationKey& key) const;
    void emit(int relation_id, std::span< const int64_t > args) const;
    void emit(const RelationKey& key, std::span< const int64_t > args) const;
    void emit_projection(size_t projection_id, std::span< const int64_t > source_args) const;

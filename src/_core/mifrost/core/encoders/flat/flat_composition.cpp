@@ -338,6 +338,21 @@ void FlatSchemaPlanBuilder::register_relation(
    relation_schema_.register_relation(std::move(key), std::move(layout), usage);
 }
 
+void FlatSchemaPlanBuilder::register_relation_alias(RelationKey alias, RelationKey target)
+{
+   if(alias == target) {
+      throw std::invalid_argument("Flat relation alias must differ from its target");
+   }
+   if(std::ranges::any_of(relation_aliases_, [&](const auto& existing) {
+         return existing.alias == alias;
+      })) {
+      throw std::invalid_argument("Flat relation alias was declared more than once");
+   }
+   relation_aliases_.push_back(
+      FlatRelationAlias{.alias = std::move(alias), .target = std::move(target)}
+   );
+}
+
 void FlatSchemaPlanBuilder::add_projection(FlatRelationProjection projection)
 {
    if(projection.slots.empty()) {
@@ -365,6 +380,18 @@ FlatRelationSchema FlatSchemaPlanBuilder::finalize_schema(const FlatCompositionC
          config.goal_derivations,
          config.empty_schema_error
       );
+}
+
+int FlatGraphContext::relation_id(const RelationKey& key) const
+{
+   if(const auto id = schema.try_id_for(key); id.has_value()) {
+      return *id;
+   }
+   const auto it = std::ranges::find(relation_aliases, key, &FlatRelationAlias::alias);
+   if(it != relation_aliases.end()) {
+      return it->target_relation_id;
+   }
+   throw std::invalid_argument("Unknown flat relation key");
 }
 
 void FlatGraphContext::emit(int relation_id, std::span< const int64_t > args) const
@@ -727,7 +754,12 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
 
    FlatRelationSink sink(schema_plan_.relation_schema.size(), config_.track_relation_instances);
    FlatGraphContext context{
-      input, schema_plan_.relation_schema, node_plan, sink, schema_plan_.projections
+      input,
+      schema_plan_.relation_schema,
+      node_plan,
+      sink,
+      schema_plan_.projections,
+      schema_plan_.relation_aliases,
    };
    for(const auto& component : components_) {
       component->prepare_graph(input, context);
@@ -1035,6 +1067,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
    }
 
    const auto projection_declarations = schema_builder.projections();
+   const auto alias_declarations = schema_builder.relation_aliases();
    auto schema = std::move(schema_builder).finalize_schema(config);
    auto node_schema = std::move(schema_builder).finalize_nodes();
    if(config.relation_args_node_type.empty()
@@ -1076,11 +1109,44 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       }
    }
 
+   std::vector< FlatRelationAlias > relation_aliases;
+   relation_aliases.reserve(alias_declarations.size());
+   for(const auto& declaration : alias_declarations) {
+      const auto target_id = schema.try_id_for(declaration.target);
+      if(not target_id.has_value()) {
+         throw std::invalid_argument("Flat relation alias target is undeclared");
+      }
+      if(const auto canonical_id = schema.try_id_for(declaration.alias);
+         canonical_id.has_value() and *canonical_id != *target_id) {
+         throw std::invalid_argument(
+            "Flat relation alias collides with a different canonical relation"
+         );
+      }
+      relation_aliases.push_back(
+         FlatRelationAlias{
+            .alias = declaration.alias,
+            .target = declaration.target,
+            .target_relation_id = *target_id,
+         }
+      );
+   }
+
+   const auto resolve_relation_id = [&](const RelationKey& key) {
+      if(const auto id = schema.try_id_for(key); id.has_value()) {
+         return *id;
+      }
+      const auto it = std::ranges::find(relation_aliases, key, &FlatRelationAlias::alias);
+      if(it != relation_aliases.end()) {
+         return it->target_relation_id;
+      }
+      throw std::invalid_argument("Flat relation projection references an undeclared relation");
+   };
+
    std::vector< CompiledFlatRelationProjection > projections;
    projections.reserve(projection_declarations.size());
    for(const auto& declaration : projection_declarations) {
-      const auto source_id = schema.id_for(declaration.source_relation);
-      const auto output_id = schema.id_for(declaration.output_relation);
+      const auto source_id = resolve_relation_id(declaration.source_relation);
+      const auto output_id = resolve_relation_id(declaration.output_relation);
       const auto source_arity = schema.arities()[static_cast< size_t >(source_id)];
       const auto output_arity = schema.arities()[static_cast< size_t >(output_id)];
       if(declaration.slots.size() != static_cast< size_t >(output_arity)) {
@@ -1109,6 +1175,7 @@ CompiledFlatPlan FlatEncoderPlan::compile(FlatCompositionConfig config) const
       .fields = std::move(fields),
       .projections = std::move(projections),
       .metadata = std::move(metadata_plan),
+      .relation_aliases = std::move(relation_aliases),
    };
    compiled.components_ = components_;
    compiled.config_ = std::move(config);
