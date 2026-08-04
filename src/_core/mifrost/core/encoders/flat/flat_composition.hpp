@@ -362,6 +362,7 @@ class FlatNodePlanBuilder;
 class FlatFieldWriter;
 class FlatMetadataWriter;
 class FlatMetadataPlanBuilder;
+class FlatNodeFeatureWriter;
 
 /** One graph-local symbolic node supplied by a backend-neutral adapter. */
 struct FlatCompositionNodeRecord {
@@ -450,6 +451,29 @@ struct FlatGraphContext {
    void emit_projection(size_t projection_id, std::span< const int64_t > source_args) const;
 };
 
+/** Owner-scoped writer for native node feature columns. */
+class MIFROST_API FlatNodeFeatureWriter {
+  public:
+   FlatNodeFeatureWriter(
+      BatchBuilder& builder,
+      const FlatNodeSchema& schema,
+      const FlatNodePlan& nodes,
+      std::string_view owner
+   )
+       : builder_(builder), schema_(schema), nodes_(nodes), owner_(owner)
+   {
+   }
+
+   void
+   set(std::string_view node_type, std::string_view attr, std::span< const float > values) const;
+
+  private:
+   BatchBuilder& builder_;
+   const FlatNodeSchema& schema_;
+   const FlatNodePlan& nodes_;
+   std::string owner_;
+};
+
 /** Native component contract. Virtual dispatch occurs only once per phase/graph. */
 class MIFROST_API FlatEmitterComponent {
   public:
@@ -460,6 +484,7 @@ class MIFROST_API FlatEmitterComponent {
    virtual void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const {}
    virtual void prepare_graph(const FlatInputView&, FlatGraphContext&) const {}
    virtual void emit(const FlatInputView&, FlatGraphContext&) const {}
+   virtual void write_node_features(const FlatGraphContext&, FlatNodeFeatureWriter&) const {}
    virtual void write_fields(const FlatGraphContext&, FlatFieldWriter&) const {}
    virtual void declare_metadata(FlatMetadataPlanBuilder&) const {}
    virtual void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const {}
@@ -496,6 +521,7 @@ class MIFROST_API FlatObjectNodeComponent final: public FlatEmitterComponent {
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
    void declare_metadata(FlatMetadataPlanBuilder&) const override;
+   void write_node_features(const FlatGraphContext&, FlatNodeFeatureWriter&) const override;
    void write_metadata(const FlatGraphContext&, FlatMetadataWriter&) const override;
 
   private:
@@ -520,6 +546,7 @@ class MIFROST_API FlatNodeRecordComponent final: public FlatEmitterComponent {
    [[nodiscard]] std::string_view name() const noexcept override { return component_name_; }
    void declare_schema(FlatSchemaPlanBuilder&) const override;
    void plan_graph(const FlatInputView&, FlatNodePlanBuilder&) const override;
+   void write_node_features(const FlatGraphContext&, FlatNodeFeatureWriter&) const override;
 
   private:
    std::string component_name_;

@@ -18,7 +18,10 @@ The lifecycle is deliberately fixed:
    relation arguments, and relation-instance sizes exactly once.
 5. Components write owner-scoped non-field metadata; the object component
    publishes object names without a second materialized encoding.
-6. `finalize_batch_encoding()` optionally performs the existing relation-major
+6. Components write native node feature columns through
+   `FlatNodeFeatureWriter`; feature dimensions and row counts are checked
+   against the shared node plan.
+7. `finalize_batch_encoding()` optionally performs the existing relation-major
    collation pass.
 
 Virtual dispatch is limited to the component/graph lifecycle.  Fact, action,
@@ -54,6 +57,9 @@ Components can also implement `write_metadata()` through
 graph-level metadata that is not a numeric graph field.
 Metadata declarations are compiled with single-owner checks, just like graph
 fields, so two components cannot silently overwrite object-name metadata.
+`write_node_features()` and `FlatNodeFeatureWriter` are the corresponding
+native path for node tensors; components may emit zeros or semantic features,
+but must use the preplanned row count.
 
 `FlatCompositionInput` is intentionally a carrier, not a semantic model.
 Backend adapters own object/action/goal interpretation and populate it.  They

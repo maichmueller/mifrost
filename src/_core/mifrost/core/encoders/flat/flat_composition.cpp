@@ -443,6 +443,25 @@ void FlatGraphContext::emit_projection(
    relations.emit(projection.output_relation_id, output);
 }
 
+void FlatNodeFeatureWriter::set(
+   std::string_view node_type,
+   std::string_view attr,
+   std::span< const float > values
+) const
+{
+   const auto type_id = schema_.id_for(node_type);
+   const auto& spec = schema_.spec(type_id);
+   const auto count = nodes_.count(type_id);
+   const auto expected = static_cast< size_t >(count) * static_cast< size_t >(spec.feature_dim);
+   if(values.size() != expected) {
+      throw std::invalid_argument(
+         "Flat node feature writer received the wrong value count for node type '"
+         + std::string(node_type) + "'"
+      );
+   }
+   builder_.add_node_features(std::string(node_type), std::string(attr), values, spec.feature_dim);
+}
+
 FlatEmitterComponent::~FlatEmitterComponent() = default;
 
 int FlatCompositionInputBuilder::relation_id(const RelationKey& key) const
@@ -583,6 +602,20 @@ void FlatObjectNodeComponent::declare_metadata(FlatMetadataPlanBuilder& builder)
    }
 }
 
+void FlatObjectNodeComponent::write_node_features(
+   const FlatGraphContext& context,
+   FlatNodeFeatureWriter& writer
+) const
+{
+   const auto type_id = context.nodes.schema().id_for(node_type_);
+   const auto& spec = context.nodes.schema().spec(type_id);
+   std::vector< float > zeros(
+      static_cast< size_t >(context.nodes.count(type_id)) * static_cast< size_t >(spec.feature_dim),
+      0.0F
+   );
+   writer.set(node_type_, "x", zeros);
+}
+
 void FlatObjectNodeComponent::write_metadata(
    const FlatGraphContext& context,
    FlatMetadataWriter& writer
@@ -633,6 +666,20 @@ void FlatNodeRecordComponent::plan_graph(
          (void) builder.add_node(node_type_, record.key);
       }
    }
+}
+
+void FlatNodeRecordComponent::write_node_features(
+   const FlatGraphContext& context,
+   FlatNodeFeatureWriter& writer
+) const
+{
+   const auto type_id = context.nodes.schema().id_for(node_type_);
+   const auto& spec = context.nodes.schema().spec(type_id);
+   std::vector< float > zeros(
+      static_cast< size_t >(context.nodes.count(type_id)) * static_cast< size_t >(spec.feature_dim),
+      0.0F
+   );
+   writer.set(node_type_, "x", zeros);
 }
 
 FlatRelationEmitterComponent::FlatRelationEmitterComponent(
@@ -783,6 +830,10 @@ void CompiledFlatPlan::encode_graph(const FlatInputView& input, BatchBuilder& bu
       schema_plan_.projections,
       schema_plan_.relation_aliases,
    };
+   for(const auto& component : components_) {
+      FlatNodeFeatureWriter writer(builder, schema_plan_.node_schema, node_plan, component->name());
+      component->write_node_features(context, writer);
+   }
    for(const auto& component : components_) {
       component->prepare_graph(input, context);
    }
