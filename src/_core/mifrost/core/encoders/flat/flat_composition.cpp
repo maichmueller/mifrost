@@ -66,6 +66,9 @@ void register_relation_runtime_fields(
    std::string_view relation_args_node_type
 )
 {
+   if(relation_count > static_cast< size_t >(std::numeric_limits< int >::max())) {
+      throw std::invalid_argument("Flat composition relation count exceeds graph-field dimension");
+   }
    builder.register_field(
       std::string(kRelationInstanceSizesField),
       GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
