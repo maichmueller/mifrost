@@ -9,6 +9,8 @@
 #include <tuple>
 #include <utility>
 
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
+
 namespace mifrost::pytyr {
 namespace {
 
@@ -419,35 +421,16 @@ struct SemanticPlanningTaskAdapter::Impl {
       const std::vector< tyr::formalism::planning::GroundActionView >& action_values
    ) const
    {
-      SemanticFlatRelationInput result;
-      result.task_context = task_context;
-      result.use_default_goals = true;
-
-      std::vector< SemanticAtom > fluent_atoms;
-      for(const auto fact : state.get_fluent_facts_view()) {
-         if(const auto value = fact.get_atom()) {
-            fluent_atoms.push_back(cached_atom(*value, Category::fluent));
-         }
-      }
-      std::ranges::sort(fluent_atoms);
-
-      std::vector< SemanticAtom > derived_atoms;
-      for(const auto value : state.get_derived_atoms_view()) {
-         derived_atoms.push_back(cached_atom(value, Category::derived));
-      }
-      std::ranges::sort(derived_atoms);
-
-      result.state_facts.reserve(fluent_atoms.size() + derived_atoms.size());
-      result.state_facts.insert(result.state_facts.end(), fluent_atoms.begin(), fluent_atoms.end());
-      result.state_facts.insert(
-         result.state_facts.end(), derived_atoms.begin(), derived_atoms.end()
-      );
-
-      result.actions.reserve(action_values.size());
-      for(const auto& value : action_values) {
-         result.actions.push_back(action(value));
-      }
-      return result;
+      const auto state_view = mifrost::pytyr::views::StateView< State, void >{state, view_context};
+      const auto action_views = action_values
+                                | std::views::transform(
+                                   [context = &view_context](const auto& value) {
+                                      return mifrost::pytyr::views::GroundActionView{
+                                         value, *context
+                                      };
+                                   }
+                                );
+      return canonical::make_semantic_flat_relation_input(task_context, state_view, action_views);
    }
 };
 

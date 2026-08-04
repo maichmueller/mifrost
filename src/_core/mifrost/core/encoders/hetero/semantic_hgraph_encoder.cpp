@@ -2072,6 +2072,12 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
    return builder.build();
 }
 
+const std::shared_ptr< const SemanticTaskContext >&
+SemanticHGraphEncoderEngine::get_task_context() const
+{
+   return impl_->task_context;
+}
+
 const SemanticHGraphEncoderEngine::Config& SemanticHGraphEncoderEngine::get_config() const
 {
    return impl_->config;

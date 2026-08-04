@@ -3,14 +3,31 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <memory>
 #include <span>
 #include <string>
 
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
 #include "mifrost/core/encoders/flat/view_flat_relation_encoder.hpp"
 #include "mifrost/core/views/canonical.hpp"
 
 namespace mifrost {
 namespace {
+
+struct ViewEncoderProbe {
+   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const
+   {
+      return {};
+   }
+   [[nodiscard]] int encode(const SemanticFlatRelationInput&) const { return 0; }
+};
+
+static_assert(requires(
+   const ViewEncoderProbe& encoder,
+   const semantic::StateView& state,
+   semantic::LiteralsView goals,
+   semantic::GroundActionsView actions
+) { canonical::encode_semantic_views(encoder, state, goals, actions); });
 
 TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
 {
@@ -83,6 +100,37 @@ TEST(ViewsTest, CanonicalFlatTraversalVisitsEachLane)
    );
 
    EXPECT_EQ(lanes, lanes_expected);
+}
+
+TEST(ViewsTest, SemanticViewBridgeMaterializesCanonicalInput)
+{
+   const SemanticAtom fluent{3, {7}};
+   const SemanticAtom derived{4, {11}};
+   const SemanticLiteral goal{fluent, false};
+   const SemanticGroundAction action{2, {7, 11}};
+   const semantic::StateView state{
+      .fluent = semantic::AtomsView(std::span{&fluent, 1}),
+      .derived = semantic::AtomsView(std::span{&derived, 1}),
+   };
+   const auto context = std::make_shared< const SemanticTaskContext >(
+      SemanticTaskContext{.objects = {"a", "b"}}
+   );
+
+   const auto input = canonical::make_semantic_flat_relation_input(
+      context,
+      state,
+      semantic::LiteralsView(std::span{&goal, 1}),
+      semantic::GroundActionsView(std::span{&action, 1})
+   );
+
+   ASSERT_FALSE(input.use_default_goals);
+   ASSERT_EQ(input.state_facts.size(), 2U);
+   ASSERT_EQ(input.goals.size(), 1U);
+   ASSERT_EQ(input.actions.size(), 1U);
+   EXPECT_EQ(input.state_facts[0], fluent);
+   EXPECT_EQ(input.state_facts[1], derived);
+   EXPECT_EQ(input.goals[0], goal);
+   EXPECT_EQ(input.actions[0], action);
 }
 
 TEST(ViewsTest, SemanticSchemaViewsUseExplicitCompactIds)

@@ -46,6 +46,9 @@ template < typename T >
 concept AtomView = requires(const view_value_t< T >& atom) {
    { atom.predicate_id() } -> std::convertible_to< PredicateId >;
    { atom.arguments() } -> std::ranges::input_range;
+} && requires(const view_value_t< T >& atom) {
+   requires std::
+      convertible_to< std::ranges::range_value_t< decltype(atom.arguments()) >, ObjectId >;
 };
 
 template < typename T >
@@ -69,6 +72,9 @@ template < typename T >
 concept GroundActionView = requires(const view_value_t< T >& action) {
    { action.schema_id() } -> std::convertible_to< ActionSchemaId >;
    { action.arguments() } -> std::ranges::input_range;
+} && requires(const view_value_t< T >& action) {
+   requires std::
+      convertible_to< std::ranges::range_value_t< decltype(action.arguments()) >, ObjectId >;
 };
 
 template < typename T >

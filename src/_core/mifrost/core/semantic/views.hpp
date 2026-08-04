@@ -245,6 +245,9 @@ static_assert(views::AtomView< AtomView >);
 static_assert(views::LiteralView< LiteralView >);
 static_assert(views::GroundActionView< GroundActionView >);
 static_assert(views::StateView< StateView >);
+static_assert(views::AtomRange< AtomsView >);
+static_assert(views::LiteralRange< LiteralsView >);
+static_assert(views::GroundActionRange< GroundActionsView >);
 static_assert(std::is_trivially_copyable_v< AtomView >);
 static_assert(sizeof(AtomView) <= 2 * sizeof(void*));
 

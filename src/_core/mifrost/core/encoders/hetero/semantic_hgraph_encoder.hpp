@@ -104,6 +104,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
 
+   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
    [[nodiscard]] const Config& get_config() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;

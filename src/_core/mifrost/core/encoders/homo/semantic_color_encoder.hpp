@@ -33,6 +33,10 @@ class MIFROST_API SemanticColorEncoderEngine {
    ) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
 
+   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const
+   {
+      return task_context_;
+   }
    [[nodiscard]] const SemanticColorEncoderConfig& get_config() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
 
