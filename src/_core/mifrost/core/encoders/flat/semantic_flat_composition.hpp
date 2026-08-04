@@ -23,9 +23,8 @@ namespace mifrost {
  * to the composition runtime.
  *
  * Semantic engines populate this carrier directly from their owned semantic
- * inputs.  A legacy encoding is still built as a parity oracle, but it is not
- * used to construct the carrier; mismatches are reported by the engine and
- * are not hidden by exception-based fallback.
+ * inputs. Legacy encoders may be invoked independently by parity tests, but
+ * production composition never constructs or compares a second encoding.
  */
 struct SemanticFlatCompositionInput {
    FlatCompositionInput composition;
@@ -84,7 +83,7 @@ class MIFROST_API SemanticFlatMetadataComponent final: public FlatEmitterCompone
 
   private:
    std::vector< std::string > graph_attrs_;
-  std::vector< std::string > optional_graph_attrs_;
+   std::vector< std::string > optional_graph_attrs_;
 };
 
 class MIFROST_API SemanticFlatRelationComponent final: public FlatEmitterComponent {

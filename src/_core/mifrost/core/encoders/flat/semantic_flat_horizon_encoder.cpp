@@ -116,16 +116,6 @@ void SemanticFlatHorizonEncoderEngine::finalize_batch_encoding(
    impl_->flat.finalize_horizon_encoding(encoding, impl_->config);
 }
 
-bool SemanticFlatHorizonEncoderEngine::last_encoding_used_composed_plan() const
-{
-   return impl_->flat.last_encoding_used_composed_plan();
-}
-
-std::string SemanticFlatHorizonEncoderEngine::last_composition_diagnostic() const
-{
-   return impl_->flat.last_composition_diagnostic();
-}
-
 const SemanticFlatHorizonEncoderEngine::Config& SemanticFlatHorizonEncoderEngine::get_config() const
 {
    return impl_->config;

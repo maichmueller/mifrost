@@ -101,15 +101,12 @@ populate objects, resolved relation records, fields, and metadata directly
 from a `SemanticFlatRelationInput` or `SemanticTransitionDAG`, while the
 compiled plan owns native emission and finalization.
 
-The semantic relation and horizon engines now populate this seam directly
-from their semantic inputs.  The legacy semantic encoder remains a parity
-oracle only; it is not used to construct the carrier.  The direct path is
-explicit through `FlatInputView::from(SemanticFlatCompositionInput)`:
-composition or execution errors propagate, and only an exact parity mismatch
-may select the legacy result, with a diagnostic recorded by the semantic
-engine.  This keeps the compiled plan and its component API independent of
-planner types while moving semantic extraction out of the legacy emission
-loop.
+The semantic relation and horizon engines populate this seam directly from
+their semantic inputs. Production encoding executes only the compiled path;
+legacy encoders are independent parity oracles used by tests and benchmarks.
+The direct path is explicit through
+`FlatInputView::from(SemanticFlatCompositionInput)`, and composition or
+execution errors propagate to the caller.
 
 The neutral C++ suite includes a minimal semantic relation encoder fixture that
 compares a composed state-fact carrier against the existing semantic engine

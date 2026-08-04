@@ -100,7 +100,6 @@ TEST(SemanticFlatHorizonEncoderEngineTest, FullModeDefaultConfigEncodesWithoutTh
 
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, RootOnlyGraphPreservesEmptyTargetNames)
@@ -109,7 +108,6 @@ TEST(SemanticFlatHorizonEncoderEngineTest, RootOnlyGraphPreservesEmptyTargetName
 
    const auto encoding = engine.encode(make_root_only_dag());
 
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    ASSERT_TRUE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
    EXPECT_TRUE(
       std::get< std::vector< std::string > >(encoding.graph_attrs.at(std::string(kTargetNamesAttr)))
@@ -141,7 +139,6 @@ TEST(SemanticFlatHorizonEncoderEngineTest, BatchEncodingUsesCompiledPlanForRelat
    const auto encoding = engine.encode_batch({make_dag(), make_dag()});
 
    EXPECT_EQ(encoding.num_graphs, 2);
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, ParityMatrixUsesCompiledPlanAcrossHorizonPolicies)
@@ -186,11 +183,6 @@ TEST(SemanticFlatHorizonEncoderEngineTest, ParityMatrixUsesCompiledPlanAcrossHor
       const auto encoding = engine.encode_batch({make_dag(), make_dag()});
 
       EXPECT_EQ(encoding.num_graphs, 2);
-      EXPECT_TRUE(engine.last_encoding_used_composed_plan())
-         << "mode=" << static_cast< int >(config.transition_mode)
-         << ", root_policy=" << static_cast< int >(config.root_policy) << ": "
-         << engine.last_composition_diagnostic();
-      EXPECT_TRUE(engine.last_composition_diagnostic().empty());
    }
 }
 

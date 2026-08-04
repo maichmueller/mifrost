@@ -495,8 +495,6 @@ TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
    const auto encoding = engine.encode(input);
 
    EXPECT_EQ(encoding.num_graphs, 1);
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
-   EXPECT_TRUE(engine.last_composition_diagnostic().empty());
 }
 
 TEST(FlatCompositionTest, SemanticRelationCompositionPreservesPredicateVirtualNodeMetadata)
@@ -519,8 +517,6 @@ TEST(FlatCompositionTest, SemanticRelationCompositionPreservesPredicateVirtualNo
    const auto encoding = engine.encode(input);
 
    EXPECT_EQ(encoding.num_graphs, 1);
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
-   EXPECT_TRUE(engine.last_composition_diagnostic().empty());
 }
 
 TEST(FlatCompositionTest, SemanticRelationBatchParityCoversRelationArgumentLayouts)
@@ -544,9 +540,6 @@ TEST(FlatCompositionTest, SemanticRelationBatchParityCoversRelationArgumentLayou
       const auto encoding = engine.encode_batch({input, input});
 
       EXPECT_EQ(encoding.num_graphs, 2);
-      EXPECT_TRUE(engine.last_encoding_used_composed_plan())
-         << engine.last_composition_diagnostic();
-      EXPECT_TRUE(engine.last_composition_diagnostic().empty());
    }
 }
 
@@ -566,7 +559,6 @@ TEST(FlatCompositionTest, SemanticRelationCompositionPreservesLazyTargetNames)
 
    const auto encoding = engine.encode(input);
 
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    ASSERT_FALSE(encoding.lazy_target_name_strings.empty());
    EXPECT_EQ(encoding.lazy_target_name_strings.front(), "(move a)");
 }
@@ -586,7 +578,6 @@ TEST(FlatCompositionTest, SemanticRelationCompositionPreservesEmptyTargetNames)
 
    const auto encoding = engine.encode(input);
 
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    ASSERT_TRUE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
    EXPECT_TRUE(
       std::get< std::vector< std::string > >(encoding.graph_attrs.at(std::string(kTargetNamesAttr)))
@@ -611,7 +602,6 @@ TEST(FlatCompositionTest, SemanticRelationBatchCompositionOmitsEmptyTargetNamesW
 
    const auto encoding = engine.encode_batch({without_action, with_action});
 
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    EXPECT_FALSE(encoding.graph_attrs.contains(std::string(kTargetNamesAttr)));
    EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
 }
@@ -640,7 +630,6 @@ TEST(FlatCompositionTest, SemanticRelationDirectCarrierCoversSemanticMetadataLan
 
    const auto encoding = engine.encode(input);
 
-   EXPECT_TRUE(engine.last_encoding_used_composed_plan()) << engine.last_composition_diagnostic();
    EXPECT_TRUE(encoding.node_names.contains("entity"));
    EXPECT_FALSE(encoding.lazy_target_name_strings.empty());
    EXPECT_TRUE(encoding.graph_fields.contains(std::string(kLGANTNSizesField)));
@@ -666,10 +655,11 @@ TEST(FlatCompositionTest, SemanticRelationParityMatrixUsesCompiledPlan)
    input.history = {
       SemanticHistoryEntry{
          .dt = -1,
-         .literals = {
-            SemanticLiteral{SemanticAtom{1, {0}}, true},
-            SemanticLiteral{SemanticAtom{2, {1}}, false},
-         },
+         .literals =
+            {
+               SemanticLiteral{SemanticAtom{1, {0}}, true},
+               SemanticLiteral{SemanticAtom{2, {1}}, false},
+            },
       },
       SemanticHistoryEntry{
          .dt = -3,
@@ -710,10 +700,6 @@ TEST(FlatCompositionTest, SemanticRelationParityMatrixUsesCompiledPlan)
          const auto encoding = engine.encode_batch({input, input});
 
          EXPECT_EQ(encoding.num_graphs, 2);
-         EXPECT_TRUE(engine.last_encoding_used_composed_plan())
-            << "relation_major=" << relation_major << ": "
-            << engine.last_composition_diagnostic();
-         EXPECT_TRUE(engine.last_composition_diagnostic().empty());
       }
    }
 }
