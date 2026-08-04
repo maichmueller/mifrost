@@ -354,16 +354,20 @@ FlatRelationSchema FlatSchemaPlanBuilder::finalize_schema(const FlatCompositionC
       );
 }
 
-void FlatGraphContext::emit(RelationKey key, std::span< const int64_t > args) const
+void FlatGraphContext::emit(int relation_id, std::span< const int64_t > args) const
 {
-   const auto relation_id = schema.id_for(key);
-   if(static_cast< size_t >(relation_id) >= schema.arities().size()) {
+   if(relation_id < 0 or static_cast< size_t >(relation_id) >= schema.arities().size()) {
       throw std::logic_error("Flat relation schema has no arity for relation id");
    }
    if(args.size() != static_cast< size_t >(schema.arities()[static_cast< size_t >(relation_id)])) {
       throw std::invalid_argument("Flat relation emission arity does not match compiled schema");
    }
    relations.emit(relation_id, args);
+}
+
+void FlatGraphContext::emit(const RelationKey& key, std::span< const int64_t > args) const
+{
+   emit(relation_id(key), args);
 }
 
 void FlatGraphContext::emit_projection(

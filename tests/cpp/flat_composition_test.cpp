@@ -49,13 +49,13 @@ class FactsComponent final: public FlatEmitterComponent {
 
    void emit(const FlatInputView& input, FlatGraphContext& context) const override
    {
-      const auto relation = predicate_relation_key("fact");
+      const auto relation_id = context.relation_id(predicate_relation_key("fact"));
       for(const auto& object : input.get< DemoInput >().objects) {
          const auto node = context.nodes.index(
             FlatNodeRef{context.nodes.schema().id_for("entity"), object}
          );
          const std::array args{node};
-         context.emit(relation, args);
+         context.emit(relation_id, args);
       }
    }
 

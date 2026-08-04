@@ -320,7 +320,9 @@ struct FlatGraphContext {
    FlatRelationSink& relations;
    std::span< const CompiledFlatRelationProjection > projections;
 
-   void emit(RelationKey key, std::span< const int64_t > args) const;
+   [[nodiscard]] int relation_id(const RelationKey& key) const { return schema.id_for(key); }
+   void emit(int relation_id, std::span< const int64_t > args) const;
+   void emit(const RelationKey& key, std::span< const int64_t > args) const;
    void emit_projection(size_t projection_id, std::span< const int64_t > source_args) const;
 };
 
