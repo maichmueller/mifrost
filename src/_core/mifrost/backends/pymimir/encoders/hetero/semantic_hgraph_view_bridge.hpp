@@ -167,11 +167,11 @@ inline SemanticFlatRelationInput state_input(
    const views::Context& view_context
 )
 {
-   std::vector< views::GroundActionView< mimir::formalism::GroundAction > > action_views;
-   action_views.reserve(actions.size());
-   for(const auto& action : actions) {
-      action_views.emplace_back(action, view_context);
-   }
+   const auto action_views = mifrost::views::TransformRange{
+      std::span{actions}, [&view_context](const auto& action) {
+         return views::GroundActionView< mimir::formalism::GroundAction >{action, view_context};
+      }
+   };
    auto result = canonical::make_semantic_flat_relation_input(
       context,
       views::make_state_view(state, view_context),

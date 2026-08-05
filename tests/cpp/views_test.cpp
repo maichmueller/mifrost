@@ -3,10 +3,12 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
 
 #if __has_include("mifrost/core/encoders/flat/view_flat_relation_input.hpp")
    #error "The deleted callback-based FlatRelationViewInput carrier must not return."
@@ -56,6 +58,36 @@ static_assert(views::PredicateView< semantic::PredicateView >);
 static_assert(views::ObjectView< semantic::ObjectView >);
 static_assert(views::ActionSchemaView< semantic::ActionSchemaView >);
 static_assert(views::HistoryEntryView< semantic::HistoryEntryView >);
+static_assert(
+   std::is_base_of_v< views::PredicateViewBase< semantic::PredicateView >, semantic::PredicateView >
+);
+static_assert(
+   std::is_base_of_v< views::ObjectViewBase< semantic::ObjectView >, semantic::ObjectView >
+);
+static_assert(std::is_base_of_v<
+              views::ActionSchemaViewBase< semantic::ActionSchemaView >,
+              semantic::ActionSchemaView >);
+static_assert(std::is_base_of_v<
+              views::HistoryEntryViewBase< semantic::HistoryEntryView >,
+              semantic::HistoryEntryView >);
+
+TEST(ViewsTest, TransformRangeDefersViewMaterialization)
+{
+   std::array values{1, 2};
+   int materializations = 0;
+   const auto transformed = views::TransformRange{
+      std::span{values}, [&materializations](const int value) {
+         ++materializations;
+         return value * 2;
+      }
+   };
+
+   EXPECT_EQ(materializations, 0);
+   EXPECT_EQ(*transformed.begin(), 2);
+   EXPECT_EQ(materializations, 1);
+   EXPECT_EQ(*std::next(transformed.begin()), 4);
+   EXPECT_EQ(materializations, 2);
+}
 
 TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
 {
