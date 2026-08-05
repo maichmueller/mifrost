@@ -92,7 +92,12 @@ void ColorEncoderEngine::encode_impl(
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
    ensure_problem(state);
-   semantic_engine_->encode(problem_adapter_->make_input(state, goals), builder);
+   const auto state_view = problem_adapter_->make_state_view(state);
+   const auto goal_views = problem_adapter_->make_goal_views(goals);
+   const auto action_views = problem_adapter_->make_action_views(actions);
+   semantic_engine_->encode(
+      state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), action_views, builder
+   );
 }
 
 BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(

@@ -124,7 +124,7 @@ template < views::GroundActionView Action >
 }
 
 /**
- * Build the neutral traversal sink used by the semantic encoders.
+ * Build the owned compatibility input used by the semantic encoders.
  */
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
@@ -138,6 +138,31 @@ template < views::StateView State, views::LiteralRange Goals, views::GroundActio
    result.use_default_goals = false;
    for(const auto& goal : goals) {
       result.goals.push_back(detail::materialize_literal(goal));
+   }
+   return result;
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions >
+[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions
+)
+{
+   auto result = make_semantic_flat_relation_input(
+      context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+   );
+   for(const auto& layer : subgoal_layers) {
+      auto& target = result.subgoal_layers.emplace_back();
+      for(const auto& goal : layer) {
+         target.push_back(detail::materialize_literal(goal));
+      }
    }
    return result;
 }

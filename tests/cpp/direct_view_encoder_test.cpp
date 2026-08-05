@@ -133,6 +133,34 @@ TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)
    expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
 }
 
+TEST_P(DirectViewEncoderTest, ColorDirectGoalAndSubgoalViewsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   auto semantic_input = adapter.make_input(ctx.root, goals);
+   if(semantic_input.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+   semantic_input.subgoal_layers = {semantic_input.goals};
+
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto action_views = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const mifrost::semantic::LiteralsView goal_views(std::span{semantic_input.goals});
+   const mifrost::semantic::SubgoalLayersView subgoal_layers(
+      std::span{semantic_input.subgoal_layers}
+   );
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(state_view, goal_views, subgoal_layers, action_views)
+   );
+}
+
 TEST_P(DirectViewEncoderTest, HGraphDirectViewMatchesSemanticCompatibilityInput)
 {
    const auto param = GetParam();

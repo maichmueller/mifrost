@@ -205,21 +205,25 @@ void HGraphEncoderEngine::encode_views(
    ensure_problem(state);
    const auto state_view = problem_adapter_->make_state_view(state);
    const auto action_views = problem_adapter_->make_action_views(actions);
-   const auto input = make_input(state, goals, actions, history, history_max_steps);
-   const pymimir::SemanticLaneViews lanes(input);
    const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
    if(same_schema(state_schema, schema_)) {
+      const auto goal_views = problem_adapter_->make_goal_views(goals);
+      const auto history_entries = pymimir::materialize_history_entries(
+         history, problem_adapter_->get_view_context()
+      );
+      const semantic::HistoryView history_view(std::span{history_entries});
       semantic_->encode(
          state_view,
-         lanes.goals,
-         lanes.subgoal_layers,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
          action_views,
-         lanes.history,
-         input.history_max_steps,
+         history_view,
+         history_max_steps,
          builder
       );
       return;
    }
+   const auto input = make_input(state, goals, actions, history, history_max_steps);
    SemanticHGraphEncoderEngine compatible_engine(
       state_schema.predicates, state_schema.actions, semantic_config(config_)
    );

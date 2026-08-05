@@ -36,6 +36,18 @@ class MIFROST_API SemanticColorEncoderEngine {
    [[nodiscard]] BatchBuilder::BatchEncoding
    encode(const State& state, Goals&& goals, Actions&& actions) const;
 
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions
+   ) const;
+
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
@@ -45,6 +57,19 @@ class MIFROST_API SemanticColorEncoderEngine {
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
    void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
+
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions >
+   void encode(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions,
+      BatchBuilder& builder
+   ) const;
 
    [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const
    {
@@ -109,6 +134,55 @@ void SemanticColorEncoderEngine::encode(
    encode(
       canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+      ),
+      builder
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions >
+BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions
+) const
+{
+   BatchBuilder builder;
+   encode(
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      builder
+   );
+   builder.next_graph();
+   return builder.build();
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions >
+void SemanticColorEncoderEngine::encode(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::make_semantic_flat_relation_input(
+         get_task_context(),
+         state,
+         std::forward< Goals >(goals),
+         std::forward< SubgoalLayers >(subgoal_layers),
+         std::forward< Actions >(actions)
       ),
       builder
    );

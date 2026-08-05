@@ -63,19 +63,7 @@ struct FlatRelationEncoderEngine::SemanticImpl {
          );
       }
       result.history_max_steps = history_max_steps;
-      for(const auto& [dt, literals] : history) {
-         SemanticHistoryEntry entry;
-         entry.dt = dt;
-         for(const auto& literal : literals) {
-            std::visit(
-               [&](const auto& value) {
-                  entry.literals.push_back(materialize_history_literal(value, view_context));
-               },
-               literal
-            );
-         }
-         result.history.push_back(std::move(entry));
-      }
+      result.history = pymimir::materialize_history_entries(history, view_context);
       return result;
    }
 
@@ -96,42 +84,41 @@ struct FlatRelationEncoderEngine::SemanticImpl {
          encoder->encode(state_view, action_views, builder);
          return;
       }
-      const auto input = make_input(state, goals, actions, history, history_max_steps, config);
-      const pymimir::SemanticLaneViews lanes(input);
+      const auto history_entries = pymimir::materialize_history_entries(
+         history, problem_adapter->get_view_context()
+      );
+      const semantic::HistoryView history_view(std::span{history_entries});
+      if(goals != nullptr) {
+         const auto goal_views = problem_adapter->make_goal_views(*goals);
+         encoder->encode(
+            state_view,
+            goal_views.goals_view(),
+            goal_views.subgoal_layers_view(),
+            action_views,
+            history_view,
+            history_max_steps,
+            builder
+         );
+         return;
+      }
+      const semantic::LiteralsView default_goals(
+         std::span{problem_adapter->get_task_context()->default_goals}
+      );
+      const semantic::SubgoalLayersView subgoal_layers(
+         std::span< const std::vector< SemanticLiteral > >{}
+      );
       encoder->encode(
          state_view,
-         lanes.goals,
-         lanes.subgoal_layers,
+         default_goals,
+         subgoal_layers,
          action_views,
-         lanes.history,
-         input.history_max_steps,
+         history_view,
+         history_max_steps,
          builder
       );
    }
 
   private:
-   template < typename Tag >
-   static SemanticLiteral materialize_history_literal(
-      const mimir::formalism::GroundLiteral< Tag >& literal,
-      const pymimir::views::Context& view_context
-   )
-   {
-      constexpr auto category = [] {
-         if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
-            return pymimir::views::Category::static_predicate;
-         } else if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
-            return pymimir::views::Category::fluent;
-         } else {
-            return pymimir::views::Category::derived;
-         }
-      }();
-      return canonical::materialize_semantic_literal(
-         pymimir::views::LiteralView< mimir::formalism::GroundLiteral< Tag >, category >{
-            literal, view_context
-         }
-      );
-   }
-
    static void
    append_schema(const mimir::formalism::DomainImpl& domain, SemanticTaskContext& context)
    {

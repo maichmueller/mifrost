@@ -25,18 +25,63 @@
 
 namespace mifrost::pymimir {
 
-struct SemanticLaneViews {
-   semantic::LiteralsView goals;
-   semantic::SubgoalLayersView subgoal_layers;
-   semantic::HistoryView history;
+struct SemanticGoalViews {
+   std::vector< SemanticLiteral > goals;
+   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
 
-   explicit SemanticLaneViews(const SemanticFlatRelationInput& input)
-       : goals(std::span{semantic_goals(input)}),
-         subgoal_layers(std::span{input.subgoal_layers}),
-         history(std::span{input.history})
+   [[nodiscard]] semantic::LiteralsView goals_view() const
    {
+      return semantic::LiteralsView(std::span{goals});
+   }
+   [[nodiscard]] semantic::SubgoalLayersView subgoal_layers_view() const
+   {
+      return semantic::SubgoalLayersView(std::span{subgoal_layers});
    }
 };
+
+template < typename Tag >
+[[nodiscard]] inline SemanticLiteral materialize_history_literal(
+   const mimir::formalism::GroundLiteral< Tag >& literal,
+   const views::Context& context
+)
+{
+   constexpr auto category = [] {
+      if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
+         return views::Category::static_predicate;
+      } else if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
+         return views::Category::fluent;
+      } else {
+         return views::Category::derived;
+      }
+   }();
+   using NativeLiteral = mimir::formalism::GroundLiteral< Tag >;
+   return canonical::materialize_semantic_literal(
+      views::LiteralView< NativeLiteral, category >{literal, context}
+   );
+}
+
+[[nodiscard]] inline std::vector< SemanticHistoryEntry > materialize_history_entries(
+   std::span< const std::pair< int, std::vector< LiteralVariant > > > history,
+   const views::Context& context
+)
+{
+   std::vector< SemanticHistoryEntry > result;
+   result.reserve(history.size());
+   for(const auto& [dt, literals] : history) {
+      auto& entry = result.emplace_back();
+      entry.dt = dt;
+      entry.literals.reserve(literals.size());
+      for(const auto& literal : literals) {
+         std::visit(
+            [&](const auto& value) {
+               entry.literals.push_back(materialize_history_literal(value, context));
+            },
+            literal
+         );
+      }
+   }
+   return result;
+}
 
 template < typename Tag >
 void append_semantic_predicates(
@@ -105,6 +150,31 @@ class SemanticProblemAdapter {
       return views::make_state_view(state, view_context_);
    }
 
+   [[nodiscard]] SemanticGoalViews make_goal_views(const GoalInputs& goals) const
+   {
+      std::vector< std::vector< SemanticLiteral > > layers;
+      append_goals< mimir::formalism::StaticTag, views::Category::static_predicate >(
+         goals.static_goals, goals.static_goal_levels, layers
+      );
+      append_goals< mimir::formalism::FluentTag, views::Category::fluent >(
+         goals.fluent_goals, goals.fluent_goal_levels, layers
+      );
+      append_goals< mimir::formalism::DerivedTag, views::Category::derived >(
+         goals.derived_goals, goals.derived_goal_levels, layers
+      );
+
+      SemanticGoalViews result;
+      if(not layers.empty()) {
+         result.goals = std::move(layers.front());
+      }
+      if(layers.size() > 1) {
+         result.subgoal_layers.assign(
+            std::make_move_iterator(layers.begin() + 1), std::make_move_iterator(layers.end())
+         );
+      }
+      return result;
+   }
+
    template < std::ranges::input_range Actions >
    [[nodiscard]] auto make_action_views(Actions&& actions) const
    {
@@ -127,24 +197,9 @@ class SemanticProblemAdapter {
       const auto state_view = views::make_state_view(state, view_context_);
       materialize_state_in_native_order(state_view, result);
 
-      std::vector< std::vector< SemanticLiteral > > layers;
-      append_goals< mimir::formalism::StaticTag, views::Category::static_predicate >(
-         goals.static_goals, goals.static_goal_levels, layers
-      );
-      append_goals< mimir::formalism::FluentTag, views::Category::fluent >(
-         goals.fluent_goals, goals.fluent_goal_levels, layers
-      );
-      append_goals< mimir::formalism::DerivedTag, views::Category::derived >(
-         goals.derived_goals, goals.derived_goal_levels, layers
-      );
-      if(not layers.empty()) {
-         result.goals = std::move(layers.front());
-      }
-      if(layers.size() > 1) {
-         result.subgoal_layers.assign(
-            std::make_move_iterator(layers.begin() + 1), std::make_move_iterator(layers.end())
-         );
-      }
+      auto goal_views = make_goal_views(goals);
+      result.goals = std::move(goal_views.goals);
+      result.subgoal_layers = std::move(goal_views.subgoal_layers);
       return result;
    }
 
