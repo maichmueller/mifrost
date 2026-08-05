@@ -26,9 +26,10 @@ materialization or per-state ABI crossings. Single/stream results also vary in
 both directions. For example, PyTyr Flat stream end-to-end is 12.61% faster,
 Color stream is 24.44% faster, HGraph stream is 25.59% slower, and
 full-transition stream is 77.99% faster. The shared semantic snapshot path is
-retained for compatibility while the native View boundary is introduced; the
-benchmark remains the regression guard for the eventual direct View execution
-path.
+retained for compatibility while the normal Pymimir paths use task-scoped
+Views. This report remains a historical regression guard; current direct-View
+smoke runs should be compared with a matched build rather than these older
+cross-backend numbers.
 
 Native Release smoke coverage is separate from the three-way Python/runtime
 comparison. `mifrost_bench_hgraph`, `mifrost_bench_flat_relation`, and

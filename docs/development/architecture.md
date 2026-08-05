@@ -115,11 +115,20 @@ record adaptation in the neutral View bridge while the mature graph emitters
 are shared. This keeps planner-library types out of the neutral core and makes
 the compatibility boundary visible rather than duplicating backend algorithms.
 
+Direct does not mean that the final graph is emitted without planning state.
+The neutral engine still creates a graph-local preparation object for schema
+ordering, validation, and relation emission. Unlike a compatibility input, that
+object is private to the encode call, is not a public semantic record, and does
+not retain planner-native values.
+
 `FlatRelationViewInput` is a synchronous lane carrier for heterogeneous
-optional lanes. Its callbacks are created at the adapter boundary and are
-consumed only during the encode call; they do not own planner values. New
-canonical algorithms should continue to use the operation-based View concepts
-directly and should not introduce backend-specific type erasure.
+optional lanes. The semantic engine is a non-template shared ABI, so this
+carrier is the deliberate boundary between statically dispatched adapter
+templates and that ABI. Its callbacks are created at the adapter boundary and
+are consumed only during the encode call; they do not own planner values or
+survive into a stream. New canonical algorithms should continue to use the
+operation-based View concepts directly and should not introduce backend-specific
+type erasure into those concepts.
 
 Task contexts and backend planning repositories must remain alive through every
 encode or stream append that consumes a View. A stream stores the resulting

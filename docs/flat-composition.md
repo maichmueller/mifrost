@@ -164,6 +164,14 @@ semantic engines. They are not the extension seam for new encoders. New
 backend-neutral and downstream encoders must use the core composition API and
 a backend View context.
 
+The normal Pymimir Flat, Color, HGraph, successor, batch, and stream paths now
+enter through that direct View boundary. The legacy semantic-record APIs remain
+available for capsules, explicit snapshots, and compatibility callers. A direct
+encode may still create private graph-local preparation state before relation
+emission; this is distinct from materializing a public
+`SemanticFlatRelationInput` and never stores a planner-native object in the
+neutral engine.
+
 ### View lifetime and streaming
 
 Direct backend streams encode each appended step immediately and retain only
