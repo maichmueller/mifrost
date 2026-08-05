@@ -111,9 +111,10 @@ The semantic relation encoder compiles entity, fact, goal/derivation, action,
 history, field, target-metadata, and LGAN components. Its graph plan contains
 only graph-local semantic lookup state and target/node identities. The
 canonical View traversal primitives are available to backend-specific
-instantiations; the current semantic engine retains
-`SemanticFlatRelationInput` as its explicit compatibility input. It emits
-directly into the runtime's single `FlatRelationSink` and does not construct
+instantiations. The semantic engine exposes both direct
+`encode_views(...)` entry points and the explicit
+`SemanticFlatRelationInput` compatibility input. It emits directly into the
+runtime's single `FlatRelationSink` and does not construct
 `FlatCompositionInput`, per-tuple vectors, or an intermediate encoding.
 
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
@@ -147,7 +148,9 @@ The reusable implementation lives in the planner-neutral core:
   C++ extension seam for new native flat encoders.
 - `SemanticFlatRelationEncoderEngine` and `SemanticFlatHorizonEncoderEngine`
   are the canonical built-in assemblies. Both execute direct semantic
-  components through a compiled plan.
+  components through a compiled plan. The former accepts both direct View lanes
+  and owned semantic records; the latter retains semantic transition DAG input
+  because a horizon DAG is itself an owned semantic snapshot.
 - Planner adapters provide task-scoped contexts and granular non-owning Views.
   The same canonical algorithms are instantiated once for PyTyr and once for
   Pymimir, keeping native types and nanobind ABI domains isolated. Semantic
@@ -163,11 +166,12 @@ a backend View context.
 
 ### View lifetime and streaming
 
-Streams retain only backend values and context references until a graph is
-flushed. A caller must keep the planning task/problem and its View context alive
-through `flush()`; a stream must not retain a lazy range after its source state
-has been destroyed. Deferred flush tests should exercise both mutable removal
-and replacement so a stale View cannot be observed.
+Direct backend streams encode each appended step immediately and retain only
+the resulting native batch encoding. A caller must keep the planning task,
+problem, and View context alive through the append call; a stream must not
+retain a lazy range after its source state has been destroyed. Deferred flush
+tests should exercise both mutable removal and replacement so a stale View
+cannot be observed.
 
 ## Generic composition capabilities
 

@@ -92,6 +92,42 @@ context must outlive every View and every lazy range derived from it. Native
 templates are instantiated separately in each adapter, preserving PyTyr and
 Pymimir ABI isolation while sharing the algorithm source.
 
+### Direct and compatibility encoder paths
+
+Native backend entry points use a direct path whenever the input is still a
+borrowed planning value:
+
+```text
+backend value + task context -> backend View -> canonical encoder -> BatchEncoding
+```
+
+The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
+this path. The semantic engines also retain an explicit compatibility path for
+owned `SemanticFlatRelationInput` records. That path is required by capsules,
+semantic transition DAGs, and callers that intentionally snapshot inputs:
+
+```text
+owned semantic records -> semantic compatibility encoder -> BatchEncoding
+```
+
+The Color, HGraph, and successor direct overloads centralize their remaining
+record adaptation in the neutral View bridge while the mature graph emitters
+are shared. This keeps planner-library types out of the neutral core and makes
+the compatibility boundary visible rather than duplicating backend algorithms.
+
+`FlatRelationViewInput` is a synchronous lane carrier for heterogeneous
+optional lanes. Its callbacks are created at the adapter boundary and are
+consumed only during the encode call; they do not own planner values. New
+canonical algorithms should continue to use the operation-based View concepts
+directly and should not introduce backend-specific type erasure.
+
+Task contexts and backend planning repositories must remain alive through every
+encode or stream append that consumes a View. A stream stores the resulting
+native batch encoding, not a lazy View, so a View's source state may be released
+after append returns. Batch inputs reserve their lane storage before creating
+callbacks so captured goal and history ranges remain stable until encoding
+finishes.
+
 ## Adding an Encoder Family
 
 1. Add or reuse a native config and engine with a stable, batch-oriented entry
