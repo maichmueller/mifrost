@@ -113,10 +113,11 @@ owned semantic records -> semantic compatibility encoder -> BatchEncoding
 
 The Color, HGraph, and successor direct overloads traverse granular Views before
 dispatching to the mature graph emitters. View traversal materializes only the
-compact semantic lanes needed for the encoder's multi-pass graph preparation;
-that preparation is private to the encode call and is not a second public
-semantic snapshot. This keeps planner-library types out of the neutral core
-without duplicating backend algorithms.
+encoder-native graph keys needed for the encoder's multi-pass graph preparation;
+it does not create a complete semantic-record mirror. That preparation is
+private to the encode call and is not a second public semantic snapshot. This
+keeps planner-library types out of the neutral core without duplicating backend
+algorithms.
 
 Direct does not mean that the final graph is emitted without planning state.
 The neutral engine still creates a graph-local preparation object for schema
@@ -126,12 +127,12 @@ not retain planner-native values.
 
 The templated adapter boundary is deliberately granular: state, goals,
 subgoal layers, actions, and history are accepted as constrained View ranges,
-then traversed synchronously into the encoder's private compact preparation
+then traversed synchronously into the encoder's fixed graph-key preparation
 state. The public `SemanticFlatRelationInput` remains the owned compatibility
-representation; direct View calls do not expose another owning DTO. New
-canonical algorithms should continue to use the operation-based View concepts
-directly and should not introduce backend-specific type erasure into those
-concepts.
+representation; direct View calls do not expose another owning DTO or callback
+range. New canonical algorithms should continue to use the operation-based View
+concepts directly and should not introduce backend-specific type erasure into
+those concepts.
 
 Task contexts and backend planning repositories must remain alive through every
 encode or stream append that consumes a View. A stream stores the resulting

@@ -174,6 +174,53 @@ TEST_P(DirectViewEncoderTest, FlatNativeGoalAndHistoryViewsMatchCompatibilityInp
    );
 }
 
+TEST_P(DirectViewEncoderTest, FlatSparseRepeatedNativeGoalLevelsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs sparse_goals;
+   if(not source_goals.static_goals.empty()) {
+      const auto literal = source_goals.static_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.fluent_goals.empty()) {
+      const auto literal = source_goals.fluent_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.derived_goals.empty()) {
+      const auto literal = source_goals.derived_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto semantic_input = adapter.make_input(ctx.root, sparse_goals);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto action_views = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto goal_views = adapter.make_goal_views(sparse_goals);
+   const std::vector< mifrost::SemanticHistoryEntry > empty_history;
+   const mifrost::semantic::HistoryView history_view(std::span{empty_history});
+   mifrost::FlatRelationEncoderConfig config;
+   config.max_goal_level = 3;
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(
+         state_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         action_views,
+         history_view
+      )
+   );
+}
+
 TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)
 {
    const auto param = GetParam();
@@ -218,6 +265,45 @@ TEST_P(DirectViewEncoderTest, ColorDirectGoalAndSubgoalViewsMatchCompatibilityIn
    );
 }
 
+TEST_P(DirectViewEncoderTest, ColorSparseRepeatedNativeGoalLevelsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs sparse_goals;
+   if(not source_goals.static_goals.empty()) {
+      const auto literal = source_goals.static_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.fluent_goals.empty()) {
+      const auto literal = source_goals.fluent_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.derived_goals.empty()) {
+      const auto literal = source_goals.derived_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto semantic_input = adapter.make_input(ctx.root, sparse_goals);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto action_views = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto goal_views = adapter.make_goal_views(sparse_goals);
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(
+         state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), action_views
+      )
+   );
+}
+
 TEST_P(DirectViewEncoderTest, HGraphDirectViewMatchesSemanticCompatibilityInput)
 {
    const auto param = GetParam();
@@ -232,6 +318,53 @@ TEST_P(DirectViewEncoderTest, HGraphDirectViewMatchesSemanticCompatibilityInput)
    const mifrost::SemanticHGraphEncoderEngine engine(semantic_context);
 
    expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+}
+
+TEST_P(DirectViewEncoderTest, HGraphSparseRepeatedNativeGoalLevelsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs sparse_goals;
+   if(not source_goals.static_goals.empty()) {
+      const auto literal = source_goals.static_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.fluent_goals.empty()) {
+      const auto literal = source_goals.fluent_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else if(not source_goals.derived_goals.empty()) {
+      const auto literal = source_goals.derived_goals.front();
+      sparse_goals.append(literal, 1);
+      sparse_goals.append(literal, 3);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto semantic_input = adapter.make_input(ctx.root, sparse_goals);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto action_views = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto goal_views = adapter.make_goal_views(sparse_goals);
+   const std::vector< mifrost::SemanticHistoryEntry > empty_history;
+   const mifrost::semantic::HistoryView history_view(std::span{empty_history});
+   mifrost::SemanticHGraphEncoderConfig config;
+   config.max_goal_level = 3;
+   const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(
+         state_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         action_views,
+         history_view
+      )
+   );
 }
 
 TEST_P(DirectViewEncoderTest, SuccessorDirectViewsMatchSemanticCompatibilityInputs)
