@@ -63,8 +63,6 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor
    ) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding
-   encode(const SemanticFlatRelationSink& current, const SemanticFlatRelationSink& successor) const;
    template <
       views::StateView CurrentState,
       views::GroundActionRange CurrentActions,
@@ -79,11 +77,6 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    void encode(
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor,
-      BatchBuilder& builder
-   ) const;
-   void encode(
-      const SemanticFlatRelationSink& current,
-      const SemanticFlatRelationSink& successor,
       BatchBuilder& builder
    ) const;
    template <
@@ -157,10 +150,10 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
       ),
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
       ),
       builder

@@ -102,7 +102,6 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    ~SemanticHGraphEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationSink& sink) const;
    template < views::StateView State, views::GroundActionRange Actions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
 
@@ -126,7 +125,6 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    ) const;
 
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
-   void encode(const SemanticFlatRelationSink& sink, BatchBuilder& builder) const;
    template < views::StateView State, views::GroundActionRange Actions >
    void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
 
@@ -178,14 +176,6 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       bool include_successor_goal_satisfaction,
       BatchBuilder& builder
    ) const;
-   void encode_successor(
-      const SemanticFlatRelationSink& current,
-      const SemanticFlatRelationSink& successor,
-      bool delta_mode,
-      std::string_view successor_suffix,
-      bool include_successor_goal_satisfaction,
-      BatchBuilder& builder
-   ) const;
 
    struct Impl;
    std::unique_ptr< Impl > impl_;
@@ -213,7 +203,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Actions >(actions)
       ),
       builder
@@ -239,7 +229,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
       ),
       builder
@@ -292,7 +282,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(),
          state,
          std::forward< Goals >(goals),

@@ -179,39 +179,8 @@ struct SemanticFlatRelationInput {
    std::optional< int64_t > history_max_steps = std::nullopt;
 };
 
-/**
- * @brief Backend-neutral lanes accumulated from non-owning Views.
- *
- * This write-only traversal sink is intentionally separate from
- * `SemanticFlatRelationInput`, which remains the owning compatibility
- * representation used by legacy and transition-DAG callers.
- */
-struct SemanticFlatRelationSink {
-   std::shared_ptr< const SemanticTaskContext > task_context;
-   std::vector< std::string > objects;
-   std::vector< SemanticAtom > state_facts;
-   std::vector< SemanticLiteral > goals;
-   bool use_default_goals = false;
-   std::vector< SemanticGroundAction > actions;
-   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
-   std::vector< SemanticHistoryEntry > history;
-   std::optional< int64_t > history_max_steps = std::nullopt;
-
-   explicit SemanticFlatRelationSink(std::shared_ptr< const SemanticTaskContext > context = nullptr)
-       : task_context(std::move(context))
-   {
-   }
-};
-
 [[nodiscard]] inline const std::vector< std::string >& semantic_objects(
    const SemanticFlatRelationInput& input
-)
-{
-   return input.task_context ? input.task_context->objects : input.objects;
-}
-
-[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
-   const SemanticFlatRelationSink& input
 )
 {
    return input.task_context ? input.task_context->objects : input.objects;
@@ -225,24 +194,8 @@ struct SemanticFlatRelationSink {
                                                          : input.goals;
 }
 
-[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
-   const SemanticFlatRelationSink& input
-)
-{
-   return input.task_context and input.use_default_goals ? input.task_context->default_goals
-                                                         : input.goals;
-}
-
 [[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
    const SemanticFlatRelationInput& input
-)
-{
-   static const std::vector< SemanticAtom > empty;
-   return input.task_context ? input.task_context->static_facts : empty;
-}
-
-[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
-   const SemanticFlatRelationSink& input
 )
 {
    static const std::vector< SemanticAtom > empty;
@@ -340,8 +293,6 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationSink& sink) const;
-   void encode(const SemanticFlatRelationSink& sink, BatchBuilder& builder) const;
 
    template < views::StateView State, views::GroundActionRange Actions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
@@ -389,9 +340,6 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
-   ) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
-      const std::vector< SemanticFlatRelationSink >& sinks
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 

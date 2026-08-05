@@ -29,7 +29,6 @@ class MIFROST_API SemanticColorEncoderEngine {
    );
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationSink& sink) const;
    template < views::StateView State, views::GroundActionRange Actions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
 
@@ -41,7 +40,6 @@ class MIFROST_API SemanticColorEncoderEngine {
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
-   void encode(const SemanticFlatRelationSink& sink, BatchBuilder& builder) const;
    template < views::StateView State, views::GroundActionRange Actions >
    void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
 
@@ -83,7 +81,7 @@ void SemanticColorEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Actions >(actions)
       ),
       builder
@@ -109,7 +107,7 @@ void SemanticColorEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
       ),
       builder

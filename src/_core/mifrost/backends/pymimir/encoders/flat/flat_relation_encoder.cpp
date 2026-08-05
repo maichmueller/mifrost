@@ -79,36 +79,6 @@ struct FlatRelationEncoderEngine::SemanticImpl {
       return result;
    }
 
-   [[nodiscard]] SemanticFlatRelationSink make_sink(
-      const mimir::search::State& state,
-      const GoalInputs* goals,
-      std::span< const mimir::formalism::GroundAction > actions,
-      std::span< const FlatRelationEncoderEngine::HistorySubgoal > history,
-      std::optional< int > history_max_steps,
-      const Config& config
-   )
-   {
-      ensure_problem(state, config);
-      auto result = goals == nullptr ? problem_adapter->make_sink(state, actions)
-                                     : problem_adapter->make_sink(state, *goals, actions);
-      pymimir::views::Context view_context(state.get_problem());
-      for(const auto& [dt, literals] : history) {
-         SemanticHistoryEntry entry;
-         entry.dt = dt;
-         for(const auto& literal : literals) {
-            std::visit(
-               [&](const auto& value) {
-                  entry.literals.push_back(materialize_history_literal(value, view_context));
-               },
-               literal
-            );
-         }
-         result.history.push_back(std::move(entry));
-      }
-      result.history_max_steps = history_max_steps;
-      return result;
-   }
-
   private:
    template < typename Tag >
    static SemanticLiteral materialize_history_literal(
@@ -260,7 +230,7 @@ void FlatRelationEncoderEngine::encode_default_goals(
    semantic_->ensure_problem(state, config_);
    if(not history_subgoals.empty() or history_max_steps.has_value()) {
       semantic_->encoder->encode(
-         semantic_->make_sink(
+         semantic_->make_input(
             state, nullptr, actions, history_subgoals, history_max_steps, config_
          ),
          builder
@@ -268,7 +238,7 @@ void FlatRelationEncoderEngine::encode_default_goals(
       return;
    }
    semantic_->encoder->encode(
-      semantic_->make_sink(state, nullptr, actions, {}, std::nullopt, config_), builder
+      semantic_->make_input(state, nullptr, actions, {}, std::nullopt, config_), builder
    );
 }
 
@@ -330,7 +300,7 @@ void FlatRelationEncoderEngine::encode_impl(
 {
    semantic_->ensure_problem(state, config_);
    semantic_->encoder->encode(
-      semantic_->make_sink(state, &goals, actions, history_subgoals, history_max_steps, config_),
+      semantic_->make_input(state, &goals, actions, history_subgoals, history_max_steps, config_),
       builder
    );
 }
@@ -342,10 +312,10 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
 {
    const size_t state_count = inputs.states.states.size();
    if(state_count == 0) {
-      return semantic_->encoder->encode_batch(std::vector< SemanticFlatRelationSink >{});
+      return semantic_->encoder->encode_batch(std::vector< SemanticFlatRelationInput >{});
    }
    semantic_->ensure_problem(inputs.states.states.front().state, config_);
-   std::vector< SemanticFlatRelationSink > entries;
+   std::vector< SemanticFlatRelationInput > entries;
    entries.reserve(state_count);
    for(size_t idx = 0; idx < state_count; ++idx) {
       const auto& state_entry = inputs.states.states[idx];
@@ -375,7 +345,7 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       const auto history_span = history_entry.has_value()
                                    ? std::span< const HistorySubgoal >(*history_entry)
                                    : std::span< const HistorySubgoal >{};
-      entries.push_back(semantic_->make_sink(
+      entries.push_back(semantic_->make_input(
          state_entry.state, &goals, actions_span, history_span, history_max_steps, config_
       ));
    }

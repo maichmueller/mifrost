@@ -95,48 +95,11 @@ class SemanticProblemAdapter {
    [[nodiscard]] auto make_action_views(Actions&& actions) const
    {
       using NativeAction = std::remove_cvref_t< std::ranges::range_value_t< Actions > >;
-      std::vector< views::GroundActionView< NativeAction > > result;
-      for(const auto& action : actions) {
-         result.emplace_back(action, view_context_);
-      }
-      return result;
-   }
-
-   template < std::ranges::input_range Actions >
-   [[nodiscard]] SemanticFlatRelationSink
-   make_sink(const mimir::search::State& state, Actions&& actions) const
-   {
-      const auto action_views = make_action_views(std::forward< Actions >(actions));
-      return canonical::make_semantic_flat_relation_sink(
-         task_context_, views::make_state_view(state, view_context_), action_views
-      );
-   }
-
-   template < std::ranges::input_range Actions >
-   [[nodiscard]] SemanticFlatRelationSink
-   make_sink(const mimir::search::State& state, const GoalInputs& goals, Actions&& actions) const
-   {
-      auto result = make_sink(state, std::forward< Actions >(actions));
-      result.use_default_goals = false;
-      std::vector< std::vector< SemanticLiteral > > layers;
-      append_goals< mimir::formalism::StaticTag, views::Category::static_predicate >(
-         goals.static_goals, goals.static_goal_levels, layers
-      );
-      append_goals< mimir::formalism::FluentTag, views::Category::fluent >(
-         goals.fluent_goals, goals.fluent_goal_levels, layers
-      );
-      append_goals< mimir::formalism::DerivedTag, views::Category::derived >(
-         goals.derived_goals, goals.derived_goal_levels, layers
-      );
-      if(not layers.empty()) {
-         result.goals = std::move(layers.front());
-      }
-      if(layers.size() > 1) {
-         result.subgoal_layers.assign(
-            std::make_move_iterator(layers.begin() + 1), std::make_move_iterator(layers.end())
-         );
-      }
-      return result;
+      return mifrost::views::TransformRange{
+         std::forward< Actions >(actions), [context = &view_context_](const auto& action) {
+            return views::GroundActionView< NativeAction >{action, *context};
+         }
+      };
    }
 
    [[nodiscard]] const views::Context& get_view_context() const noexcept { return view_context_; }

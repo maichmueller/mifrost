@@ -24,20 +24,26 @@ using views::ObjectId;
 using views::PredicateCategory;
 using views::PredicateId;
 
-struct PredicateView {
+struct PredicateView: views::PredicateViewBase< PredicateView > {
    const SemanticPredicateSpec* value = nullptr;
    PredicateId value_id = -1;
 
-   [[nodiscard]] PredicateId id() const noexcept { return value_id; }
-   [[nodiscard]] std::string_view name() const noexcept
+   constexpr PredicateView() = default;
+   constexpr PredicateView(const SemanticPredicateSpec* predicate, PredicateId id)
+       : value(predicate), value_id(id)
+   {
+   }
+
+   [[nodiscard]] PredicateId id_impl() const noexcept { return value_id; }
+   [[nodiscard]] std::string_view name_impl() const noexcept
    {
       return value == nullptr ? std::string_view{} : value->name;
    }
-   [[nodiscard]] std::size_t arity() const noexcept
+   [[nodiscard]] std::size_t arity_impl() const noexcept
    {
       return value == nullptr ? 0U : static_cast< std::size_t >(value->arity);
    }
-   [[nodiscard]] PredicateCategory category() const noexcept
+   [[nodiscard]] PredicateCategory category_impl() const noexcept
    {
       if(value == nullptr) {
          return PredicateCategory::fluent;
@@ -46,12 +52,15 @@ struct PredicateView {
    }
 };
 
-struct ObjectView {
+struct ObjectView: views::ObjectViewBase< ObjectView > {
    ObjectId value = -1;
    std::string_view object_name{};
 
-   [[nodiscard]] ObjectId id() const noexcept { return value; }
-   [[nodiscard]] std::string_view name() const noexcept { return object_name; }
+   constexpr ObjectView() = default;
+   constexpr ObjectView(ObjectId id, std::string_view name) : value(id), object_name(name) {}
+
+   [[nodiscard]] ObjectId id_impl() const noexcept { return value; }
+   [[nodiscard]] std::string_view name_impl() const noexcept { return object_name; }
 };
 
 struct AtomView: views::AtomViewBase< AtomView > {
@@ -89,16 +98,22 @@ struct LiteralView: views::LiteralViewBase< LiteralView > {
    }
 };
 
-struct ActionSchemaView {
+struct ActionSchemaView: views::ActionSchemaViewBase< ActionSchemaView > {
    const SemanticActionSpec* value = nullptr;
    ActionSchemaId value_id = -1;
 
-   [[nodiscard]] ActionSchemaId id() const noexcept { return value_id; }
-   [[nodiscard]] std::string_view name() const noexcept
+   constexpr ActionSchemaView() = default;
+   constexpr ActionSchemaView(const SemanticActionSpec* action, ActionSchemaId id)
+       : value(action), value_id(id)
+   {
+   }
+
+   [[nodiscard]] ActionSchemaId id_impl() const noexcept { return value_id; }
+   [[nodiscard]] std::string_view name_impl() const noexcept
    {
       return value == nullptr ? std::string_view{} : value->name;
    }
-   [[nodiscard]] std::size_t arity() const noexcept
+   [[nodiscard]] std::size_t arity_impl() const noexcept
    {
       return value == nullptr ? 0U : static_cast< std::size_t >(value->arity);
    }
@@ -288,12 +303,15 @@ class SubgoalLayersView {
    std::span< const std::vector< SemanticLiteral > > values_;
 };
 
-class HistoryEntryView {
+class HistoryEntryView: public views::HistoryEntryViewBase< HistoryEntryView > {
   public:
    explicit HistoryEntryView(const SemanticHistoryEntry* value) : value_(value) {}
 
-   [[nodiscard]] std::int64_t dt() const noexcept { return value_ == nullptr ? 0 : value_->dt; }
-   [[nodiscard]] LiteralsView literals() const noexcept
+   [[nodiscard]] std::int64_t dt_impl() const noexcept
+   {
+      return value_ == nullptr ? 0 : value_->dt;
+   }
+   [[nodiscard]] LiteralsView literals_impl() const noexcept
    {
       if(value_ == nullptr) {
          return LiteralsView(std::span< const SemanticLiteral >{});

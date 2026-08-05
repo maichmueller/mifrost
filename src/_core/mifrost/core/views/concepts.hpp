@@ -117,6 +117,105 @@ class StateViewBase {
    }
 };
 
+template < typename Derived >
+class PredicateViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) id() const noexcept(noexcept(derived().id_impl()))
+   {
+      return derived().id_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) name() const noexcept(noexcept(derived().name_impl()))
+   {
+      return derived().name_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) arity() const noexcept(noexcept(derived().arity_impl()))
+   {
+      return derived().arity_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) category() const noexcept(
+      noexcept(derived().category_impl())
+   )
+   {
+      return derived().category_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class ObjectViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) id() const noexcept(noexcept(derived().id_impl()))
+   {
+      return derived().id_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) name() const noexcept(noexcept(derived().name_impl()))
+   {
+      return derived().name_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class ActionSchemaViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) id() const noexcept(noexcept(derived().id_impl()))
+   {
+      return derived().id_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) name() const noexcept(noexcept(derived().name_impl()))
+   {
+      return derived().name_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) arity() const noexcept(noexcept(derived().arity_impl()))
+   {
+      return derived().arity_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class HistoryEntryViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) dt() const noexcept(noexcept(derived().dt_impl()))
+   {
+      return derived().dt_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) literals() const noexcept(
+      noexcept(derived().literals_impl())
+   )
+   {
+      return derived().literals_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
 template < typename T >
 concept PredicateView = requires(const view_value_t< T >& predicate) {
    { predicate.id() } -> std::convertible_to< PredicateId >;

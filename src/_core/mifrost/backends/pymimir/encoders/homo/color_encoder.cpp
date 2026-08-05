@@ -92,12 +92,7 @@ void ColorEncoderEngine::encode_impl(
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
    ensure_problem(state);
-   semantic_engine_->encode(
-      problem_adapter_->make_sink(
-         state, goals, std::span< const mimir::formalism::GroundAction >{}
-      ),
-      builder
-   );
+   semantic_engine_->encode(problem_adapter_->make_input(state, goals), builder);
 }
 
 BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(

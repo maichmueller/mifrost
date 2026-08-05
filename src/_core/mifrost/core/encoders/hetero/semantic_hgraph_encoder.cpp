@@ -2038,41 +2038,9 @@ void SemanticHGraphEncoderEngine::encode(
    impl_->encode(input, builder);
 }
 
-BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink
-) const
-{
-   BatchBuilder builder;
-   encode(sink, builder);
-   builder.next_graph();
-   return builder.build();
-}
-
-void SemanticHGraphEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink,
-   BatchBuilder& builder
-) const
-{
-   impl_->encode(sink, builder);
-}
-
 void SemanticHGraphEncoderEngine::encode_successor(
    const SemanticFlatRelationInput& current,
    const SemanticFlatRelationInput& successor,
-   bool delta_mode,
-   std::string_view successor_suffix,
-   bool include_successor_goal_satisfaction,
-   BatchBuilder& builder
-) const
-{
-   impl_->encode_successor(
-      current, successor, delta_mode, successor_suffix, include_successor_goal_satisfaction, builder
-   );
-}
-
-void SemanticHGraphEncoderEngine::encode_successor(
-   const SemanticFlatRelationSink& current,
-   const SemanticFlatRelationSink& successor,
    bool delta_mode,
    std::string_view successor_suffix,
    bool include_successor_goal_satisfaction,

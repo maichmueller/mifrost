@@ -96,33 +96,6 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    );
 }
 
-BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
-   const SemanticFlatRelationSink& current,
-   const SemanticFlatRelationSink& successor
-) const
-{
-   BatchBuilder builder;
-   encode(current, successor, builder);
-   builder.next_graph();
-   return builder.build();
-}
-
-void SemanticSuccessorHGraphEncoderEngine::encode(
-   const SemanticFlatRelationSink& current,
-   const SemanticFlatRelationSink& successor,
-   BatchBuilder& builder
-) const
-{
-   impl_->hgraph.encode_successor(
-      current,
-      successor,
-      impl_->config.successor_mode == SemanticSuccessorMode::delta,
-      impl_->config.successor_suffix,
-      impl_->config.include_successor_goal_satisfaction,
-      builder
-   );
-}
-
 BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_batch(
    const std::vector< SemanticFlatRelationInput >& currents,
    const std::vector< SemanticFlatRelationInput >& successors

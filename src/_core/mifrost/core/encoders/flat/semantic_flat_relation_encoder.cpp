@@ -495,7 +495,6 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    struct PreparedRelationGraph {
       const SemanticFlatRelationInput* input = nullptr;
-      const SemanticFlatRelationSink* sink = nullptr;
       std::vector< SemanticGoalLevel > goal_levels;
       std::vector< SemanticLiteral > grouped_goals;
       hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
@@ -504,42 +503,42 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       [[nodiscard]] const std::vector< std::string >& objects() const
       {
-         return input ? semantic_objects(*input) : semantic_objects(*sink);
+         return semantic_objects(*input);
       }
 
       [[nodiscard]] const std::vector< SemanticAtom >& state_facts() const
       {
-         return input ? input->state_facts : sink->state_facts;
+         return input->state_facts;
       }
 
       [[nodiscard]] const std::vector< SemanticAtom >& static_facts() const
       {
-         return input ? semantic_static_facts(*input) : semantic_static_facts(*sink);
+         return semantic_static_facts(*input);
       }
 
       [[nodiscard]] const std::vector< SemanticLiteral >& goals() const
       {
-         return input ? semantic_goals(*input) : semantic_goals(*sink);
+         return semantic_goals(*input);
       }
 
       [[nodiscard]] const std::vector< std::vector< SemanticLiteral > >& subgoal_layers() const
       {
-         return input ? input->subgoal_layers : sink->subgoal_layers;
+         return input->subgoal_layers;
       }
 
       [[nodiscard]] const std::vector< SemanticGroundAction >& actions() const
       {
-         return input ? input->actions : sink->actions;
+         return input->actions;
       }
 
       [[nodiscard]] const std::vector< SemanticHistoryEntry >& history() const
       {
-         return input ? input->history : sink->history;
+         return input->history;
       }
 
       [[nodiscard]] std::optional< int64_t > history_max_steps() const
       {
-         return input ? input->history_max_steps : sink->history_max_steps;
+         return input->history_max_steps;
       }
    };
 
@@ -1948,16 +1947,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return context;
    }
 
-   template < typename Input >
-   PreparedRelationGraph prepare_relation_graph(const Input& input) const
+   PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
    {
       validate_input(input);
       PreparedRelationGraph prepared;
-      if constexpr(std::same_as< Input, SemanticFlatRelationInput >) {
-         prepared.input = &input;
-      } else {
-         prepared.sink = &input;
-      }
+      prepared.input = &input;
       prepared.goal_levels = semantic_goal_levels(input);
       const auto& goals = prepared.goals();
       for(const auto category : kCategoryOrder) {
@@ -2933,8 +2927,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       writer.finalize(encoding);
    }
 
-   template < typename Input >
-   BatchBuilder::BatchEncoding encode_many(std::span< const Input > inputs) const
+   BatchBuilder::BatchEncoding encode_many(
+      std::span< const SemanticFlatRelationInput > inputs
+   ) const
    {
       return compose_many(inputs);
    }
@@ -2948,17 +2943,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       composition_plan->append_graph(FlatInputView::from(prepared), builder);
    }
 
-   void append_composed(const SemanticFlatRelationSink& sink, BatchBuilder& builder) const
-   {
-      if(composition_plan == nullptr) {
-         throw std::logic_error("semantic flat composition plan is not available");
-      }
-      const auto prepared = prepare_relation_graph(sink);
-      composition_plan->append_graph(FlatInputView::from(prepared), builder);
-   }
-
-   template < typename Input >
-   BatchBuilder::BatchEncoding compose_many(std::span< const Input > inputs) const
+   BatchBuilder::BatchEncoding compose_many(
+      std::span< const SemanticFlatRelationInput > inputs
+   ) const
    {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
@@ -3035,36 +3022,11 @@ void SemanticFlatRelationEncoderEngine::encode(
    impl_->append_composed(input, builder);
 }
 
-BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink
-) const
-{
-   BatchBuilder builder;
-   encode(sink, builder);
-   builder.next_graph();
-   return builder.build();
-}
-
-void SemanticFlatRelationEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink,
-   BatchBuilder& builder
-) const
-{
-   impl_->append_composed(sink, builder);
-}
-
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
    const std::vector< SemanticFlatRelationInput >& inputs
 ) const
 {
    return impl_->encode_many(std::span{inputs});
-}
-
-BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
-   const std::vector< SemanticFlatRelationSink >& sinks
-) const
-{
-   return impl_->encode_many(std::span{sinks});
 }
 
 void SemanticFlatRelationEncoderEngine::finalize_batch_encoding(

@@ -37,14 +37,6 @@ class MIFROST_API SemanticPlanningTaskAdapter {
       const tyr::planning::StateView< tyr::planning::LiftedTag >& state,
       const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}
    ) const;
-   [[nodiscard]] SemanticFlatRelationSink make_sink(
-      const tyr::planning::StateView< tyr::planning::LiftedTag >& state,
-      const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}
-   ) const;
-   [[nodiscard]] SemanticFlatRelationSink make_sink(
-      const tyr::planning::StateView< tyr::planning::GroundTag >& state,
-      const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}
-   ) const;
    [[nodiscard]] SemanticFlatRelationInput make_input(
       const tyr::planning::StateView< tyr::planning::GroundTag >& state,
       const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}

@@ -471,30 +471,12 @@ void SemanticColorEncoderEngine::encode(
    encode_impl(input, predicates_, config_, builder);
 }
 
-void SemanticColorEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink,
-   BatchBuilder& builder
-) const
-{
-   encode_impl(sink, predicates_, config_, builder);
-}
-
 BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
    const SemanticFlatRelationInput& input
 ) const
 {
    BatchBuilder builder;
    encode(input, builder);
-   builder.next_graph();
-   return builder.build();
-}
-
-BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
-   const SemanticFlatRelationSink& sink
-) const
-{
-   BatchBuilder builder;
-   encode(sink, builder);
    builder.next_graph();
    return builder.build();
 }

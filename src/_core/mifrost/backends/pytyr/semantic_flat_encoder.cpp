@@ -432,24 +432,6 @@ struct SemanticPlanningTaskAdapter::Impl {
                                 );
       return canonical::make_semantic_flat_relation_input(task_context, state_view, action_views);
    }
-
-   template < typename State >
-   SemanticFlatRelationSink make_sink(
-      const State& state,
-      const std::vector< tyr::formalism::planning::GroundActionView >& action_values
-   ) const
-   {
-      const auto state_view = mifrost::pytyr::views::StateView< State, void >{state, view_context};
-      const auto action_views = action_values
-                                | std::views::transform(
-                                   [context = &view_context](const auto& value) {
-                                      return mifrost::pytyr::views::GroundActionView{
-                                         value, *context
-                                      };
-                                   }
-                                );
-      return canonical::make_semantic_flat_relation_sink(task_context, state_view, action_views);
-   }
 };
 
 SemanticPlanningTaskAdapter::SemanticPlanningTaskAdapter(
@@ -474,22 +456,6 @@ SemanticFlatRelationInput SemanticPlanningTaskAdapter::make_input(
 ) const
 {
    return impl_->make_input(state, actions);
-}
-
-SemanticFlatRelationSink SemanticPlanningTaskAdapter::make_sink(
-   const tyr::planning::StateView< tyr::planning::GroundTag >& state,
-   const std::vector< tyr::formalism::planning::GroundActionView >& actions
-) const
-{
-   return impl_->make_sink(state, actions);
-}
-
-SemanticFlatRelationSink SemanticPlanningTaskAdapter::make_sink(
-   const tyr::planning::StateView< tyr::planning::LiftedTag >& state,
-   const std::vector< tyr::formalism::planning::GroundActionView >& actions
-) const
-{
-   return impl_->make_sink(state, actions);
 }
 
 SemanticLiteral SemanticPlanningTaskAdapter::make_raw_literal(

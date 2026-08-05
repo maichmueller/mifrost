@@ -143,22 +143,24 @@ class Context {
 };
 
 template < typename NativePredicate, Category PredicateCategory >
-class PredicateView {
+class PredicateView:
+    public mifrost::views::PredicateViewBase<
+       PredicateView< NativePredicate, PredicateCategory > > {
   public:
    PredicateView(NativePredicate value, const Context& context) : value_(value), context_(&context)
    {
    }
 
-   [[nodiscard]] auto id() const noexcept
+   [[nodiscard]] auto id_impl() const noexcept
    {
       return context_->predicate_id(PredicateCategory, raw_index(value_->get_index()));
    }
-   [[nodiscard]] std::string_view name() const noexcept { return value_->get_name(); }
-   [[nodiscard]] std::size_t arity() const noexcept
+   [[nodiscard]] std::string_view name_impl() const noexcept { return value_->get_name(); }
+   [[nodiscard]] std::size_t arity_impl() const noexcept
    {
       return static_cast< std::size_t >(value_->get_arity());
    }
-   [[nodiscard]] Category category() const noexcept { return PredicateCategory; }
+   [[nodiscard]] Category category_impl() const noexcept { return PredicateCategory; }
 
   private:
    NativePredicate value_;
@@ -166,15 +168,15 @@ class PredicateView {
 };
 
 template < typename NativeObject >
-class ObjectView {
+class ObjectView: public mifrost::views::ObjectViewBase< ObjectView< NativeObject > > {
   public:
    ObjectView(NativeObject value, const Context& context) : value_(value), context_(&context) {}
 
-   [[nodiscard]] auto id() const noexcept
+   [[nodiscard]] auto id_impl() const noexcept
    {
       return context_->object_id(raw_index(value_->get_index()));
    }
-   [[nodiscard]] std::string_view name() const noexcept { return value_->get_name(); }
+   [[nodiscard]] std::string_view name_impl() const noexcept { return value_->get_name(); }
 
   private:
    NativeObject value_;
@@ -182,18 +184,19 @@ class ObjectView {
 };
 
 template < typename NativeAction >
-class ActionSchemaView {
+class ActionSchemaView:
+    public mifrost::views::ActionSchemaViewBase< ActionSchemaView< NativeAction > > {
   public:
    ActionSchemaView(NativeAction value, const Context& context) : value_(value), context_(&context)
    {
    }
 
-   [[nodiscard]] auto id() const noexcept
+   [[nodiscard]] auto id_impl() const noexcept
    {
       return context_->action_id(raw_index(value_->get_index()));
    }
-   [[nodiscard]] std::string_view name() const noexcept { return value_->get_name(); }
-   [[nodiscard]] std::size_t arity() const noexcept
+   [[nodiscard]] std::string_view name_impl() const noexcept { return value_->get_name(); }
+   [[nodiscard]] std::size_t arity_impl() const noexcept
    {
       return static_cast< std::size_t >(value_->get_arity());
    }

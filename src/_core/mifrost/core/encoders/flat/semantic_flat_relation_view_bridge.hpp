@@ -86,14 +86,15 @@ void append_state(const State& state, Target& result)
 }
 
 template < views::StateView State, views::GroundActionRange Actions >
-[[nodiscard]] SemanticFlatRelationSink make_sink(
+[[nodiscard]] SemanticFlatRelationInput make_input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const State& state,
    Actions&& actions
 )
 {
    require_semantic_view_context(context);
-   SemanticFlatRelationSink result(context);
+   SemanticFlatRelationInput result;
+   result.task_context = context;
    result.use_default_goals = true;
    append_state(state, result);
    for(const auto& action : actions) {
@@ -126,14 +127,14 @@ template < views::GroundActionView Action >
  * Build the neutral traversal sink used by the semantic encoders.
  */
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-[[nodiscard]] SemanticFlatRelationSink make_semantic_flat_relation_sink(
+[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
 )
 {
-   auto result = detail::make_sink(context, state, std::forward< Actions >(actions));
+   auto result = detail::make_input(context, state, std::forward< Actions >(actions));
    result.use_default_goals = false;
    for(const auto& goal : goals) {
       result.goals.push_back(detail::materialize_literal(goal));
@@ -146,13 +147,13 @@ template < views::StateView State, views::LiteralRange Goals, views::GroundActio
  * goals. This overload is the normal path for a planning task adapter.
  */
 template < views::StateView State, views::GroundActionRange Actions >
-[[nodiscard]] SemanticFlatRelationSink make_semantic_flat_relation_sink(
+[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const State& state,
    Actions&& actions
 )
 {
-   return detail::make_sink(context, state, std::forward< Actions >(actions));
+   return detail::make_input(context, state, std::forward< Actions >(actions));
 }
 
 template <
@@ -161,7 +162,7 @@ template <
    views::LiteralLayerRange SubgoalLayers,
    views::GroundActionRange Actions,
    views::HistoryRange History >
-[[nodiscard]] SemanticFlatRelationSink make_semantic_flat_relation_sink(
+[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const State& state,
    Goals&& goals,
@@ -171,7 +172,9 @@ template <
    std::optional< int64_t > history_max_steps = std::nullopt
 )
 {
-   auto result = make_semantic_flat_relation_sink(context, state, std::forward< Actions >(actions));
+   auto result = make_semantic_flat_relation_input(
+      context, state, std::forward< Actions >(actions)
+   );
    result.use_default_goals = false;
    for(const auto& goal : goals) {
       result.goals.push_back(detail::materialize_literal(goal));
@@ -191,52 +194,6 @@ template <
       result.history.push_back(std::move(target));
    }
    result.history_max_steps = history_max_steps;
-   return result;
-}
-
-/**
- * Compatibility adapter for callers that still require an owned semantic
- * snapshot. View encoder entry points use the sink overloads above instead.
- */
-template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
-   const State& state,
-   Goals&& goals,
-   Actions&& actions
-)
-{
-   auto sink = make_semantic_flat_relation_sink(
-      context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
-   );
-   SemanticFlatRelationInput result;
-   result.task_context = std::move(sink.task_context);
-   result.state_facts = std::move(sink.state_facts);
-   result.goals = std::move(sink.goals);
-   result.use_default_goals = sink.use_default_goals;
-   result.actions = std::move(sink.actions);
-   result.subgoal_layers = std::move(sink.subgoal_layers);
-   result.history = std::move(sink.history);
-   result.history_max_steps = sink.history_max_steps;
-   return result;
-}
-
-template < views::StateView State, views::GroundActionRange Actions >
-[[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
-   const State& state,
-   Actions&& actions
-)
-{
-   auto sink = make_semantic_flat_relation_sink(context, state, std::forward< Actions >(actions));
-   SemanticFlatRelationInput result;
-   result.task_context = std::move(sink.task_context);
-   result.state_facts = std::move(sink.state_facts);
-   result.use_default_goals = sink.use_default_goals;
-   result.actions = std::move(sink.actions);
-   result.subgoal_layers = std::move(sink.subgoal_layers);
-   result.history = std::move(sink.history);
-   result.history_max_steps = sink.history_max_steps;
    return result;
 }
 
@@ -262,7 +219,7 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Actions >(actions)
       ),
       builder
@@ -291,7 +248,7 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
       ),
       builder
@@ -344,7 +301,7 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_sink(
+      canonical::make_semantic_flat_relation_input(
          get_task_context(),
          state,
          std::forward< Goals >(goals),

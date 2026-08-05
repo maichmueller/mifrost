@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -53,7 +52,10 @@ static_assert(requires(
    semantic::HistoryView history
 ) { encoder.encode(state, goals, subgoal_layers, actions, history, std::optional< int64_t >{}); });
 
-static_assert(! std::is_constructible_v< SemanticFlatRelationSink, std::function< void() > >);
+static_assert(views::PredicateView< semantic::PredicateView >);
+static_assert(views::ObjectView< semantic::ObjectView >);
+static_assert(views::ActionSchemaView< semantic::ActionSchemaView >);
+static_assert(views::HistoryEntryView< semantic::HistoryEntryView >);
 
 TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
 {

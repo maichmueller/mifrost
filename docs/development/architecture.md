@@ -111,11 +111,11 @@ semantic transition DAGs, and callers that intentionally snapshot inputs:
 owned semantic records -> semantic compatibility encoder -> BatchEncoding
 ```
 
-The Color, HGraph, and successor direct overloads build the same neutral sink
-from granular Views before dispatching to the mature graph emitters. The sink
-contains only compact, encoding-local lanes needed for the encoder's
-multi-pass graph preparation; it is not the public semantic snapshot used by
-compatibility callers. This keeps planner-library types out of the neutral core
+The Color, HGraph, and successor direct overloads traverse granular Views before
+dispatching to the mature graph emitters. View traversal materializes only the
+compact semantic lanes needed for the encoder's multi-pass graph preparation;
+that preparation is private to the encode call and is not a second public
+semantic snapshot. This keeps planner-library types out of the neutral core
 without duplicating backend algorithms.
 
 Direct does not mean that the final graph is emitted without planning state.
@@ -126,10 +126,9 @@ not retain planner-native values.
 
 The templated adapter boundary is deliberately granular: state, goals,
 subgoal layers, actions, and history are accepted as constrained View ranges,
-then traversed synchronously into `SemanticFlatRelationSink`. The sink is the
-neutral ABI object consumed by the non-template semantic engines. It owns only
-compact semantic values for the current encode call, never planner-native
-objects or callbacks, and it is discarded after the graph is appended. New
+then traversed synchronously into the encoder's private compact preparation
+state. The public `SemanticFlatRelationInput` remains the owned compatibility
+representation; direct View calls do not expose another owning DTO. New
 canonical algorithms should continue to use the operation-based View concepts
 directly and should not introduce backend-specific type erasure into those
 concepts.
@@ -137,8 +136,8 @@ concepts.
 Task contexts and backend planning repositories must remain alive through every
 encode or stream append that consumes a View. A stream stores the resulting
 native batch encoding, not a lazy View, so a View's source state may be released
-after append returns. Batch adapters materialize each sink entry while its
-source ranges are alive and retain only the resulting native batch encoding.
+after append returns. Batch adapters materialize each input while its source
+ranges are alive and retain only the resulting native batch encoding.
 
 ## Adding an Encoder Family
 
