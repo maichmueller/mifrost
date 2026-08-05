@@ -476,6 +476,11 @@ void SemanticColorEncoderEngine::encode_views(
    BatchBuilder& builder
 ) const
 {
+   if(not input.task_context or input.task_context != task_context_) {
+      throw std::invalid_argument(
+         "Semantic color input belongs to a different task context than the encoder"
+      );
+   }
    encode(canonical::materialize_semantic_flat_view_input(input), builder);
 }
 
