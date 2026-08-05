@@ -227,7 +227,7 @@ void encode_without_names(
           SemanticPredicateCategory::fluent,
           SemanticPredicateCategory::derived,
        }) {
-      const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+      const auto encode_facts = [&](const auto& facts) {
          for(const auto& atom : facts) {
             if(predicates.at(static_cast< size_t >(atom.predicate)).category == category) {
                encode_atom(atom, std::nullopt, true);
@@ -309,7 +309,7 @@ void encode_impl(
    BatchBuilder& builder
 )
 {
-   if(not input.actions.empty()) {
+   if(not std::ranges::empty(input.actions)) {
       throw std::invalid_argument("SemanticColorEncoderEngine does not support actions");
    }
    if(input.subgoal_layers.size() > 3) {
@@ -414,7 +414,7 @@ void encode_impl(
           SemanticPredicateCategory::fluent,
           SemanticPredicateCategory::derived,
        }) {
-      const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+      const auto encode_facts = [&](const auto& facts) {
          for(const auto& atom : facts) {
             if(predicates.at(static_cast< size_t >(atom.predicate)).category == category) {
                encode_atom(atom, std::nullopt, true);
@@ -468,7 +468,8 @@ void SemanticColorEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode_impl(input, predicates_, config_, builder);
+   const auto preparation = canonical::detail::make_graph_input(input);
+   encode_view_preparation(preparation, builder);
 }
 
 void SemanticColorEncoderEngine::encode_view_preparation(

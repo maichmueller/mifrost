@@ -18,6 +18,7 @@
 #include "mifrost/core/encoders/common/goal_derivation.hpp"
 #include "mifrost/core/encoders/common/target_source.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
+#include "mifrost/core/views/semantic_preparation.hpp"
 
 namespace mifrost {
 
@@ -78,45 +79,7 @@ BOOST_DESCRIBE_STRUCT(
 
 namespace detail {
 
-/** Encoder-local preparation for direct semantic View encoding. */
-struct HGraphViewPreparation {
-   std::shared_ptr< const SemanticTaskContext > task_context;
-   std::vector< SemanticAtom > state_facts;
-   std::vector< SemanticLiteral > goals;
-   bool use_default_goals = false;
-   std::vector< SemanticGroundAction > actions;
-   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
-   std::vector< SemanticHistoryEntry > history;
-   std::optional< int64_t > history_max_steps = std::nullopt;
-};
-
-[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
-   const HGraphViewPreparation& input
-)
-{
-   if(not input.task_context) {
-      throw std::invalid_argument("semantic View preparation requires a task context");
-   }
-   return input.task_context->objects;
-}
-
-[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
-   const HGraphViewPreparation& input
-)
-{
-   if(input.task_context and input.use_default_goals) {
-      return input.task_context->default_goals;
-   }
-   return input.goals;
-}
-
-[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
-   const HGraphViewPreparation& input
-)
-{
-   static const std::vector< SemanticAtom > empty;
-   return input.task_context ? input.task_context->static_facts : empty;
-}
+using HGraphViewPreparation = canonical::detail::GraphInput;
 
 }  // namespace detail
 
@@ -220,6 +183,14 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       bool include_successor_goal_satisfaction,
       BatchBuilder& builder
    ) const;
+   void encode_successor(
+      const detail::HGraphViewPreparation& current,
+      const detail::HGraphViewPreparation& successor,
+      bool delta_mode,
+      std::string_view successor_suffix,
+      bool include_successor_goal_satisfaction,
+      BatchBuilder& builder
+   ) const;
 
    void
    encode_view_preparation(const detail::HGraphViewPreparation& input, BatchBuilder& builder) const;
@@ -249,7 +220,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+   auto preparation = canonical::detail::make_graph_input(
       get_task_context(), state, std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -273,7 +244,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+   auto preparation = canonical::detail::make_graph_input(
       get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -324,7 +295,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+   auto preparation = canonical::detail::make_graph_input(
       get_task_context(),
       state,
       std::forward< Goals >(goals),

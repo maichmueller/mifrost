@@ -86,6 +86,19 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
+   encode_views(
+      canonical::detail::make_graph_input(current),
+      canonical::detail::make_graph_input(successor),
+      builder
+   );
+}
+
+void SemanticSuccessorHGraphEncoderEngine::encode_views(
+   const canonical::detail::GraphInput& current,
+   const canonical::detail::GraphInput& successor,
+   BatchBuilder& builder
+) const
+{
    impl_->hgraph.encode_successor(
       current,
       successor,

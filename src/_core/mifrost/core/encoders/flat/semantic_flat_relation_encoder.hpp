@@ -182,23 +182,74 @@ struct SemanticFlatRelationInput {
 namespace detail {
 
 /**
- * Encoder-local preparation populated directly from backend-neutral Views.
- *
- * This is intentionally distinct from `SemanticFlatRelationInput`, which is
- * retained as an owned compatibility DTO for callers that already materialize
- * semantic records.
+ * Encoder-native graph keys collected from concrete backend View ranges.
+ * These records are retained only for graph emission and are deliberately
+ * separate from the public compatibility DTO.
  */
-struct FlatRelationViewPreparation {
+struct GraphAtomKey {
+   GraphAtomKey() = default;
+   GraphAtomKey(int64_t predicate, SemanticArguments arguments)
+       : predicate(predicate), arguments(std::move(arguments))
+   {
+   }
+
+   operator SemanticAtom() const { return SemanticAtom{predicate, arguments}; }
+
+   int64_t predicate = -1;
+   SemanticArguments arguments;
+
+   auto operator<=>(const GraphAtomKey&) const = default;
+};
+
+struct GraphLiteralKey {
+   GraphLiteralKey() = default;
+   GraphLiteralKey(GraphAtomKey atom, bool positive) : atom(std::move(atom)), positive(positive) {}
+
+   operator SemanticLiteral() const
+   {
+      return SemanticLiteral{static_cast< SemanticAtom >(atom), positive};
+   }
+
+   GraphAtomKey atom;
+   bool positive = true;
+
+   auto operator<=>(const GraphLiteralKey&) const = default;
+};
+
+struct GraphActionKey {
+   GraphActionKey() = default;
+   GraphActionKey(int64_t action, SemanticArguments arguments)
+       : action(action), arguments(std::move(arguments))
+   {
+   }
+
+   operator SemanticGroundAction() const { return SemanticGroundAction{action, arguments}; }
+
+   int64_t action = -1;
+   SemanticArguments arguments;
+
+   auto operator<=>(const GraphActionKey&) const = default;
+};
+
+struct GraphHistoryEntry {
+   int64_t dt = 0;
+   std::vector< GraphLiteralKey > literals;
+
+   auto operator<=>(const GraphHistoryEntry&) const = default;
+};
+
+struct GraphInput {
    std::shared_ptr< const SemanticTaskContext > task_context;
-   std::vector< std::string > objects;
-   std::vector< SemanticAtom > state_facts;
-   std::vector< SemanticLiteral > goals;
-   bool use_default_goals = false;
-   std::vector< SemanticGroundAction > actions;
-   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
-   std::vector< SemanticHistoryEntry > history;
+   const std::vector< std::string >* objects = nullptr;
+   std::vector< GraphAtomKey > state_facts;
+   std::vector< GraphLiteralKey > goals;
+   std::vector< GraphActionKey > actions;
+   std::vector< std::vector< GraphLiteralKey > > subgoal_layers;
+   std::vector< GraphHistoryEntry > history;
    std::optional< int64_t > history_max_steps = std::nullopt;
 };
+
+using FlatRelationGraph = GraphInput;
 
 }  // namespace detail
 
@@ -219,31 +270,6 @@ struct FlatRelationViewPreparation {
 
 [[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
    const SemanticFlatRelationInput& input
-)
-{
-   static const std::vector< SemanticAtom > empty;
-   return input.task_context ? input.task_context->static_facts : empty;
-}
-
-[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
-   const detail::FlatRelationViewPreparation& input
-)
-{
-   return input.task_context ? input.task_context->objects : input.objects;
-}
-
-[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
-   const detail::FlatRelationViewPreparation& input
-)
-{
-   if(input.task_context and input.use_default_goals) {
-      return input.task_context->default_goals;
-   }
-   return input.goals;
-}
-
-[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
-   const detail::FlatRelationViewPreparation& input
 )
 {
    static const std::vector< SemanticAtom > empty;
@@ -426,10 +452,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       const SemanticFlatHorizonEncoderConfig& config
    ) const;
 
-   void encode_view_preparation(
-      const detail::FlatRelationViewPreparation& input,
-      BatchBuilder& builder
-   ) const;
+   void encode_graph(const detail::FlatRelationGraph& input, BatchBuilder& builder) const;
 
    struct Impl;
    std::unique_ptr< Impl > impl_;

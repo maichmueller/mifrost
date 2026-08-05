@@ -252,8 +252,8 @@ std::vector< PreparedGoal > prepare_goals(const Input& input)
    for(const auto& goal : goals) {
       ordered.push_back(goal);
    }
-   for(size_t layer = 0; layer < input.subgoal_layers.size(); ++layer) {
-      for(const auto& goal : input.subgoal_layers[layer]) {
+   for(const auto& goals : input.subgoal_layers) {
+      for(const auto& goal : goals) {
          ordered.push_back(goal);
       }
    }
@@ -1046,14 +1046,15 @@ struct SemanticHGraphEncoderEngine::Impl {
    {
       struct Entry {
          int64_t dt;
-         std::vector< SemanticLiteral > literals;
+         size_t source_index;
       };
       std::vector< Entry > entries;
-      for(const auto& entry : input.history) {
+      for(size_t source_index = 0; source_index < input.history.size(); ++source_index) {
+         const auto& entry = input.history[source_index];
          if(input.history_max_steps and std::abs(entry.dt) > *input.history_max_steps) {
             continue;
          }
-         entries.push_back({entry.dt, entry.literals});
+         entries.push_back({entry.dt, source_index});
       }
       std::ranges::stable_sort(entries, {}, &Entry::dt);
       if(entries.empty()) {
@@ -1073,7 +1074,7 @@ struct SemanticHGraphEncoderEngine::Impl {
             builder
          );
          history_dt.push_back(static_cast< float >(entry.dt));
-         for(const auto& literal : entry.literals) {
+         for(const auto& literal : input.history[entry.source_index].literals) {
             if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
                continue;
             }
@@ -1337,7 +1338,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
          }
-         const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+         const auto encode_facts = [&](const auto& facts) {
             for(const auto& fact : facts) {
                if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
                   encode_fact(workspace, fact, input, builder);
@@ -1419,7 +1420,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          if(category == SemanticPredicateCategory::static_predicate and not config.include_static) {
             continue;
          }
-         const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
+         const auto encode_facts = [&](const auto& facts) {
             for(const auto& fact : facts) {
                if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
                   encode_fact(workspace, fact, current, builder);
@@ -2025,7 +2026,8 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
 ) const
 {
    BatchBuilder builder;
-   impl_->encode(input, builder);
+   const auto preparation = canonical::detail::make_graph_input(input);
+   impl_->encode(preparation, builder);
    builder.next_graph();
    return builder.build();
 }
@@ -2035,7 +2037,8 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   impl_->encode(input, builder);
+   const auto preparation = canonical::detail::make_graph_input(input);
+   encode_view_preparation(preparation, builder);
 }
 
 void SemanticHGraphEncoderEngine::encode_view_preparation(
@@ -2049,6 +2052,27 @@ void SemanticHGraphEncoderEngine::encode_view_preparation(
 void SemanticHGraphEncoderEngine::encode_successor(
    const SemanticFlatRelationInput& current,
    const SemanticFlatRelationInput& successor,
+   bool delta_mode,
+   std::string_view successor_suffix,
+   bool include_successor_goal_satisfaction,
+   BatchBuilder& builder
+) const
+{
+   const auto current_graph = canonical::detail::make_graph_input(current);
+   const auto successor_graph = canonical::detail::make_graph_input(successor);
+   impl_->encode_successor(
+      current_graph,
+      successor_graph,
+      delta_mode,
+      successor_suffix,
+      include_successor_goal_satisfaction,
+      builder
+   );
+}
+
+void SemanticHGraphEncoderEngine::encode_successor(
+   const detail::HGraphViewPreparation& current,
+   const detail::HGraphViewPreparation& successor,
    bool delta_mode,
    std::string_view successor_suffix,
    bool include_successor_goal_satisfaction,
@@ -2083,7 +2107,8 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    for(const auto& input : inputs) {
-      impl_->encode(input, builder);
+      const auto preparation = canonical::detail::make_graph_input(input);
+      impl_->encode(preparation, builder);
       builder.next_graph();
    }
    return builder.build();

@@ -91,6 +91,37 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       SuccessorActions&& successor_actions,
       BatchBuilder& builder
    ) const;
+   template <
+      views::StateView CurrentState,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange CurrentActions,
+      views::StateView SuccessorState,
+      views::GroundActionRange SuccessorActions >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const CurrentState& current_state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      CurrentActions&& current_actions,
+      const SuccessorState& successor_state,
+      SuccessorActions&& successor_actions
+   ) const;
+   template <
+      views::StateView CurrentState,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange CurrentActions,
+      views::StateView SuccessorState,
+      views::GroundActionRange SuccessorActions >
+   void encode(
+      const CurrentState& current_state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      CurrentActions&& current_actions,
+      const SuccessorState& successor_state,
+      SuccessorActions&& successor_actions,
+      BatchBuilder& builder
+   ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& currents,
       const std::vector< SemanticFlatRelationInput >& successors
@@ -104,6 +135,12 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    void update_relations(std::map< std::string, int > relation_arities);
 
   private:
+   void encode_views(
+      const canonical::detail::GraphInput& current,
+      const canonical::detail::GraphInput& successor,
+      BatchBuilder& builder
+   ) const;
+
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };
@@ -149,11 +186,73 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
+   encode_views(
+      canonical::detail::make_graph_input(
          get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
       ),
-      canonical::make_semantic_flat_relation_input(
+      canonical::detail::make_graph_input(
+         get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
+      ),
+      builder
+   );
+}
+
+template <
+   views::StateView CurrentState,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange CurrentActions,
+   views::StateView SuccessorState,
+   views::GroundActionRange SuccessorActions >
+BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
+   const CurrentState& current_state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   CurrentActions&& current_actions,
+   const SuccessorState& successor_state,
+   SuccessorActions&& successor_actions
+) const
+{
+   BatchBuilder builder;
+   encode(
+      current_state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< CurrentActions >(current_actions),
+      successor_state,
+      std::forward< SuccessorActions >(successor_actions),
+      builder
+   );
+   builder.next_graph();
+   return builder.build();
+}
+
+template <
+   views::StateView CurrentState,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange CurrentActions,
+   views::StateView SuccessorState,
+   views::GroundActionRange SuccessorActions >
+void SemanticSuccessorHGraphEncoderEngine::encode(
+   const CurrentState& current_state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   CurrentActions&& current_actions,
+   const SuccessorState& successor_state,
+   SuccessorActions&& successor_actions,
+   BatchBuilder& builder
+) const
+{
+   encode_views(
+      canonical::detail::make_graph_input(
+         get_task_context(),
+         current_state,
+         std::forward< Goals >(goals),
+         std::forward< SubgoalLayers >(subgoal_layers),
+         std::forward< CurrentActions >(current_actions)
+      ),
+      canonical::detail::make_graph_input(
          get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
       ),
       builder
