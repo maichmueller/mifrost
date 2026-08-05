@@ -254,8 +254,9 @@ inline SemanticFlatRelationInput input(
    return input(context, state, goals, actions, view_context);
 }
 
+template < typename Target >
 inline void add_history(
-   SemanticFlatRelationInput& result,
+   Target& result,
    const std::vector< std::pair< int, std::vector< LiteralVariant > > >& history,
    const views::Context& context
 )

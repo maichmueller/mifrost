@@ -102,6 +102,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    ~SemanticHGraphEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationSink& sink) const;
    template < views::StateView State, views::GroundActionRange Actions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
 
@@ -109,12 +110,44 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    [[nodiscard]] BatchBuilder::BatchEncoding
    encode(const State& state, Goals&& goals, Actions&& actions) const;
 
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions,
+      views::HistoryRange History >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions,
+      History&& history,
+      std::optional< int64_t > history_max_steps = std::nullopt
+   ) const;
+
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
+   void encode(const SemanticFlatRelationSink& sink, BatchBuilder& builder) const;
    template < views::StateView State, views::GroundActionRange Actions >
    void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
    void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
+
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions,
+      views::HistoryRange History >
+   void encode(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions,
+      History&& history,
+      std::optional< int64_t > history_max_steps,
+      BatchBuilder& builder
+   ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
@@ -140,6 +173,14 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    void encode_successor(
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor,
+      bool delta_mode,
+      std::string_view successor_suffix,
+      bool include_successor_goal_satisfaction,
+      BatchBuilder& builder
+   ) const;
+   void encode_successor(
+      const SemanticFlatRelationSink& current,
+      const SemanticFlatRelationSink& successor,
       bool delta_mode,
       std::string_view successor_suffix,
       bool include_successor_goal_satisfaction,
@@ -172,7 +213,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_input(
+      canonical::make_semantic_flat_relation_sink(
          get_task_context(), state, std::forward< Actions >(actions)
       ),
       builder
@@ -198,8 +239,67 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    encode(
-      canonical::make_semantic_flat_relation_input(
+      canonical::make_semantic_flat_relation_sink(
          get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+      ),
+      builder
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps
+) const
+{
+   BatchBuilder builder;
+   encode(
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps,
+      builder
+   );
+   builder.next_graph();
+   return builder.build();
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+void SemanticHGraphEncoderEngine::encode(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::make_semantic_flat_relation_sink(
+         get_task_context(),
+         state,
+         std::forward< Goals >(goals),
+         std::forward< SubgoalLayers >(subgoal_layers),
+         std::forward< Actions >(actions),
+         std::forward< History >(history),
+         history_max_steps
       ),
       builder
    );

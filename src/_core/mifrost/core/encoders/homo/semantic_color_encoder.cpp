@@ -109,8 +109,9 @@ struct CompactColorBuffers {
    int next_color = 1;
 };
 
+template < typename Input >
 void encode_without_names(
-   const SemanticFlatRelationInput& input,
+   const Input& input,
    const std::vector< SemanticPredicateSpec >& predicates,
    const SemanticColorEncoderConfig& config,
    BatchBuilder& builder
@@ -300,10 +301,13 @@ SemanticColorEncoderEngine::SemanticColorEncoderEngine(
 {
 }
 
-void SemanticColorEncoderEngine::encode(
-   const SemanticFlatRelationInput& input,
+template < typename Input >
+void encode_impl(
+   const Input& input,
+   const std::vector< SemanticPredicateSpec >& predicates,
+   const SemanticColorEncoderConfig& config,
    BatchBuilder& builder
-) const
+)
 {
    if(not input.actions.empty()) {
       throw std::invalid_argument("SemanticColorEncoderEngine does not support actions");
@@ -311,13 +315,13 @@ void SemanticColorEncoderEngine::encode(
    if(input.subgoal_layers.size() > 3) {
       throw std::invalid_argument("Semantic color supports at most three subgoal layers");
    }
-   if(not config_.export_node_names) {
-      encode_without_names(input, predicates_, config_, builder);
+   if(not config.export_node_names) {
+      encode_without_names(input, predicates, config, builder);
       return;
    }
    builder.set_graph_kind("homo");
-   builder.set_schema_flag("edge_features", config_.edge_features);
-   builder.set_schema_flag("predicate_nodes", config_.enable_global_predicate_nodes);
+   builder.set_schema_flag("edge_features", config.edge_features);
+   builder.set_schema_flag("predicate_nodes", config.enable_global_predicate_nodes);
    Buffers buffers;
    const auto& objects = semantic_objects(input);
    const auto& goals = semantic_goals(input);
@@ -336,10 +340,10 @@ void SemanticColorEncoderEngine::encode(
       );
       if(inserted) {
          buffers.node_names.push_back(name);
-         if(not config_.edge_features) {
+         if(not config.edge_features) {
             buffers.node_colors.push_back(color.value_or(0.0F));
          }
-      } else if(not config_.edge_features and color) {
+      } else if(not config.edge_features and color) {
          buffers.node_colors.at(static_cast< size_t >(it->second)) = *color;
       }
       return it->second;
@@ -347,34 +351,34 @@ void SemanticColorEncoderEngine::encode(
    const auto add_edge = [&](int64_t src, int64_t dst, std::optional< float > color) {
       buffers.edge_src.push_back(src);
       buffers.edge_dst.push_back(dst);
-      if(config_.edge_features) {
+      if(config.edge_features) {
          buffers.edge_colors.push_back(color.value_or(0.0F));
       }
    };
 
    const auto encode_atom =
       [&](const SemanticAtom& atom, std::optional< size_t > goal_level, bool positive) {
-         const auto& predicate = predicates_.at(static_cast< size_t >(atom.predicate));
+         const auto& predicate = predicates.at(static_cast< size_t >(atom.predicate));
          const std::string prefix = goal_level ? (positive ? "[+]" : "[-]") : "";
          const std::string suffix = goal_level ? std::string(kGoalSuffixes.at(*goal_level)) : "";
          const std::string predicate_name = prefix + predicate.name + suffix;
          std::optional< int64_t > predicate_idx;
-         if(config_.enable_global_predicate_nodes) {
+         if(config.enable_global_predicate_nodes) {
             predicate_idx = ensure_node(predicate_name, 0.0F);
-            if(config_.edge_features
+            if(config.edge_features
                and buffers.predicate_self_edges.insert(predicate_name).second) {
                add_edge(
                   *predicate_idx, *predicate_idx, static_cast< float >(color_for(predicate_name))
                );
             }
          }
-         const std::string base = prefix + atom_name(atom, predicates_, objects) + suffix;
+         const std::string base = prefix + atom_name(atom, predicates, objects) + suffix;
          if(atom.arguments.empty()) {
             const auto color = static_cast< float >(color_for(base));
             const auto index = ensure_node(
-               base, config_.edge_features ? std::nullopt : std::optional{color}
+               base, config.edge_features ? std::nullopt : std::optional{color}
             );
-            if(config_.edge_features) {
+            if(config.edge_features) {
                add_edge(index, index, color);
             }
             return;
@@ -384,7 +388,7 @@ void SemanticColorEncoderEngine::encode(
             const auto object = objects.at(static_cast< size_t >(atom.arguments[position]));
             const auto position_name = fmt::format("{}:{}", base, position);
             const auto color = static_cast< float >(color_for(position_name));
-            if(config_.edge_features) {
+            if(config.edge_features) {
                const auto object_idx = ensure_node(object, std::nullopt);
                const auto item_idx = ensure_node(base, std::nullopt);
                add_edge(object_idx, item_idx, color);
@@ -412,7 +416,7 @@ void SemanticColorEncoderEngine::encode(
        }) {
       const auto encode_facts = [&](const std::vector< SemanticAtom >& facts) {
          for(const auto& atom : facts) {
-            if(predicates_.at(static_cast< size_t >(atom.predicate)).category == category) {
+            if(predicates.at(static_cast< size_t >(atom.predicate)).category == category) {
                encode_atom(atom, std::nullopt, true);
             }
          }
@@ -427,7 +431,7 @@ void SemanticColorEncoderEngine::encode(
           SemanticPredicateCategory::derived,
        }) {
       const auto encode_category_literal = [&](const SemanticLiteral& literal) {
-         if(predicates_.at(static_cast< size_t >(literal.atom.predicate)).category == category) {
+         if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category == category) {
             encode_atom(literal.atom, semantic_goal_level(levels, literal), literal.positive);
          }
       };
@@ -444,19 +448,35 @@ void SemanticColorEncoderEngine::encode(
    static const std::string node_type = "node";
    builder.add_nodes(node_type, static_cast< int64_t >(buffers.node_names.size()));
    builder.set_node_names(node_type, buffers.node_names);
-   if(not config_.edge_features) {
+   if(not config.edge_features) {
       builder.add_node_features(node_type, "x", std::span{buffers.node_colors}, 1);
    }
    if(not buffers.edge_src.empty()) {
       builder.add_edges(
          node_type, "edge", node_type, std::span{buffers.edge_src}, std::span{buffers.edge_dst}
       );
-      if(config_.edge_features) {
+      if(config.edge_features) {
          builder.add_edge_features(
             node_type, "edge", node_type, "edge_attr", std::span{buffers.edge_colors}, 1
          );
       }
    }
+}
+
+void SemanticColorEncoderEngine::encode(
+   const SemanticFlatRelationInput& input,
+   BatchBuilder& builder
+) const
+{
+   encode_impl(input, predicates_, config_, builder);
+}
+
+void SemanticColorEncoderEngine::encode(
+   const SemanticFlatRelationSink& sink,
+   BatchBuilder& builder
+) const
+{
+   encode_impl(sink, predicates_, config_, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
@@ -465,6 +485,16 @@ BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
 {
    BatchBuilder builder;
    encode(input, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
+   const SemanticFlatRelationSink& sink
+) const
+{
+   BatchBuilder builder;
+   encode(sink, builder);
    builder.next_graph();
    return builder.build();
 }

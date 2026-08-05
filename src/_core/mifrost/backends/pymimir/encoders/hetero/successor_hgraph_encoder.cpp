@@ -102,7 +102,7 @@ void SuccessorHGraphEncoderEngine::encode(
 )
 {
    semantic_successor_->encode(
-      make_input(current, goals, {}), make_default_input(successor), builder
+      make_sink(current, goals, {}), make_default_sink(successor), builder
    );
 }
 

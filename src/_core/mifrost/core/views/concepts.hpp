@@ -11,6 +11,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -200,5 +201,22 @@ concept LiteralRange = std::ranges::input_range< R >
 template < typename R >
 concept GroundActionRange = std::ranges::input_range< R >
                             && GroundActionView< std::ranges::range_value_t< R > >;
+
+template < typename R >
+concept LiteralLayerRange = std::ranges::input_range< R >
+                            && LiteralRange< std::ranges::range_value_t< R > >;
+
+template < typename T >
+concept HistoryEntryView =
+   requires(const view_value_t< T >& entry) {
+      { entry.dt() } -> std::convertible_to< std::int64_t >;
+      entry.literals();
+   }
+   && LiteralRange<
+      view_value_t< decltype(std::declval< const view_value_t< T >& >().literals()) > >;
+
+template < typename R >
+concept HistoryRange = std::ranges::input_range< R >
+                       && HistoryEntryView< std::ranges::range_value_t< R > >;
 
 }  // namespace mifrost::views

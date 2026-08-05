@@ -172,8 +172,9 @@ void validate_atom(
    }
 }
 
+template < typename Input >
 void validate_input(
-   const SemanticFlatRelationInput& input,
+   const Input& input,
    const std::vector< SemanticPredicateSpec >& predicates,
    const std::vector< SemanticActionSpec >& actions,
    const SemanticHGraphEncoderConfig& config
@@ -241,7 +242,8 @@ struct PreparedGoal {
    size_t level = 0;
 };
 
-std::vector< PreparedGoal > prepare_goals(const SemanticFlatRelationInput& input)
+template < typename Input >
+std::vector< PreparedGoal > prepare_goals(const Input& input)
 {
    const auto& goals = semantic_goals(input);
    const auto levels = semantic_goal_levels(input);
@@ -666,10 +668,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       return it->second;
    }
 
+   template < typename Input >
    int64_t object_node(
       Workspace& workspace,
       int64_t object,
-      const SemanticFlatRelationInput& input,
+      const Input& input,
       BatchBuilder& builder
    ) const
    {
@@ -815,10 +818,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       return index;
    }
 
+   template < typename Input >
    std::vector< int64_t > atom_symbols(
       Workspace& workspace,
       const SemanticAtom& atom,
-      const SemanticFlatRelationInput& input,
+      const Input& input,
       BatchBuilder& builder
    ) const
    {
@@ -855,10 +859,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
    }
 
+   template < typename Input >
    void encode_fact(
       Workspace& workspace,
       const SemanticAtom& atom,
-      const SemanticFlatRelationInput& input,
+      const Input& input,
       BatchBuilder& builder
    ) const
    {
@@ -878,10 +883,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       track(workspace, relation_ref(workspace, predicate.name, index), symbols);
    }
 
+   template < typename Input >
    void encode_successor_fact(
       Workspace& workspace,
       const SemanticAtom& atom,
-      const SemanticFlatRelationInput& input,
+      const Input& input,
       BatchBuilder& builder,
       std::string_view predicate_suffix,
       std::optional< bool > polarity = std::nullopt
@@ -907,10 +913,11 @@ struct SemanticHGraphEncoderEngine::Impl {
       track(workspace, relation_ref(workspace, type, index), symbols);
    }
 
+   template < typename Input >
    void encode_goal(
       Workspace& workspace,
       const PreparedGoal& prepared,
-      const SemanticFlatRelationInput& input,
+      const Input& input,
       BatchBuilder& builder,
       std::optional< GoalDerivation > derivation = std::nullopt,
       std::string_view predicate_suffix = {}
@@ -989,11 +996,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       track(workspace, relation_ref(workspace, type, index), tracked_symbols);
    }
 
-   void encode_actions(
-      Workspace& workspace,
-      const SemanticFlatRelationInput& input,
-      BatchBuilder& builder
-   ) const
+   template < typename Input >
+   void encode_actions(Workspace& workspace, const Input& input, BatchBuilder& builder) const
    {
       if(config.ignore_actions) {
          return;
@@ -1037,11 +1041,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
    }
 
-   void encode_history(
-      Workspace& workspace,
-      const SemanticFlatRelationInput& input,
-      BatchBuilder& builder
-   ) const
+   template < typename Input >
+   void encode_history(Workspace& workspace, const Input& input, BatchBuilder& builder) const
    {
       struct Entry {
          int64_t dt;
@@ -1319,7 +1320,8 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
    }
 
-   void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
+   template < typename Input >
+   void encode(const Input& input, BatchBuilder& builder) const
    {
       validate_input(input, predicates, actions, config);
       const auto& objects = semantic_objects(input);
@@ -1387,9 +1389,10 @@ struct SemanticHGraphEncoderEngine::Impl {
       finalize(workspace, builder);
    }
 
+   template < typename Input >
    void encode_successor(
-      const SemanticFlatRelationInput& current,
-      const SemanticFlatRelationInput& successor,
+      const Input& current,
+      const Input& successor,
       bool delta_mode,
       std::string_view successor_suffix,
       bool include_successor_goal_satisfaction,
@@ -2035,9 +2038,41 @@ void SemanticHGraphEncoderEngine::encode(
    impl_->encode(input, builder);
 }
 
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
+   const SemanticFlatRelationSink& sink
+) const
+{
+   BatchBuilder builder;
+   encode(sink, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+void SemanticHGraphEncoderEngine::encode(
+   const SemanticFlatRelationSink& sink,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode(sink, builder);
+}
+
 void SemanticHGraphEncoderEngine::encode_successor(
    const SemanticFlatRelationInput& current,
    const SemanticFlatRelationInput& successor,
+   bool delta_mode,
+   std::string_view successor_suffix,
+   bool include_successor_goal_satisfaction,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode_successor(
+      current, successor, delta_mode, successor_suffix, include_successor_goal_satisfaction, builder
+   );
+}
+
+void SemanticHGraphEncoderEngine::encode_successor(
+   const SemanticFlatRelationSink& current,
+   const SemanticFlatRelationSink& successor,
    bool delta_mode,
    std::string_view successor_suffix,
    bool include_successor_goal_satisfaction,

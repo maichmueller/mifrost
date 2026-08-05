@@ -18,6 +18,7 @@
 
 #include "mifrost/core/views/concepts.hpp"
 #include "mifrost/core/views/ids.hpp"
+#include "mifrost/core/views/ranges.hpp"
 
 namespace mifrost::pymimir::views {
 
@@ -288,13 +289,16 @@ class StateView: public mifrost::views::StateViewBase< StateView > {
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
          state_->get_atoms< mimir::formalism::FluentTag >()
       );
-      std::vector<
-         AtomView< mimir::formalism::GroundAtom< mimir::formalism::FluentTag >, Category::fluent > >
-         result;
-      for(const auto atom : atoms) {
-         result.emplace_back(atom, *context_);
-      }
-      return result;
+      return mifrost::views::TransformRange{
+         std::move(atoms),
+         [context = context_](
+            const mimir::formalism::GroundAtom< mimir::formalism::FluentTag > atom
+         ) {
+            return AtomView<
+               mimir::formalism::GroundAtom< mimir::formalism::FluentTag >,
+               Category::fluent >{atom, *context};
+         },
+      };
    }
    [[nodiscard]] auto derived_atoms_impl() const
    {
@@ -302,14 +306,16 @@ class StateView: public mifrost::views::StateViewBase< StateView > {
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
          state_->get_atoms< mimir::formalism::DerivedTag >()
       );
-      std::vector< AtomView<
-         mimir::formalism::GroundAtom< mimir::formalism::DerivedTag >,
-         Category::derived > >
-         result;
-      for(const auto atom : atoms) {
-         result.emplace_back(atom, *context_);
-      }
-      return result;
+      return mifrost::views::TransformRange{
+         std::move(atoms),
+         [context = context_](
+            const mimir::formalism::GroundAtom< mimir::formalism::DerivedTag > atom
+         ) {
+            return AtomView<
+               mimir::formalism::GroundAtom< mimir::formalism::DerivedTag >,
+               Category::derived >{atom, *context};
+         },
+      };
    }
 
   private:

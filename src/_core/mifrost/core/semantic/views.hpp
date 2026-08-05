@@ -10,6 +10,7 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 #include "mifrost/core/views/concepts.hpp"
@@ -242,6 +243,110 @@ class GroundActionsView {
    std::span< const SemanticGroundAction > values_;
 };
 
+class SubgoalLayersView {
+   using Base = std::span< const std::vector< SemanticLiteral > >::iterator;
+
+  public:
+   explicit SubgoalLayersView(std::span< const std::vector< SemanticLiteral > > values)
+       : values_(values)
+   {
+   }
+
+   class iterator {
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = LiteralsView;
+      using difference_type = std::ptrdiff_t;
+
+      explicit iterator(Base value = {}) : value_(value) {}
+      [[nodiscard]] LiteralsView operator*() const noexcept
+      {
+         return LiteralsView(std::span{value_->data(), value_->size()});
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin()); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end()); }
+   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+
+  private:
+   std::span< const std::vector< SemanticLiteral > > values_;
+};
+
+class HistoryEntryView {
+  public:
+   explicit HistoryEntryView(const SemanticHistoryEntry* value) : value_(value) {}
+
+   [[nodiscard]] std::int64_t dt() const noexcept { return value_ == nullptr ? 0 : value_->dt; }
+   [[nodiscard]] LiteralsView literals() const noexcept
+   {
+      if(value_ == nullptr) {
+         return LiteralsView(std::span< const SemanticLiteral >{});
+      }
+      return LiteralsView(std::span{value_->literals.data(), value_->literals.size()});
+   }
+
+  private:
+   const SemanticHistoryEntry* value_;
+};
+
+class HistoryView {
+   using Base = std::span< const SemanticHistoryEntry >::iterator;
+
+  public:
+   explicit HistoryView(std::span< const SemanticHistoryEntry > values) : values_(values) {}
+
+   class iterator {
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = HistoryEntryView;
+      using difference_type = std::ptrdiff_t;
+
+      explicit iterator(Base value = {}) : value_(value) {}
+      [[nodiscard]] HistoryEntryView operator*() const noexcept
+      {
+         return HistoryEntryView{&*value_};
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin()); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end()); }
+   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+
+  private:
+   std::span< const SemanticHistoryEntry > values_;
+};
+
 struct StateView: views::StateViewBase< StateView > {
    AtomsView fluent;
    AtomsView derived;
@@ -262,6 +367,8 @@ static_assert(views::StateView< StateView >);
 static_assert(views::AtomRange< AtomsView >);
 static_assert(views::LiteralRange< LiteralsView >);
 static_assert(views::GroundActionRange< GroundActionsView >);
+static_assert(views::LiteralLayerRange< SubgoalLayersView >);
+static_assert(views::HistoryRange< HistoryView >);
 static_assert(std::is_trivially_copyable_v< AtomView >);
 static_assert(sizeof(AtomView) <= 2 * sizeof(void*));
 
