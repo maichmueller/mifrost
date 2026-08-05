@@ -98,7 +98,8 @@ Native backend entry points use a direct path whenever the input is still a
 borrowed planning value:
 
 ```text
-backend value + task context -> backend View -> canonical encoder -> BatchEncoding
+backend value + task context -> granular backend Views -> sink builder
+                              -> neutral semantic sink -> BatchEncoding
 ```
 
 The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
@@ -110,10 +111,12 @@ semantic transition DAGs, and callers that intentionally snapshot inputs:
 owned semantic records -> semantic compatibility encoder -> BatchEncoding
 ```
 
-The Color, HGraph, and successor direct overloads centralize their remaining
-record adaptation in the neutral View bridge while the mature graph emitters
-are shared. This keeps planner-library types out of the neutral core and makes
-the compatibility boundary visible rather than duplicating backend algorithms.
+The Color, HGraph, and successor direct overloads build the same neutral sink
+from granular Views before dispatching to the mature graph emitters. The sink
+contains only compact, encoding-local lanes needed for the encoder's
+multi-pass graph preparation; it is not the public semantic snapshot used by
+compatibility callers. This keeps planner-library types out of the neutral core
+without duplicating backend algorithms.
 
 Direct does not mean that the final graph is emitted without planning state.
 The neutral engine still creates a graph-local preparation object for schema
@@ -121,21 +124,21 @@ ordering, validation, and relation emission. Unlike a compatibility input, that
 object is private to the encode call, is not a public semantic record, and does
 not retain planner-native values.
 
-`FlatRelationViewInput` is a synchronous lane carrier for heterogeneous
-optional lanes. The semantic engine is a non-template shared ABI, so this
-carrier is the deliberate boundary between statically dispatched adapter
-templates and that ABI. Its callbacks are created at the adapter boundary and
-are consumed only during the encode call; they do not own planner values or
-survive into a stream. New canonical algorithms should continue to use the
-operation-based View concepts directly and should not introduce backend-specific
-type erasure into those concepts.
+The templated adapter boundary is deliberately granular: state, goals,
+subgoal layers, actions, and history are accepted as constrained View ranges,
+then traversed synchronously into `SemanticFlatRelationSink`. The sink is the
+neutral ABI object consumed by the non-template semantic engines. It owns only
+compact semantic values for the current encode call, never planner-native
+objects or callbacks, and it is discarded after the graph is appended. New
+canonical algorithms should continue to use the operation-based View concepts
+directly and should not introduce backend-specific type erasure into those
+concepts.
 
 Task contexts and backend planning repositories must remain alive through every
 encode or stream append that consumes a View. A stream stores the resulting
 native batch encoding, not a lazy View, so a View's source state may be released
-after append returns. Batch inputs reserve their lane storage before creating
-callbacks so captured goal and history ranges remain stable until encoding
-finishes.
+after append returns. Batch adapters materialize each sink entry while its
+source ranges are alive and retain only the resulting native batch encoding.
 
 ## Adding an Encoder Family
 

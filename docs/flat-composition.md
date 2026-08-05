@@ -111,11 +111,12 @@ The semantic relation encoder compiles entity, fact, goal/derivation, action,
 history, field, target-metadata, and LGAN components. Its graph plan contains
 only graph-local semantic lookup state and target/node identities. The
 canonical View traversal primitives are available to backend-specific
-instantiations. The semantic engine exposes both direct
-`encode_views(...)` entry points and the explicit
-`SemanticFlatRelationInput` compatibility input. It emits directly into the
-runtime's single `FlatRelationSink` and does not construct
-`FlatCompositionInput`, per-tuple vectors, or an intermediate encoding.
+instantiations. Templated `encode(...)` overloads accept granular state, goal,
+subgoal, action, and history Views and synchronously fill a neutral
+`SemanticFlatRelationSink`. The explicit `SemanticFlatRelationInput` remains
+the owned compatibility input. Both paths emit directly into the runtime's
+single `FlatRelationSink`; neither constructs `FlatCompositionInput`, per-tuple
+vectors, or an intermediate encoding.
 
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
 candidate identities, exact transition deltas, and goal-membership sets. A

@@ -199,6 +199,56 @@ TEST_P(DirectViewEncoderTest, FlatViewBatchMatchesSemanticCompatibilityBatch)
    expect_encoding_equal(engine.encode_batch(semantic_inputs), direct_builder.build());
 }
 
+TEST_P(DirectViewEncoderTest, FlatViewSubgoalAndHistoryLanesMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   auto semantic_input = adapter.make_input(ctx.root);
+   semantic_input.use_default_goals = false;
+   semantic_input.goals = adapter.get_task_context()->default_goals;
+   if(semantic_input.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+   semantic_input.subgoal_layers = {semantic_input.goals};
+   semantic_input.history = {
+      mifrost::SemanticHistoryEntry{.dt = -1, .literals = semantic_input.goals}
+   };
+   semantic_input.history_max_steps = 1;
+
+   mifrost::FlatRelationEncoderConfig config;
+   config.max_goal_level = 1;
+   config.target_sources = {
+      mifrost::TargetSource::goals,
+      mifrost::TargetSource::subgoals,
+      mifrost::TargetSource::history,
+   };
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const mifrost::semantic::LiteralsView goals(
+      std::span{semantic_input.goals.data(), semantic_input.goals.size()}
+   );
+   const mifrost::semantic::SubgoalLayersView subgoal_layers(
+      std::span{
+         semantic_input.subgoal_layers.data(),
+         semantic_input.subgoal_layers.size(),
+      }
+   );
+   const mifrost::semantic::HistoryView history(
+      std::span{semantic_input.history.data(), semantic_input.history.size()}
+   );
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(
+         state_view, goals, subgoal_layers, empty_actions, history, semantic_input.history_max_steps
+      )
+   );
+}
+
 TEST_P(DirectViewEncoderTest, HGraphStreamMatchesDirectViewBatch)
 {
    const auto param = GetParam();

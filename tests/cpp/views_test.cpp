@@ -3,10 +3,17 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 
+#if __has_include("mifrost/core/encoders/flat/view_flat_relation_input.hpp")
+   #error "The deleted callback-based FlatRelationViewInput carrier must not return."
+#endif
+
+#include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
 #include "mifrost/core/encoders/flat/view_flat_relation_encoder.hpp"
 #include "mifrost/core/views/canonical.hpp"
@@ -34,6 +41,19 @@ static_assert(requires(
    semantic::LiteralsView goals,
    semantic::GroundActionsView actions
 ) { encoder.encode(state, goals, actions); });
+
+static_assert(views::LiteralLayerRange< semantic::SubgoalLayersView >);
+static_assert(views::HistoryRange< semantic::HistoryView >);
+static_assert(requires(
+   const SemanticFlatRelationEncoderEngine& encoder,
+   const semantic::StateView& state,
+   semantic::LiteralsView goals,
+   semantic::SubgoalLayersView subgoal_layers,
+   semantic::GroundActionsView actions,
+   semantic::HistoryView history
+) { encoder.encode(state, goals, subgoal_layers, actions, history, std::optional< int64_t >{}); });
+
+static_assert(! std::is_constructible_v< SemanticFlatRelationSink, std::function< void() > >);
 
 TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
 {
