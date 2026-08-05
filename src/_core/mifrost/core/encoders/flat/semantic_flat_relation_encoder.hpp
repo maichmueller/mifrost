@@ -20,6 +20,7 @@
 #include "flat_relation_config.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/encoders/flat/view_flat_relation_input.hpp"
 
 namespace mifrost {
 
@@ -293,6 +294,13 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
+      const canonical::FlatRelationViewInput& input
+   ) const;
+   void encode_views(const canonical::FlatRelationViewInput& input, BatchBuilder& builder) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_views_batch(
+      std::span< const canonical::FlatRelationViewInput > inputs
+   ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;

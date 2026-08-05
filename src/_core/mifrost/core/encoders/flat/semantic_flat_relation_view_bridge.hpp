@@ -10,6 +10,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "mifrost/core/api.hpp"
@@ -28,6 +29,108 @@ namespace mifrost::canonical {
 MIFROST_API void require_semantic_view_context(
    const std::shared_ptr< const SemanticTaskContext >& context
 );
+
+/**
+ * Copy the callback lanes from a direct flat View input into the neutral
+ * compatibility record. Canonical encoders use this for families that still
+ * share the mature semantic-record implementation internally.
+ */
+[[nodiscard]] inline SemanticFlatRelationInput materialize_semantic_flat_view_input(
+   const FlatRelationViewInput& input
+)
+{
+   require_semantic_view_context(input.task_context);
+   SemanticFlatRelationInput result;
+   result.task_context = input.task_context;
+   result.use_default_goals = input.use_default_goals;
+   if(input.state_atoms) {
+      input.state_atoms([&](
+                           const views::PredicateId predicate,
+                           const FlatRelationViewInput::ObjectRangeVisitor& objects
+                        ) {
+         SemanticAtom atom;
+         atom.predicate = static_cast< int64_t >(predicate);
+         objects([&](const views::ObjectId object) {
+            atom.arguments.push_back(static_cast< int64_t >(object));
+         });
+         result.state_facts.push_back(std::move(atom));
+      });
+   }
+   if(input.goals) {
+      input.goals([&](
+                     const views::PredicateId predicate,
+                     const bool positive,
+                     const FlatRelationViewInput::ObjectRangeVisitor& objects
+                  ) {
+         SemanticLiteral literal;
+         literal.atom.predicate = static_cast< int64_t >(predicate);
+         literal.positive = positive;
+         objects([&](const views::ObjectId object) {
+            literal.atom.arguments.push_back(static_cast< int64_t >(object));
+         });
+         result.goals.push_back(std::move(literal));
+      });
+   }
+   if(input.subgoal_layers) {
+      input.subgoal_layers(
+         [&](const size_t level, const FlatRelationViewInput::LiteralRangeVisitor& literals) {
+            if(result.subgoal_layers.size() <= level) {
+               result.subgoal_layers.resize(level + 1);
+            }
+            literals([&](
+                        const views::PredicateId predicate,
+                        const bool positive,
+                        const FlatRelationViewInput::ObjectRangeVisitor& objects
+                     ) {
+               SemanticLiteral literal;
+               literal.atom.predicate = static_cast< int64_t >(predicate);
+               literal.positive = positive;
+               objects([&](const views::ObjectId object) {
+                  literal.atom.arguments.push_back(static_cast< int64_t >(object));
+               });
+               result.subgoal_layers[level].push_back(std::move(literal));
+            });
+         }
+      );
+   }
+   if(input.actions) {
+      input.actions([&](
+                       const views::ActionSchemaId action_id,
+                       const FlatRelationViewInput::ObjectRangeVisitor& objects
+                    ) {
+         SemanticGroundAction action;
+         action.action = static_cast< int64_t >(action_id);
+         objects([&](const views::ObjectId object) {
+            action.arguments.push_back(static_cast< int64_t >(object));
+         });
+         result.actions.push_back(std::move(action));
+      });
+   }
+   if(input.history) {
+      input.history(
+         [&](const std::int64_t dt, const FlatRelationViewInput::LiteralRangeVisitor& literals) {
+            SemanticHistoryEntry entry;
+            entry.dt = dt;
+            literals([&](
+                        const views::PredicateId predicate,
+                        const bool positive,
+                        const FlatRelationViewInput::ObjectRangeVisitor& objects
+                     ) {
+               SemanticLiteral literal;
+               literal.atom.predicate = static_cast< int64_t >(predicate);
+               literal.positive = positive;
+               objects([&](const views::ObjectId object) {
+                  literal.atom.arguments.push_back(static_cast< int64_t >(object));
+               });
+               entry.literals.push_back(std::move(literal));
+            });
+            result.history.push_back(std::move(entry));
+         }
+      );
+   }
+   result.history_max_steps = input.history_max_steps;
+   return result;
+}
 
 namespace detail {
 

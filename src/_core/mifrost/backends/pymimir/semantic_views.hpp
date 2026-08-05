@@ -9,9 +9,11 @@
 #include <mimir/formalism/problem.hpp>
 #include <mimir/search/state.hpp>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
@@ -77,6 +79,142 @@ class SemanticProblemAdapter {
       materialize_state_in_native_order(views::make_state_view(state, view_context_), result);
       return result;
    }
+
+   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const noexcept
+   {
+      return task_context_;
+   }
+
+   [[nodiscard]] canonical::FlatRelationViewInput make_view_input(
+      const mimir::search::State& state,
+      std::span< const mimir::formalism::GroundAction > actions = {},
+      const GoalInputs* goals = nullptr,
+      std::span< const std::pair< int, std::vector< LiteralVariant > > > history = {},
+      std::optional< int > history_max_steps = std::nullopt
+   ) const
+   {
+      std::vector< views::GroundActionView< mimir::formalism::GroundAction > > action_views;
+      action_views.reserve(actions.size());
+      for(const auto& action : actions) {
+         action_views.emplace_back(action, view_context_);
+      }
+      auto result = canonical::make_flat_relation_view_input(
+         task_context_, views::make_state_view(state, view_context_), action_views
+      );
+
+      const auto* context = &view_context_;
+      const auto visit_literal = [context](
+                                    const auto& literal,
+                                    const canonical::FlatRelationViewInput::LiteralVisitor& visitor
+                                 ) {
+         using NativeLiteral = std::remove_cvref_t< decltype(literal) >;
+         constexpr auto category = [] {
+            if constexpr(std::is_same_v<
+                            NativeLiteral,
+                            mimir::formalism::GroundLiteral< mimir::formalism::StaticTag > >) {
+               return views::Category::static_predicate;
+            } else if constexpr(std::is_same_v<
+                                   NativeLiteral,
+                                   mimir::formalism::GroundLiteral<
+                                      mimir::formalism::FluentTag > >) {
+               return views::Category::fluent;
+            } else if constexpr(std::is_same_v<
+                                   NativeLiteral,
+                                   mimir::formalism::GroundLiteral<
+                                      mimir::formalism::DerivedTag > >) {
+               return views::Category::derived;
+            } else {
+               static_assert(
+                  std::is_same_v<
+                     NativeLiteral,
+                     mimir::formalism::GroundLiteral< mimir::formalism::StaticTag > >,
+                  "unsupported Pymimir literal type"
+               );
+            }
+         }();
+         canonical::detail::visit_flat_literal(
+            views::LiteralView< NativeLiteral, category >{literal, *context}, visitor
+         );
+      };
+
+      if(goals != nullptr) {
+         result.use_default_goals = false;
+         const auto level_for = [](const auto& levels, const auto& literal) {
+            const auto it = levels.find(literal);
+            if(it == levels.end()) {
+               throw std::invalid_argument("Pymimir goal input is missing its goal level");
+            }
+            return it->second;
+         };
+         const auto visit_level = [goals, visit_literal, level_for](
+                                     const size_t level,
+                                     const canonical::FlatRelationViewInput::LiteralVisitor& visitor
+                                  ) {
+            for(const auto& literal : goals->static_goals) {
+               if(level_for(goals->static_goal_levels, literal) == level) {
+                  visit_literal(literal, visitor);
+               }
+            }
+            for(const auto& literal : goals->fluent_goals) {
+               if(level_for(goals->fluent_goal_levels, literal) == level) {
+                  visit_literal(literal, visitor);
+               }
+            }
+            for(const auto& literal : goals->derived_goals) {
+               if(level_for(goals->derived_goal_levels, literal) == level) {
+                  visit_literal(literal, visitor);
+               }
+            }
+         };
+         size_t max_level = 0;
+         for(const auto& literal : goals->static_goals) {
+            max_level = std::max(max_level, level_for(goals->static_goal_levels, literal));
+         }
+         for(const auto& literal : goals->fluent_goals) {
+            max_level = std::max(max_level, level_for(goals->fluent_goal_levels, literal));
+         }
+         for(const auto& literal : goals->derived_goals) {
+            max_level = std::max(max_level, level_for(goals->derived_goal_levels, literal));
+         }
+         result.goals = [visit_level](const auto& visitor) { visit_level(0, visitor); };
+         if(max_level > 0) {
+            result.subgoal_layers = [visit_level, max_level](const auto& visitor) {
+               for(size_t index = 0; index < max_level; ++index) {
+                  visitor(index, [visit_level, index](const auto& literal_visitor) {
+                     visit_level(index + 1, literal_visitor);
+                  });
+               }
+            };
+         }
+      }
+
+      if(not history.empty()) {
+         result.history = [history, visit_literal](const auto& visitor) {
+            for(const auto& [dt, literals] : history) {
+               visitor(dt, [&](const auto& literal_visitor) {
+                  for(const auto& literal : literals) {
+                     std::visit(
+                        [&](const auto& value) { visit_literal(value, literal_visitor); }, literal
+                     );
+                  }
+               });
+            }
+         };
+      }
+      result.history_max_steps = history_max_steps;
+      return result;
+   }
+
+   template < std::ranges::input_range Actions >
+   [[nodiscard]] canonical::FlatRelationViewInput
+   make_view_input(const mimir::search::State& state, Actions actions) const
+   {
+      return make_view_input(
+         state, std::span< const mimir::formalism::GroundAction >{actions.begin(), actions.end()}
+      );
+   }
+
+   [[nodiscard]] const views::Context& get_view_context() const noexcept { return view_context_; }
 
    [[nodiscard]] SemanticFlatRelationInput
    make_input(const mimir::search::State& state, const GoalInputs& goals) const
