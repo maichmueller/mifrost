@@ -107,13 +107,70 @@ TEST_P(DirectViewEncoderTest, FlatExplicitGoalsAndActionsMatchSemanticCompatibil
    }
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(actions);
-   const mifrost::semantic::LiteralsView goal_views(
-      std::span{semantic_input.goals.data(), semantic_input.goals.size()}
-   );
+   const auto goal_views = adapter.make_goal_views(goals);
    const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context());
 
    expect_encoding_equal(
-      engine.encode(semantic_input), engine.encode(state_view, goal_views, action_views)
+      engine.encode(semantic_input),
+      engine.encode(state_view, goal_views.goals_view(), action_views)
+   );
+}
+
+TEST_P(DirectViewEncoderTest, FlatNativeGoalAndHistoryViewsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+   auto semantic_input = adapter.make_input(ctx.root, goals);
+   if(semantic_input.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   semantic_input.history = {
+      mifrost::SemanticHistoryEntry{.dt = -1, .literals = semantic_input.goals}
+   };
+   semantic_input.history_max_steps = 1;
+
+   std::vector< mifrost::LiteralVariant > history_literals;
+   history_literals.reserve(
+      goals.static_goals.size() + goals.fluent_goals.size() + goals.derived_goals.size()
+   );
+   for(const auto literal : goals.static_goals) {
+      history_literals.emplace_back(literal);
+   }
+   for(const auto literal : goals.fluent_goals) {
+      history_literals.emplace_back(literal);
+   }
+   for(const auto literal : goals.derived_goals) {
+      history_literals.emplace_back(literal);
+   }
+   const std::vector< std::pair< int, std::vector< mifrost::LiteralVariant > > > history{
+      {-1, std::move(history_literals)}
+   };
+
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto goal_views = adapter.make_goal_views(goals);
+   const auto action_views = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto history_view = mifrost::pymimir::make_history_view(
+      history, adapter.get_view_context()
+   );
+   mifrost::FlatRelationEncoderConfig config;
+   config.target_sources = {mifrost::TargetSource::goals, mifrost::TargetSource::history};
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(
+         state_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         action_views,
+         history_view,
+         semantic_input.history_max_steps
+      )
    );
 }
 

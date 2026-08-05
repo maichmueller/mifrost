@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "mifrost/backends/pymimir/semantic_views.hpp"
+#include "mifrost/core/semantic/views.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
 
 namespace mifrost {
