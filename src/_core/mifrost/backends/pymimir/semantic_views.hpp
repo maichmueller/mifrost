@@ -616,6 +616,13 @@ class SemanticProblemAdapter {
       for(const auto literal : goal_views.goals_view()) {
          result.goals.push_back(canonical::materialize_semantic_literal(literal));
       }
+      // The owning compatibility DTO indexes subgoal layers by position, so
+      // reject levels that the semantic encoders cannot represent before
+      // attempting a potentially huge dense resize.
+      constexpr size_t max_compatibility_goal_level = 3;
+      if(goal_views.max_level > max_compatibility_goal_level) {
+         throw std::invalid_argument("Pymimir goal level exceeds the semantic compatibility limit");
+      }
       result.subgoal_layers.resize(goal_views.max_level);
       for(const auto layer : goal_views.subgoal_layers_view()) {
          auto& target = result.subgoal_layers.at(layer.level() - 1);

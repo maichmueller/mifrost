@@ -2,6 +2,7 @@
 
 #include <mimir/formalism/domain.hpp>
 #include <span>
+#include <stdexcept>
 #include <type_traits>
 #include <variant>
 
@@ -249,6 +250,7 @@ TEST_P(DirectViewEncoderTest, NativeGoalLayersKeepSparseOccupiedLevels)
    ++iterator;
    EXPECT_EQ((*iterator).level(), 1'000'000U);
    EXPECT_EQ(++iterator, layers.end());
+   EXPECT_THROW((void) adapter.make_input(ctx.root, sparse_goals), std::invalid_argument);
 }
 
 TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)
