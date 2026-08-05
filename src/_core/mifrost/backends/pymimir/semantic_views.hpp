@@ -122,14 +122,14 @@ class NativeAtomView: public mifrost::views::AtomViewBase< NativeAtomView > {
 class NativeLiteralView: public mifrost::views::LiteralViewBase< NativeLiteralView > {
   public:
    NativeLiteralView() = default;
-   NativeLiteralView(const NativeLiteralVariant* value, const views::Context& context)
-       : value_(value), context_(&context)
+   NativeLiteralView(NativeLiteralVariant value, const views::Context& context)
+       : value_(std::move(value)), context_(&context)
    {
    }
 
    [[nodiscard]] bool is_negated_impl() const
    {
-      return std::visit([](const auto literal) { return not literal->get_polarity(); }, *value_);
+      return std::visit([](const auto literal) { return not literal->get_polarity(); }, value_);
    }
 
    [[nodiscard]] NativeAtomView atom_impl() const
@@ -138,12 +138,12 @@ class NativeLiteralView: public mifrost::views::LiteralViewBase< NativeLiteralVi
          [this](const auto literal) {
             return NativeAtomView{NativeAtomVariant{literal->get_atom()}, *context_};
          },
-         *value_
+         value_
       );
    }
 
   private:
-   const NativeLiteralVariant* value_ = nullptr;
+   NativeLiteralVariant value_;
    const views::Context* context_ = nullptr;
 };
 
@@ -166,7 +166,7 @@ class NativeLiteralsView {
       iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
       [[nodiscard]] NativeLiteralView operator*() const noexcept
       {
-         return NativeLiteralView{&*value_, *context_};
+         return NativeLiteralView{*value_, *context_};
       }
       iterator& operator++() noexcept
       {
@@ -195,69 +195,222 @@ class NativeLiteralsView {
    const views::Context* context_;
 };
 
-class NativeSubgoalLayersView {
-   using Base = std::span< const std::vector< NativeLiteralVariant > >::iterator;
+using NativeStaticGoalLevels = std::remove_cvref_t<
+   decltype(std::declval< GoalInputs& >().static_goal_levels) >;
+using NativeFluentGoalLevels = std::remove_cvref_t<
+   decltype(std::declval< GoalInputs& >().fluent_goal_levels) >;
+using NativeDerivedGoalLevels = std::remove_cvref_t<
+   decltype(std::declval< GoalInputs& >().derived_goal_levels) >;
 
+struct NativeGoalSources {
+   std::span< const StaticLiteral > static_goals;
+   std::span< const FluentLiteral > fluent_goals;
+   std::span< const DerivedLiteral > derived_goals;
+   const NativeStaticGoalLevels* static_goal_levels = nullptr;
+   const NativeFluentGoalLevels* fluent_goal_levels = nullptr;
+   const NativeDerivedGoalLevels* derived_goal_levels = nullptr;
+};
+
+/**
+ * A filtered view over the original native goal lists.
+ *
+ * GoalInputs stores the three literal categories separately, while the
+ * semantic encoders consume one level-ordered range. This iterator joins the
+ * borrowed lists and filters by the existing level maps without allocating a
+ * second native goal container.
+ */
+class NativeGoalLiteralsView {
   public:
-   NativeSubgoalLayersView(
-      std::span< const std::vector< NativeLiteralVariant > > values,
-      const views::Context& context
-   )
-       : values_(values), context_(&context)
+   NativeGoalLiteralsView(NativeGoalSources sources, const views::Context& context, size_t level)
+       : sources_(sources), context_(&context), level_(level)
    {
    }
 
    class iterator {
      public:
       using iterator_category = std::forward_iterator_tag;
-      using value_type = NativeLiteralsView;
+      using value_type = NativeLiteralView;
       using difference_type = std::ptrdiff_t;
 
       iterator() = default;
-      iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
-      [[nodiscard]] NativeLiteralsView operator*() const noexcept
+      iterator(const NativeGoalLiteralsView* owner, size_t source, size_t index)
+          : owner_(owner), source_(source), index_(index)
       {
-         return NativeLiteralsView(std::span{*value_}, *context_);
+         skip_unmatched();
       }
+
+      [[nodiscard]] NativeLiteralView operator*() const noexcept
+      {
+         return NativeLiteralView{owner_->literal(source_, index_), *owner_->context_};
+      }
+
       iterator& operator++() noexcept
       {
-         ++value_;
+         ++index_;
+         skip_unmatched();
          return *this;
       }
+
       iterator operator++(int) noexcept
       {
          auto copy = *this;
-         ++value_;
+         ++*this;
          return copy;
       }
+
       friend bool operator==(const iterator&, const iterator&) = default;
 
      private:
-      Base value_;
-      const views::Context* context_;
+      void skip_unmatched() noexcept
+      {
+         while(source_ < 3) {
+            if(index_ >= owner_->source_size(source_)) {
+               ++source_;
+               index_ = 0;
+               continue;
+            }
+            if(owner_->matches(source_, index_)) {
+               return;
+            }
+            ++index_;
+         }
+      }
+
+      const NativeGoalLiteralsView* owner_ = nullptr;
+      size_t source_ = 3;
+      size_t index_ = 0;
    };
 
-   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin(), *context_); }
-   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end(), *context_); }
-   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+   [[nodiscard]] iterator begin() const noexcept { return iterator{this, 0, 0}; }
+   [[nodiscard]] iterator end() const noexcept { return iterator{this, 3, 0}; }
+
+   [[nodiscard]] size_t size() const noexcept
+   {
+      return static_cast< size_t >(std::ranges::distance(*this));
+   }
 
   private:
-   std::span< const std::vector< NativeLiteralVariant > > values_;
+   [[nodiscard]] size_t source_size(size_t source) const noexcept
+   {
+      switch(source) {
+         case 0: return sources_.static_goals.size();
+         case 1: return sources_.fluent_goals.size();
+         case 2: return sources_.derived_goals.size();
+         default: return 0;
+      }
+   }
+
+   [[nodiscard]] size_t source_level(size_t source, size_t index) const noexcept
+   {
+      switch(source) {
+         case 0:
+            return sources_.static_goal_levels == nullptr
+                      ? 0
+                      : sources_.static_goal_levels->at(sources_.static_goals[index]);
+         case 1:
+            return sources_.fluent_goal_levels == nullptr
+                      ? 0
+                      : sources_.fluent_goal_levels->at(sources_.fluent_goals[index]);
+         case 2:
+            return sources_.derived_goal_levels == nullptr
+                      ? 0
+                      : sources_.derived_goal_levels->at(sources_.derived_goals[index]);
+         default: return 0;
+      }
+   }
+
+   [[nodiscard]] bool matches(size_t source, size_t index) const noexcept
+   {
+      return source_level(source, index) == level_;
+   }
+
+   [[nodiscard]] NativeLiteralVariant literal(size_t source, size_t index) const
+   {
+      switch(source) {
+         case 0: return sources_.static_goals[index];
+         case 1: return sources_.fluent_goals[index];
+         case 2: return sources_.derived_goals[index];
+         default: return NativeLiteralVariant{};
+      }
+   }
+
+   NativeGoalSources sources_;
    const views::Context* context_;
+   size_t level_;
+
+   friend class NativeGoalViews;
+};
+
+class NativeGoalLayersView {
+  public:
+   NativeGoalLayersView(
+      NativeGoalSources sources,
+      const views::Context& context,
+      size_t first_level,
+      size_t past_level
+   )
+       : sources_(sources), context_(&context), first_level_(first_level), past_level_(past_level)
+   {
+   }
+
+   class iterator {
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = NativeGoalLiteralsView;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      iterator(const NativeGoalLayersView* owner, size_t level) : owner_(owner), level_(level) {}
+
+      [[nodiscard]] NativeGoalLiteralsView operator*() const noexcept
+      {
+         return NativeGoalLiteralsView{owner_->sources_, *owner_->context_, level_};
+      }
+
+      iterator& operator++() noexcept
+      {
+         ++level_;
+         return *this;
+      }
+
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++*this;
+         return copy;
+      }
+
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      const NativeGoalLayersView* owner_ = nullptr;
+      size_t level_ = 0;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator{this, first_level_}; }
+   [[nodiscard]] iterator end() const noexcept { return iterator{this, past_level_}; }
+   [[nodiscard]] size_t size() const noexcept { return past_level_ - first_level_; }
+
+  private:
+   NativeGoalSources sources_;
+   const views::Context* context_;
+   size_t first_level_;
+   size_t past_level_;
 };
 
 struct NativeGoalViews {
-   std::vector< NativeLiteralVariant > goals;
-   std::vector< std::vector< NativeLiteralVariant > > subgoal_layers;
+   NativeGoalSources sources;
    const views::Context* context = nullptr;
+   size_t max_level = 0;
 
-   [[nodiscard]] NativeLiteralsView goals_view() const
+   [[nodiscard]] NativeGoalLiteralsView goals_view() const
    {
-      return NativeLiteralsView(std::span{goals}, *context);
+      return NativeGoalLiteralsView{sources, *context, 0};
    }
-   [[nodiscard]] NativeSubgoalLayersView subgoal_layers_view() const
+
+   [[nodiscard]] NativeGoalLayersView subgoal_layers_view() const
    {
-      return NativeSubgoalLayersView(std::span{subgoal_layers}, *context);
+      return NativeGoalLayersView{sources, *context, 1, max_level + 1};
    }
 };
 
@@ -410,28 +563,28 @@ class SemanticProblemAdapter {
 
    [[nodiscard]] NativeGoalViews make_goal_views(const GoalInputs& goals) const
    {
-      std::vector< std::vector< NativeLiteralVariant > > layers;
-      append_goals< mimir::formalism::StaticTag, views::Category::static_predicate >(
-         goals.static_goals, goals.static_goal_levels, layers
+      return make_goal_views(
+         NativeGoalSources{
+            .static_goals = std::span{goals.static_goals},
+            .fluent_goals = std::span{goals.fluent_goals},
+            .derived_goals = std::span{goals.derived_goals},
+            .static_goal_levels = &goals.static_goal_levels,
+            .fluent_goal_levels = &goals.fluent_goal_levels,
+            .derived_goal_levels = &goals.derived_goal_levels,
+         }
       );
-      append_goals< mimir::formalism::FluentTag, views::Category::fluent >(
-         goals.fluent_goals, goals.fluent_goal_levels, layers
-      );
-      append_goals< mimir::formalism::DerivedTag, views::Category::derived >(
-         goals.derived_goals, goals.derived_goal_levels, layers
-      );
+   }
 
-      NativeGoalViews result;
-      result.context = &view_context_;
-      if(not layers.empty()) {
-         result.goals = std::move(layers.front());
-      }
-      if(layers.size() > 1) {
-         result.subgoal_layers.assign(
-            std::make_move_iterator(layers.begin() + 1), std::make_move_iterator(layers.end())
-         );
-      }
-      return result;
+   [[nodiscard]] NativeGoalViews make_default_goal_views() const
+   {
+      const auto& problem = view_context_.problem();
+      return make_goal_views(
+         NativeGoalSources{
+            .static_goals = std::span{problem.get_goal_literals< mimir::formalism::StaticTag >()},
+            .fluent_goals = std::span{problem.get_goal_literals< mimir::formalism::FluentTag >()},
+            .derived_goals = std::span{problem.get_goal_literals< mimir::formalism::DerivedTag >()},
+         }
+      );
    }
 
    template < std::ranges::input_range Actions >
@@ -516,24 +669,36 @@ class SemanticProblemAdapter {
       return context;
    }
 
-   template < typename Tag, views::Category Category, typename Range, typename Map >
-   void append_goals(
-      const Range& values,
-      const Map& levels,
-      std::vector< std::vector< NativeLiteralVariant > >& layers
-   ) const
+   template < typename Range, typename Map >
+   static size_t validate_goal_source(const Range& values, const Map* levels)
    {
+      size_t max_level = 0;
       for(const auto& literal : values) {
-         const auto level_it = levels.find(literal);
-         if(level_it == levels.end()) {
-            throw std::invalid_argument("Pymimir goal input is missing its goal level");
+         size_t level = 0;
+         if(levels != nullptr) {
+            const auto level_it = levels->find(literal);
+            if(level_it == levels->end()) {
+               throw std::invalid_argument("Pymimir goal input is missing its goal level");
+            }
+            level = level_it->second;
          }
-         const auto level = level_it->second;
-         if(layers.size() <= level) {
-            layers.resize(level + 1);
-         }
-         layers[level].emplace_back(literal);
+         max_level = std::max(max_level, level);
       }
+      return max_level;
+   }
+
+   [[nodiscard]] NativeGoalViews make_goal_views(NativeGoalSources sources) const
+   {
+      NativeGoalViews result{
+         .sources = sources,
+         .context = &view_context_,
+      };
+      result.max_level = std::max({
+         validate_goal_source(sources.static_goals, sources.static_goal_levels),
+         validate_goal_source(sources.fluent_goals, sources.fluent_goal_levels),
+         validate_goal_source(sources.derived_goals, sources.derived_goal_levels),
+      });
+      return result;
    }
 
    void build_problem_lanes(const mimir::formalism::ProblemImpl& problem)

@@ -54,7 +54,8 @@ struct FlatRelationEncoderEngine::SemanticImpl {
       const auto state_view = problem_adapter->make_state_view(state);
       const auto action_views = problem_adapter->make_action_views(actions);
       if(goals == nullptr and history.empty() and not history_max_steps.has_value()) {
-         encoder->encode(state_view, action_views, builder);
+         const auto goal_views = problem_adapter->make_default_goal_views();
+         encoder->encode(state_view, goal_views.goals_view(), action_views, builder);
          return;
       }
       const auto history_view = pymimir::make_history_view(
@@ -73,16 +74,11 @@ struct FlatRelationEncoderEngine::SemanticImpl {
          );
          return;
       }
-      const semantic::LiteralsView default_goals(
-         std::span{problem_adapter->get_task_context()->default_goals}
-      );
-      const semantic::SubgoalLayersView subgoal_layers(
-         std::span< const std::vector< SemanticLiteral > >{}
-      );
+      const auto goal_views = problem_adapter->make_default_goal_views();
       encoder->encode(
          state_view,
-         default_goals,
-         subgoal_layers,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
          action_views,
          history_view,
          history_max_steps,

@@ -243,7 +243,8 @@ void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder
    const auto action_views = problem_adapter_->make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   semantic_->encode(state_view, action_views, builder);
+   const auto goal_views = problem_adapter_->make_default_goal_views();
+   semantic_->encode(state_view, goal_views.goals_view(), action_views, builder);
 }
 
 void HGraphEncoderEngine::encode(

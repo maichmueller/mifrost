@@ -1,5 +1,6 @@
 #include "successor_hgraph_encoder.hpp"
 
+#include <stdexcept>
 #include <utility>
 
 #include "mifrost/input_handling/batch_input_parser.hpp"
@@ -101,14 +102,44 @@ void SuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
+   if(&current.get_problem() != &successor.get_problem()) {
+      throw std::invalid_argument(
+         "SuccessorHGraphEncoder states must belong to the same planning problem"
+      );
+   }
+   ensure_problem(current);
+   const auto task_context = problem_adapter_->get_task_context();
+   if(semantic_task_context_ != task_context) {
+      semantic_successor_ = std::make_unique< SemanticSuccessorHGraphEncoderEngine >(
+         task_context, semantic_config(successor_config_)
+      );
+      semantic_task_context_ = task_context;
+      if(not semantic_relation_arities_.empty()) {
+         semantic_successor_->update_relations(semantic_relation_arities_);
+      }
+   }
+
+   const auto current_view = problem_adapter_->make_state_view(current);
+   const auto successor_view = problem_adapter_->make_state_view(successor);
+   const auto empty_actions = problem_adapter_->make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto goal_views = problem_adapter_->make_goal_views(goals);
    semantic_successor_->encode(
-      make_input(current, goals, {}), make_default_input(successor), builder
+      current_view,
+      goal_views.goals_view(),
+      goal_views.subgoal_layers_view(),
+      empty_actions,
+      successor_view,
+      empty_actions,
+      builder
    );
 }
 
 void SuccessorHGraphEncoderEngine::update_relations(RelationDict relation_dict)
 {
-   semantic_successor_->update_relations(relation_dict.arity);
+   semantic_relation_arities_ = relation_dict.arity;
+   semantic_successor_->update_relations(semantic_relation_arities_);
    HGraphEncoderEngine::update_relations(std::move(relation_dict));
 }
 

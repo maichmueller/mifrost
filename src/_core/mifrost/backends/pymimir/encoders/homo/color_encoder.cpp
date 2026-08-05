@@ -78,7 +78,8 @@ void ColorEncoderEngine::encode_state_impl(const mimir::search::State& state, Ba
    const auto actions = problem_adapter_->make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   semantic_engine_->encode(state_view, actions, builder);
+   const auto goal_views = problem_adapter_->make_default_goal_views();
+   semantic_engine_->encode(state_view, goal_views.goals_view(), actions, builder);
 }
 
 void ColorEncoderEngine::encode_impl(
