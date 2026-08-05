@@ -193,6 +193,39 @@ void HGraphEncoderEngine::encode_semantic(
    compatible_engine.encode(input, builder);
 }
 
+void HGraphEncoderEngine::encode_views(
+   const mimir::search::State& state,
+   const GoalInputs& goals,
+   std::span< const mimir::formalism::GroundAction > actions,
+   const std::vector< HistorySubgoal >& history,
+   std::optional< int > history_max_steps,
+   BatchBuilder& builder
+) const
+{
+   ensure_problem(state);
+   const auto state_view = problem_adapter_->make_state_view(state);
+   const auto action_views = problem_adapter_->make_action_views(actions);
+   const auto input = make_input(state, goals, actions, history, history_max_steps);
+   const pymimir::SemanticLaneViews lanes(input);
+   const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
+   if(same_schema(state_schema, schema_)) {
+      semantic_->encode(
+         state_view,
+         lanes.goals,
+         lanes.subgoal_layers,
+         action_views,
+         lanes.history,
+         input.history_max_steps,
+         builder
+      );
+      return;
+   }
+   SemanticHGraphEncoderEngine compatible_engine(
+      state_schema.predicates, state_schema.actions, semantic_config(config_)
+   );
+   compatible_engine.encode(input, builder);
+}
+
 void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
 {
    ensure_problem(state);
@@ -210,7 +243,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic(state, make_input(state, goals, actions), builder);
+   encode_views(state, goals, actions, {}, std::nullopt, builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -222,7 +255,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic(state, make_input(state, goals, actions, history, history_max_steps), builder);
+   encode_views(state, goals, actions, history, history_max_steps, builder);
 }
 
 void HGraphEncoderEngine::update_relations(RelationDict relation_dict_value)

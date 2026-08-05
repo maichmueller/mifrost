@@ -79,6 +79,36 @@ struct FlatRelationEncoderEngine::SemanticImpl {
       return result;
    }
 
+   void encode_views(
+      const mimir::search::State& state,
+      const GoalInputs* goals,
+      std::span< const mimir::formalism::GroundAction > actions,
+      std::span< const FlatRelationEncoderEngine::HistorySubgoal > history,
+      std::optional< int > history_max_steps,
+      const Config& config,
+      BatchBuilder& builder
+   )
+   {
+      ensure_problem(state, config);
+      const auto state_view = problem_adapter->make_state_view(state);
+      const auto action_views = problem_adapter->make_action_views(actions);
+      if(goals == nullptr and history.empty() and not history_max_steps.has_value()) {
+         encoder->encode(state_view, action_views, builder);
+         return;
+      }
+      const auto input = make_input(state, goals, actions, history, history_max_steps, config);
+      const pymimir::SemanticLaneViews lanes(input);
+      encoder->encode(
+         state_view,
+         lanes.goals,
+         lanes.subgoal_layers,
+         action_views,
+         lanes.history,
+         input.history_max_steps,
+         builder
+      );
+   }
+
   private:
    template < typename Tag >
    static SemanticLiteral materialize_history_literal(
@@ -227,18 +257,8 @@ void FlatRelationEncoderEngine::encode_default_goals(
    BatchBuilder& builder
 )
 {
-   semantic_->ensure_problem(state, config_);
-   if(not history_subgoals.empty() or history_max_steps.has_value()) {
-      semantic_->encoder->encode(
-         semantic_->make_input(
-            state, nullptr, actions, history_subgoals, history_max_steps, config_
-         ),
-         builder
-      );
-      return;
-   }
-   semantic_->encoder->encode(
-      semantic_->make_input(state, nullptr, actions, {}, std::nullopt, config_), builder
+   semantic_->encode_views(
+      state, nullptr, actions, history_subgoals, history_max_steps, config_, builder
    );
 }
 
@@ -299,9 +319,8 @@ void FlatRelationEncoderEngine::encode_impl(
 )
 {
    semantic_->ensure_problem(state, config_);
-   semantic_->encoder->encode(
-      semantic_->make_input(state, &goals, actions, history_subgoals, history_max_steps, config_),
-      builder
+   semantic_->encode_views(
+      state, &goals, actions, history_subgoals, history_max_steps, config_, builder
    );
 }
 

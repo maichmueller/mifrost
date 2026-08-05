@@ -21,8 +21,22 @@
 #include "mifrost/backends/pymimir/views.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
 #include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
+#include "mifrost/core/semantic/views.hpp"
 
 namespace mifrost::pymimir {
+
+struct SemanticLaneViews {
+   semantic::LiteralsView goals;
+   semantic::SubgoalLayersView subgoal_layers;
+   semantic::HistoryView history;
+
+   explicit SemanticLaneViews(const SemanticFlatRelationInput& input)
+       : goals(std::span{semantic_goals(input)}),
+         subgoal_layers(std::span{input.subgoal_layers}),
+         history(std::span{input.history})
+   {
+   }
+};
 
 template < typename Tag >
 void append_semantic_predicates(
