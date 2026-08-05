@@ -221,6 +221,36 @@ TEST_P(DirectViewEncoderTest, FlatSparseRepeatedNativeGoalLevelsMatchCompatibili
    );
 }
 
+TEST_P(DirectViewEncoderTest, NativeGoalLayersKeepSparseOccupiedLevels)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs sparse_goals;
+   if(source_goals.static_goals.size() >= 2) {
+      sparse_goals.append(source_goals.static_goals.front(), 1);
+      sparse_goals.append(source_goals.static_goals.back(), 1'000'000);
+   } else if(source_goals.fluent_goals.size() >= 2) {
+      sparse_goals.append(source_goals.fluent_goals.front(), 1);
+      sparse_goals.append(source_goals.fluent_goals.back(), 1'000'000);
+   } else if(source_goals.derived_goals.size() >= 2) {
+      sparse_goals.append(source_goals.derived_goals.front(), 1);
+      sparse_goals.append(source_goals.derived_goals.back(), 1'000'000);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto goal_views = adapter.make_goal_views(sparse_goals);
+   const auto layers = goal_views.subgoal_layers_view();
+   ASSERT_EQ(layers.size(), 2U);
+   auto iterator = layers.begin();
+   EXPECT_EQ((*iterator).level(), 1U);
+   ++iterator;
+   EXPECT_EQ((*iterator).level(), 1'000'000U);
+   EXPECT_EQ(++iterator, layers.end());
+}
+
 TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)
 {
    const auto param = GetParam();

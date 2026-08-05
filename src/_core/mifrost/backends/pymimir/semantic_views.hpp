@@ -217,7 +217,8 @@ struct NativeGoalSources {
  * GoalInputs stores the three literal categories separately, while the
  * semantic encoders consume one level-ordered range. This iterator joins the
  * borrowed lists and filters by the existing level maps without allocating a
- * second native goal container.
+ * second native goal container. `NativeGoalLayersView` visits only occupied
+ * levels, so a sparse high level does not expand into empty intermediate lanes.
  */
 class NativeGoalLiteralsView {
   public:
@@ -288,6 +289,7 @@ class NativeGoalLiteralsView {
    {
       return static_cast< size_t >(std::ranges::distance(*this));
    }
+   [[nodiscard]] size_t level() const noexcept { return level_; }
 
   private:
    [[nodiscard]] size_t source_size(size_t source) const noexcept
@@ -346,10 +348,9 @@ class NativeGoalLayersView {
    NativeGoalLayersView(
       NativeGoalSources sources,
       const views::Context& context,
-      size_t first_level,
-      size_t past_level
+      const std::vector< size_t >& occupied_levels
    )
-       : sources_(sources), context_(&context), first_level_(first_level), past_level_(past_level)
+       : sources_(sources), context_(&context), occupied_levels_(&occupied_levels)
    {
    }
 
@@ -360,16 +361,18 @@ class NativeGoalLayersView {
       using difference_type = std::ptrdiff_t;
 
       iterator() = default;
-      iterator(const NativeGoalLayersView* owner, size_t level) : owner_(owner), level_(level) {}
+      iterator(const NativeGoalLayersView* owner, size_t index) : owner_(owner), index_(index) {}
 
       [[nodiscard]] NativeGoalLiteralsView operator*() const noexcept
       {
-         return NativeGoalLiteralsView{owner_->sources_, *owner_->context_, level_};
+         return NativeGoalLiteralsView{
+            owner_->sources_, *owner_->context_, owner_->occupied_levels_->at(index_)
+         };
       }
 
       iterator& operator++() noexcept
       {
-         ++level_;
+         ++index_;
          return *this;
       }
 
@@ -384,24 +387,24 @@ class NativeGoalLayersView {
 
      private:
       const NativeGoalLayersView* owner_ = nullptr;
-      size_t level_ = 0;
+      size_t index_ = 0;
    };
 
-   [[nodiscard]] iterator begin() const noexcept { return iterator{this, first_level_}; }
-   [[nodiscard]] iterator end() const noexcept { return iterator{this, past_level_}; }
-   [[nodiscard]] size_t size() const noexcept { return past_level_ - first_level_; }
+   [[nodiscard]] iterator begin() const noexcept { return iterator{this, 0}; }
+   [[nodiscard]] iterator end() const noexcept { return iterator{this, occupied_levels_->size()}; }
+   [[nodiscard]] size_t size() const noexcept { return occupied_levels_->size(); }
 
   private:
    NativeGoalSources sources_;
    const views::Context* context_;
-   size_t first_level_;
-   size_t past_level_;
+   const std::vector< size_t >* occupied_levels_;
 };
 
 struct NativeGoalViews {
    NativeGoalSources sources;
    const views::Context* context = nullptr;
    size_t max_level = 0;
+   std::vector< size_t > occupied_levels;
 
    [[nodiscard]] NativeGoalLiteralsView goals_view() const
    {
@@ -410,7 +413,7 @@ struct NativeGoalViews {
 
    [[nodiscard]] NativeGoalLayersView subgoal_layers_view() const
    {
-      return NativeGoalLayersView{sources, *context, 1, max_level + 1};
+      return NativeGoalLayersView{sources, *context, occupied_levels};
    }
 };
 
@@ -613,8 +616,9 @@ class SemanticProblemAdapter {
       for(const auto literal : goal_views.goals_view()) {
          result.goals.push_back(canonical::materialize_semantic_literal(literal));
       }
+      result.subgoal_layers.resize(goal_views.max_level);
       for(const auto layer : goal_views.subgoal_layers_view()) {
-         auto& target = result.subgoal_layers.emplace_back();
+         auto& target = result.subgoal_layers.at(layer.level() - 1);
          for(const auto literal : layer) {
             target.push_back(canonical::materialize_semantic_literal(literal));
          }
@@ -698,6 +702,24 @@ class SemanticProblemAdapter {
          validate_goal_source(sources.fluent_goals, sources.fluent_goal_levels),
          validate_goal_source(sources.derived_goals, sources.derived_goal_levels),
       });
+      const auto append_occupied_levels = [&result](const auto& values, const auto* levels) {
+         if(levels == nullptr) {
+            return;
+         }
+         for(const auto& literal : values) {
+            const auto level = levels->at(literal);
+            if(level > 0) {
+               result.occupied_levels.push_back(level);
+            }
+         }
+      };
+      append_occupied_levels(sources.static_goals, sources.static_goal_levels);
+      append_occupied_levels(sources.fluent_goals, sources.fluent_goal_levels);
+      append_occupied_levels(sources.derived_goals, sources.derived_goal_levels);
+      std::ranges::sort(result.occupied_levels);
+      result.occupied_levels.erase(
+         std::ranges::unique(result.occupied_levels).begin(), result.occupied_levels.end()
+      );
       return result;
    }
 
