@@ -79,19 +79,6 @@ struct FlatRelationEncoderEngine::SemanticImpl {
       return result;
    }
 
-   [[nodiscard]] canonical::FlatRelationViewInput make_view_input(
-      const mimir::search::State& state,
-      std::span< const mimir::formalism::GroundAction > actions,
-      const GoalInputs* goals,
-      std::span< const FlatRelationEncoderEngine::HistorySubgoal > history,
-      std::optional< int > history_max_steps,
-      const Config& config
-   )
-   {
-      ensure_problem(state, config);
-      return problem_adapter->make_view_input(state, actions, goals, history, history_max_steps);
-   }
-
   private:
    template < typename Tag >
    static SemanticLiteral materialize_history_literal(
@@ -240,10 +227,19 @@ void FlatRelationEncoderEngine::encode_default_goals(
    BatchBuilder& builder
 )
 {
-   const auto view_input = semantic_->make_view_input(
-      state, actions, nullptr, history_subgoals, history_max_steps, config_
-   );
-   semantic_->encoder->encode_views(view_input, builder);
+   semantic_->ensure_problem(state, config_);
+   if(not history_subgoals.empty() or history_max_steps.has_value()) {
+      semantic_->encoder->encode(
+         semantic_->make_input(
+            state, nullptr, actions, history_subgoals, history_max_steps, config_
+         ),
+         builder
+      );
+      return;
+   }
+   const auto state_view = semantic_->problem_adapter->make_state_view(state);
+   const auto action_views = semantic_->problem_adapter->make_action_views(actions);
+   semantic_->encoder->encode(state_view, action_views, builder);
 }
 
 void FlatRelationEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
@@ -302,10 +298,11 @@ void FlatRelationEncoderEngine::encode_impl(
    bool
 )
 {
-   const auto view_input = semantic_->make_view_input(
-      state, actions, &goals, history_subgoals, history_max_steps, config_
+   semantic_->ensure_problem(state, config_);
+   semantic_->encoder->encode(
+      semantic_->make_input(state, &goals, actions, history_subgoals, history_max_steps, config_),
+      builder
    );
-   semantic_->encoder->encode_views(view_input, builder);
 }
 
 BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
@@ -318,11 +315,7 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       return semantic_->encoder->encode_batch({});
    }
    semantic_->ensure_problem(inputs.states.states.front().state, config_);
-   struct ViewBatchEntry {
-      GoalInputs goals;
-      canonical::FlatRelationViewInput view;
-   };
-   std::vector< ViewBatchEntry > entries;
+   std::vector< SemanticFlatRelationInput > entries;
    entries.reserve(state_count);
    for(size_t idx = 0; idx < state_count; ++idx) {
       const auto& state_entry = inputs.states.states[idx];
@@ -331,17 +324,16 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       const auto& subgoal_layers_entry = inputs.subgoal_layers.at(idx);
       const auto& history_entry = inputs.history_subgoals.at(idx);
 
-      entries.emplace_back();
-      auto& entry = entries.back();
+      GoalInputs goals;
       if(goals_entry.has_value()) {
          const auto* layers = subgoal_layers_entry.has_value() ? &*subgoal_layers_entry : nullptr;
-         entry.goals = batch_input::compose_goal_inputs(*goals_entry, layers);
+         goals = batch_input::compose_goal_inputs(*goals_entry, layers);
       } else {
-         entry.goals = batch_input::default_goal_inputs_for_batch_state(state_entry);
+         goals = batch_input::default_goal_inputs_for_batch_state(state_entry);
          if(subgoal_layers_entry.has_value()) {
             size_t level = 1;
             for(const auto& layer : *subgoal_layers_entry) {
-               entry.goals.extend(layer, level++);
+               goals.extend(layer, level++);
             }
          }
       }
@@ -353,16 +345,11 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       const auto history_span = history_entry.has_value()
                                    ? std::span< const HistorySubgoal >(*history_entry)
                                    : std::span< const HistorySubgoal >{};
-      entry.view = semantic_->make_view_input(
-         state_entry.state, actions_span, &entry.goals, history_span, history_max_steps, config_
-      );
+      entries.push_back(semantic_->make_input(
+         state_entry.state, &goals, actions_span, history_span, history_max_steps, config_
+      ));
    }
-   std::vector< canonical::FlatRelationViewInput > views;
-   views.reserve(entries.size());
-   for(const auto& entry : entries) {
-      views.push_back(entry.view);
-   }
-   return semantic_->encoder->encode_views_batch(std::span{views});
+   return semantic_->encoder->encode_batch(entries);
 }
 
 void FlatRelationEncoderEngine::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const

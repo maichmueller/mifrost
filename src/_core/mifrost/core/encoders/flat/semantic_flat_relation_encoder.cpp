@@ -495,14 +495,6 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    struct PreparedRelationGraph {
       const SemanticFlatRelationInput* input = nullptr;
-      std::shared_ptr< const SemanticTaskContext > view_task_context;
-      std::vector< SemanticAtom > view_state_facts;
-      std::vector< SemanticLiteral > view_goals;
-      std::vector< std::vector< SemanticLiteral > > view_subgoal_layers;
-      std::vector< SemanticGroundAction > view_actions;
-      std::vector< SemanticHistoryEntry > view_history;
-      std::optional< int64_t > view_history_max_steps = std::nullopt;
-      bool view_use_default_goals = false;
       std::vector< SemanticGoalLevel > goal_levels;
       std::vector< SemanticLiteral > grouped_goals;
       hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
@@ -511,45 +503,42 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       [[nodiscard]] const std::vector< std::string >& objects() const
       {
-         return input != nullptr ? semantic_objects(*input) : view_task_context->objects;
+         return semantic_objects(*input);
       }
 
       [[nodiscard]] const std::vector< SemanticAtom >& state_facts() const
       {
-         return input != nullptr ? input->state_facts : view_state_facts;
+         return input->state_facts;
       }
 
       [[nodiscard]] const std::vector< SemanticAtom >& static_facts() const
       {
-         return input != nullptr ? semantic_static_facts(*input) : view_task_context->static_facts;
+         return semantic_static_facts(*input);
       }
 
       [[nodiscard]] const std::vector< SemanticLiteral >& goals() const
       {
-         if(input != nullptr) {
-            return semantic_goals(*input);
-         }
-         return view_use_default_goals ? view_task_context->default_goals : view_goals;
+         return semantic_goals(*input);
       }
 
       [[nodiscard]] const std::vector< std::vector< SemanticLiteral > >& subgoal_layers() const
       {
-         return input != nullptr ? input->subgoal_layers : view_subgoal_layers;
+         return input->subgoal_layers;
       }
 
       [[nodiscard]] const std::vector< SemanticGroundAction >& actions() const
       {
-         return input != nullptr ? input->actions : view_actions;
+         return input->actions;
       }
 
       [[nodiscard]] const std::vector< SemanticHistoryEntry >& history() const
       {
-         return input != nullptr ? input->history : view_history;
+         return input->history;
       }
 
       [[nodiscard]] std::optional< int64_t > history_max_steps() const
       {
-         return input != nullptr ? input->history_max_steps : view_history_max_steps;
+         return input->history_max_steps;
       }
    };
 
@@ -2027,228 +2016,6 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return prepared;
    }
 
-   PreparedRelationGraph prepare_relation_graph(const canonical::FlatRelationViewInput& input) const
-   {
-      if(not input.task_context or input.task_context != task_context) {
-         throw std::invalid_argument(
-            "Semantic flat View input belongs to a different task context than the encoder"
-         );
-      }
-
-      PreparedRelationGraph prepared;
-      prepared.view_task_context = input.task_context;
-      prepared.view_use_default_goals = input.use_default_goals;
-      prepared.view_history_max_steps = input.history_max_steps;
-
-      const auto make_atom =
-         [](views::PredicateId predicate,
-            const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects) {
-            SemanticAtom result;
-            result.predicate = static_cast< int64_t >(predicate);
-            objects([&](const views::ObjectId object) {
-               result.arguments.push_back(static_cast< int64_t >(object));
-            });
-            return result;
-         };
-      const auto make_literal =
-         [&](
-            views::PredicateId predicate,
-            const bool positive,
-            const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-         ) { return SemanticLiteral{make_atom(predicate, objects), positive}; };
-
-      if(input.state_atoms) {
-         input.state_atoms([&](
-                              const views::PredicateId predicate,
-                              const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-                           ) {
-            prepared.view_state_facts.push_back(make_atom(predicate, objects));
-         });
-      }
-      if(input.goals) {
-         input.goals([&](
-                        const views::PredicateId predicate,
-                        const bool positive,
-                        const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-                     ) {
-            prepared.view_goals.push_back(make_literal(predicate, positive, objects));
-         });
-      }
-      if(input.subgoal_layers) {
-         input.subgoal_layers(
-            [&](
-               const std::size_t level,
-               const canonical::FlatRelationViewInput::LiteralRangeVisitor& visitor
-            ) {
-               if(prepared.view_subgoal_layers.size() <= level) {
-                  prepared.view_subgoal_layers.resize(level + 1);
-               }
-               visitor([&](
-                          const views::PredicateId predicate,
-                          const bool positive,
-                          const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-                       ) {
-                  prepared.view_subgoal_layers[level].push_back(
-                     make_literal(predicate, positive, objects)
-                  );
-               });
-            }
-         );
-      }
-      if(input.actions) {
-         input.actions([&](
-                          const views::ActionSchemaId action_id,
-                          const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-                       ) {
-            SemanticGroundAction action;
-            action.action = static_cast< int64_t >(action_id);
-            objects([&](const views::ObjectId object) {
-               action.arguments.push_back(static_cast< int64_t >(object));
-            });
-            prepared.view_actions.push_back(std::move(action));
-         });
-      }
-      if(input.history) {
-         input.history([&](
-                          const std::int64_t dt,
-                          const canonical::FlatRelationViewInput::LiteralRangeVisitor& visitor
-                       ) {
-            SemanticHistoryEntry entry;
-            entry.dt = dt;
-            visitor([&](
-                       const views::PredicateId predicate,
-                       const bool positive,
-                       const canonical::FlatRelationViewInput::ObjectRangeVisitor& objects
-                    ) { entry.literals.push_back(make_literal(predicate, positive, objects)); });
-            prepared.view_history.push_back(std::move(entry));
-         });
-      }
-
-      const auto& objects = prepared.objects();
-      std::set< std::string, std::less<> > object_names;
-      for(const auto& object : objects) {
-         validate_name(object, "object");
-         if(not object_names.emplace(object).second) {
-            throw std::invalid_argument("Semantic flat object names must be unique");
-         }
-      }
-      const auto validate_atoms = [&](const auto& atoms, std::string_view lane) {
-         for(const auto& atom : atoms) {
-            validate_atom(atom, objects.size(), lane);
-         }
-      };
-      validate_atoms(prepared.static_facts(), "static fact");
-      validate_atoms(prepared.state_facts(), "state fact");
-      const auto validate_literals = [&](const auto& literals, std::string_view lane) {
-         for(const auto& literal : literals) {
-            validate_atom(literal.atom, objects.size(), lane);
-         }
-      };
-      validate_literals(prepared.goals(), "goal");
-      if(prepared.subgoal_layers().size() > config.max_goal_level) {
-         throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
-      }
-      for(const auto& layer : prepared.subgoal_layers()) {
-         validate_literals(layer, "subgoal");
-      }
-      for(const auto& action : prepared.actions()) {
-         if(action.action < 0 or static_cast< size_t >(action.action) >= actions.size()) {
-            throw std::invalid_argument("Semantic flat action schema index out of range");
-         }
-         const auto& schema_action = actions.at(static_cast< size_t >(action.action));
-         if(action.arguments.size() != static_cast< size_t >(schema_action.arity)) {
-            throw std::invalid_argument("Semantic flat ground action arity mismatch");
-         }
-         for(const auto object : action.arguments) {
-            if(object < 0 or static_cast< size_t >(object) >= objects.size()) {
-               throw std::invalid_argument("Semantic flat action object index out of range");
-            }
-         }
-      }
-      for(const auto& entry : prepared.history()) {
-         if(entry.dt >= 0) {
-            throw std::invalid_argument("Semantic flat history requires negative dt values");
-         }
-         validate_literals(entry.literals, "history literal");
-      }
-
-      size_t goal_level_count = prepared.goals().size();
-      for(const auto& layer : prepared.subgoal_layers()) {
-         goal_level_count += layer.size();
-      }
-      prepared.goal_levels.reserve(goal_level_count);
-      for(const auto& literal : prepared.goals()) {
-         prepared.goal_levels.push_back({literal, 0});
-      }
-      for(size_t level = 0; level < prepared.subgoal_layers().size(); ++level) {
-         for(const auto& literal : prepared.subgoal_layers()[level]) {
-            prepared.goal_levels.push_back({literal, level + 1});
-         }
-      }
-      std::ranges::sort(prepared.goal_levels);
-
-      const auto& goals = prepared.goals();
-      for(const auto category : kCategoryOrder) {
-         const auto append_category = [&](const std::vector< SemanticLiteral >& literals) {
-            for(const auto& literal : literals) {
-               if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category
-                  == category) {
-                  prepared.grouped_goals.push_back(literal);
-               }
-            }
-         };
-         append_category(goals);
-         for(const auto& layer : prepared.subgoal_layers()) {
-            append_category(layer);
-         }
-      }
-      prepared.context = make_context(prepared, prepared.grouped_goals, prepared.goal_levels);
-
-      const auto
-         record_facts =
-            [&](const std::vector< SemanticAtom >& facts, const bool emit_facts) {
-               for(const auto& fact : facts) {
-                  const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
-                  if(emit_facts
-                  and (predicate.category != SemanticPredicateCategory::static_predicate
-                      or config.include_static)
-                  and not(config.ignore_zero_arity_relations and predicate.arity == 0)
-                  and config.use_predicate_virtual_nodes) {
-                     (void) ensure_predicate_entity(prepared.context, fact.predicate);
-                  }
-                  prepared.fact_keys.emplace(fact);
-               }
-            };
-      record_facts(prepared.static_facts(), config.include_static);
-      record_facts(prepared.state_facts(), true);
-      for(const auto& literal : prepared.grouped_goals) {
-         const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
-         if(kTopTypePredicates.contains(predicate.name)
-            or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
-            continue;
-         }
-         const bool satisfied = prepared.fact_keys.contains(literal.atom) == literal.positive;
-         const bool emits = config.goal_derivations.contains(GoalDerivation::plain)
-                            or config.goal_derivations.contains(
-                               satisfied ? GoalDerivation::satisfied : GoalDerivation::unsatisfied
-                            );
-         if(emits and config.use_predicate_virtual_nodes) {
-            (void) ensure_predicate_entity(prepared.context, literal.atom.predicate);
-         }
-      }
-      if(config.use_predicate_virtual_nodes) {
-         for(const auto& entry : prepared.context.history_entries) {
-            for(const auto& literal : entry.literals) {
-               const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
-               if(not(config.ignore_zero_arity_relations and predicate.arity == 0)) {
-                  (void) ensure_predicate_entity(prepared.context, literal.atom.predicate);
-               }
-            }
-         }
-      }
-      return prepared;
-   }
-
    void emit_relation_lane(
       const PreparedRelationGraph& prepared,
       RelationLane lane,
@@ -3166,48 +2933,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return compose_many(inputs);
    }
 
-   BatchBuilder::BatchEncoding encode_many_views(
-      std::span< const canonical::FlatRelationViewInput > inputs
-   ) const
-   {
-      if(composition_plan == nullptr) {
-         throw std::logic_error("semantic flat composition plan is not available");
-      }
-      std::vector< PreparedRelationGraph > graphs;
-      graphs.reserve(inputs.size());
-      for(const auto& input : inputs) {
-         graphs.push_back(prepare_relation_graph(input));
-      }
-      if(not target_group_names.empty() and config.export_node_names
-         and std::ranges::any_of(graphs, [](const auto& graph) {
-                return not graph.context.target_columns.names.empty();
-             })) {
-         for(auto& graph : graphs) {
-            graph.suppress_empty_target_names = true;
-         }
-      }
-      std::vector< FlatInputView > views;
-      views.reserve(graphs.size());
-      for(const auto& graph : graphs) {
-         views.push_back(FlatInputView::from(graph));
-      }
-      return composition_plan->encode_batch(std::span{views});
-   }
-
    void append_composed(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
    {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
       }
       const auto prepared = prepare_relation_graph(input);
-      composition_plan->append_graph(FlatInputView::from(prepared), builder);
-   }
-
-   void append_composed(const PreparedRelationGraph& prepared, BatchBuilder& builder) const
-   {
-      if(composition_plan == nullptr) {
-         throw std::logic_error("semantic flat composition plan is not available");
-      }
       composition_plan->append_graph(FlatInputView::from(prepared), builder);
    }
 
@@ -3288,31 +3019,6 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    impl_->append_composed(input, builder);
-}
-
-BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_views(
-   const canonical::FlatRelationViewInput& input
-) const
-{
-   BatchBuilder builder;
-   encode_views(input, builder);
-   builder.next_graph();
-   return builder.build();
-}
-
-void SemanticFlatRelationEncoderEngine::encode_views(
-   const canonical::FlatRelationViewInput& input,
-   BatchBuilder& builder
-) const
-{
-   impl_->append_composed(impl_->prepare_relation_graph(input), builder);
-}
-
-BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_views_batch(
-   std::span< const canonical::FlatRelationViewInput > inputs
-) const
-{
-   return impl_->encode_many_views(inputs);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(

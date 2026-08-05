@@ -20,6 +20,12 @@ struct ViewEncoderProbe {
       return {};
    }
    [[nodiscard]] int encode(const SemanticFlatRelationInput&) const { return 0; }
+
+   template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+   [[nodiscard]] int encode(const State&, Goals&&, Actions&&) const
+   {
+      return 0;
+   }
 };
 
 static_assert(requires(
@@ -27,7 +33,7 @@ static_assert(requires(
    const semantic::StateView& state,
    semantic::LiteralsView goals,
    semantic::GroundActionsView actions
-) { canonical::encode_semantic_views(encoder, state, goals, actions); });
+) { encoder.encode(state, goals, actions); });
 
 TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
 {

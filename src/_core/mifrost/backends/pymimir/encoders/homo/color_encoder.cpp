@@ -74,7 +74,11 @@ void ColorEncoderEngine::ensure_problem(const mimir::search::State& state)
 void ColorEncoderEngine::encode_state_impl(const mimir::search::State& state, BatchBuilder& builder)
 {
    ensure_problem(state);
-   semantic_engine_->encode_views(problem_adapter_->make_view_input(state), builder);
+   const auto state_view = problem_adapter_->make_state_view(state);
+   const auto actions = problem_adapter_->make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   semantic_engine_->encode(state_view, actions, builder);
 }
 
 void ColorEncoderEngine::encode_impl(
@@ -88,7 +92,7 @@ void ColorEncoderEngine::encode_impl(
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
    ensure_problem(state);
-   semantic_engine_->encode_views(problem_adapter_->make_view_input(state, {}, &goals), builder);
+   semantic_engine_->encode(problem_adapter_->make_input(state, goals), builder);
 }
 
 BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(

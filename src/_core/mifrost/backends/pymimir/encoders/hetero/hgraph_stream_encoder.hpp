@@ -117,21 +117,12 @@ class MIFROST_API HGraphEncoderEngine {
       const std::vector< HistorySubgoal >& history = {},
       std::optional< int > history_max_steps = std::nullopt
    ) const;
-   [[nodiscard]] canonical::FlatRelationViewInput make_view_input(
-      const mimir::search::State& state,
-      const GoalInputs* goals = nullptr,
-      std::span< const mimir::formalism::GroundAction > actions = {},
-      std::span< const HistorySubgoal > history = {},
-      std::optional< int > history_max_steps = std::nullopt
+   [[nodiscard]] SemanticFlatRelationInput make_default_input(
+      const mimir::search::State& state
    ) const;
    void encode_semantic(
       const mimir::search::State& state,
       SemanticFlatRelationInput input,
-      BatchBuilder& builder
-   ) const;
-   void encode_semantic_views(
-      const mimir::search::State& state,
-      canonical::FlatRelationViewInput input,
       BatchBuilder& builder
    ) const;
    void ensure_problem(const mimir::search::State& state) const;

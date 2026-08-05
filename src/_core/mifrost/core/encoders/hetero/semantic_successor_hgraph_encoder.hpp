@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mifrost/core/api.hpp"
@@ -62,18 +63,32 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor
    ) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
-      const canonical::FlatRelationViewInput& current,
-      const canonical::FlatRelationViewInput& successor
+   template <
+      views::StateView CurrentState,
+      views::GroundActionRange CurrentActions,
+      views::StateView SuccessorState,
+      views::GroundActionRange SuccessorActions >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const CurrentState& current_state,
+      CurrentActions&& current_actions,
+      const SuccessorState& successor_state,
+      SuccessorActions&& successor_actions
    ) const;
    void encode(
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor,
       BatchBuilder& builder
    ) const;
-   void encode_views(
-      const canonical::FlatRelationViewInput& current,
-      const canonical::FlatRelationViewInput& successor,
+   template <
+      views::StateView CurrentState,
+      views::GroundActionRange CurrentActions,
+      views::StateView SuccessorState,
+      views::GroundActionRange SuccessorActions >
+   void encode(
+      const CurrentState& current_state,
+      CurrentActions&& current_actions,
+      const SuccessorState& successor_state,
+      SuccessorActions&& successor_actions,
       BatchBuilder& builder
    ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
@@ -82,6 +97,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    ) const;
 
    [[nodiscard]] const Config& get_config() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
    [[nodiscard]] const std::map< std::string, int >& get_relation_arities() const;
@@ -91,5 +107,57 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };
+
+}  // namespace mifrost
+
+namespace mifrost {
+
+template <
+   views::StateView CurrentState,
+   views::GroundActionRange CurrentActions,
+   views::StateView SuccessorState,
+   views::GroundActionRange SuccessorActions >
+BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
+   const CurrentState& current_state,
+   CurrentActions&& current_actions,
+   const SuccessorState& successor_state,
+   SuccessorActions&& successor_actions
+) const
+{
+   BatchBuilder builder;
+   encode(
+      current_state,
+      std::forward< CurrentActions >(current_actions),
+      successor_state,
+      std::forward< SuccessorActions >(successor_actions),
+      builder
+   );
+   builder.next_graph();
+   return builder.build();
+}
+
+template <
+   views::StateView CurrentState,
+   views::GroundActionRange CurrentActions,
+   views::StateView SuccessorState,
+   views::GroundActionRange SuccessorActions >
+void SemanticSuccessorHGraphEncoderEngine::encode(
+   const CurrentState& current_state,
+   CurrentActions&& current_actions,
+   const SuccessorState& successor_state,
+   SuccessorActions&& successor_actions,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::make_semantic_flat_relation_input(
+         get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
+      ),
+      canonical::make_semantic_flat_relation_input(
+         get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
+      ),
+      builder
+   );
+}
 
 }  // namespace mifrost

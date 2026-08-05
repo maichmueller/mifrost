@@ -101,9 +101,9 @@ void SuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   auto current_input = make_view_input(current, &goals);
-   auto successor_input = make_view_input(successor);
-   semantic_successor_->encode_views(current_input, successor_input, builder);
+   semantic_successor_->encode(
+      make_input(current, goals, {}), make_default_input(successor), builder
+   );
 }
 
 void SuccessorHGraphEncoderEngine::update_relations(RelationDict relation_dict)

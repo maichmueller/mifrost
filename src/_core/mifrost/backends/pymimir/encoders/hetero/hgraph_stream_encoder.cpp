@@ -168,16 +168,12 @@ SemanticFlatRelationInput HGraphEncoderEngine::make_input(
    return input;
 }
 
-canonical::FlatRelationViewInput HGraphEncoderEngine::make_view_input(
-   const mimir::search::State& state,
-   const GoalInputs* goals,
-   std::span< const mimir::formalism::GroundAction > actions,
-   std::span< const HistorySubgoal > history,
-   std::optional< int > history_max_steps
+SemanticFlatRelationInput HGraphEncoderEngine::make_default_input(
+   const mimir::search::State& state
 ) const
 {
    ensure_problem(state);
-   return problem_adapter_->make_view_input(state, actions, goals, history, history_max_steps);
+   return problem_adapter_->make_input(state);
 }
 
 void HGraphEncoderEngine::encode_semantic(
@@ -197,24 +193,14 @@ void HGraphEncoderEngine::encode_semantic(
    compatible_engine.encode(input, builder);
 }
 
-void HGraphEncoderEngine::encode_semantic_views(
-   const mimir::search::State& state,
-   canonical::FlatRelationViewInput input,
-   BatchBuilder& builder
-) const
-{
-   const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
-   if(same_schema(state_schema, schema_) and input.task_context == semantic_->get_task_context()) {
-      semantic_->encode_views(input, builder);
-      return;
-   }
-   SemanticHGraphEncoderEngine compatible_engine(input.task_context, semantic_config(config_));
-   compatible_engine.encode_views(input, builder);
-}
-
 void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
 {
-   encode_semantic_views(state, make_view_input(state), builder);
+   ensure_problem(state);
+   const auto state_view = problem_adapter_->make_state_view(state);
+   const auto action_views = problem_adapter_->make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   semantic_->encode(state_view, action_views, builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -224,7 +210,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic_views(state, make_view_input(state, &goals, actions), builder);
+   encode_semantic(state, make_input(state, goals, actions), builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -236,9 +222,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic_views(
-      state, make_view_input(state, &goals, actions, history, history_max_steps), builder
-   );
+   encode_semantic(state, make_input(state, goals, actions, history, history_max_steps), builder);
 }
 
 void HGraphEncoderEngine::update_relations(RelationDict relation_dict_value)

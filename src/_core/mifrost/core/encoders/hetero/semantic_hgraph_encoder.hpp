@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "mifrost/core/api.hpp"
@@ -101,11 +102,19 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    ~SemanticHGraphEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
-      const canonical::FlatRelationViewInput& input
-   ) const;
+   template < views::StateView State, views::GroundActionRange Actions >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
+
+   template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+   [[nodiscard]] BatchBuilder::BatchEncoding
+   encode(const State& state, Goals&& goals, Actions&& actions) const;
+
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
-   void encode_views(const canonical::FlatRelationViewInput& input, BatchBuilder& builder) const;
+   template < views::StateView State, views::GroundActionRange Actions >
+   void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
+
+   template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+   void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
@@ -140,5 +149,60 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };
+
+}  // namespace mifrost
+
+namespace mifrost {
+
+template < views::StateView State, views::GroundActionRange Actions >
+BatchBuilder::BatchEncoding
+SemanticHGraphEncoderEngine::encode(const State& state, Actions&& actions) const
+{
+   BatchBuilder builder;
+   encode(state, std::forward< Actions >(actions), builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+template < views::StateView State, views::GroundActionRange Actions >
+void SemanticHGraphEncoderEngine::encode(
+   const State& state,
+   Actions&& actions,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::make_semantic_flat_relation_input(
+         get_task_context(), state, std::forward< Actions >(actions)
+      ),
+      builder
+   );
+}
+
+template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+BatchBuilder::BatchEncoding
+SemanticHGraphEncoderEngine::encode(const State& state, Goals&& goals, Actions&& actions) const
+{
+   BatchBuilder builder;
+   encode(state, std::forward< Goals >(goals), std::forward< Actions >(actions), builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+void SemanticHGraphEncoderEngine::encode(
+   const State& state,
+   Goals&& goals,
+   Actions&& actions,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::make_semantic_flat_relation_input(
+         get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+      ),
+      builder
+   );
+}
 
 }  // namespace mifrost

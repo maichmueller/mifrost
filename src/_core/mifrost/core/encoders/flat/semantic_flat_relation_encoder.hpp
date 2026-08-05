@@ -8,7 +8,6 @@
 #include <boost/container/small_vector.hpp>
 #include <compare>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -20,7 +19,7 @@
 #include "flat_relation_config.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
-#include "mifrost/core/encoders/flat/view_flat_relation_input.hpp"
+#include "mifrost/core/views/concepts.hpp"
 
 namespace mifrost {
 
@@ -294,13 +293,20 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
-      const canonical::FlatRelationViewInput& input
-   ) const;
-   void encode_views(const canonical::FlatRelationViewInput& input, BatchBuilder& builder) const;
-   [[nodiscard]] BatchBuilder::BatchEncoding encode_views_batch(
-      std::span< const canonical::FlatRelationViewInput > inputs
-   ) const;
+
+   template < views::StateView State, views::GroundActionRange Actions >
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
+
+   template < views::StateView State, views::GroundActionRange Actions >
+   void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
+
+   template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+   [[nodiscard]] BatchBuilder::BatchEncoding
+   encode(const State& state, Goals&& goals, Actions&& actions) const;
+
+   template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+   void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
+
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
@@ -346,3 +352,5 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 };
 
 }  // namespace mifrost
+
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
