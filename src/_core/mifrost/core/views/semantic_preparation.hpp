@@ -391,6 +391,11 @@ inline SemanticGoalRange ViewPreparation::goal_levels() const
    return SemanticGoalRange{this};
 }
 
+inline void append_view_default_goals(ViewPreparation& preparation);
+inline void append_view_static_facts(ViewPreparation& preparation);
+template < typename Layer >
+[[nodiscard]] size_t view_layer_level(const Layer& layer, size_t fallback);
+
 /**
  * Compile-time borrowed input aggregate used at the direct encoder boundary.
  *
