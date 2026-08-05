@@ -65,16 +65,16 @@ void init_semantic_color_encoder(nb::module_& m)
       .def_prop_ro("predicates", &SemanticColorEncoderEngine::get_predicates)
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput& >(
-            &SemanticColorEncoderEngine::encode, nb::const_
-         ),
+         static_cast< BatchBuilder::BatchEncoding (SemanticColorEncoderEngine::*)(
+            const SemanticFlatRelationInput&
+         ) const >(&SemanticColorEncoderEngine::encode),
          "input"_a
       )
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput&, BatchBuilder& >(
-            &SemanticColorEncoderEngine::encode, nb::const_
-         ),
+         static_cast< void (SemanticColorEncoderEngine::*)(
+            const SemanticFlatRelationInput&, BatchBuilder&
+         ) const >(&SemanticColorEncoderEngine::encode),
          "input"_a,
          "builder"_a
       )

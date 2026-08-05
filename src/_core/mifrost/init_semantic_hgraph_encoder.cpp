@@ -74,16 +74,16 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       .def("update_relations", &SemanticHGraphEncoderEngine::update_relations, "relations"_a)
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput& >(
-            &SemanticHGraphEncoderEngine::encode, nb::const_
-         ),
+         static_cast< BatchBuilder::BatchEncoding (SemanticHGraphEncoderEngine::*)(
+            const SemanticFlatRelationInput&
+         ) const >(&SemanticHGraphEncoderEngine::encode),
          "input"_a
       )
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput&, BatchBuilder& >(
-            &SemanticHGraphEncoderEngine::encode, nb::const_
-         ),
+         static_cast< void (SemanticHGraphEncoderEngine::*)(
+            const SemanticFlatRelationInput&, BatchBuilder&
+         ) const >(&SemanticHGraphEncoderEngine::encode),
          "input"_a,
          "builder"_a
       )
@@ -272,18 +272,17 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       )
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput&, const SemanticFlatRelationInput& >(
-            &SemanticSuccessorHGraphEncoderEngine::encode, nb::const_
-         ),
+         static_cast< BatchBuilder::BatchEncoding (SemanticSuccessorHGraphEncoderEngine::*)(
+            const SemanticFlatRelationInput&, const SemanticFlatRelationInput&
+         ) const >(&SemanticSuccessorHGraphEncoderEngine::encode),
          "current"_a,
          "successor"_a
       )
       .def(
          "encode",
-         nb::overload_cast<
-            const SemanticFlatRelationInput&,
-            const SemanticFlatRelationInput&,
-            BatchBuilder& >(&SemanticSuccessorHGraphEncoderEngine::encode, nb::const_),
+         static_cast< void (SemanticSuccessorHGraphEncoderEngine::*)(
+            const SemanticFlatRelationInput&, const SemanticFlatRelationInput&, BatchBuilder&
+         ) const >(&SemanticSuccessorHGraphEncoderEngine::encode),
          "current"_a,
          "successor"_a,
          "builder"_a

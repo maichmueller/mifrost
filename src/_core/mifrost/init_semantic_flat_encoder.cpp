@@ -309,16 +309,16 @@ void init_semantic_flat_encoder(nb::module_& m)
       .def_prop_ro("slot_role_names", &SemanticFlatRelationEncoderEngine::get_slot_role_names)
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput& >(
-            &SemanticFlatRelationEncoderEngine::encode, nb::const_
-         ),
+         static_cast< BatchBuilder::BatchEncoding (SemanticFlatRelationEncoderEngine::*)(
+            const SemanticFlatRelationInput&
+         ) const >(&SemanticFlatRelationEncoderEngine::encode),
          "input"_a
       )
       .def(
          "encode",
-         nb::overload_cast< const SemanticFlatRelationInput&, BatchBuilder& >(
-            &SemanticFlatRelationEncoderEngine::encode, nb::const_
-         ),
+         static_cast< void (SemanticFlatRelationEncoderEngine::*)(
+            const SemanticFlatRelationInput&, BatchBuilder&
+         ) const >(&SemanticFlatRelationEncoderEngine::encode),
          "input"_a,
          "builder"_a
       )
@@ -327,7 +327,13 @@ void init_semantic_flat_encoder(nb::module_& m)
          &SemanticFlatRelationEncoderEngine::finalize_batch_encoding,
          "encoding"_a
       )
-      .def("encode_batch", &SemanticFlatRelationEncoderEngine::encode_batch, "inputs"_a);
+      .def(
+         "encode_batch",
+         static_cast< BatchBuilder::BatchEncoding (SemanticFlatRelationEncoderEngine::*)(
+            const std::vector< SemanticFlatRelationInput >&
+         ) const >(&SemanticFlatRelationEncoderEngine::encode_batch),
+         "inputs"_a
+      );
 
    m.def(
       "_flat_relation_config_capsule",
