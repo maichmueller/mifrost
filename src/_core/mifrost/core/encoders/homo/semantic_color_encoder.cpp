@@ -122,7 +122,6 @@ void encode_without_names(
    builder.set_schema_flag("predicate_nodes", config.enable_global_predicate_nodes);
    CompactColorBuffers buffers;
    const auto& static_facts = semantic_static_facts(input);
-   const auto& goals = semantic_goals(input);
 
    const auto color_for = [&](const CompactColorNodeKey& key) {
       const auto [it, inserted] = buffers.colormap.try_emplace(key, buffers.next_color);
@@ -235,27 +234,24 @@ void encode_without_names(
          }
       };
       encode_facts(static_facts);
-      encode_facts(input.state_facts);
+      encode_facts(semantic_state_facts(input));
    }
 
-   const auto levels = semantic_goal_levels(input);
+   auto levels = semantic_goal_levels(input);
+   std::ranges::sort(levels);
    for(const auto category : {
           SemanticPredicateCategory::static_predicate,
           SemanticPredicateCategory::fluent,
           SemanticPredicateCategory::derived,
        }) {
-      const auto encode_category_literal = [&](const SemanticLiteral& literal) {
-         if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category == category) {
-            encode_atom(literal.atom, semantic_goal_level(levels, literal), literal.positive);
+      const auto encode_category_literal = [&](const SemanticGoalLevel& goal) {
+         if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+            == category) {
+            encode_atom(goal.literal.atom, goal.level, goal.literal.positive);
          }
       };
-      for(const auto& literal : goals) {
-         encode_category_literal(literal);
-      }
-      for(const auto& layer : input.subgoal_layers) {
-         for(const auto& literal : layer) {
-            encode_category_literal(literal);
-         }
+      for(const auto& goal : levels) {
+         encode_category_literal(goal);
       }
    }
 
@@ -309,10 +305,14 @@ void encode_impl(
    BatchBuilder& builder
 )
 {
-   if(not std::ranges::empty(input.actions)) {
+   if(not std::ranges::empty(semantic_actions(input))) {
       throw std::invalid_argument("SemanticColorEncoderEngine does not support actions");
    }
-   if(input.subgoal_layers.size() > 3) {
+   if constexpr(requires { input.goal_levels(); }) {
+      if(input.goal_layer_count > 3) {
+         throw std::invalid_argument("Semantic color supports at most three subgoal layers");
+      }
+   } else if(input.subgoal_layers.size() > 3) {
       throw std::invalid_argument("Semantic color supports at most three subgoal layers");
    }
    if(not config.export_node_names) {
@@ -324,7 +324,6 @@ void encode_impl(
    builder.set_schema_flag("predicate_nodes", config.enable_global_predicate_nodes);
    Buffers buffers;
    const auto& objects = semantic_objects(input);
-   const auto& goals = semantic_goals(input);
    const auto& static_facts = semantic_static_facts(input);
 
    const auto color_for = [&](const std::string& key) {
@@ -422,26 +421,23 @@ void encode_impl(
          }
       };
       encode_facts(static_facts);
-      encode_facts(input.state_facts);
+      encode_facts(semantic_state_facts(input));
    }
-   const auto levels = semantic_goal_levels(input);
+   auto levels = semantic_goal_levels(input);
+   std::ranges::sort(levels);
    for(const auto category : {
           SemanticPredicateCategory::static_predicate,
           SemanticPredicateCategory::fluent,
           SemanticPredicateCategory::derived,
        }) {
-      const auto encode_category_literal = [&](const SemanticLiteral& literal) {
-         if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category == category) {
-            encode_atom(literal.atom, semantic_goal_level(levels, literal), literal.positive);
+      const auto encode_category_literal = [&](const SemanticGoalLevel& goal) {
+         if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+            == category) {
+            encode_atom(goal.literal.atom, goal.level, goal.literal.positive);
          }
       };
-      for(const auto& literal : goals) {
-         encode_category_literal(literal);
-      }
-      for(const auto& layer : input.subgoal_layers) {
-         for(const auto& literal : layer) {
-            encode_category_literal(literal);
-         }
+      for(const auto& goal : levels) {
+         encode_category_literal(goal);
       }
    }
 
@@ -468,12 +464,11 @@ void SemanticColorEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   const auto preparation = canonical::detail::make_graph_input(input);
-   encode_view_preparation(preparation, builder);
+   encode_impl(input, predicates_, config_, builder);
 }
 
 void SemanticColorEncoderEngine::encode_view_preparation(
-   const detail::ColorViewPreparation& input,
+   const canonical::detail::ViewPreparation& input,
    BatchBuilder& builder
 ) const
 {

@@ -77,12 +77,6 @@ BOOST_DESCRIBE_STRUCT(
     goal_derivations)
 )
 
-namespace detail {
-
-using HGraphViewPreparation = canonical::detail::GraphInput;
-
-}  // namespace detail
-
 /**
  * Encode `SemanticFlatRelationInput` as the legacy heterogeneous graph schema.
  *
@@ -184,16 +178,18 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       BatchBuilder& builder
    ) const;
    void encode_successor(
-      const detail::HGraphViewPreparation& current,
-      const detail::HGraphViewPreparation& successor,
+      const canonical::detail::ViewPreparation& current,
+      const canonical::detail::ViewPreparation& successor,
       bool delta_mode,
       std::string_view successor_suffix,
       bool include_successor_goal_satisfaction,
       BatchBuilder& builder
    ) const;
 
-   void
-   encode_view_preparation(const detail::HGraphViewPreparation& input, BatchBuilder& builder) const;
+   void encode_view_preparation(
+      const canonical::detail::ViewPreparation& input,
+      BatchBuilder& builder
+   ) const;
 
    struct Impl;
    std::unique_ptr< Impl > impl_;
@@ -220,7 +216,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_hgraph_view_preparation(
       get_task_context(), state, std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -244,7 +240,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_hgraph_view_preparation(
       get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -295,7 +291,7 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_hgraph_view_preparation(
       get_task_context(),
       state,
       std::forward< Goals >(goals),

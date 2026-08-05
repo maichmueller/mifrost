@@ -112,11 +112,14 @@ owned semantic records -> semantic compatibility encoder -> BatchEncoding
 ```
 
 The Color, HGraph, and successor direct overloads traverse granular Views before
-dispatching to the mature graph emitters. View traversal materializes only the
-encoder-native graph keys needed for the encoder's multi-pass graph preparation;
-it does not create a complete semantic-record mirror. That preparation is
-private to the encode call and is not a second public semantic snapshot. This
-keeps planner-library types out of the neutral core without duplicating backend
+dispatching to the mature graph emitters. View traversal builds only compact
+graph-working records (flattened goal levels, unique action records, filtered
+history, state facts, and fact membership) needed for emission; it does not
+create a complete semantic-record mirror. Compatibility
+`SemanticFlatRelationInput` values bypass that View preparation and are consumed
+through borrowed references to their existing lanes, so compatibility encoding
+does not copy the complete input into another graph carrier. This keeps
+planner-library types out of the neutral core without duplicating backend
 algorithms.
 
 Direct does not mean that the final graph is emitted without planning state.

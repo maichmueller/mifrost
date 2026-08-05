@@ -244,10 +244,10 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   const auto preparation = canonical::detail::make_graph_input(
+   const auto preparation = canonical::detail::make_flat_view_preparation(
       get_task_context(), state, std::forward< Actions >(actions)
    );
-   encode_graph(preparation, builder);
+   encode_view_preparation(preparation, builder);
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
@@ -271,10 +271,10 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   const auto preparation = canonical::detail::make_graph_input(
+   const auto preparation = canonical::detail::make_flat_view_preparation(
       get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
-   encode_graph(preparation, builder);
+   encode_view_preparation(preparation, builder);
 }
 
 template <
@@ -322,7 +322,7 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   const auto preparation = canonical::detail::make_graph_input(
+   const auto preparation = canonical::detail::make_flat_view_preparation(
       get_task_context(),
       state,
       std::forward< Goals >(goals),
@@ -331,7 +331,7 @@ void SemanticFlatRelationEncoderEngine::encode(
       std::forward< History >(history),
       history_max_steps
    );
-   encode_graph(preparation, builder);
+   encode_view_preparation(preparation, builder);
 }
 
 }  // namespace mifrost

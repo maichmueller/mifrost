@@ -27,6 +27,9 @@ namespace mifrost {
 class SemanticFlatHorizonEncoderEngine;
 class SemanticTransitionDAG;
 struct SemanticFlatHorizonEncoderConfig;
+namespace canonical::detail {
+struct ViewPreparation;
+}
 
 /** Category of a predicate in the semantic input schema. */
 enum class SemanticPredicateCategory : int64_t {
@@ -179,80 +182,6 @@ struct SemanticFlatRelationInput {
    std::optional< int64_t > history_max_steps = std::nullopt;
 };
 
-namespace detail {
-
-/**
- * Encoder-native graph keys collected from concrete backend View ranges.
- * These records are retained only for graph emission and are deliberately
- * separate from the public compatibility DTO.
- */
-struct GraphAtomKey {
-   GraphAtomKey() = default;
-   GraphAtomKey(int64_t predicate, SemanticArguments arguments)
-       : predicate(predicate), arguments(std::move(arguments))
-   {
-   }
-
-   operator SemanticAtom() const { return SemanticAtom{predicate, arguments}; }
-
-   int64_t predicate = -1;
-   SemanticArguments arguments;
-
-   auto operator<=>(const GraphAtomKey&) const = default;
-};
-
-struct GraphLiteralKey {
-   GraphLiteralKey() = default;
-   GraphLiteralKey(GraphAtomKey atom, bool positive) : atom(std::move(atom)), positive(positive) {}
-
-   operator SemanticLiteral() const
-   {
-      return SemanticLiteral{static_cast< SemanticAtom >(atom), positive};
-   }
-
-   GraphAtomKey atom;
-   bool positive = true;
-
-   auto operator<=>(const GraphLiteralKey&) const = default;
-};
-
-struct GraphActionKey {
-   GraphActionKey() = default;
-   GraphActionKey(int64_t action, SemanticArguments arguments)
-       : action(action), arguments(std::move(arguments))
-   {
-   }
-
-   operator SemanticGroundAction() const { return SemanticGroundAction{action, arguments}; }
-
-   int64_t action = -1;
-   SemanticArguments arguments;
-
-   auto operator<=>(const GraphActionKey&) const = default;
-};
-
-struct GraphHistoryEntry {
-   int64_t dt = 0;
-   std::vector< GraphLiteralKey > literals;
-
-   auto operator<=>(const GraphHistoryEntry&) const = default;
-};
-
-struct GraphInput {
-   std::shared_ptr< const SemanticTaskContext > task_context;
-   const std::vector< std::string >* objects = nullptr;
-   std::vector< GraphAtomKey > state_facts;
-   std::vector< GraphLiteralKey > goals;
-   std::vector< GraphActionKey > actions;
-   std::vector< std::vector< GraphLiteralKey > > subgoal_layers;
-   std::vector< GraphHistoryEntry > history;
-   std::optional< int64_t > history_max_steps = std::nullopt;
-};
-
-using FlatRelationGraph = GraphInput;
-
-}  // namespace detail
-
 [[nodiscard]] inline const std::vector< std::string >& semantic_objects(
    const SemanticFlatRelationInput& input
 )
@@ -304,10 +233,12 @@ template < typename Input >
    for(const auto& literal : goals) {
       levels.push_back({literal, 0});
    }
-   for(size_t index = 0; index < input.subgoal_layers.size(); ++index) {
-      for(const auto& literal : input.subgoal_layers[index]) {
+   size_t index = 0;
+   for(const auto& layer : input.subgoal_layers) {
+      for(const auto& literal : layer) {
          levels.push_back({literal, index + 1});
       }
+      ++index;
    }
    std::ranges::sort(levels);
    return levels;
@@ -452,7 +383,10 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       const SemanticFlatHorizonEncoderConfig& config
    ) const;
 
-   void encode_graph(const detail::FlatRelationGraph& input, BatchBuilder& builder) const;
+   void encode_view_preparation(
+      const canonical::detail::ViewPreparation& input,
+      BatchBuilder& builder
+   ) const;
 
    struct Impl;
    std::unique_ptr< Impl > impl_;

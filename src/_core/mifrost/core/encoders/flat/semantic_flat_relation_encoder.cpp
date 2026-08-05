@@ -27,6 +27,7 @@
 #include "mifrost/core/encoders/flat/flat_composition.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/semantic/semantic_transition_dag.hpp"
+#include "mifrost/core/views/semantic_preparation.hpp"
 
 namespace mifrost {
 
@@ -246,7 +247,7 @@ struct HistoryEntityKeyHash {
 struct PreparedHistoryEntry {
    int64_t dt = 0;
    size_t entry_index = 0;
-   std::vector< detail::GraphLiteralKey > literals;
+   std::vector< SemanticLiteral > literals;
    int64_t entity_index = -1;
 };
 
@@ -494,65 +495,79 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    };
 
    struct PreparedRelationGraph {
-      const detail::FlatRelationGraph* graph = nullptr;
-      std::shared_ptr< detail::FlatRelationGraph > owned_graph;
+      const canonical::detail::ViewPreparation* view = nullptr;
+      const SemanticFlatRelationInput* compatibility_input = nullptr;
       std::vector< SemanticGoalLevel > goal_levels;
-      std::vector< detail::GraphLiteralKey > grouped_goals;
+      std::vector< SemanticLiteral > grouped_goals;
       hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
+      const hash_set< SemanticAtom, SemanticAtomHash >* view_fact_lookup = nullptr;
       mutable SemanticEncodingContext context;
       bool suppress_empty_target_names = false;
 
       [[nodiscard]] const std::vector< std::string >& objects() const
       {
-         return graph->task_context ? graph->task_context->objects : *graph->objects;
+         if(compatibility_input != nullptr) {
+            return semantic_objects(*compatibility_input);
+         }
+         return view->task_context->objects;
       }
 
-      [[nodiscard]] const std::vector< detail::GraphAtomKey >& state_facts() const
+      [[nodiscard]] canonical::detail::SemanticAtomRange state_facts() const
       {
-         return graph->state_facts;
+         if(compatibility_input != nullptr) {
+            return canonical::detail::SemanticAtomRange{
+               &compatibility_input->state_facts, nullptr, nullptr
+            };
+         }
+         return view->state_facts();
       }
 
       [[nodiscard]] const std::vector< SemanticAtom >& static_facts() const
       {
-         return graph->task_context ? graph->task_context->static_facts : empty_semantic_atoms();
+         if(compatibility_input != nullptr) {
+            return semantic_static_facts(*compatibility_input);
+         }
+         return view->task_context ? view->task_context->static_facts : empty_semantic_atoms();
       }
 
-      [[nodiscard]] const std::vector< detail::GraphLiteralKey >& goals() const
+      [[nodiscard]] canonical::detail::SemanticActionRange actions() const
       {
-         return graph->goals;
+         if(compatibility_input != nullptr) {
+            return canonical::detail::SemanticActionRange{&compatibility_input->actions, nullptr};
+         }
+         return view->actions();
       }
 
-      [[nodiscard]] const std::vector< std::vector< detail::GraphLiteralKey > >&
-      subgoal_layers() const
+      [[nodiscard]] canonical::detail::SemanticHistoryRange history() const
       {
-         return graph->subgoal_layers;
-      }
-
-      [[nodiscard]] const std::vector< detail::GraphActionKey >& actions() const
-      {
-         return graph->actions;
-      }
-
-      [[nodiscard]] const std::vector< detail::GraphHistoryEntry >& history() const
-      {
-         return graph->history;
+         if(compatibility_input != nullptr) {
+            return canonical::detail::SemanticHistoryRange{&compatibility_input->history, nullptr};
+         }
+         return view->history();
       }
 
       [[nodiscard]] std::optional< int64_t > history_max_steps() const
       {
-         return graph->history_max_steps;
+         return compatibility_input != nullptr ? compatibility_input->history_max_steps
+                                               : std::nullopt;
       }
 
       [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
       {
          static const std::shared_ptr< const SemanticTaskContext > empty;
-         return graph->task_context;
+         return compatibility_input != nullptr ? compatibility_input->task_context
+                                               : view->task_context;
       }
 
       [[nodiscard]] static const std::vector< SemanticAtom >& empty_semantic_atoms()
       {
          static const std::vector< SemanticAtom > empty;
          return empty;
+      }
+
+      [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >& fact_membership() const
+      {
+         return view_fact_lookup != nullptr ? *view_fact_lookup : fact_keys;
       }
    };
 
@@ -1689,7 +1704,6 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          );
       }
       const auto& objects = input.objects();
-      const auto& goals = input.goals();
       const auto& static_facts = input.static_facts();
       std::set< std::string, std::less<> > object_names;
       for(const auto& object : objects) {
@@ -1704,15 +1718,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       for(const auto& fact : static_facts) {
          validate_atom(fact, objects.size(), "static fact");
       }
-      for(const auto& goal : goals) {
-         validate_atom(goal.atom, objects.size(), "goal");
-      }
-      if(input.subgoal_layers().size() > config.max_goal_level) {
-         throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
-      }
-      for(const auto& layer : input.subgoal_layers()) {
-         for(const auto& goal : layer) {
-            validate_atom(goal.atom, objects.size(), "subgoal");
+      if(input.view != nullptr) {
+         if(input.view->goal_layer_count > config.max_goal_level) {
+            throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
+         }
+         for(const auto& goal : input.view->goal_levels()) {
+            validate_atom(goal.literal.atom, objects.size(), goal.level == 0 ? "goal" : "subgoal");
+         }
+      } else {
+         for(const auto& goal : semantic_goals(*input.compatibility_input)) {
+            validate_atom(goal.atom, objects.size(), "goal");
+         }
+         if(input.compatibility_input->subgoal_layers.size() > config.max_goal_level) {
+            throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
+         }
+         for(const auto& layer : input.compatibility_input->subgoal_layers) {
+            for(const auto& goal : layer) {
+               validate_atom(goal.atom, objects.size(), "subgoal");
+            }
          }
       }
       for(const auto& action : input.actions()) {
@@ -1825,7 +1848,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
    SemanticEncodingContext make_context(
       const PreparedRelationGraph& prepared,
-      const std::vector< detail::GraphLiteralKey >& grouped_goals,
+      const std::vector< SemanticLiteral >& grouped_goals,
       const std::vector< SemanticGoalLevel >& goal_levels
    ) const
    {
@@ -1876,25 +1899,57 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          }
       }
 
-      for(const auto& action : prepared.actions()) {
-         const auto display = config.export_node_names
-                                 ? action_display_name(action, actions, objects)
-                                 : std::string{};
-         bool inserted = false;
-         const int64_t position = ensure_target_entity(
-            context,
-            context.action_entity_indices,
-            action,
-            TargetSource::actions,
-            FlatEntityRole::action,
-            display,
-            inserted
-         );
-         if(inserted) {
-            context.unique_actions.push_back(action);
+      if(prepared.view != nullptr) {
+         for(const auto& action : prepared.actions()) {
+            const auto display = config.export_node_names
+                                    ? action_display_name(action, actions, objects)
+                                    : std::string{};
+            bool inserted = false;
+            (void) ensure_target_entity(
+               context,
+               context.action_entity_indices,
+               action,
+               TargetSource::actions,
+               FlatEntityRole::action,
+               display,
+               inserted
+            );
+            if(inserted) {
+               context.unique_actions.push_back(action);
+            }
          }
          if(has_target_source(config, TargetSource::actions)) {
-            append_target_row(context, TargetSource::actions, position, display);
+            for(const auto index : prepared.view->action_occurrence_indices) {
+               const auto& action = prepared.actions().at(index);
+               const auto display = config.export_node_names
+                                       ? action_display_name(action, actions, objects)
+                                       : std::string{};
+               append_target_row(
+                  context, TargetSource::actions, context.action_entity_indices.at(action), display
+               );
+            }
+         }
+      } else {
+         for(const auto& action : prepared.actions()) {
+            const auto display = config.export_node_names
+                                    ? action_display_name(action, actions, objects)
+                                    : std::string{};
+            bool inserted = false;
+            const int64_t position = ensure_target_entity(
+               context,
+               context.action_entity_indices,
+               action,
+               TargetSource::actions,
+               FlatEntityRole::action,
+               display,
+               inserted
+            );
+            if(inserted) {
+               context.unique_actions.push_back(action);
+            }
+            if(has_target_source(config, TargetSource::actions)) {
+               append_target_row(context, TargetSource::actions, position, display);
+            }
          }
       }
 
@@ -1963,22 +2018,31 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    PreparedRelationGraph prepare_relation_graph(PreparedRelationGraph prepared) const
    {
       validate_prepared_input(prepared);
-      const auto& goals = prepared.goals();
-      prepared.goal_levels.reserve(
-         goals.size()
-         + std::accumulate(
-            prepared.subgoal_layers().begin(),
-            prepared.subgoal_layers().end(),
-            size_t{0},
-            [](size_t count, const auto& layer) { return count + layer.size(); }
-         )
-      );
-      for(const auto& literal : goals) {
-         prepared.goal_levels.push_back({literal, 0});
-      }
-      for(size_t index = 0; index < prepared.subgoal_layers().size(); ++index) {
-         for(const auto& literal : prepared.subgoal_layers()[index]) {
-            prepared.goal_levels.push_back({literal, index + 1});
+      if(prepared.view != nullptr) {
+         prepared.goal_levels.clear();
+         prepared.goal_levels.reserve(prepared.view->goal_level_refs.size());
+         for(const auto& goal : prepared.view->goal_levels()) {
+            prepared.goal_levels.push_back(goal);
+         }
+      } else {
+         const auto& goals = semantic_goals(*prepared.compatibility_input);
+         prepared.goal_levels.reserve(
+            goals.size()
+            + std::accumulate(
+               prepared.compatibility_input->subgoal_layers.begin(),
+               prepared.compatibility_input->subgoal_layers.end(),
+               size_t{0},
+               [](size_t count, const auto& layer) { return count + layer.size(); }
+            )
+         );
+         for(const auto& literal : goals) {
+            prepared.goal_levels.push_back({literal, 0});
+         }
+         for(size_t index = 0; index < prepared.compatibility_input->subgoal_layers.size();
+             ++index) {
+            for(const auto& literal : prepared.compatibility_input->subgoal_layers[index]) {
+               prepared.goal_levels.push_back({literal, index + 1});
+            }
          }
       }
       std::ranges::sort(prepared.goal_levels);
@@ -1991,12 +2055,24 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                }
             }
          };
-         append_category(goals);
-         for(const auto& layer : prepared.subgoal_layers()) {
-            append_category(layer);
+         if(prepared.view != nullptr) {
+            for(const auto& goal : prepared.view->goal_levels()) {
+               if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
+                  == category) {
+                  prepared.grouped_goals.push_back(goal.literal);
+               }
+            }
+         } else {
+            append_category(semantic_goals(*prepared.compatibility_input));
+            for(const auto& layer : prepared.compatibility_input->subgoal_layers) {
+               append_category(layer);
+            }
          }
       }
       prepared.context = make_context(prepared, prepared.grouped_goals, prepared.goal_levels);
+      if(prepared.view != nullptr) {
+         prepared.view_fact_lookup = &prepared.view->fact_lookup;
+      }
 
       const auto& static_facts = prepared.static_facts();
       const auto
@@ -2011,7 +2087,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                and config.use_predicate_virtual_nodes) {
                      (void) ensure_predicate_entity(prepared.context, fact.predicate);
                   }
-                  prepared.fact_keys.emplace(fact);
+                  if(prepared.view == nullptr) {
+                     prepared.fact_keys.emplace(fact);
+                  }
                }
             };
       record_facts(static_facts, config.include_static);
@@ -2023,7 +2101,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
             continue;
          }
-         const bool satisfied = prepared.fact_keys.contains(literal.atom) == literal.positive;
+         const bool satisfied = prepared.fact_membership().contains(literal.atom)
+                                == literal.positive;
          const bool emits = config.goal_derivations.contains(GoalDerivation::plain)
                             or config.goal_derivations.contains(
                                satisfied ? GoalDerivation::satisfied : GoalDerivation::unsatisfied
@@ -2045,18 +2124,16 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return prepared;
    }
 
-   PreparedRelationGraph prepare_relation_graph(const detail::FlatRelationGraph& input) const
+   PreparedRelationGraph prepare_relation_graph(
+      const canonical::detail::ViewPreparation& input
+   ) const
    {
-      return prepare_relation_graph(PreparedRelationGraph{.graph = &input});
+      return prepare_relation_graph(PreparedRelationGraph{.view = &input});
    }
 
    PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
    {
-      auto graph = std::make_shared< detail::FlatRelationGraph >(
-         canonical::detail::make_graph_input(input)
-      );
-      PreparedRelationGraph prepared{.graph = graph.get(), .owned_graph = std::move(graph)};
-      prepared.graph = prepared.owned_graph.get();
+      PreparedRelationGraph prepared{.compatibility_input = &input};
       return prepare_relation_graph(std::move(prepared));
    }
 
@@ -2119,7 +2196,8 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                   auxiliary_span
                );
             }
-            const bool satisfied = prepared.fact_keys.contains(literal.atom) == literal.positive;
+            const bool satisfied = prepared.fact_membership().contains(literal.atom)
+                                   == literal.positive;
             const auto derivation = satisfied ? GoalDerivation::satisfied
                                               : GoalDerivation::unsatisfied;
             if(config.goal_derivations.contains(derivation)) {
@@ -3014,7 +3092,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return composition_plan->encode_batch(std::span{views});
    }
 
-   void append_graph(const detail::FlatRelationGraph& input, BatchBuilder& builder) const
+   void append_view_preparation(
+      const canonical::detail::ViewPreparation& input,
+      BatchBuilder& builder
+   ) const
    {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
@@ -3074,12 +3155,12 @@ void SemanticFlatRelationEncoderEngine::encode(
    impl_->append_composed(input, builder);
 }
 
-void SemanticFlatRelationEncoderEngine::encode_graph(
-   const detail::FlatRelationGraph& input,
+void SemanticFlatRelationEncoderEngine::encode_view_preparation(
+   const canonical::detail::ViewPreparation& input,
    BatchBuilder& builder
 ) const
 {
-   impl_->append_graph(input, builder);
+   impl_->append_view_preparation(input, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(

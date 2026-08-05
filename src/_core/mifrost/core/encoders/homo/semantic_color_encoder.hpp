@@ -18,12 +18,6 @@ struct SemanticColorEncoderConfig {
    bool export_node_names = true;
 };
 
-namespace detail {
-
-using ColorViewPreparation = canonical::detail::GraphInput;
-
-}  // namespace detail
-
 class MIFROST_API SemanticColorEncoderEngine {
   public:
    SemanticColorEncoderEngine(
@@ -86,8 +80,10 @@ class MIFROST_API SemanticColorEncoderEngine {
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
 
   private:
-   void
-   encode_view_preparation(const detail::ColorViewPreparation& input, BatchBuilder& builder) const;
+   void encode_view_preparation(
+      const canonical::detail::ViewPreparation& input,
+      BatchBuilder& builder
+   ) const;
 
    std::shared_ptr< const SemanticTaskContext > task_context_;
    const std::vector< SemanticPredicateSpec >& predicates_;
@@ -115,7 +111,7 @@ void SemanticColorEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_color_view_preparation(
       get_task_context(), state, std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -139,7 +135,7 @@ void SemanticColorEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_color_view_preparation(
       get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
@@ -182,7 +178,7 @@ void SemanticColorEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   auto preparation = canonical::detail::make_graph_input(
+   auto preparation = canonical::detail::make_color_view_preparation(
       get_task_context(),
       state,
       std::forward< Goals >(goals),

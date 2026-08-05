@@ -181,10 +181,14 @@ void validate_input(
 )
 {
    const auto& objects = semantic_objects(input);
-   const auto& goals = semantic_goals(input);
    const auto& static_facts = semantic_static_facts(input);
-   if(not config.allow_subgoal_layers_beyond_max_goal_level
-      and input.subgoal_layers.size() > config.max_goal_level) {
+   if constexpr(requires { input.goal_levels(); }) {
+      if(not config.allow_subgoal_layers_beyond_max_goal_level
+         and input.goal_layer_count > config.max_goal_level) {
+         throw std::invalid_argument("subgoal layer exceeds max_goal_level");
+      }
+   } else if(not config.allow_subgoal_layers_beyond_max_goal_level
+             and input.subgoal_layers.size() > config.max_goal_level) {
       throw std::invalid_argument("subgoal layer exceeds max_goal_level");
    }
    std::set< std::string > object_names;
@@ -196,7 +200,7 @@ void validate_input(
          throw std::invalid_argument("Semantic HGraph requires unique object names");
       }
    }
-   for(const auto& fact : input.state_facts) {
+   for(const auto& fact : semantic_state_facts(input)) {
       validate_atom(fact, predicates, objects.size());
    }
    for(const auto& fact : static_facts) {
@@ -205,15 +209,22 @@ void validate_input(
    const auto validate_literal = [&](const SemanticLiteral& literal) {
       validate_atom(literal.atom, predicates, objects.size());
    };
-   for(const auto& goal : goals) {
-      validate_literal(goal);
-   }
-   for(const auto& layer : input.subgoal_layers) {
-      for(const auto& goal : layer) {
+   if constexpr(requires { input.goal_levels(); }) {
+      for(const auto& goal : input.goal_levels()) {
+         validate_literal(goal.literal);
+      }
+   } else {
+      const auto& goals = semantic_goals(input);
+      for(const auto& goal : goals) {
          validate_literal(goal);
       }
+      for(const auto& layer : input.subgoal_layers) {
+         for(const auto& goal : layer) {
+            validate_literal(goal);
+         }
+      }
    }
-   for(const auto& entry : input.history) {
+   for(const auto& entry : semantic_history(input)) {
       if(entry.dt >= 0) {
          throw std::invalid_argument("history_subgoals expects negative dt values");
       }
@@ -221,7 +232,7 @@ void validate_input(
          validate_literal(literal);
       }
    }
-   for(const auto& action : input.actions) {
+   for(const auto& action : semantic_actions(input)) {
       if(action.action < 0 or static_cast< size_t >(action.action) >= actions.size()) {
          throw std::invalid_argument("action index out of range");
       }
@@ -245,24 +256,33 @@ struct PreparedGoal {
 template < typename Input >
 std::vector< PreparedGoal > prepare_goals(const Input& input)
 {
-   const auto& goals = semantic_goals(input);
-   const auto levels = semantic_goal_levels(input);
-   std::vector< SemanticLiteral > ordered;
-   ordered.reserve(goals.size());
-   for(const auto& goal : goals) {
-      ordered.push_back(goal);
-   }
-   for(const auto& goals : input.subgoal_layers) {
+   if constexpr(requires { input.goal_levels(); }) {
+      std::vector< PreparedGoal > result;
+      result.reserve(input.goal_levels().size());
+      for(const auto& goal : input.goal_levels()) {
+         result.push_back({goal.literal, goal.level});
+      }
+      return result;
+   } else {
+      const auto& goals = semantic_goals(input);
+      const auto levels = semantic_goal_levels(input);
+      std::vector< SemanticLiteral > ordered;
+      ordered.reserve(goals.size());
       for(const auto& goal : goals) {
          ordered.push_back(goal);
       }
+      for(const auto& goals : input.subgoal_layers) {
+         for(const auto& goal : goals) {
+            ordered.push_back(goal);
+         }
+      }
+      std::vector< PreparedGoal > result;
+      result.reserve(ordered.size());
+      for(const auto& goal : ordered) {
+         result.push_back({goal, semantic_goal_level(levels, goal)});
+      }
+      return result;
    }
-   std::vector< PreparedGoal > result;
-   result.reserve(ordered.size());
-   for(const auto& goal : ordered) {
-      result.push_back({goal, semantic_goal_level(levels, goal)});
-   }
-   return result;
 }
 
 }  // namespace
@@ -1004,7 +1024,20 @@ struct SemanticHGraphEncoderEngine::Impl {
       }
       const bool target_actions = has_target_source(TargetSource::actions);
       const bool target_symbol = target_actions or config.include_lgan_edges;
-      for(const auto& action : input.actions) {
+      size_t action_count = std::ranges::size(semantic_actions(input));
+      if constexpr(requires { input.action_occurrence_indices; }) {
+         action_count = input.action_occurrence_indices.size();
+      }
+      for(size_t occurrence = 0; occurrence < action_count; ++occurrence) {
+         const SemanticGroundAction* action_pointer = nullptr;
+         if constexpr(requires { input.action_occurrence_indices; }) {
+            action_pointer = &semantic_action_at(
+               input, input.action_occurrence_indices[occurrence]
+            );
+         } else {
+            action_pointer = &semantic_action_at(input, occurrence);
+         }
+         const auto& action = *action_pointer;
          const auto& spec = actions.at(static_cast< size_t >(action.action));
          const auto formatted = config.export_node_names
                                    ? action_name(action, actions, semantic_objects(input))
@@ -1049,10 +1082,13 @@ struct SemanticHGraphEncoderEngine::Impl {
          size_t source_index;
       };
       std::vector< Entry > entries;
-      for(size_t source_index = 0; source_index < input.history.size(); ++source_index) {
-         const auto& entry = input.history[source_index];
-         if(input.history_max_steps and std::abs(entry.dt) > *input.history_max_steps) {
-            continue;
+      const auto history = semantic_history(input);
+      for(size_t source_index = 0; source_index < std::ranges::size(history); ++source_index) {
+         const auto entry = semantic_history_at(input, source_index);
+         if constexpr(not requires { input.goal_levels(); }) {
+            if(input.history_max_steps and std::abs(entry.dt) > *input.history_max_steps) {
+               continue;
+            }
          }
          entries.push_back({entry.dt, source_index});
       }
@@ -1074,7 +1110,8 @@ struct SemanticHGraphEncoderEngine::Impl {
             builder
          );
          history_dt.push_back(static_cast< float >(entry.dt));
-         for(const auto& literal : input.history[entry.source_index].literals) {
+         const auto source_entry = semantic_history_at(input, entry.source_index);
+         for(const auto& literal : source_entry.literals) {
             if(literal.atom.arguments.empty() and not config.add_nullary_predicates) {
                continue;
             }
@@ -1346,7 +1383,7 @@ struct SemanticHGraphEncoderEngine::Impl {
             }
          };
          encode_facts(static_facts);
-         encode_facts(input.state_facts);
+         encode_facts(semantic_state_facts(input));
       }
       const auto prepared = prepare_goals(input);
       if(includes_plain_goal_derivation(config.goal_derivations)) {
@@ -1366,7 +1403,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          for(const auto& fact : static_facts) {
             facts.emplace(SemanticPredicateCategory::static_predicate, fact);
          }
-         for(const auto& fact : input.state_facts) {
+         for(const auto& fact : semantic_state_facts(input)) {
             const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
             facts.emplace(category, fact);
          }
@@ -1428,18 +1465,18 @@ struct SemanticHGraphEncoderEngine::Impl {
             }
          };
          encode_facts(semantic_static_facts(current));
-         encode_facts(current.state_facts);
+         encode_facts(semantic_state_facts(current));
       }
 
       std::set< SemanticAtom > current_dynamic_facts;
       std::set< SemanticAtom > successor_dynamic_facts;
-      for(const auto& fact : current.state_facts) {
+      for(const auto& fact : semantic_state_facts(current)) {
          if(predicates.at(static_cast< size_t >(fact.predicate)).category
             != SemanticPredicateCategory::static_predicate) {
             current_dynamic_facts.insert(fact);
          }
       }
-      for(const auto& fact : successor.state_facts) {
+      for(const auto& fact : semantic_state_facts(successor)) {
          if(predicates.at(static_cast< size_t >(fact.predicate)).category
             != SemanticPredicateCategory::static_predicate) {
             successor_dynamic_facts.insert(fact);
@@ -1462,7 +1499,7 @@ struct SemanticHGraphEncoderEngine::Impl {
                 SemanticPredicateCategory::fluent,
                 SemanticPredicateCategory::derived,
              }) {
-            for(const auto& fact : successor.state_facts) {
+            for(const auto& fact : semantic_state_facts(successor)) {
                if(predicates.at(static_cast< size_t >(fact.predicate)).category == category) {
                   encode_successor_fact(workspace, fact, successor, builder, successor_suffix);
                }
@@ -1514,7 +1551,7 @@ struct SemanticHGraphEncoderEngine::Impl {
          current_facts.insert(
             semantic_static_facts(current).begin(), semantic_static_facts(current).end()
          );
-         for(const auto& fact : current.state_facts) {
+         for(const auto& fact : semantic_state_facts(current)) {
             const auto category = predicates.at(static_cast< size_t >(fact.predicate)).category;
             current_facts.insert(fact);
          }
@@ -2026,8 +2063,7 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
 ) const
 {
    BatchBuilder builder;
-   const auto preparation = canonical::detail::make_graph_input(input);
-   impl_->encode(preparation, builder);
+   impl_->encode(input, builder);
    builder.next_graph();
    return builder.build();
 }
@@ -2037,12 +2073,11 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   const auto preparation = canonical::detail::make_graph_input(input);
-   encode_view_preparation(preparation, builder);
+   impl_->encode(input, builder);
 }
 
 void SemanticHGraphEncoderEngine::encode_view_preparation(
-   const detail::HGraphViewPreparation& input,
+   const canonical::detail::ViewPreparation& input,
    BatchBuilder& builder
 ) const
 {
@@ -2058,21 +2093,14 @@ void SemanticHGraphEncoderEngine::encode_successor(
    BatchBuilder& builder
 ) const
 {
-   const auto current_graph = canonical::detail::make_graph_input(current);
-   const auto successor_graph = canonical::detail::make_graph_input(successor);
    impl_->encode_successor(
-      current_graph,
-      successor_graph,
-      delta_mode,
-      successor_suffix,
-      include_successor_goal_satisfaction,
-      builder
+      current, successor, delta_mode, successor_suffix, include_successor_goal_satisfaction, builder
    );
 }
 
 void SemanticHGraphEncoderEngine::encode_successor(
-   const detail::HGraphViewPreparation& current,
-   const detail::HGraphViewPreparation& successor,
+   const canonical::detail::ViewPreparation& current,
+   const canonical::detail::ViewPreparation& successor,
    bool delta_mode,
    std::string_view successor_suffix,
    bool include_successor_goal_satisfaction,
@@ -2107,8 +2135,7 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    for(const auto& input : inputs) {
-      const auto preparation = canonical::detail::make_graph_input(input);
-      impl_->encode(preparation, builder);
+      impl_->encode(input, builder);
       builder.next_graph();
    }
    return builder.build();

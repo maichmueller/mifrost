@@ -86,16 +86,19 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode_views(
-      canonical::detail::make_graph_input(current),
-      canonical::detail::make_graph_input(successor),
+   impl_->hgraph.encode_successor(
+      current,
+      successor,
+      impl_->config.successor_mode == SemanticSuccessorMode::delta,
+      impl_->config.successor_suffix,
+      impl_->config.include_successor_goal_satisfaction,
       builder
    );
 }
 
 void SemanticSuccessorHGraphEncoderEngine::encode_views(
-   const canonical::detail::GraphInput& current,
-   const canonical::detail::GraphInput& successor,
+   const canonical::detail::ViewPreparation& current,
+   const canonical::detail::ViewPreparation& successor,
    BatchBuilder& builder
 ) const
 {

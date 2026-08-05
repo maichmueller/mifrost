@@ -11,6 +11,7 @@
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_hgraph_encoder.hpp"
+#include "mifrost/core/views/semantic_preparation.hpp"
 
 namespace mifrost {
 
@@ -136,8 +137,8 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
 
   private:
    void encode_views(
-      const canonical::detail::GraphInput& current,
-      const canonical::detail::GraphInput& successor,
+      const canonical::detail::ViewPreparation& current,
+      const canonical::detail::ViewPreparation& successor,
       BatchBuilder& builder
    ) const;
 
@@ -187,10 +188,10 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
 ) const
 {
    encode_views(
-      canonical::detail::make_graph_input(
+      canonical::detail::make_hgraph_view_preparation(
          get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
       ),
-      canonical::detail::make_graph_input(
+      canonical::detail::make_hgraph_view_preparation(
          get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
       ),
       builder
@@ -245,14 +246,14 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
 ) const
 {
    encode_views(
-      canonical::detail::make_graph_input(
+      canonical::detail::make_hgraph_view_preparation(
          get_task_context(),
          current_state,
          std::forward< Goals >(goals),
          std::forward< SubgoalLayers >(subgoal_layers),
          std::forward< CurrentActions >(current_actions)
       ),
-      canonical::detail::make_graph_input(
+      canonical::detail::make_hgraph_view_preparation(
          get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
       ),
       builder
