@@ -37,8 +37,8 @@ TEST(ViewsTest, SemanticViewsExposeRecordsLazily)
    const SemanticGroundAction action{2, {7, 11}};
 
    const semantic::StateView state{
-      .fluent = semantic::AtomsView(std::span{&fluent_atom, 1}),
-      .derived = semantic::AtomsView(std::span{&derived_atom, 1}),
+      semantic::AtomsView(std::span{&fluent_atom, 1}),
+      semantic::AtomsView(std::span{&derived_atom, 1}),
    };
 
    const auto fluent = *state.fluent_atoms().begin();
@@ -64,8 +64,8 @@ TEST(ViewsTest, CanonicalAlgorithmsOperateOnViews)
    const SemanticLiteral negative{different, false};
 
    const semantic::StateView state{
-      .fluent = semantic::AtomsView(std::span{&atom, 1}),
-      .derived = semantic::AtomsView(std::span< const SemanticAtom >{}),
+      semantic::AtomsView(std::span{&atom, 1}),
+      semantic::AtomsView(std::span< const SemanticAtom >{}),
    };
 
    const auto fluent = state.fluent_atoms();
@@ -81,8 +81,8 @@ TEST(ViewsTest, CanonicalFlatTraversalVisitsEachLane)
    const SemanticLiteral goal{atom, true};
    const SemanticGroundAction action{2, {7}};
    const semantic::StateView state{
-      .fluent = semantic::AtomsView(std::span{&atom, 1}),
-      .derived = semantic::AtomsView(std::span< const SemanticAtom >{}),
+      semantic::AtomsView(std::span{&atom, 1}),
+      semantic::AtomsView(std::span< const SemanticAtom >{}),
    };
    const std::array lanes_expected{
       canonical::FlatLane::state,
@@ -109,8 +109,8 @@ TEST(ViewsTest, SemanticViewBridgeMaterializesCanonicalInput)
    const SemanticLiteral goal{fluent, false};
    const SemanticGroundAction action{2, {7, 11}};
    const semantic::StateView state{
-      .fluent = semantic::AtomsView(std::span{&fluent, 1}),
-      .derived = semantic::AtomsView(std::span{&derived, 1}),
+      semantic::AtomsView(std::span{&fluent, 1}),
+      semantic::AtomsView(std::span{&derived, 1}),
    };
    const auto context = std::make_shared< const SemanticTaskContext >(
       SemanticTaskContext{.objects = {"a", "b"}}

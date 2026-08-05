@@ -3,8 +3,9 @@
  * @brief Small statically dispatched concepts used by canonical encoders.
  *
  * A View is a cheap operation-bearing proxy over a backend value. The concepts
- * intentionally validate only the operations consumed by an encoder; they do
- * not impose ownership, inheritance, or a common runtime base class.
+ *  intentionally validate only the operations consumed by an encoder. The
+ *  small CRTP bases below provide one statically dispatched interface without
+ *  introducing a runtime hierarchy or ownership.
  */
 #pragma once
 
@@ -20,6 +21,100 @@ namespace mifrost::views {
 
 template < typename T >
 using view_value_t = std::remove_cvref_t< T >;
+
+template < typename Derived >
+class AtomViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) predicate_id() const noexcept(
+      noexcept(derived().predicate_id_impl())
+   )
+   {
+      return derived().predicate_id_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) arguments() const noexcept(
+      noexcept(derived().arguments_impl())
+   )
+   {
+      return derived().arguments_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class LiteralViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) is_negated() const noexcept(
+      noexcept(derived().is_negated_impl())
+   )
+   {
+      return derived().is_negated_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) atom() const noexcept(noexcept(derived().atom_impl()))
+   {
+      return derived().atom_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class GroundActionViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) schema_id() const noexcept(
+      noexcept(derived().schema_id_impl())
+   )
+   {
+      return derived().schema_id_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) arguments() const noexcept(
+      noexcept(derived().arguments_impl())
+   )
+   {
+      return derived().arguments_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
+
+template < typename Derived >
+class StateViewBase {
+  public:
+   [[nodiscard]] constexpr decltype(auto) fluent_atoms() const noexcept(
+      noexcept(derived().fluent_atoms_impl())
+   )
+   {
+      return derived().fluent_atoms_impl();
+   }
+
+   [[nodiscard]] constexpr decltype(auto) derived_atoms() const noexcept(
+      noexcept(derived().derived_atoms_impl())
+   )
+   {
+      return derived().derived_atoms_impl();
+   }
+
+  private:
+   [[nodiscard]] constexpr const Derived& derived() const noexcept
+   {
+      return static_cast< const Derived& >(*this);
+   }
+};
 
 template < typename T >
 concept PredicateView = requires(const view_value_t< T >& predicate) {

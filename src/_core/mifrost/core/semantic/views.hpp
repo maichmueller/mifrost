@@ -53,14 +53,17 @@ struct ObjectView {
    [[nodiscard]] std::string_view name() const noexcept { return object_name; }
 };
 
-struct AtomView {
+struct AtomView: views::AtomViewBase< AtomView > {
    const SemanticAtom* value = nullptr;
 
-   [[nodiscard]] PredicateId predicate_id() const noexcept
+   constexpr AtomView() = default;
+   constexpr explicit AtomView(const SemanticAtom* atom) : value(atom) {}
+
+   [[nodiscard]] PredicateId predicate_id_impl() const noexcept
    {
       return value == nullptr ? -1 : value->predicate;
    }
-   [[nodiscard]] std::span< const ObjectId > arguments() const noexcept
+   [[nodiscard]] std::span< const ObjectId > arguments_impl() const noexcept
    {
       if(value == nullptr) {
          return {};
@@ -69,14 +72,17 @@ struct AtomView {
    }
 };
 
-struct LiteralView {
+struct LiteralView: views::LiteralViewBase< LiteralView > {
    const SemanticLiteral* value = nullptr;
 
-   [[nodiscard]] bool is_negated() const noexcept
+   constexpr LiteralView() = default;
+   constexpr explicit LiteralView(const SemanticLiteral* literal) : value(literal) {}
+
+   [[nodiscard]] bool is_negated_impl() const noexcept
    {
       return value != nullptr and not value->positive;
    }
-   [[nodiscard]] AtomView atom() const noexcept
+   [[nodiscard]] AtomView atom_impl() const noexcept
    {
       return value == nullptr ? AtomView{} : AtomView{&value->atom};
    }
@@ -97,14 +103,17 @@ struct ActionSchemaView {
    }
 };
 
-struct GroundActionView {
+struct GroundActionView: views::GroundActionViewBase< GroundActionView > {
    const SemanticGroundAction* value = nullptr;
 
-   [[nodiscard]] ActionSchemaId schema_id() const noexcept
+   constexpr GroundActionView() = default;
+   constexpr explicit GroundActionView(const SemanticGroundAction* action) : value(action) {}
+
+   [[nodiscard]] ActionSchemaId schema_id_impl() const noexcept
    {
       return value == nullptr ? -1 : value->action;
    }
-   [[nodiscard]] std::span< const ObjectId > arguments() const noexcept
+   [[nodiscard]] std::span< const ObjectId > arguments_impl() const noexcept
    {
       if(value == nullptr) {
          return {};
@@ -233,12 +242,17 @@ class GroundActionsView {
    std::span< const SemanticGroundAction > values_;
 };
 
-struct StateView {
+struct StateView: views::StateViewBase< StateView > {
    AtomsView fluent;
    AtomsView derived;
 
-   [[nodiscard]] AtomsView fluent_atoms() const noexcept { return fluent; }
-   [[nodiscard]] AtomsView derived_atoms() const noexcept { return derived; }
+   StateView(AtomsView fluent_atoms, AtomsView derived_atoms)
+       : fluent(fluent_atoms), derived(derived_atoms)
+   {
+   }
+
+   [[nodiscard]] AtomsView fluent_atoms_impl() const noexcept { return fluent; }
+   [[nodiscard]] AtomsView derived_atoms_impl() const noexcept { return derived; }
 };
 
 static_assert(views::AtomView< AtomView >);

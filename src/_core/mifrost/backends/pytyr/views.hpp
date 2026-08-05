@@ -151,17 +151,17 @@ class ObjectView {
 };
 
 template < typename NativeAtom, Category AtomCategory >
-class AtomView {
+class AtomView: public mifrost::views::AtomViewBase< AtomView< NativeAtom, AtomCategory > > {
   public:
    AtomView(NativeAtom value, const Context& context) : value_(std::move(value)), context_(&context)
    {
    }
 
-   [[nodiscard]] auto predicate_id() const noexcept
+   [[nodiscard]] auto predicate_id_impl() const noexcept
    {
       return context_->predicate_id(AtomCategory, raw_index(value_.get_predicate().get_index()));
    }
-   [[nodiscard]] auto arguments() const
+   [[nodiscard]] auto arguments_impl() const
    {
       return value_.get_objects() | std::views::transform([context = context_](const auto object) {
                 return context->object_id(raw_index(object.get_index()));
@@ -178,18 +178,19 @@ class AtomView {
 };
 
 template < typename NativeLiteral, Category LiteralCategory >
-class LiteralView {
+class LiteralView:
+    public mifrost::views::LiteralViewBase< LiteralView< NativeLiteral, LiteralCategory > > {
   public:
    LiteralView(NativeLiteral value, const Context& context)
        : value_(std::move(value)), context_(&context)
    {
    }
 
-   [[nodiscard]] bool is_negated() const noexcept
+   [[nodiscard]] bool is_negated_impl() const noexcept
    {
       return not static_cast< bool >(value_.get_polarity());
    }
-   [[nodiscard]] auto atom() const
+   [[nodiscard]] auto atom_impl() const
    {
       using NativeAtom = std::remove_cvref_t< decltype(value_.get_atom()) >;
       return AtomView< NativeAtom, LiteralCategory >{value_.get_atom(), *context_};
@@ -224,18 +225,19 @@ class ActionSchemaView {
 };
 
 template < typename NativeAction >
-class GroundActionView {
+class GroundActionView:
+    public mifrost::views::GroundActionViewBase< GroundActionView< NativeAction > > {
   public:
    GroundActionView(NativeAction value, const Context& context)
        : value_(std::move(value)), context_(&context)
    {
    }
 
-   [[nodiscard]] auto schema_id() const noexcept
+   [[nodiscard]] auto schema_id_impl() const noexcept
    {
       return context_->action_id(raw_index(value_.get_action().get_index()));
    }
-   [[nodiscard]] auto arguments() const
+   [[nodiscard]] auto arguments_impl() const
    {
       return value_.get_objects() | std::views::transform([context = context_](const auto object) {
                 return context->object_id(raw_index(object.get_index()));
@@ -249,14 +251,14 @@ class GroundActionView {
 };
 
 template < typename NativeState, typename StateKind >
-class StateView {
+class StateView: public mifrost::views::StateViewBase< StateView< NativeState, StateKind > > {
   public:
    StateView(NativeState value, const Context& context)
        : value_(std::move(value)), context_(&context)
    {
    }
 
-   [[nodiscard]] auto fluent_atoms() const
+   [[nodiscard]] auto fluent_atoms_impl() const
    {
       return value_.get_fluent_facts_view() | std::views::filter([](const auto fact) {
                 return static_cast< bool >(fact.get_atom());
@@ -267,7 +269,7 @@ class StateView {
                      Category::fluent >{*fact.get_atom(), *context};
                });
    }
-   [[nodiscard]] auto derived_atoms() const
+   [[nodiscard]] auto derived_atoms_impl() const
    {
       return value_.get_derived_atoms_view()
              | std::views::transform([context = context_](const auto atom) {

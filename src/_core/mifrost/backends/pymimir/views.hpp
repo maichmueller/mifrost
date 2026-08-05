@@ -203,15 +203,15 @@ class ActionSchemaView {
 };
 
 template < typename NativeAtom, Category AtomCategory >
-class AtomView {
+class AtomView: public mifrost::views::AtomViewBase< AtomView< NativeAtom, AtomCategory > > {
   public:
    AtomView(NativeAtom value, const Context& context) : value_(value), context_(&context) {}
 
-   [[nodiscard]] auto predicate_id() const noexcept
+   [[nodiscard]] auto predicate_id_impl() const noexcept
    {
       return context_->predicate_id(AtomCategory, raw_index(value_->get_predicate()->get_index()));
    }
-   [[nodiscard]] auto arguments() const
+   [[nodiscard]] auto arguments_impl() const
    {
       return value_->get_objects() | std::views::transform([context = context_](const auto object) {
                 return context->object_id(raw_index(object->get_index()));
@@ -229,12 +229,13 @@ class AtomView {
 };
 
 template < typename NativeLiteral, Category LiteralCategory >
-class LiteralView {
+class LiteralView:
+    public mifrost::views::LiteralViewBase< LiteralView< NativeLiteral, LiteralCategory > > {
   public:
    LiteralView(NativeLiteral value, const Context& context) : value_(value), context_(&context) {}
 
-   [[nodiscard]] bool is_negated() const noexcept { return not value_->get_polarity(); }
-   [[nodiscard]] auto atom() const
+   [[nodiscard]] bool is_negated_impl() const noexcept { return not value_->get_polarity(); }
+   [[nodiscard]] auto atom_impl() const
    {
       using NativeAtom = decltype(value_->get_atom());
       return AtomView< NativeAtom, LiteralCategory >{value_->get_atom(), *context_};
@@ -246,17 +247,18 @@ class LiteralView {
 };
 
 template < typename NativeAction >
-class GroundActionView {
+class GroundActionView:
+    public mifrost::views::GroundActionViewBase< GroundActionView< NativeAction > > {
   public:
    GroundActionView(NativeAction value, const Context& context) : value_(value), context_(&context)
    {
    }
 
-   [[nodiscard]] auto schema_id() const noexcept
+   [[nodiscard]] auto schema_id_impl() const noexcept
    {
       return context_->action_id(raw_index(value_->get_action()->get_index()));
    }
-   [[nodiscard]] auto arguments() const
+   [[nodiscard]] auto arguments_impl() const
    {
       return value_->get_objects() | std::views::transform([context = context_](const auto object) {
                 return context->object_id(raw_index(object->get_index()));
@@ -273,14 +275,14 @@ class GroundActionView {
    const Context* context_;
 };
 
-class StateView {
+class StateView: public mifrost::views::StateViewBase< StateView > {
   public:
    StateView(const mimir::search::State& state, const Context& context)
        : state_(&state), context_(&context)
    {
    }
 
-   [[nodiscard]] auto fluent_atoms() const
+   [[nodiscard]] auto fluent_atoms_impl() const
    {
       const auto& repositories = state_->get_problem().get_repositories();
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::FluentTag >(
@@ -294,7 +296,7 @@ class StateView {
       }
       return result;
    }
-   [[nodiscard]] auto derived_atoms() const
+   [[nodiscard]] auto derived_atoms_impl() const
    {
       const auto& repositories = state_->get_problem().get_repositories();
       auto atoms = repositories.get_ground_atoms_from_indices< mimir::formalism::DerivedTag >(
