@@ -179,6 +179,28 @@ struct SemanticFlatRelationInput {
    std::optional< int64_t > history_max_steps = std::nullopt;
 };
 
+namespace detail {
+
+/**
+ * Encoder-local preparation populated directly from backend-neutral Views.
+ *
+ * This is intentionally distinct from `SemanticFlatRelationInput`, which is
+ * retained as an owned compatibility DTO for callers that already materialize
+ * semantic records.
+ */
+struct FlatRelationViewPreparation {
+   std::shared_ptr< const SemanticTaskContext > task_context;
+   std::vector< SemanticAtom > state_facts;
+   std::vector< SemanticLiteral > goals;
+   bool use_default_goals = false;
+   std::vector< SemanticGroundAction > actions;
+   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
+   std::vector< SemanticHistoryEntry > history;
+   std::optional< int64_t > history_max_steps = std::nullopt;
+};
+
+}  // namespace detail
+
 [[nodiscard]] inline const std::vector< std::string >& semantic_objects(
    const SemanticFlatRelationInput& input
 )
@@ -196,6 +218,34 @@ struct SemanticFlatRelationInput {
 
 [[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
    const SemanticFlatRelationInput& input
+)
+{
+   static const std::vector< SemanticAtom > empty;
+   return input.task_context ? input.task_context->static_facts : empty;
+}
+
+[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
+   const detail::FlatRelationViewPreparation& input
+)
+{
+   if(not input.task_context) {
+      throw std::invalid_argument("semantic View preparation requires a task context");
+   }
+   return input.task_context->objects;
+}
+
+[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
+   const detail::FlatRelationViewPreparation& input
+)
+{
+   if(input.task_context and input.use_default_goals) {
+      return input.task_context->default_goals;
+   }
+   return input.goals;
+}
+
+[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
+   const detail::FlatRelationViewPreparation& input
 )
 {
    static const std::vector< SemanticAtom > empty;
@@ -376,6 +426,11 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    void finalize_horizon_encoding(
       BatchBuilder::BatchEncoding& encoding,
       const SemanticFlatHorizonEncoderConfig& config
+   ) const;
+
+   void encode_view_preparation(
+      const detail::FlatRelationViewPreparation& input,
+      BatchBuilder& builder
    ) const;
 
    struct Impl;

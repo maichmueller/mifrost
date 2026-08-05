@@ -103,6 +103,108 @@ template < views::StateView State, views::GroundActionRange Actions >
    return result;
 }
 
+template < typename Preparation, views::StateView State, views::GroundActionRange Actions >
+[[nodiscard]] Preparation make_preparation(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state,
+   Actions&& actions
+)
+{
+   require_semantic_view_context(context);
+   Preparation result;
+   result.task_context = context;
+   result.use_default_goals = true;
+   append_state(state, result);
+   for(const auto& action : actions) {
+      result.actions.push_back(materialize_action(action));
+   }
+   return result;
+}
+
+template <
+   typename Preparation,
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::GroundActionRange Actions >
+[[nodiscard]] Preparation make_preparation(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state,
+   Goals&& goals,
+   Actions&& actions
+)
+{
+   auto result = make_preparation< Preparation >(context, state, std::forward< Actions >(actions));
+   result.use_default_goals = false;
+   for(const auto& goal : goals) {
+      result.goals.push_back(materialize_literal(goal));
+   }
+   return result;
+}
+
+template <
+   typename Preparation,
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions >
+[[nodiscard]] Preparation make_preparation(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions
+)
+{
+   auto result = make_preparation< Preparation >(
+      context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+   );
+   for(const auto& layer : subgoal_layers) {
+      auto& target = result.subgoal_layers.emplace_back();
+      for(const auto& goal : layer) {
+         target.push_back(materialize_literal(goal));
+      }
+   }
+   return result;
+}
+
+template <
+   typename Preparation,
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+[[nodiscard]] Preparation make_preparation(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps = std::nullopt
+)
+{
+   auto result = make_preparation< Preparation >(
+      context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+   );
+   for(const auto& layer : subgoal_layers) {
+      auto& target = result.subgoal_layers.emplace_back();
+      for(const auto& goal : layer) {
+         target.push_back(materialize_literal(goal));
+      }
+   }
+   for(const auto& entry : history) {
+      SemanticHistoryEntry target;
+      target.dt = static_cast< int64_t >(entry.dt());
+      for(const auto& literal : entry.literals()) {
+         target.literals.push_back(materialize_literal(literal));
+      }
+      result.history.push_back(std::move(target));
+   }
+   result.history_max_steps = history_max_steps;
+   return result;
+}
+
 }  // namespace detail
 
 template < views::AtomView Atom >
@@ -243,12 +345,10 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(), state, std::forward< Actions >(actions)
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::FlatRelationViewPreparation >(
+      get_task_context(), state, std::forward< Actions >(actions)
    );
+   encode_view_preparation(preparation, builder);
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
@@ -272,12 +372,10 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::FlatRelationViewPreparation >(
+      get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
+   encode_view_preparation(preparation, builder);
 }
 
 template <
@@ -325,18 +423,16 @@ void SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(),
-         state,
-         std::forward< Goals >(goals),
-         std::forward< SubgoalLayers >(subgoal_layers),
-         std::forward< Actions >(actions),
-         std::forward< History >(history),
-         history_max_steps
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::FlatRelationViewPreparation >(
+      get_task_context(),
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps
    );
+   encode_view_preparation(preparation, builder);
 }
 
 }  // namespace mifrost

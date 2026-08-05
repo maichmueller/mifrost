@@ -494,7 +494,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    };
 
    struct PreparedRelationGraph {
-      const SemanticFlatRelationInput* input = nullptr;
+      const detail::FlatRelationViewPreparation* input = nullptr;
       std::vector< SemanticGoalLevel > goal_levels;
       std::vector< SemanticLiteral > grouped_goals;
       hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
@@ -1947,7 +1947,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return context;
    }
 
-   PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
+   PreparedRelationGraph prepare_relation_graph(
+      const detail::FlatRelationViewPreparation& input
+   ) const
    {
       validate_input(input);
       PreparedRelationGraph prepared;
@@ -2934,13 +2936,26 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return compose_many(inputs);
    }
 
+   static detail::FlatRelationViewPreparation make_preparation(
+      const SemanticFlatRelationInput& input
+   )
+   {
+      return detail::FlatRelationViewPreparation{
+         .task_context = input.task_context,
+         .state_facts = input.state_facts,
+         .goals = input.goals,
+         .use_default_goals = input.use_default_goals,
+         .actions = input.actions,
+         .subgoal_layers = input.subgoal_layers,
+         .history = input.history,
+         .history_max_steps = input.history_max_steps,
+      };
+   }
+
    void append_composed(const SemanticFlatRelationInput& input, BatchBuilder& builder) const
    {
-      if(composition_plan == nullptr) {
-         throw std::logic_error("semantic flat composition plan is not available");
-      }
-      const auto prepared = prepare_relation_graph(input);
-      composition_plan->append_graph(FlatInputView::from(prepared), builder);
+      const auto preparation = make_preparation(input);
+      append_view_preparation(preparation, builder);
    }
 
    BatchBuilder::BatchEncoding compose_many(
@@ -2950,10 +2965,16 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
       }
+      std::vector< detail::FlatRelationViewPreparation > preparations;
+      preparations.reserve(inputs.size());
+      for(const auto& input : inputs) {
+         preparations.push_back(make_preparation(input));
+      }
+
       std::vector< PreparedRelationGraph > graphs;
       graphs.reserve(inputs.size());
-      for(const auto& input : inputs) {
-         graphs.push_back(prepare_relation_graph(input));
+      for(const auto& preparation : preparations) {
+         graphs.push_back(prepare_relation_graph(preparation));
       }
       if(not target_group_names.empty() and config.export_node_names
          and std::ranges::any_of(graphs, [](const auto& graph) {
@@ -2969,6 +2990,29 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          views.push_back(FlatInputView::from(graph));
       }
       return composition_plan->encode_batch(std::span{views});
+   }
+
+   BatchBuilder::BatchEncoding encode_view_preparation(
+      const detail::FlatRelationViewPreparation& input
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      const auto prepared = prepare_relation_graph(input);
+      return composition_plan->encode(FlatInputView::from(prepared));
+   }
+
+   void append_view_preparation(
+      const detail::FlatRelationViewPreparation& input,
+      BatchBuilder& builder
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      const auto prepared = prepare_relation_graph(input);
+      composition_plan->append_graph(FlatInputView::from(prepared), builder);
    }
 
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
@@ -3020,6 +3064,14 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    impl_->append_composed(input, builder);
+}
+
+void SemanticFlatRelationEncoderEngine::encode_view_preparation(
+   const detail::FlatRelationViewPreparation& input,
+   BatchBuilder& builder
+) const
+{
+   impl_->append_view_preparation(input, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(

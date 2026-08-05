@@ -76,6 +76,50 @@ BOOST_DESCRIBE_STRUCT(
     goal_derivations)
 )
 
+namespace detail {
+
+/** Encoder-local preparation for direct semantic View encoding. */
+struct HGraphViewPreparation {
+   std::shared_ptr< const SemanticTaskContext > task_context;
+   std::vector< SemanticAtom > state_facts;
+   std::vector< SemanticLiteral > goals;
+   bool use_default_goals = false;
+   std::vector< SemanticGroundAction > actions;
+   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
+   std::vector< SemanticHistoryEntry > history;
+   std::optional< int64_t > history_max_steps = std::nullopt;
+};
+
+[[nodiscard]] inline const std::vector< std::string >& semantic_objects(
+   const HGraphViewPreparation& input
+)
+{
+   if(not input.task_context) {
+      throw std::invalid_argument("semantic View preparation requires a task context");
+   }
+   return input.task_context->objects;
+}
+
+[[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
+   const HGraphViewPreparation& input
+)
+{
+   if(input.task_context and input.use_default_goals) {
+      return input.task_context->default_goals;
+   }
+   return input.goals;
+}
+
+[[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
+   const HGraphViewPreparation& input
+)
+{
+   static const std::vector< SemanticAtom > empty;
+   return input.task_context ? input.task_context->static_facts : empty;
+}
+
+}  // namespace detail
+
 /**
  * Encode `SemanticFlatRelationInput` as the legacy heterogeneous graph schema.
  *
@@ -177,6 +221,9 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       BatchBuilder& builder
    ) const;
 
+   void
+   encode_view_preparation(const detail::HGraphViewPreparation& input, BatchBuilder& builder) const;
+
    struct Impl;
    std::unique_ptr< Impl > impl_;
 };
@@ -202,12 +249,10 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(), state, std::forward< Actions >(actions)
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+      get_task_context(), state, std::forward< Actions >(actions)
    );
+   encode_view_preparation(preparation, builder);
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
@@ -228,12 +273,10 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+      get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
+   encode_view_preparation(preparation, builder);
 }
 
 template <
@@ -281,18 +324,16 @@ void SemanticHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   encode(
-      canonical::make_semantic_flat_relation_input(
-         get_task_context(),
-         state,
-         std::forward< Goals >(goals),
-         std::forward< SubgoalLayers >(subgoal_layers),
-         std::forward< Actions >(actions),
-         std::forward< History >(history),
-         history_max_steps
-      ),
-      builder
+   auto preparation = canonical::detail::make_preparation< detail::HGraphViewPreparation >(
+      get_task_context(),
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps
    );
+   encode_view_preparation(preparation, builder);
 }
 
 }  // namespace mifrost

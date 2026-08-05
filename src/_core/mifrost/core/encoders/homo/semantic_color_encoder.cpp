@@ -471,6 +471,14 @@ void SemanticColorEncoderEngine::encode(
    encode_impl(input, predicates_, config_, builder);
 }
 
+void SemanticColorEncoderEngine::encode_view_preparation(
+   const detail::ColorViewPreparation& input,
+   BatchBuilder& builder
+) const
+{
+   encode_impl(input, predicates_, config_, builder);
+}
+
 BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(
    const SemanticFlatRelationInput& input
 ) const

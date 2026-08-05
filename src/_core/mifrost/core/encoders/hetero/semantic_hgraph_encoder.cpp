@@ -2038,6 +2038,14 @@ void SemanticHGraphEncoderEngine::encode(
    impl_->encode(input, builder);
 }
 
+void SemanticHGraphEncoderEngine::encode_view_preparation(
+   const detail::HGraphViewPreparation& input,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode(input, builder);
+}
+
 void SemanticHGraphEncoderEngine::encode_successor(
    const SemanticFlatRelationInput& current,
    const SemanticFlatRelationInput& successor,
