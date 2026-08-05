@@ -11,6 +11,8 @@
 #include <string>
 #include <string_view>
 
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -457,6 +459,24 @@ void SemanticColorEncoderEngine::encode(
          );
       }
    }
+}
+
+BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& input
+) const
+{
+   BatchBuilder builder;
+   encode_views(input, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
+void SemanticColorEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& input,
+   BatchBuilder& builder
+) const
+{
+   encode(canonical::materialize_semantic_flat_view_input(input), builder);
 }
 
 BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode(

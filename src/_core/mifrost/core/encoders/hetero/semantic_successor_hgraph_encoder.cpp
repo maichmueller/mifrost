@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
+
 namespace mifrost {
 namespace {
 
@@ -80,6 +82,17 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
    return builder.build();
 }
 
+BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& current,
+   const canonical::FlatRelationViewInput& successor
+) const
+{
+   BatchBuilder builder;
+   encode_views(current, successor, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
 void SemanticSuccessorHGraphEncoderEngine::encode(
    const SemanticFlatRelationInput& current,
    const SemanticFlatRelationInput& successor,
@@ -92,6 +105,19 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
       impl_->config.successor_mode == SemanticSuccessorMode::delta,
       impl_->config.successor_suffix,
       impl_->config.include_successor_goal_satisfaction,
+      builder
+   );
+}
+
+void SemanticSuccessorHGraphEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& current,
+   const canonical::FlatRelationViewInput& successor,
+   BatchBuilder& builder
+) const
+{
+   encode(
+      canonical::materialize_semantic_flat_view_input(current),
+      canonical::materialize_semantic_flat_view_input(successor),
       builder
    );
 }

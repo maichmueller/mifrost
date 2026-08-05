@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <memory>
 #include <mimir/formalism/domain.hpp>
 #include <mimir/formalism/ground_action.hpp>
 #include <mimir/formalism/ground_literal.hpp>
@@ -102,6 +103,7 @@ class MIFROST_API ColorEncoderEngine {
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder
    );
+   void ensure_problem(const mimir::search::State& state);
 
    /// Optional owning domain storage for handle-based construction.
    std::optional< mimir::formalism::Domain > domain_holder_;
@@ -110,7 +112,9 @@ class MIFROST_API ColorEncoderEngine {
    /// Effective runtime config.
    Config config_;
    /// Backend-neutral semantic Color engine used for all Pymimir inputs.
-   SemanticColorEncoderEngine semantic_engine_;
+   std::unique_ptr< SemanticColorEncoderEngine > semantic_engine_;
+   std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter_;
+   const mimir::formalism::ProblemImpl* problem_ = nullptr;
 };
 
 /**

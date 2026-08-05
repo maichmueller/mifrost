@@ -163,10 +163,10 @@ materialize_action(const mimir::formalism::GroundAction& action, const views::Co
 inline SemanticFlatRelationInput state_input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const mimir::search::State& state,
-   std::span< const mimir::formalism::GroundAction > actions = {}
+   std::span< const mimir::formalism::GroundAction > actions,
+   const views::Context& view_context
 )
 {
-   const auto view_context = views::make_context(state.get_problem());
    std::vector< views::GroundActionView< mimir::formalism::GroundAction > > action_views;
    action_views.reserve(actions.size());
    for(const auto& action : actions) {
@@ -182,6 +182,16 @@ inline SemanticFlatRelationInput state_input(
    );
    result.use_default_goals = true;
    return result;
+}
+
+inline SemanticFlatRelationInput state_input(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const mimir::search::State& state,
+   std::span< const mimir::formalism::GroundAction > actions = {}
+)
+{
+   const auto view_context = views::make_context(state.get_problem());
+   return state_input(context, state, actions, view_context);
 }
 
 template < typename Literal >
@@ -205,11 +215,11 @@ inline SemanticFlatRelationInput input(
    const std::shared_ptr< const SemanticTaskContext >& context,
    const mimir::search::State& state,
    const GoalInputs& goals,
-   std::span< const mimir::formalism::GroundAction > actions = {}
+   std::span< const mimir::formalism::GroundAction > actions,
+   const views::Context& view_context
 )
 {
-   const auto view_context = views::make_context(state.get_problem());
-   auto result = state_input(context, state, actions);
+   auto result = state_input(context, state, actions, view_context);
    for(const auto& goal : goals.static_goals) {
       const auto it = goals.static_goal_levels.find(goal);
       append_goal(
@@ -231,6 +241,17 @@ inline SemanticFlatRelationInput input(
    result.use_default_goals = false;
    result.history_max_steps = std::nullopt;
    return result;
+}
+
+inline SemanticFlatRelationInput input(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const mimir::search::State& state,
+   const GoalInputs& goals,
+   std::span< const mimir::formalism::GroundAction > actions = {}
+)
+{
+   const auto view_context = views::make_context(state.get_problem());
+   return input(context, state, goals, actions, view_context);
 }
 
 inline void add_history(

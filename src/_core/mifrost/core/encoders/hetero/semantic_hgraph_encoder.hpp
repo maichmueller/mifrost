@@ -101,7 +101,11 @@ class MIFROST_API SemanticHGraphEncoderEngine {
    ~SemanticHGraphEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
+      const canonical::FlatRelationViewInput& input
+   ) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
+   void encode_views(const canonical::FlatRelationViewInput& input, BatchBuilder& builder) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;

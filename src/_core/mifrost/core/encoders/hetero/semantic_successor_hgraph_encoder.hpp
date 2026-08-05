@@ -62,9 +62,18 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor
    ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_views(
+      const canonical::FlatRelationViewInput& current,
+      const canonical::FlatRelationViewInput& successor
+   ) const;
    void encode(
       const SemanticFlatRelationInput& current,
       const SemanticFlatRelationInput& successor,
+      BatchBuilder& builder
+   ) const;
+   void encode_views(
+      const canonical::FlatRelationViewInput& current,
+      const canonical::FlatRelationViewInput& successor,
       BatchBuilder& builder
    ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(

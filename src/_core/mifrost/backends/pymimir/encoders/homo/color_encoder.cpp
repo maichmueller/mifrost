@@ -31,7 +31,12 @@ ColorEncoderEngine::ColorEncoderEngine(const mimir::formalism::DomainImpl& domai
 ColorEncoderEngine::ColorEncoderEngine(const mimir::formalism::DomainImpl& domain, Config config)
     : domain_(domain),
       config_(std::move(config)),
-      semantic_engine_(pymimir::make_semantic_predicates(domain), semantic_config(config_))
+      semantic_engine_(
+         std::make_unique< SemanticColorEncoderEngine >(
+            pymimir::make_semantic_predicates(domain),
+            semantic_config(config_)
+         )
+      )
 {
 }
 
@@ -44,14 +49,32 @@ ColorEncoderEngine::ColorEncoderEngine(mimir::formalism::Domain domain, Config c
     : domain_holder_(std::move(domain)),
       domain_(**domain_holder_),
       config_(std::move(config)),
-      semantic_engine_(pymimir::make_semantic_predicates(domain_), semantic_config(config_))
+      semantic_engine_(
+         std::make_unique< SemanticColorEncoderEngine >(
+            pymimir::make_semantic_predicates(domain_),
+            semantic_config(config_)
+         )
+      )
 {
+}
+
+void ColorEncoderEngine::ensure_problem(const mimir::search::State& state)
+{
+   const auto* problem = &state.get_problem();
+   if(problem_ == problem) {
+      return;
+   }
+   problem_ = problem;
+   problem_adapter_ = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
+   semantic_engine_ = std::make_unique< SemanticColorEncoderEngine >(
+      problem_adapter_->get_task_context(), semantic_config(config_)
+   );
 }
 
 void ColorEncoderEngine::encode_state_impl(const mimir::search::State& state, BatchBuilder& builder)
 {
-   const pymimir::SemanticProblemAdapter adapter(state.get_problem());
-   semantic_engine_.encode(adapter.make_input(state), builder);
+   ensure_problem(state);
+   semantic_engine_->encode_views(problem_adapter_->make_view_input(state), builder);
 }
 
 void ColorEncoderEngine::encode_impl(
@@ -64,8 +87,8 @@ void ColorEncoderEngine::encode_impl(
    if(not actions.empty()) {
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
-   const pymimir::SemanticProblemAdapter adapter(state.get_problem());
-   semantic_engine_.encode(adapter.make_input(state, goals), builder);
+   ensure_problem(state);
+   semantic_engine_->encode_views(problem_adapter_->make_view_input(state, {}, &goals), builder);
 }
 
 BatchBuilder::BatchEncoding ColorEncoderEngine::encode_batch(

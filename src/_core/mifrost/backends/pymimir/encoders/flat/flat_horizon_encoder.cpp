@@ -93,16 +93,15 @@ SemanticTransitionDAG materialize_dag(
 {
    std::vector< SemanticTransitionDAG::Node > nodes;
    nodes.reserve(dag.nodes().size());
-   const auto view_context = pymimir::views::make_context(root.get_problem());
+   const auto& view_context = adapter.get_view_context();
+   const auto context = adapter.get_task_context();
    for(const auto& node : dag.nodes()) {
       SemanticTransitionDAG::Node semantic_node;
       semantic_node.state = node.index == dag.root_index() ? adapter.make_input(root, goals)
                                                            : adapter.make_input(node.state);
       semantic_node.index = node.index;
       semantic_node.depth = node.depth;
-      if(adapter.make_input(root).task_context) {
-         semantic_node.display_name = state_display_name(node.state);
-      }
+      semantic_node.display_name = state_display_name(node.state);
       if(node.action.has_value()) {
          semantic_node.incoming_action = pymimir::hetero_bridge::materialize_action(
             *node.action, view_context
@@ -131,7 +130,6 @@ SemanticTransitionDAG materialize_dag(
    for(const auto [parent, child] : dag.transitions()) {
       edges.emplace_back(parent, child);
    }
-   const auto context = adapter.make_input(root).task_context;
    return SemanticTransitionDAG{
       context->predicates,
       context->actions,
@@ -193,7 +191,7 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
       problem = value;
       problem_adapter = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
       encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(
-         problem_adapter->make_input(state).task_context, semantic_config
+         problem_adapter->get_task_context(), semantic_config
       );
       fill_relation_dict(relation_dict, *encoder, config);
    }

@@ -127,8 +127,29 @@ std::shared_ptr< const SemanticTaskContext > HGraphEncoderEngine::make_task_cont
    const mimir::search::State& state
 ) const
 {
-   const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
-   return pymimir::hetero_bridge::task_context(state.get_problem(), state_schema);
+   ensure_problem(state);
+   return problem_adapter_->get_task_context();
+}
+
+void HGraphEncoderEngine::ensure_problem(const mimir::search::State& state) const
+{
+   const auto* problem = &state.get_problem();
+   if(problem_ == problem) {
+      return;
+   }
+   problem_ = problem;
+   problem_adapter_ = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
+   semantic_ = std::make_unique< SemanticHGraphEncoderEngine >(
+      problem_adapter_->get_task_context(), semantic_config(config_)
+   );
+}
+
+const pymimir::views::Context& HGraphEncoderEngine::view_context(
+   const mimir::search::State& state
+) const
+{
+   ensure_problem(state);
+   return problem_adapter_->get_view_context();
 }
 
 SemanticFlatRelationInput HGraphEncoderEngine::make_input(
@@ -141,11 +162,22 @@ SemanticFlatRelationInput HGraphEncoderEngine::make_input(
 {
    auto input = pymimir::hetero_bridge::input(make_task_context(state), state, goals, actions);
    if(not history.empty()) {
-      const auto view_context = pymimir::views::make_context(state.get_problem());
-      pymimir::hetero_bridge::add_history(input, history, view_context);
+      pymimir::hetero_bridge::add_history(input, history, view_context(state));
    }
    input.history_max_steps = history_max_steps;
    return input;
+}
+
+canonical::FlatRelationViewInput HGraphEncoderEngine::make_view_input(
+   const mimir::search::State& state,
+   const GoalInputs* goals,
+   std::span< const mimir::formalism::GroundAction > actions,
+   std::span< const HistorySubgoal > history,
+   std::optional< int > history_max_steps
+) const
+{
+   ensure_problem(state);
+   return problem_adapter_->make_view_input(state, actions, goals, history, history_max_steps);
 }
 
 void HGraphEncoderEngine::encode_semantic(
@@ -165,10 +197,24 @@ void HGraphEncoderEngine::encode_semantic(
    compatible_engine.encode(input, builder);
 }
 
+void HGraphEncoderEngine::encode_semantic_views(
+   const mimir::search::State& state,
+   canonical::FlatRelationViewInput input,
+   BatchBuilder& builder
+) const
+{
+   const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
+   if(same_schema(state_schema, schema_) and input.task_context == semantic_->get_task_context()) {
+      semantic_->encode_views(input, builder);
+      return;
+   }
+   SemanticHGraphEncoderEngine compatible_engine(input.task_context, semantic_config(config_));
+   compatible_engine.encode_views(input, builder);
+}
+
 void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
 {
-   auto input = pymimir::hetero_bridge::state_input(make_task_context(state), state);
-   encode_semantic(state, std::move(input), builder);
+   encode_semantic_views(state, make_view_input(state), builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -178,7 +224,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic(state, make_input(state, goals, actions), builder);
+   encode_semantic_views(state, make_view_input(state, &goals, actions), builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -190,7 +236,9 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_semantic(state, make_input(state, goals, actions, history, history_max_steps), builder);
+   encode_semantic_views(
+      state, make_view_input(state, &goals, actions, history, history_max_steps), builder
+   );
 }
 
 void HGraphEncoderEngine::update_relations(RelationDict relation_dict_value)

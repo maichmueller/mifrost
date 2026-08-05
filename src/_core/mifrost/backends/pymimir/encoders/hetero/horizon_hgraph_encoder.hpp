@@ -54,6 +54,7 @@ class MIFROST_API HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
       const TransitionDAG& dag,
       const std::shared_ptr< const SemanticTaskContext >& context,
       const pymimir::hetero_bridge::Schema& schema,
+      const pymimir::views::Context& view_context,
       const GoalInputs& goals
    );
    Config horizon_config_;

@@ -101,10 +101,9 @@ void SuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   auto context = make_task_context(current);
-   auto current_input = pymimir::hetero_bridge::input(context, current, goals);
-   auto successor_input = pymimir::hetero_bridge::state_input(context, successor);
-   semantic_successor_->encode(current_input, successor_input, builder);
+   auto current_input = make_view_input(current, &goals);
+   auto successor_input = make_view_input(successor);
+   semantic_successor_->encode_views(current_input, successor_input, builder);
 }
 
 void SuccessorHGraphEncoderEngine::update_relations(RelationDict relation_dict)

@@ -14,6 +14,7 @@
 
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_dict.hpp"
+#include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/common/default_relations.hpp"
@@ -106,6 +107,9 @@ class MIFROST_API HGraphEncoderEngine {
    [[nodiscard]] std::shared_ptr< const SemanticTaskContext > make_task_context(
       const mimir::search::State& state
    ) const;
+   [[nodiscard]] const pymimir::views::Context& view_context(
+      const mimir::search::State& state
+   ) const;
    [[nodiscard]] SemanticFlatRelationInput make_input(
       const mimir::search::State& state,
       const GoalInputs& goals,
@@ -113,18 +117,33 @@ class MIFROST_API HGraphEncoderEngine {
       const std::vector< HistorySubgoal >& history = {},
       std::optional< int > history_max_steps = std::nullopt
    ) const;
+   [[nodiscard]] canonical::FlatRelationViewInput make_view_input(
+      const mimir::search::State& state,
+      const GoalInputs* goals = nullptr,
+      std::span< const mimir::formalism::GroundAction > actions = {},
+      std::span< const HistorySubgoal > history = {},
+      std::optional< int > history_max_steps = std::nullopt
+   ) const;
    void encode_semantic(
       const mimir::search::State& state,
       SemanticFlatRelationInput input,
       BatchBuilder& builder
    ) const;
+   void encode_semantic_views(
+      const mimir::search::State& state,
+      canonical::FlatRelationViewInput input,
+      BatchBuilder& builder
+   ) const;
+   void ensure_problem(const mimir::search::State& state) const;
 
    Config config_;
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    pymimir::hetero_bridge::Schema schema_;
-   std::unique_ptr< SemanticHGraphEncoderEngine > semantic_;
+   mutable std::unique_ptr< SemanticHGraphEncoderEngine > semantic_;
    RelationDict relation_dict_;
+   mutable std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter_;
+   mutable const mimir::formalism::ProblemImpl* problem_ = nullptr;
 };
 
 BOOST_DESCRIBE_STRUCT(

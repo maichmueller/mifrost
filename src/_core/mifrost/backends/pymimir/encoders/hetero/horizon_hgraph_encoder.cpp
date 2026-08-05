@@ -123,16 +123,16 @@ SemanticTransitionDAG HorizonHGraphEncoderEngine::materialize_dag(
    const TransitionDAG& dag,
    const std::shared_ptr< const SemanticTaskContext >& context,
    const pymimir::hetero_bridge::Schema& schema,
+   const pymimir::views::Context& view_context,
    const GoalInputs& goals
 )
 {
    std::vector< SemanticTransitionDAG::Node > nodes;
    nodes.reserve(dag.nodes().size());
-   const auto root_view_context = pymimir::views::make_context(dag.root().get_problem());
    for(const auto& node : dag.nodes()) {
-      auto input = pymimir::hetero_bridge::state_input(context, node.state);
+      auto input = pymimir::hetero_bridge::state_input(context, node.state, {}, view_context);
       if(node.index == dag.root_index()) {
-         input = pymimir::hetero_bridge::input(context, node.state, goals);
+         input = pymimir::hetero_bridge::input(context, node.state, goals, {}, view_context);
       }
       SemanticTransitionDAG::Node semantic_node;
       semantic_node.state = std::move(input);
@@ -143,7 +143,7 @@ SemanticTransitionDAG HorizonHGraphEncoderEngine::materialize_dag(
       semantic_node.display_name = display_name.str();
       if(node.action.has_value() and node.index != dag.root_index()) {
          semantic_node.incoming_action = pymimir::hetero_bridge::materialize_action(
-            *node.action, root_view_context
+            *node.action, view_context
          );
       }
       semantic_node.candidate_id = node.candidate_id;
@@ -153,7 +153,7 @@ SemanticTransitionDAG HorizonHGraphEncoderEngine::materialize_dag(
             std::visit(
                [&](const auto& native) {
                   literals.push_back(
-                     pymimir::hetero_bridge::materialize_literal(native, root_view_context)
+                     pymimir::hetero_bridge::materialize_literal(native, view_context)
                   );
                },
                literal
@@ -201,7 +201,8 @@ void HorizonHGraphEncoderEngine::encode(
    }
 
    auto context = make_task_context(root);
-   auto semantic_dag = materialize_dag(dag, context, schema_, goals);
+   const auto& view_context = this->view_context(root);
+   auto semantic_dag = materialize_dag(dag, context, schema_, view_context, goals);
    semantic_horizon_->encode(semantic_dag, builder);
    if(not builder.lazy_target_name_strings.empty()) {
       auto names = std::move(builder.lazy_target_name_strings);

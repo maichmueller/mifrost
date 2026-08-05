@@ -17,6 +17,7 @@
 #include "mifrost/core/common_types.hpp"
 #include "mifrost/core/encoders/common/relation_key.hpp"
 #include "mifrost/core/encoders/common/target_metadata.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
 #include "mifrost/core/encoders/hetero/hetero_relation_schema.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/schema_key_separators.hpp"
@@ -2027,12 +2028,30 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
    return builder.build();
 }
 
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& input
+) const
+{
+   BatchBuilder builder;
+   encode_views(input, builder);
+   builder.next_graph();
+   return builder.build();
+}
+
 void SemanticHGraphEncoderEngine::encode(
    const SemanticFlatRelationInput& input,
    BatchBuilder& builder
 ) const
 {
    impl_->encode(input, builder);
+}
+
+void SemanticHGraphEncoderEngine::encode_views(
+   const canonical::FlatRelationViewInput& input,
+   BatchBuilder& builder
+) const
+{
+   impl_->encode(canonical::materialize_semantic_flat_view_input(input), builder);
 }
 
 void SemanticHGraphEncoderEngine::encode_successor(
