@@ -190,6 +190,7 @@ namespace detail {
  */
 struct FlatRelationViewPreparation {
    std::shared_ptr< const SemanticTaskContext > task_context;
+   std::vector< std::string > objects;
    std::vector< SemanticAtom > state_facts;
    std::vector< SemanticLiteral > goals;
    bool use_default_goals = false;
@@ -228,10 +229,7 @@ struct FlatRelationViewPreparation {
    const detail::FlatRelationViewPreparation& input
 )
 {
-   if(not input.task_context) {
-      throw std::invalid_argument("semantic View preparation requires a task context");
-   }
-   return input.task_context->objects;
+   return input.task_context ? input.task_context->objects : input.objects;
 }
 
 [[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(

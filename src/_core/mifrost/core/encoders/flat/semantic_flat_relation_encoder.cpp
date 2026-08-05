@@ -2942,6 +2942,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    {
       return detail::FlatRelationViewPreparation{
          .task_context = input.task_context,
+         .objects = input.objects,
          .state_facts = input.state_facts,
          .goals = input.goals,
          .use_default_goals = input.use_default_goals,
