@@ -193,7 +193,7 @@ void HGraphEncoderEngine::encode_semantic(
    compatible_engine.encode(input, builder);
 }
 
-void HGraphEncoderEngine::encode_views(
+void HGraphEncoderEngine::encode_impl(
    const mimir::search::State& state,
    const GoalInputs& goals,
    std::span< const mimir::formalism::GroundAction > actions,
@@ -206,12 +206,11 @@ void HGraphEncoderEngine::encode_views(
    const auto state_view = problem_adapter_->make_state_view(state);
    const auto action_views = problem_adapter_->make_action_views(actions);
    const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
+   const auto goal_views = problem_adapter_->make_goal_views(goals);
+   const auto history_view = pymimir::make_history_view(
+      history, problem_adapter_->get_view_context()
+   );
    if(same_schema(state_schema, schema_)) {
-      const auto goal_views = problem_adapter_->make_goal_views(goals);
-      const auto history_entries = pymimir::materialize_history_entries(
-         history, problem_adapter_->get_view_context()
-      );
-      const semantic::HistoryView history_view(std::span{history_entries});
       semantic_->encode(
          state_view,
          goal_views.goals_view(),
@@ -223,11 +222,18 @@ void HGraphEncoderEngine::encode_views(
       );
       return;
    }
-   const auto input = make_input(state, goals, actions, history, history_max_steps);
    SemanticHGraphEncoderEngine compatible_engine(
-      state_schema.predicates, state_schema.actions, semantic_config(config_)
+      problem_adapter_->get_task_context(), semantic_config(config_)
    );
-   compatible_engine.encode(input, builder);
+   compatible_engine.encode(
+      state_view,
+      goal_views.goals_view(),
+      goal_views.subgoal_layers_view(),
+      action_views,
+      history_view,
+      history_max_steps,
+      builder
+   );
 }
 
 void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
@@ -247,7 +253,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_views(state, goals, actions, {}, std::nullopt, builder);
+   encode_impl(state, goals, actions, {}, std::nullopt, builder);
 }
 
 void HGraphEncoderEngine::encode(
@@ -259,7 +265,7 @@ void HGraphEncoderEngine::encode(
    BatchBuilder& builder
 )
 {
-   encode_views(state, goals, actions, history, history_max_steps, builder);
+   encode_impl(state, goals, actions, history, history_max_steps, builder);
 }
 
 void HGraphEncoderEngine::update_relations(RelationDict relation_dict_value)

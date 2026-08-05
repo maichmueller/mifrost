@@ -98,8 +98,8 @@ Native backend entry points use a direct path whenever the input is still a
 borrowed planning value:
 
 ```text
-backend value + task context -> granular backend Views -> sink builder
-                              -> neutral semantic sink -> BatchEncoding
+backend value + task context -> granular backend Views
+                              -> encoder-local preparation -> BatchEncoding
 ```
 
 The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use

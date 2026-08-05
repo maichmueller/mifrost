@@ -5,6 +5,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <mimir/formalism/problem.hpp>
 #include <mimir/search/state.hpp>
@@ -20,67 +21,324 @@
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/views.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.hpp"
-#include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
-#include "mifrost/core/semantic/views.hpp"
 
 namespace mifrost::pymimir {
 
-struct SemanticGoalViews {
-   std::vector< SemanticLiteral > goals;
-   std::vector< std::vector< SemanticLiteral > > subgoal_layers;
+using NativeLiteralVariant = LiteralVariant;
+using NativeAtomVariant = std::variant<
+   mimir::formalism::GroundAtom< mimir::formalism::StaticTag >,
+   mimir::formalism::GroundAtom< mimir::formalism::FluentTag >,
+   mimir::formalism::GroundAtom< mimir::formalism::DerivedTag > >;
 
-   [[nodiscard]] semantic::LiteralsView goals_view() const
+template < typename Tag >
+inline constexpr views::Category
+   native_category = std::is_same_v< Tag, mimir::formalism::StaticTag >
+                        ? views::Category::static_predicate
+                        : (std::is_same_v< Tag, mimir::formalism::FluentTag >
+                              ? views::Category::fluent
+                              : views::Category::derived);
+
+class NativeArgumentsView {
+  public:
+   NativeArgumentsView(const mimir::formalism::ObjectList* values, const views::Context& context)
+       : values_(values), context_(&context)
    {
-      return semantic::LiteralsView(std::span{goals});
    }
-   [[nodiscard]] semantic::SubgoalLayersView subgoal_layers_view() const
+
+   class iterator {
+      using Base = mimir::formalism::ObjectList::const_iterator;
+
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = mifrost::views::ObjectId;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
+      [[nodiscard]] mifrost::views::ObjectId operator*() const noexcept
+      {
+         return context_->object_id(views::raw_index((*value_)->get_index()));
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+      const views::Context* context_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_->begin(), *context_); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_->end(), *context_); }
+
+  private:
+   const mimir::formalism::ObjectList* values_;
+   const views::Context* context_;
+};
+
+class NativeAtomView: public mifrost::views::AtomViewBase< NativeAtomView > {
+  public:
+   NativeAtomView() = default;
+   NativeAtomView(NativeAtomVariant value, const views::Context& context)
+       : value_(std::move(value)), context_(&context)
    {
-      return semantic::SubgoalLayersView(std::span{subgoal_layers});
+   }
+
+   [[nodiscard]] auto predicate_id_impl() const
+   {
+      return std::visit(
+         [this](const auto atom) {
+            using NativeAtom = std::remove_cvref_t< decltype(atom) >;
+            using Tag = typename std::remove_pointer_t< NativeAtom >::Type;
+            return context_->predicate_id(
+               native_category< Tag >, views::raw_index(atom->get_predicate()->get_index())
+            );
+         },
+         value_
+      );
+   }
+
+   [[nodiscard]] auto arguments_impl() const
+   {
+      return NativeArgumentsView{
+         std::visit([](const auto atom) { return &atom->get_objects(); }, value_), *context_
+      };
+   }
+
+  private:
+   NativeAtomVariant value_;
+   const views::Context* context_ = nullptr;
+};
+
+class NativeLiteralView: public mifrost::views::LiteralViewBase< NativeLiteralView > {
+  public:
+   NativeLiteralView() = default;
+   NativeLiteralView(const NativeLiteralVariant* value, const views::Context& context)
+       : value_(value), context_(&context)
+   {
+   }
+
+   [[nodiscard]] bool is_negated_impl() const
+   {
+      return std::visit([](const auto literal) { return not literal->get_polarity(); }, *value_);
+   }
+
+   [[nodiscard]] NativeAtomView atom_impl() const
+   {
+      return std::visit(
+         [this](const auto literal) {
+            return NativeAtomView{NativeAtomVariant{literal->get_atom()}, *context_};
+         },
+         *value_
+      );
+   }
+
+  private:
+   const NativeLiteralVariant* value_ = nullptr;
+   const views::Context* context_ = nullptr;
+};
+
+class NativeLiteralsView {
+  public:
+   NativeLiteralsView(std::span< const NativeLiteralVariant > values, const views::Context& context)
+       : values_(values), context_(&context)
+   {
+   }
+
+   class iterator {
+      using Base = std::span< const NativeLiteralVariant >::iterator;
+
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = NativeLiteralView;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
+      [[nodiscard]] NativeLiteralView operator*() const noexcept
+      {
+         return NativeLiteralView{&*value_, *context_};
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+      const views::Context* context_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin(), *context_); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end(), *context_); }
+   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+
+  private:
+   std::span< const NativeLiteralVariant > values_;
+   const views::Context* context_;
+};
+
+class NativeSubgoalLayersView {
+   using Base = std::span< const std::vector< NativeLiteralVariant > >::iterator;
+
+  public:
+   NativeSubgoalLayersView(
+      std::span< const std::vector< NativeLiteralVariant > > values,
+      const views::Context& context
+   )
+       : values_(values), context_(&context)
+   {
+   }
+
+   class iterator {
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = NativeLiteralsView;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
+      [[nodiscard]] NativeLiteralsView operator*() const noexcept
+      {
+         return NativeLiteralsView(std::span{*value_}, *context_);
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+      const views::Context* context_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin(), *context_); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end(), *context_); }
+   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+
+  private:
+   std::span< const std::vector< NativeLiteralVariant > > values_;
+   const views::Context* context_;
+};
+
+struct NativeGoalViews {
+   std::vector< NativeLiteralVariant > goals;
+   std::vector< std::vector< NativeLiteralVariant > > subgoal_layers;
+   const views::Context* context = nullptr;
+
+   [[nodiscard]] NativeLiteralsView goals_view() const
+   {
+      return NativeLiteralsView(std::span{goals}, *context);
+   }
+   [[nodiscard]] NativeSubgoalLayersView subgoal_layers_view() const
+   {
+      return NativeSubgoalLayersView(std::span{subgoal_layers}, *context);
    }
 };
 
-template < typename Tag >
-[[nodiscard]] inline SemanticLiteral materialize_history_literal(
-   const mimir::formalism::GroundLiteral< Tag >& literal,
-   const views::Context& context
-)
-{
-   constexpr auto category = [] {
-      if constexpr(std::is_same_v< Tag, mimir::formalism::StaticTag >) {
-         return views::Category::static_predicate;
-      } else if constexpr(std::is_same_v< Tag, mimir::formalism::FluentTag >) {
-         return views::Category::fluent;
-      } else {
-         return views::Category::derived;
-      }
-   }();
-   using NativeLiteral = mimir::formalism::GroundLiteral< Tag >;
-   return canonical::materialize_semantic_literal(
-      views::LiteralView< NativeLiteral, category >{literal, context}
-   );
-}
-
-[[nodiscard]] inline std::vector< SemanticHistoryEntry > materialize_history_entries(
-   std::span< const std::pair< int, std::vector< LiteralVariant > > > history,
-   const views::Context& context
-)
-{
-   std::vector< SemanticHistoryEntry > result;
-   result.reserve(history.size());
-   for(const auto& [dt, literals] : history) {
-      auto& entry = result.emplace_back();
-      entry.dt = dt;
-      entry.literals.reserve(literals.size());
-      for(const auto& literal : literals) {
-         std::visit(
-            [&](const auto& value) {
-               entry.literals.push_back(materialize_history_literal(value, context));
-            },
-            literal
-         );
-      }
+class NativeHistoryEntryView:
+    public mifrost::views::HistoryEntryViewBase< NativeHistoryEntryView > {
+  public:
+   NativeHistoryEntryView(
+      const std::pair< int, std::vector< NativeLiteralVariant > >* value,
+      const views::Context& context
+   )
+       : value_(value), context_(&context)
+   {
    }
-   return result;
+
+   [[nodiscard]] int64_t dt_impl() const noexcept { return value_->first; }
+   [[nodiscard]] NativeLiteralsView literals_impl() const noexcept
+   {
+      return NativeLiteralsView(std::span{value_->second}, *context_);
+   }
+
+  private:
+   const std::pair< int, std::vector< NativeLiteralVariant > >* value_;
+   const views::Context* context_;
+};
+
+class NativeHistoryView {
+   using Entry = std::pair< int, std::vector< NativeLiteralVariant > >;
+
+  public:
+   NativeHistoryView(std::span< const Entry > values, const views::Context& context)
+       : values_(values), context_(&context)
+   {
+   }
+
+   class iterator {
+      using Base = std::span< const Entry >::iterator;
+
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = NativeHistoryEntryView;
+      using difference_type = std::ptrdiff_t;
+
+      iterator() = default;
+      iterator(Base value, const views::Context& context) : value_(value), context_(&context) {}
+      [[nodiscard]] NativeHistoryEntryView operator*() const noexcept
+      {
+         return NativeHistoryEntryView{&*value_, *context_};
+      }
+      iterator& operator++() noexcept
+      {
+         ++value_;
+         return *this;
+      }
+      iterator operator++(int) noexcept
+      {
+         auto copy = *this;
+         ++value_;
+         return copy;
+      }
+      friend bool operator==(const iterator&, const iterator&) = default;
+
+     private:
+      Base value_;
+      const views::Context* context_;
+   };
+
+   [[nodiscard]] iterator begin() const noexcept { return iterator(values_.begin(), *context_); }
+   [[nodiscard]] iterator end() const noexcept { return iterator(values_.end(), *context_); }
+   [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+
+  private:
+   std::span< const Entry > values_;
+   const views::Context* context_;
+};
+
+[[nodiscard]] inline NativeHistoryView make_history_view(
+   std::span< const std::pair< int, std::vector< NativeLiteralVariant > > > values,
+   const views::Context& context
+)
+{
+   return NativeHistoryView(values, context);
 }
 
 template < typename Tag >
@@ -150,9 +408,9 @@ class SemanticProblemAdapter {
       return views::make_state_view(state, view_context_);
    }
 
-   [[nodiscard]] SemanticGoalViews make_goal_views(const GoalInputs& goals) const
+   [[nodiscard]] NativeGoalViews make_goal_views(const GoalInputs& goals) const
    {
-      std::vector< std::vector< SemanticLiteral > > layers;
+      std::vector< std::vector< NativeLiteralVariant > > layers;
       append_goals< mimir::formalism::StaticTag, views::Category::static_predicate >(
          goals.static_goals, goals.static_goal_levels, layers
       );
@@ -163,7 +421,8 @@ class SemanticProblemAdapter {
          goals.derived_goals, goals.derived_goal_levels, layers
       );
 
-      SemanticGoalViews result;
+      NativeGoalViews result;
+      result.context = &view_context_;
       if(not layers.empty()) {
          result.goals = std::move(layers.front());
       }
@@ -198,8 +457,15 @@ class SemanticProblemAdapter {
       materialize_state_in_native_order(state_view, result);
 
       auto goal_views = make_goal_views(goals);
-      result.goals = std::move(goal_views.goals);
-      result.subgoal_layers = std::move(goal_views.subgoal_layers);
+      for(const auto literal : goal_views.goals_view()) {
+         result.goals.push_back(canonical::materialize_semantic_literal(literal));
+      }
+      for(const auto layer : goal_views.subgoal_layers_view()) {
+         auto& target = result.subgoal_layers.emplace_back();
+         for(const auto literal : layer) {
+            target.push_back(canonical::materialize_semantic_literal(literal));
+         }
+      }
       return result;
    }
 
@@ -254,7 +520,7 @@ class SemanticProblemAdapter {
    void append_goals(
       const Range& values,
       const Map& levels,
-      std::vector< std::vector< SemanticLiteral > >& layers
+      std::vector< std::vector< NativeLiteralVariant > >& layers
    ) const
    {
       for(const auto& literal : values) {
@@ -266,9 +532,7 @@ class SemanticProblemAdapter {
          if(layers.size() <= level) {
             layers.resize(level + 1);
          }
-         using NativeLiteral = std::remove_cvref_t< decltype(literal) >;
-         const views::LiteralView< NativeLiteral, Category > view{literal, view_context_};
-         layers[level].push_back(canonical::materialize_semantic_literal(view));
+         layers[level].emplace_back(literal);
       }
    }
 
