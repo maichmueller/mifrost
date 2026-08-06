@@ -663,6 +663,35 @@ inline void append_view_static_facts(ViewPreparation& preparation)
    }
 }
 
+/**
+ * Lane-aware preparation for paths that read only objects and state facts.
+ *
+ * The successor side of the successor-HGraph algorithm reads exactly two things
+ * from its input: the object table (for name formatting and the shared-table
+ * check) and the successor state facts. It never inspects successor goals,
+ * subgoal layers, actions or history. Running the full preparation there
+ * materialized the task context's default goals into the atom pool and the
+ * goal-level lane on every encode, purely to be discarded.
+ *
+ * This builds only the static-fact membership set and the state-fact lane; the
+ * other lanes stay empty. Output is unchanged, because no consumer of a
+ * state-only preparation reads them.
+ */
+template < views::StateView State >
+[[nodiscard]] ViewPreparation make_state_only_view_preparation(
+   const std::shared_ptr< const SemanticTaskContext >& context,
+   const State& state
+)
+{
+   if(not context) {
+      throw std::invalid_argument("semantic View input requires a task context");
+   }
+   ViewPreparation result{.task_context = context};
+   append_view_static_facts(result);
+   append_view_state(state, result);
+   return result;
+}
+
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_view_preparation(
    const std::shared_ptr< const SemanticTaskContext >& context,

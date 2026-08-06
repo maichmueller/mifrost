@@ -538,6 +538,46 @@ TEST_P(DirectViewEncoderTest, SuccessorDirectViewsMatchSemanticCompatibilityInpu
    );
 }
 
+// The successor lane must not build goal/action/history records the successor
+// algorithm never reads, and doing less work must not change the output.
+TEST_P(DirectViewEncoderTest, SuccessorPreparationIsStateOnly)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto [successor, action] = mifrost_test::find_successor(ctx);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto semantic_context = adapter.get_task_context();
+   const auto successor_view = adapter.make_state_view(successor);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+
+   const auto state_only = mifrost::canonical::detail::make_state_only_view_preparation(
+      semantic_context, successor_view
+   );
+   const auto full = mifrost::canonical::detail::make_hgraph_view_preparation(
+      semantic_context, successor_view, empty_actions
+   );
+
+   // Same state facts either way.
+   EXPECT_EQ(state_only.state_fact_indices.size(), full.state_fact_indices.size());
+   EXPECT_EQ(state_only.fact_lookup.size(), full.fact_lookup.size());
+
+   // No goal lane at all, and no atoms interned purely to back one.
+   EXPECT_TRUE(state_only.goal_level_refs.empty());
+   EXPECT_EQ(state_only.goal_layer_count, 0U);
+   EXPECT_TRUE(state_only.action_pool.empty());
+   EXPECT_TRUE(state_only.action_occurrence_indices.empty());
+   EXPECT_TRUE(state_only.history_data.empty());
+   EXPECT_LE(state_only.atom_pool.size(), full.atom_pool.size());
+   if(not semantic_context->default_goals.empty()) {
+      // The full preparation only differs by the discarded default goals.
+      EXPECT_FALSE(full.goal_level_refs.empty());
+   }
+
+   (void) action;
+}
+
 TEST_P(DirectViewEncoderTest, FlatViewBatchMatchesSemanticCompatibilityBatch)
 {
    const auto param = GetParam();

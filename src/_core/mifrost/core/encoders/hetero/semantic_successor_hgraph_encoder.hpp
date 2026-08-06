@@ -187,13 +187,18 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
+   // Accepted for signature symmetry with the current-state lane, but the
+   // successor-graph algorithm never encodes successor actions.
+   (void) successor_actions;
    encode_views(
       canonical::detail::make_hgraph_view_preparation(
          get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
       ),
-      canonical::detail::make_hgraph_view_preparation(
-         get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
-      ),
+      // The successor side reads only the object table and the successor state
+      // facts; goals, subgoal layers, actions and history are never inspected
+      // there. Prepare only what the algorithm consumes instead of
+      // materializing the task context's default goals to discard them.
+      canonical::detail::make_state_only_view_preparation(get_task_context(), successor_state),
       builder
    );
 }
@@ -245,6 +250,9 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
+   // Accepted for signature symmetry with the current-state lane, but the
+   // successor-graph algorithm never encodes successor actions.
+   (void) successor_actions;
    encode_views(
       canonical::detail::make_hgraph_view_preparation(
          get_task_context(),
@@ -253,9 +261,11 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
          std::forward< SubgoalLayers >(subgoal_layers),
          std::forward< CurrentActions >(current_actions)
       ),
-      canonical::detail::make_hgraph_view_preparation(
-         get_task_context(), successor_state, std::forward< SuccessorActions >(successor_actions)
-      ),
+      // The successor side reads only the object table and the successor state
+      // facts; goals, subgoal layers, actions and history are never inspected
+      // there. Prepare only what the algorithm consumes instead of
+      // materializing the task context's default goals to discard them.
+      canonical::detail::make_state_only_view_preparation(get_task_context(), successor_state),
       builder
    );
 }
