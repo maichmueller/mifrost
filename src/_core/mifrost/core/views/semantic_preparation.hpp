@@ -48,7 +48,6 @@ struct ViewHistoryEntryData {
    std::vector< ViewLiteralRef > literals;
 };
 
-class SemanticAtomRange;
 class SemanticActionRange;
 class SemanticLiteralRange;
 class SemanticHistoryRange;
@@ -67,7 +66,20 @@ struct ViewPreparation {
     */
    std::vector< SemanticAtom > atom_pool;
    hash_map< SemanticAtom, size_t, SemanticAtomHash > atom_indices;
-   std::vector< size_t > state_fact_indices;
+   /**
+    * State facts in native emission order, stored contiguously.
+    *
+    * These are not pool references. A backend state View yields lazy atom
+    * proxies, so the state lane has to become owned `SemanticAtom` values
+    * somewhere regardless; keeping them contiguous lets every consumer take a
+    * plain `std::span` -- the same shape the owning compatibility DTO already
+    * has -- instead of a two-mode carrier that branches on storage per element.
+    * It also costs one vector rather than a pool entry plus an index.
+    *
+    * The pool remains for the lanes that genuinely need stable multi-pass
+    * identity across repeated occurrences: goals and history.
+    */
+   std::vector< SemanticAtom > state_facts;
    std::vector< ViewGoalLevelRef > goal_level_refs;
    size_t goal_layer_count = 0;
    std::vector< SemanticGroundAction > action_pool;
@@ -81,6 +93,12 @@ struct ViewPreparation {
    {
       atom_pool.reserve(atom_pool.size() + count);
       atom_indices.reserve(atom_indices.size() + count);
+      fact_lookup.reserve(fact_lookup.size() + count);
+   }
+
+   void reserve_state_facts(size_t count)
+   {
+      state_facts.reserve(state_facts.size() + count);
       fact_lookup.reserve(fact_lookup.size() + count);
    }
 
@@ -114,7 +132,6 @@ struct ViewPreparation {
       return SemanticLiteral{atom_pool.at(literal.atom_index), literal.positive};
    }
 
-   [[nodiscard]] SemanticAtomRange state_facts() const;
    [[nodiscard]] SemanticActionRange actions() const;
    [[nodiscard]] const SemanticGroundAction& action_at(size_t index) const
    {
@@ -124,72 +141,16 @@ struct ViewPreparation {
    [[nodiscard]] SemanticGoalRange goal_levels() const;
 };
 
-class SemanticAtomRange {
-  public:
-   SemanticAtomRange(
-      const std::vector< SemanticAtom >* owned,
-      const ViewPreparation* preparation,
-      const std::vector< size_t >* references
-   )
-       : owned_(owned), preparation_(preparation), references_(references)
-   {
-   }
-
-   class iterator {
-     public:
-      using iterator_category = std::forward_iterator_tag;
-      using iterator_concept = std::forward_iterator_tag;
-      using value_type = SemanticAtom;
-      using difference_type = std::ptrdiff_t;
-      using reference = const SemanticAtom&;
-
-      iterator() = default;
-      iterator(const SemanticAtomRange* owner, size_t index) : owner_(owner), index_(index) {}
-
-      [[nodiscard]] const SemanticAtom& operator*() const { return owner_->at(index_); }
-      iterator& operator++()
-      {
-         ++index_;
-         return *this;
-      }
-      [[nodiscard]] bool operator==(const iterator& other) const
-      {
-         return owner_ == other.owner_ and index_ == other.index_;
-      }
-
-     private:
-      const SemanticAtomRange* owner_ = nullptr;
-      size_t index_ = 0;
-   };
-
-   [[nodiscard]] iterator begin() const { return iterator{this, 0}; }
-   [[nodiscard]] iterator end() const { return iterator{this, size()}; }
-   [[nodiscard]] size_t size() const
-   {
-      return owned_ != nullptr ? owned_->size() : references_->size();
-   }
-
-  private:
-   [[nodiscard]] const SemanticAtom& at(size_t index) const
-   {
-      return owned_ != nullptr ? owned_->at(index)
-                               : preparation_->atom_pool.at(references_->at(index));
-   }
-
-   const std::vector< SemanticAtom >* owned_ = nullptr;
-   const ViewPreparation* preparation_ = nullptr;
-   const std::vector< size_t >* references_ = nullptr;
-};
-
+/**
+ * The unique ground actions interned for one graph.
+ *
+ * Single-mode by construction: it always reads the preparation's action pool.
+ * The owning compatibility DTO already stores its actions contiguously and is
+ * consumed as a plain span, so no storage-mode check reaches per-element code.
+ */
 class SemanticActionRange {
   public:
-   SemanticActionRange(
-      const std::vector< SemanticGroundAction >* owned,
-      const ViewPreparation* preparation
-   )
-       : owned_(owned), preparation_(preparation)
-   {
-   }
+   explicit SemanticActionRange(const ViewPreparation* preparation) : preparation_(preparation) {}
 
    class iterator {
      public:
@@ -220,28 +181,23 @@ class SemanticActionRange {
 
    [[nodiscard]] iterator begin() const { return iterator{this, 0}; }
    [[nodiscard]] iterator end() const { return iterator{this, size()}; }
-   [[nodiscard]] size_t size() const
-   {
-      return owned_ != nullptr ? owned_->size() : preparation_->action_pool.size();
-   }
+   [[nodiscard]] size_t size() const { return preparation_->action_pool.size(); }
    [[nodiscard]] const SemanticGroundAction& at(size_t index) const
    {
-      return owned_ != nullptr ? owned_->at(index) : preparation_->action_pool.at(index);
+      return preparation_->action_pool.at(index);
    }
 
   private:
-   const std::vector< SemanticGroundAction >* owned_ = nullptr;
    const ViewPreparation* preparation_ = nullptr;
 };
 
 class SemanticLiteralRange {
   public:
    SemanticLiteralRange(
-      const std::vector< SemanticLiteral >* owned,
       const ViewPreparation* preparation,
       const std::vector< ViewLiteralRef >* references
    )
-       : owned_(owned), preparation_(preparation), references_(references)
+       : preparation_(preparation), references_(references)
    {
    }
 
@@ -274,18 +230,13 @@ class SemanticLiteralRange {
 
    [[nodiscard]] iterator begin() const { return iterator{this, 0}; }
    [[nodiscard]] iterator end() const { return iterator{this, size()}; }
-   [[nodiscard]] size_t size() const
-   {
-      return owned_ != nullptr ? owned_->size() : references_->size();
-   }
+   [[nodiscard]] size_t size() const { return references_->size(); }
    [[nodiscard]] SemanticLiteral at(size_t index) const
    {
-      return owned_ != nullptr ? owned_->at(index)
-                               : preparation_->materialize_literal(references_->at(index));
+      return preparation_->materialize_literal(references_->at(index));
    }
 
   private:
-   const std::vector< SemanticLiteral >* owned_ = nullptr;
    const ViewPreparation* preparation_ = nullptr;
    const std::vector< ViewLiteralRef >* references_ = nullptr;
 };
@@ -294,16 +245,10 @@ class SemanticHistoryRange {
   public:
    struct Entry {
       int64_t dt = 0;
-      SemanticLiteralRange literals{nullptr, nullptr, nullptr};
+      SemanticLiteralRange literals{nullptr, nullptr};
    };
 
-   SemanticHistoryRange(
-      const std::vector< SemanticHistoryEntry >* owned,
-      const ViewPreparation* preparation
-   )
-       : owned_(owned), preparation_(preparation)
-   {
-   }
+   explicit SemanticHistoryRange(const ViewPreparation* preparation) : preparation_(preparation) {}
 
    class iterator {
      public:
@@ -334,28 +279,17 @@ class SemanticHistoryRange {
 
    [[nodiscard]] iterator begin() const { return iterator{this, 0}; }
    [[nodiscard]] iterator end() const { return iterator{this, size()}; }
-   [[nodiscard]] size_t size() const
-   {
-      return owned_ != nullptr ? owned_->size() : preparation_->history_data.size();
-   }
+   [[nodiscard]] size_t size() const { return preparation_->history_data.size(); }
    [[nodiscard]] Entry at(size_t index) const
    {
-      if(owned_ != nullptr) {
-         const auto& entry = owned_->at(index);
-         return Entry{
-            .dt = entry.dt,
-            .literals = SemanticLiteralRange{&entry.literals, nullptr, nullptr},
-         };
-      }
       const auto& entry = preparation_->history_data.at(index);
       return Entry{
          .dt = entry.dt,
-         .literals = SemanticLiteralRange{nullptr, preparation_, &entry.literals},
+         .literals = SemanticLiteralRange{preparation_, &entry.literals},
       };
    }
 
   private:
-   const std::vector< SemanticHistoryEntry >* owned_ = nullptr;
    const ViewPreparation* preparation_ = nullptr;
 };
 
@@ -406,19 +340,14 @@ class SemanticGoalRange {
    const ViewPreparation* preparation_ = nullptr;
 };
 
-inline SemanticAtomRange ViewPreparation::state_facts() const
-{
-   return SemanticAtomRange{nullptr, this, &state_fact_indices};
-}
-
 inline SemanticActionRange ViewPreparation::actions() const
 {
-   return SemanticActionRange{nullptr, this};
+   return SemanticActionRange{this};
 }
 
 inline SemanticHistoryRange ViewPreparation::history() const
 {
-   return SemanticHistoryRange{nullptr, this};
+   return SemanticHistoryRange{this};
 }
 
 inline SemanticGoalRange ViewPreparation::goal_levels() const
@@ -540,7 +469,7 @@ inline SemanticGroundAction view_materialize_action(const SemanticGroundAction& 
 inline void add_fact(ViewPreparation& preparation, SemanticAtom atom)
 {
    preparation.fact_lookup.emplace(atom);
-   preparation.state_fact_indices.push_back(preparation.intern_atom(std::move(atom)));
+   preparation.state_facts.push_back(std::move(atom));
 }
 
 template < views::StateView State >
@@ -550,9 +479,9 @@ void append_view_state(const State& state, ViewPreparation& preparation)
    const auto derived_atoms = state.derived_atoms();
    if constexpr(std::ranges::sized_range< decltype(fluent_atoms) >
                 and std::ranges::sized_range< decltype(derived_atoms) >) {
-      const auto count = std::ranges::size(fluent_atoms) + std::ranges::size(derived_atoms);
-      preparation.reserve_atoms(count);
-      preparation.state_fact_indices.reserve(preparation.state_fact_indices.size() + count);
+      preparation.reserve_state_facts(
+         std::ranges::size(fluent_atoms) + std::ranges::size(derived_atoms)
+      );
    }
    for(const auto atom : state.fluent_atoms()) {
       add_fact(preparation, view_materialize_atom(atom));

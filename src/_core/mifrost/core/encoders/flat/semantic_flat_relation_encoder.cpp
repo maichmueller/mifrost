@@ -494,80 +494,196 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       };
    };
 
-   struct PreparedRelationGraph {
-      const canonical::detail::ViewPreparation* view = nullptr;
-      const SemanticFlatRelationInput* compatibility_input = nullptr;
-      std::vector< SemanticGoalLevel > goal_levels;
-      std::vector< SemanticLiteral > grouped_goals;
-      hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
-      const hash_set< SemanticAtom, SemanticAtomHash >* view_fact_lookup = nullptr;
-      mutable SemanticEncodingContext context;
-      bool suppress_empty_target_names = false;
+   /**
+    * The two concrete borrowed input sources for the Flat family.
+    *
+    * The canonical algorithm is written once and instantiated for each of
+    * these. Neither carries a storage-mode flag: the choice is made exactly
+    * once, at the public entry point that picks the source type, and never
+    * again per lane or per element.
+    */
+   struct ViewSource {
+      const canonical::detail::ViewPreparation* input = nullptr;
 
       [[nodiscard]] const std::vector< std::string >& objects() const
       {
-         if(compatibility_input != nullptr) {
-            return semantic_objects(*compatibility_input);
-         }
-         return view->task_context->objects;
+         return input->task_context->objects;
       }
-
-      [[nodiscard]] canonical::detail::SemanticAtomRange state_facts() const
+      [[nodiscard]] std::span< const SemanticAtom > static_facts() const
       {
-         if(compatibility_input != nullptr) {
-            return canonical::detail::SemanticAtomRange{
-               &compatibility_input->state_facts, nullptr, nullptr
-            };
-         }
-         return view->state_facts();
+         return input->task_context
+                   ? std::span< const SemanticAtom >{input->task_context->static_facts}
+                   : std::span< const SemanticAtom >{};
       }
-
-      [[nodiscard]] const std::vector< SemanticAtom >& static_facts() const
+      [[nodiscard]] std::span< const SemanticAtom > state_facts() const
       {
-         if(compatibility_input != nullptr) {
-            return semantic_static_facts(*compatibility_input);
-         }
-         return view->task_context ? view->task_context->static_facts : empty_semantic_atoms();
+         return std::span< const SemanticAtom >{input->state_facts};
       }
-
-      [[nodiscard]] canonical::detail::SemanticActionRange actions() const
-      {
-         if(compatibility_input != nullptr) {
-            return canonical::detail::SemanticActionRange{&compatibility_input->actions, nullptr};
-         }
-         return view->actions();
-      }
-
-      [[nodiscard]] canonical::detail::SemanticHistoryRange history() const
-      {
-         if(compatibility_input != nullptr) {
-            return canonical::detail::SemanticHistoryRange{&compatibility_input->history, nullptr};
-         }
-         return view->history();
-      }
-
-      [[nodiscard]] std::optional< int64_t > history_max_steps() const
-      {
-         return compatibility_input != nullptr ? compatibility_input->history_max_steps
-                                               : std::nullopt;
-      }
-
+      [[nodiscard]] auto actions() const { return input->actions(); }
+      [[nodiscard]] auto history() const { return input->history(); }
+      [[nodiscard]] std::optional< int64_t > history_max_steps() const { return std::nullopt; }
       [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
       {
-         static const std::shared_ptr< const SemanticTaskContext > empty;
-         return compatibility_input != nullptr ? compatibility_input->task_context
-                                               : view->task_context;
+         return input->task_context;
       }
-
-      [[nodiscard]] static const std::vector< SemanticAtom >& empty_semantic_atoms()
+      /**
+       * Fact membership is already interned while traversing the Views, so the
+       * prepared graph borrows it instead of rebuilding a second set.
+       */
+      [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >*
+      borrowed_fact_membership() const
       {
-         static const std::vector< SemanticAtom > empty;
-         return empty;
+         return &input->fact_lookup;
       }
 
+      /** Emit each goal occurrence in level order, preserving multiplicity. */
+      template < typename Fn >
+      void for_each_goal(Fn&& visit) const
+      {
+         for(const auto& goal : input->goal_levels()) {
+            visit(goal.literal, goal.level);
+         }
+      }
+      [[nodiscard]] size_t goal_count() const { return input->goal_level_refs.size(); }
+      [[nodiscard]] size_t max_subgoal_layer() const { return input->goal_layer_count; }
+
+      /**
+       * Unique actions plus one occurrence index per input action. Graph nodes
+       * are deduplicated while target rows keep every occurrence.
+       */
+      template < typename Fn >
+      void for_each_action_occurrence(Fn&& visit) const
+      {
+         for(const auto index : input->action_occurrence_indices) {
+            visit(input->action_pool[index]);
+         }
+      }
+   };
+
+   struct CompatibilitySource {
+      const SemanticFlatRelationInput* input = nullptr;
+
+      [[nodiscard]] const std::vector< std::string >& objects() const
+      {
+         return semantic_objects(*input);
+      }
+      [[nodiscard]] std::span< const SemanticAtom > static_facts() const
+      {
+         return std::span< const SemanticAtom >{semantic_static_facts(*input)};
+      }
+      [[nodiscard]] std::span< const SemanticAtom > state_facts() const
+      {
+         return std::span< const SemanticAtom >{input->state_facts};
+      }
+      [[nodiscard]] std::span< const SemanticGroundAction > actions() const
+      {
+         return std::span< const SemanticGroundAction >{input->actions};
+      }
+      [[nodiscard]] std::span< const SemanticHistoryEntry > history() const
+      {
+         return std::span< const SemanticHistoryEntry >{input->history};
+      }
+      [[nodiscard]] std::optional< int64_t > history_max_steps() const
+      {
+         return input->history_max_steps;
+      }
+      [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
+      {
+         return input->task_context;
+      }
+      /** The owning DTO has no interned membership set; the graph builds one. */
+      [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >*
+      borrowed_fact_membership() const
+      {
+         return nullptr;
+      }
+
+      template < typename Fn >
+      void for_each_goal(Fn&& visit) const
+      {
+         for(const auto& literal : semantic_goals(*input)) {
+            visit(literal, size_t{0});
+         }
+         for(size_t layer = 0; layer < input->subgoal_layers.size(); ++layer) {
+            for(const auto& literal : input->subgoal_layers[layer]) {
+               visit(literal, layer + 1);
+            }
+         }
+      }
+      [[nodiscard]] size_t goal_count() const
+      {
+         size_t count = semantic_goals(*input).size();
+         for(const auto& layer : input->subgoal_layers) {
+            count += layer.size();
+         }
+         return count;
+      }
+
+      [[nodiscard]] size_t max_subgoal_layer() const { return input->subgoal_layers.size(); }
+
+      /** No deduplication: every action is its own occurrence. */
+      template < typename Fn >
+      void for_each_action_occurrence(Fn&& visit) const
+      {
+         for(const auto& action : input->actions) {
+            visit(action);
+         }
+      }
+   };
+
+   /**
+    * One goal occurrence plus the level the encoder must emit it at.
+    *
+    * Repeated goal literals keep every occurrence, and each occurrence carries
+    * the *effective* level -- the highest level the literal appears at -- which
+    * is resolved once during preparation instead of by a binary search on every
+    * emission pass.
+    */
+   struct PreparedGoalRef {
+      size_t entry_index = 0;
+      size_t level = 0;
+   };
+
+   /**
+    * Fully resolved borrowed input plus the graph-derived working state.
+    *
+    * Every member is either a borrowed span/pointer settled once by
+    * `prepare_relation_graph`, or a compact graph-derived structure. There is
+    * no storage-mode pointer left for the emitters to test.
+    */
+   struct PreparedRelationGraph {
+      const std::vector< std::string >* objects_lane = nullptr;
+      std::span< const SemanticAtom > static_facts_lane;
+      std::span< const SemanticAtom > state_facts_lane;
+      std::shared_ptr< const SemanticTaskContext > task_context;
+
+      /** Goal occurrences in input order; the only owned copy of the goal lane. */
+      std::vector< SemanticGoalLevel > goal_entries;
+      /** Category-grouped references into `goal_entries`, with effective levels. */
+      std::vector< PreparedGoalRef > grouped_goals;
+
+      hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
+      const hash_set< SemanticAtom, SemanticAtomHash >* fact_membership_ptr = nullptr;
+      mutable SemanticEncodingContext context;
+      bool suppress_empty_target_names = false;
+
+      [[nodiscard]] const std::vector< std::string >& objects() const { return *objects_lane; }
+      [[nodiscard]] std::span< const SemanticAtom > state_facts() const { return state_facts_lane; }
+      [[nodiscard]] std::span< const SemanticAtom > static_facts() const
+      {
+         return static_facts_lane;
+      }
+      [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
+      {
+         return task_context;
+      }
       [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >& fact_membership() const
       {
-         return view_fact_lookup != nullptr ? *view_fact_lookup : fact_keys;
+         return fact_membership_ptr != nullptr ? *fact_membership_ptr : fact_keys;
+      }
+      [[nodiscard]] const SemanticLiteral& goal_literal(const PreparedGoalRef& ref) const
+      {
+         return goal_entries[ref.entry_index].literal;
       }
    };
 
@@ -1696,15 +1812,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
    }
 
-   void validate_prepared_input(const PreparedRelationGraph& input) const
+   template < typename Source >
+   void validate_source(const Source& source) const
    {
-      if(input.task_context_ptr() and input.task_context_ptr() != task_context) {
+      if(source.task_context_ptr() and source.task_context_ptr() != task_context) {
          throw std::invalid_argument(
             "Semantic flat input belongs to a different task context than the encoder"
          );
       }
-      const auto& objects = input.objects();
-      const auto& static_facts = input.static_facts();
+      const auto& objects = source.objects();
       std::set< std::string, std::less<> > object_names;
       for(const auto& object : objects) {
          validate_name(object, "object");
@@ -1712,33 +1828,19 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             throw std::invalid_argument("Semantic flat object names must be unique");
          }
       }
-      for(const auto& fact : input.state_facts()) {
+      for(const auto& fact : source.state_facts()) {
          validate_atom(fact, objects.size(), "state fact");
       }
-      for(const auto& fact : static_facts) {
+      for(const auto& fact : source.static_facts()) {
          validate_atom(fact, objects.size(), "static fact");
       }
-      if(input.view != nullptr) {
-         if(input.view->goal_layer_count > config.max_goal_level) {
-            throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
-         }
-         for(const auto& goal : input.view->goal_levels()) {
-            validate_atom(goal.literal.atom, objects.size(), goal.level == 0 ? "goal" : "subgoal");
-         }
-      } else {
-         for(const auto& goal : semantic_goals(*input.compatibility_input)) {
-            validate_atom(goal.atom, objects.size(), "goal");
-         }
-         if(input.compatibility_input->subgoal_layers.size() > config.max_goal_level) {
-            throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
-         }
-         for(const auto& layer : input.compatibility_input->subgoal_layers) {
-            for(const auto& goal : layer) {
-               validate_atom(goal.atom, objects.size(), "subgoal");
-            }
-         }
+      if(source.max_subgoal_layer() > config.max_goal_level) {
+         throw std::invalid_argument("Semantic flat subgoal layer count exceeds max_goal_level");
       }
-      for(const auto& action : input.actions()) {
+      source.for_each_goal([&](const SemanticLiteral& literal, size_t level) {
+         validate_atom(literal.atom, objects.size(), level == 0 ? "goal" : "subgoal");
+      });
+      for(const auto& action : source.actions()) {
          if(action.action < 0 or static_cast< size_t >(action.action) >= actions.size()) {
             throw std::invalid_argument("Semantic flat action schema index out of range");
          }
@@ -1752,7 +1854,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
             }
          }
       }
-      for(const auto& entry : input.history()) {
+      for(const auto& entry : source.history()) {
          if(entry.dt >= 0) {
             throw std::invalid_argument("Semantic flat history requires negative dt values");
          }
@@ -1846,11 +1948,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return index;
    }
 
-   SemanticEncodingContext make_context(
-      const PreparedRelationGraph& prepared,
-      const std::vector< SemanticLiteral >& grouped_goals,
-      const std::vector< SemanticGoalLevel >& goal_levels
-   ) const
+   template < typename Source >
+   SemanticEncodingContext
+   make_context(const Source& source, const PreparedRelationGraph& prepared) const
    {
       SemanticEncodingContext context;
       const auto& objects = prepared.objects();
@@ -1865,98 +1965,73 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       std::iota(context.object_indices.begin(), context.object_indices.end(), int64_t{0});
       context.predicate_entity_indices.assign(predicates.size(), -1);
 
-      for(const auto source : {TargetSource::goals, TargetSource::subgoals}) {
-         if(not has_anchor_entity_source(config, source)) {
+      for(const auto target_source : {TargetSource::goals, TargetSource::subgoals}) {
+         if(not has_anchor_entity_source(config, target_source)) {
             continue;
          }
-         for(const auto& literal : grouped_goals) {
+         for(const auto& goal : prepared.grouped_goals) {
+            const auto& literal = prepared.goal_literal(goal);
             const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
             if(config.ignore_zero_arity_relations and predicate.arity == 0) {
                continue;
             }
-            const size_t level = semantic_goal_level(goal_levels, literal);
-            if((source == TargetSource::goals and level > 0)
-               or (source == TargetSource::subgoals and level == 0)) {
+            const size_t level = goal.level;
+            if((target_source == TargetSource::goals and level > 0)
+               or (target_source == TargetSource::subgoals and level == 0)) {
                continue;
             }
             const auto display = config.export_node_names
                                     ? goal_display_name(literal, level, predicates, objects)
                                     : std::string{};
             bool inserted = false;
-            const auto key = GoalEntityKey{source, literal, level};
+            const auto key = GoalEntityKey{target_source, literal, level};
             const int64_t position = ensure_target_entity(
                context,
                context.goal_entity_indices,
                key,
-               source,
-               entity_role_for_target_source(source),
+               target_source,
+               entity_role_for_target_source(target_source),
                display,
                inserted
             );
-            if(has_target_source(config, source)) {
-               append_target_row(context, source, position, display);
+            if(has_target_source(config, target_source)) {
+               append_target_row(context, target_source, position, display);
             }
          }
       }
 
-      if(prepared.view != nullptr) {
-         for(const auto& action : prepared.actions()) {
-            const auto display = config.export_node_names
-                                    ? action_display_name(action, actions, objects)
-                                    : std::string{};
-            bool inserted = false;
-            (void) ensure_target_entity(
-               context,
-               context.action_entity_indices,
-               action,
-               TargetSource::actions,
-               FlatEntityRole::action,
-               display,
-               inserted
-            );
-            if(inserted) {
-               context.unique_actions.push_back(action);
-            }
+      // One pass over action *occurrences*. Graph entities are created on first
+      // occurrence, so entity indices follow first-use order, while every
+      // occurrence still contributes its own target row. This is the same
+      // result the previous per-storage-mode loops produced, expressed once.
+      const bool target_actions = has_target_source(config, TargetSource::actions);
+      source.for_each_action_occurrence([&](const SemanticGroundAction& action) {
+         const auto display = config.export_node_names
+                                 ? action_display_name(action, actions, objects)
+                                 : std::string{};
+         bool inserted = false;
+         const int64_t position = ensure_target_entity(
+            context,
+            context.action_entity_indices,
+            action,
+            TargetSource::actions,
+            FlatEntityRole::action,
+            display,
+            inserted
+         );
+         if(inserted) {
+            context.unique_actions.push_back(action);
          }
-         if(has_target_source(config, TargetSource::actions)) {
-            for(const auto index : prepared.view->action_occurrence_indices) {
-               const auto& action = prepared.actions().at(index);
-               const auto display = config.export_node_names
-                                       ? action_display_name(action, actions, objects)
-                                       : std::string{};
-               append_target_row(
-                  context, TargetSource::actions, context.action_entity_indices.at(action), display
-               );
-            }
+         if(target_actions) {
+            append_target_row(context, TargetSource::actions, position, display);
          }
-      } else {
-         for(const auto& action : prepared.actions()) {
-            const auto display = config.export_node_names
-                                    ? action_display_name(action, actions, objects)
-                                    : std::string{};
-            bool inserted = false;
-            const int64_t position = ensure_target_entity(
-               context,
-               context.action_entity_indices,
-               action,
-               TargetSource::actions,
-               FlatEntityRole::action,
-               display,
-               inserted
-            );
-            if(inserted) {
-               context.unique_actions.push_back(action);
-            }
-            if(has_target_source(config, TargetSource::actions)) {
-               append_target_row(context, TargetSource::actions, position, display);
-            }
-         }
-      }
+      });
 
-      context.history_entries.reserve(prepared.history().size());
-      for(const auto& entry : prepared.history()) {
-         if(prepared.history_max_steps().has_value()
-            and std::abs(entry.dt) > *prepared.history_max_steps()) {
+      const auto history_max_steps = source.history_max_steps();
+      const auto history = source.history();
+      context.history_entries.reserve(history.size());
+      for(const auto& entry : history) {
+         if(history_max_steps.has_value() and std::abs(entry.dt) > *history_max_steps) {
             continue;
          }
          context.history_entries.push_back(
@@ -2015,69 +2090,59 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       return context;
    }
 
-   PreparedRelationGraph prepare_relation_graph(PreparedRelationGraph prepared) const
+   /**
+    * The one canonical Flat preparation, instantiated per concrete source.
+    *
+    * This is the only place that knows which kind of input is being encoded.
+    * Everything it produces is either a borrowed span settled here, or compact
+    * graph-derived working state, so no emitter downstream re-tests the storage
+    * mode.
+    */
+   template < typename Source >
+   PreparedRelationGraph prepare_source(const Source& source) const
    {
-      validate_prepared_input(prepared);
-      if(prepared.view != nullptr) {
-         prepared.goal_levels.clear();
-         prepared.goal_levels.reserve(prepared.view->goal_level_refs.size());
-         for(const auto& goal : prepared.view->goal_levels()) {
-            prepared.goal_levels.push_back(goal);
-         }
-      } else {
-         const auto& goals = semantic_goals(*prepared.compatibility_input);
-         prepared.goal_levels.reserve(
-            goals.size()
-            + std::accumulate(
-               prepared.compatibility_input->subgoal_layers.begin(),
-               prepared.compatibility_input->subgoal_layers.end(),
-               size_t{0},
-               [](size_t count, const auto& layer) { return count + layer.size(); }
-            )
-         );
-         for(const auto& literal : goals) {
-            prepared.goal_levels.push_back({literal, 0});
-         }
-         for(size_t index = 0; index < prepared.compatibility_input->subgoal_layers.size();
-             ++index) {
-            for(const auto& literal : prepared.compatibility_input->subgoal_layers[index]) {
-               prepared.goal_levels.push_back({literal, index + 1});
-            }
-         }
-      }
-      std::ranges::sort(prepared.goal_levels);
+      validate_source(source);
+
+      PreparedRelationGraph prepared;
+      prepared.objects_lane = &source.objects();
+      prepared.static_facts_lane = source.static_facts();
+      prepared.state_facts_lane = source.state_facts();
+      prepared.task_context = source.task_context_ptr();
+      prepared.fact_membership_ptr = source.borrowed_fact_membership();
+
+      // Goal occurrences in input order: plain goals first, then each subgoal
+      // layer. Repeated literals keep every occurrence.
+      prepared.goal_entries.reserve(source.goal_count());
+      source.for_each_goal([&](const SemanticLiteral& literal, size_t level) {
+         prepared.goal_entries.push_back(SemanticGoalLevel{literal, level});
+      });
+
+      // Effective level for a repeated literal is the highest level it appears
+      // at. Resolve it once here rather than binary-searching on every pass.
+      auto sorted_levels = prepared.goal_entries;
+      std::ranges::sort(sorted_levels);
+
+      prepared.grouped_goals.reserve(prepared.goal_entries.size());
       for(const auto category : kCategoryOrder) {
-         const auto append_category = [&](const auto& literals) {
-            for(const auto& literal : literals) {
-               if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category
-                  == category) {
-                  prepared.grouped_goals.push_back(literal);
+         for(size_t index = 0; index < prepared.goal_entries.size(); ++index) {
+            const auto& literal = prepared.goal_entries[index].literal;
+            if(predicates.at(static_cast< size_t >(literal.atom.predicate)).category != category) {
+               continue;
+            }
+            prepared.grouped_goals.push_back(
+               PreparedGoalRef{
+                  .entry_index = index,
+                  .level = semantic_goal_level(sorted_levels, literal),
                }
-            }
-         };
-         if(prepared.view != nullptr) {
-            for(const auto& goal : prepared.view->goal_levels()) {
-               if(predicates.at(static_cast< size_t >(goal.literal.atom.predicate)).category
-                  == category) {
-                  prepared.grouped_goals.push_back(goal.literal);
-               }
-            }
-         } else {
-            append_category(semantic_goals(*prepared.compatibility_input));
-            for(const auto& layer : prepared.compatibility_input->subgoal_layers) {
-               append_category(layer);
-            }
+            );
          }
-      }
-      prepared.context = make_context(prepared, prepared.grouped_goals, prepared.goal_levels);
-      if(prepared.view != nullptr) {
-         prepared.view_fact_lookup = &prepared.view->fact_lookup;
       }
 
-      const auto& static_facts = prepared.static_facts();
+      prepared.context = make_context(source, prepared);
+
       const auto
          record_facts =
-            [&](const auto& facts, bool emit_facts) {
+            [&](std::span< const SemanticAtom > facts, bool emit_facts) {
                for(const auto& fact : facts) {
                   const auto& predicate = predicates.at(static_cast< size_t >(fact.predicate));
                   if(emit_facts
@@ -2087,15 +2152,16 @@ struct SemanticFlatRelationEncoderEngine::Impl {
                and config.use_predicate_virtual_nodes) {
                      (void) ensure_predicate_entity(prepared.context, fact.predicate);
                   }
-                  if(prepared.view == nullptr) {
+                  if(prepared.fact_membership_ptr == nullptr) {
                      prepared.fact_keys.emplace(fact);
                   }
                }
             };
-      record_facts(static_facts, config.include_static);
+      record_facts(prepared.static_facts(), config.include_static);
       record_facts(prepared.state_facts(), true);
 
-      for(const auto& literal : prepared.grouped_goals) {
+      for(const auto& goal : prepared.grouped_goals) {
+         const auto& literal = prepared.goal_literal(goal);
          const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
          if(kTopTypePredicates.contains(predicate.name)
             or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
@@ -2128,13 +2194,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       const canonical::detail::ViewPreparation& input
    ) const
    {
-      return prepare_relation_graph(PreparedRelationGraph{.view = &input});
+      return prepare_source(ViewSource{&input});
    }
 
    PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
    {
-      PreparedRelationGraph prepared{.compatibility_input = &input};
-      return prepare_relation_graph(std::move(prepared));
+      return prepare_source(CompatibilitySource{&input});
    }
 
    void emit_relation_lane(
@@ -2172,13 +2237,14 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       }
 
       if(lane == RelationLane::goals) {
-         for(const auto& literal : prepared.grouped_goals) {
+         for(const auto& goal : prepared.grouped_goals) {
+            const auto& literal = prepared.goal_literal(goal);
             const auto& predicate = predicates.at(static_cast< size_t >(literal.atom.predicate));
             if(kTopTypePredicates.contains(predicate.name)
                or (config.ignore_zero_arity_relations and predicate.arity == 0)) {
                continue;
             }
-            const size_t level = semantic_goal_level(prepared.goal_levels, literal);
+            const size_t level = goal.level;
             if(config.goal_derivations.contains(GoalDerivation::plain)) {
                std::array< int64_t, 1 > auxiliary{};
                std::span< const int64_t > auxiliary_span;

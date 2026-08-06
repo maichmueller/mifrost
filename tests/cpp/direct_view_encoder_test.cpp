@@ -538,6 +538,48 @@ TEST_P(DirectViewEncoderTest, SuccessorDirectViewsMatchSemanticCompatibilityInpu
    );
 }
 
+// Action graph nodes are deduplicated while every occurrence still contributes
+// a target row. The direct path reaches that through the intern pool plus an
+// occurrence-index lane; the compatibility path has no pool at all. Both must
+// produce byte-identical output, including for repeated actions.
+TEST_P(DirectViewEncoderTest, DuplicateActionOccurrencesMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   if(ctx.actions.empty()) {
+      GTEST_SKIP() << "Fixture does not provide applicable actions.";
+   }
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto& view_context = adapter.get_view_context();
+
+   // Repeat the first action, keep a distinct one, then repeat the first again,
+   // so first-use ordering and multiplicity are both observable.
+   std::vector< mimir::formalism::GroundAction > repeated{
+      ctx.actions.front(),
+      ctx.actions.back(),
+      ctx.actions.front(),
+   };
+   const std::span< const mimir::formalism::GroundAction > action_span{repeated};
+
+   auto semantic_input = adapter.make_input(ctx.root);
+   for(const auto& action : action_span) {
+      using NativeAction = std::remove_cvref_t< decltype(action) >;
+      semantic_input.actions.push_back(
+         mifrost::canonical::materialize_semantic_action(
+            mifrost::pymimir::views::GroundActionView< NativeAction >{action, view_context}
+         )
+      );
+   }
+
+   mifrost::FlatRelationEncoderConfig config;
+   config.target_sources = {mifrost::TargetSource::actions};
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto action_views = adapter.make_action_views(action_span);
+
+   expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+}
+
 // The successor lane must not build goal/action/history records the successor
 // algorithm never reads, and doing less work must not change the output.
 TEST_P(DirectViewEncoderTest, SuccessorPreparationIsStateOnly)
@@ -560,7 +602,7 @@ TEST_P(DirectViewEncoderTest, SuccessorPreparationIsStateOnly)
    );
 
    // Same state facts either way.
-   EXPECT_EQ(state_only.state_fact_indices.size(), full.state_fact_indices.size());
+   EXPECT_EQ(state_only.state_facts, full.state_facts);
    EXPECT_EQ(state_only.fact_lookup.size(), full.fact_lookup.size());
 
    // No goal lane at all, and no atoms interned purely to back one.
