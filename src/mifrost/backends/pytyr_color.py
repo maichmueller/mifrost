@@ -21,7 +21,7 @@ class _PyTyrColorStream:
         self.reset()
 
     def append(self, state: object, **kwargs: Any) -> int:
-        item = self._runtime._input(state, **kwargs)
+        item = self._runtime._prepared(state, **kwargs)
         if self._reuse_removed and self._removed:
             stream_id = min(self._removed)
             self._removed.remove(stream_id)
@@ -35,7 +35,7 @@ class _PyTyrColorStream:
     def update(self, stream_id: int, state: object, **kwargs: Any) -> None:
         if stream_id not in self._items:
             raise KeyError(stream_id)
-        self._items[stream_id] = self._runtime._input(state, **kwargs)
+        self._items[stream_id] = self._runtime._prepared(state, **kwargs)
 
     def remove(self, stream_id: int) -> None:
         if stream_id not in self._items:
@@ -47,8 +47,10 @@ class _PyTyrColorStream:
         self._reuse_removed = bool(value)
 
     def flush(self) -> Any:
+        # Each appended step was prepared immediately, so the stream holds no
+        # borrowed Tyr state between calls.
         values = [self._items[key] for key in sorted(self._items)]
-        return self._runtime.engine.encode_batch(values)
+        return self._runtime._direct.encode_prepared(values)
 
     def reset(self) -> None:
         self._items: dict[int, Any] = {}
@@ -64,15 +66,16 @@ class PyTyrColorRuntime:
     def __init__(self, planning_task: object, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_color_engine(config)
+        self._direct = self._adapter.make_direct_color_encoder(config)
 
-    def _input(
+    def _checked_lanes(
         self,
         state: object,
         *,
         goals: object = None,
         actions: object = None,
         subgoal_layers: object = None,
-    ) -> Any:
+    ) -> tuple[Any, list[Any]]:
         if not _is_state(state):
             raise TypeError(
                 "a PyTyr ColorEncoder expects a lifted or ground PyTyr state, "
@@ -87,14 +90,32 @@ class PyTyrColorRuntime:
             else list(cast(Iterable[Iterable[Any]], subgoal_layers))
         )
         validate_subgoal_layers_state_payload(layers, state_index=0, max_goal_level=3)
+        return goals, layers
+
+    def _input(self, state: object, **kwargs: Any) -> Any:
+        goals, layers = self._checked_lanes(state, **kwargs)
         return self._adapter.make_input(
             state,
             goals=cast(Iterable[object] | None, goals),
             subgoal_layers=layers,
         )
 
+    def _prepared(self, state: object, **kwargs: Any) -> Any:
+        goals, layers = self._checked_lanes(state, **kwargs)
+        return self._direct.prepare(
+            state,
+            goals=cast(Iterable[object] | None, goals),
+            subgoal_layers=layers,
+        )
+
     def encode_one(self, state: object, **kwargs: Any) -> Any:
-        return self.engine.encode(self._input(state, **kwargs))
+        goals, layers = self._checked_lanes(state, **kwargs)
+        # Direct-View encode inside the PyTyr module; no owning semantic input.
+        return self._direct.encode(
+            state,
+            goals=cast(Iterable[object] | None, goals),
+            subgoal_layers=layers,
+        )
 
     def encode_batch(
         self,
@@ -132,14 +153,14 @@ class PyTyrColorRuntime:
             validate_subgoal_layers_state_payload(
                 value, state_index=index, max_goal_level=3
             )
-        inputs = self._adapter.make_inputs(
+        # Direct-View batch: prepared and encoded in one native crossing.
+        return self._direct.encode_batch(
             state_values,
             goals=goal_values,
             subgoal_layers=[
                 () if values is None else values for values in subgoal_values
             ],
         )
-        return self.engine.encode_batch(inputs)
 
     def make_stream(self) -> Any:
         return _PyTyrColorStream(self)

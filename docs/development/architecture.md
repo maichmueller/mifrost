@@ -135,6 +135,16 @@ actions reach the canonical algorithm as granular Views. Only the finished,
 planner-neutral `BatchEncoding` crosses back, as a capsule. No owning
 `SemanticFlatRelationInput` is built for a normal encode.
 
+Every PyTyr family that has a direct encoder now routes its public runtime
+through it: single encode, batch, and stream, for Flat, Color, HGraph and the
+successor family.
+
+A runtime keeps two engines -- the compatibility one and the direct encoder's
+own instance -- so `update_relations` has to reach both. Updating only the
+compatibility engine leaves every encode on the arity table the direct encoder
+was constructed with, and the result stays internally consistent, so only a
+comparison against the compatibility engine reveals it.
+
 Batches and streams use the same boundary. A batch prepares and encodes every
 state in one crossing. A stream cannot do that -- it must hold graphs between
 appends -- so each appended step is prepared immediately into a

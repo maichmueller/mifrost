@@ -686,3 +686,125 @@ def test_direct_view_successor_prepared_batch_matches_batch() -> None:
         direct.prepare(current, successor),
     ]
     _assert_encoding_deep_equal(direct.encode_prepared(prepared), expected)
+
+
+def _relation_probe(runtime: Any) -> dict[str, int]:
+    """The runtime's arity table plus one relation it has never seen."""
+    relations = dict(runtime.relation_dict)
+    relations["mifrost_probe_relation"] = 2
+    return relations
+
+
+def test_hgraph_runtime_update_relations_reaches_the_direct_path() -> None:
+    """A runtime keeps two engines; both must see a replaced arity table.
+
+    The direct encoder owns its own engine instance, so updating only the
+    compatibility engine leaves every encode on the table the direct encoder
+    was constructed with -- and the output is still self-consistent, so only a
+    comparison against the compatibility engine catches it.
+    """
+    from mifrost.backends.pytyr_hgraph import PyTyrHGraphRuntime
+
+    reader, states, actions = _two_states("blocks", "small")
+    runtime = PyTyrHGraphRuntime(
+        reader._planning_task, mifrost._neutral_core.SemanticHGraphEncoderConfig()
+    )
+    state = states[0]
+
+    before = runtime.encode_one(state, actions=actions)
+    runtime.update_relations(_relation_probe(runtime))
+    after = runtime.encode_one(state, actions=actions)
+
+    assert set(after.as_pyg().node_types) != set(before.as_pyg().node_types)
+    _assert_encoding_deep_equal(
+        after, runtime.engine.encode(runtime._input(state, actions=actions))
+    )
+
+
+def test_transition_runtime_update_relations_reaches_the_direct_path() -> None:
+    from mifrost.backends.pytyr_transition import PyTyrTransitionRuntime
+
+    reader, states, _actions = _two_states("blocks", "small")
+    if len(states) < 2:
+        pytest.skip("fixture exposes no successor state")
+    runtime = PyTyrTransitionRuntime(
+        reader._planning_task,
+        mifrost._neutral_core.SemanticSuccessorHGraphEncoderConfig(),
+    )
+    current, successor = states[0], states[1]
+
+    before = runtime.encode_one(current, successor)
+    runtime.update_relations(_relation_probe(runtime))
+    after = runtime.encode_one(current, successor)
+
+    assert set(after.as_pyg().node_types) != set(before.as_pyg().node_types)
+    _assert_encoding_deep_equal(
+        after, runtime.engine.encode(*runtime._inputs(current, successor))
+    )
+
+
+@pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
+def test_color_and_hgraph_runtimes_match_their_owned_route(
+    domain: str, problem: str
+) -> None:
+    """The public Color and HGraph runtimes now encode through Views."""
+    from mifrost.backends.pytyr_color import PyTyrColorRuntime
+    from mifrost.backends.pytyr_hgraph import PyTyrHGraphRuntime
+
+    reader, states, actions = _two_states(domain, problem)
+    goals = list(reader.problem_snapshot().goals)
+
+    color = PyTyrColorRuntime(
+        reader._planning_task, mifrost._neutral_core.SemanticColorEncoderConfig()
+    )
+    _assert_encoding_deep_equal(
+        color.encode_one(states[0], goals=goals),
+        color.engine.encode(color._input(states[0], goals=goals)),
+    )
+    _assert_encoding_deep_equal(
+        color.encode_batch(states, goals=goals),
+        color.engine.encode_batch(
+            [color._input(state, goals=goals) for state in states]
+        ),
+    )
+
+    hgraph = PyTyrHGraphRuntime(
+        reader._planning_task, mifrost._neutral_core.SemanticHGraphEncoderConfig()
+    )
+    lanes: dict[str, Any] = {"goals": goals, "actions": actions}
+    _assert_encoding_deep_equal(
+        hgraph.encode_one(states[0], **lanes),
+        hgraph.engine.encode(hgraph._input(states[0], **lanes)),
+    )
+    _assert_encoding_deep_equal(
+        hgraph.encode_batch(states, goals=goals),
+        hgraph.engine.encode_batch(
+            [hgraph._input(state, goals=goals) for state in states]
+        ),
+    )
+
+
+@pytest.mark.parametrize("family", ["color", "hgraph"])
+def test_color_and_hgraph_streams_flush_prepared_handles(family: str) -> None:
+    from mifrost.backends.pytyr_color import PyTyrColorRuntime
+    from mifrost.backends.pytyr_hgraph import PyTyrHGraphRuntime
+
+    reader, states, _actions = _two_states("blocks", "small")
+    if family == "color":
+        runtime: Any = PyTyrColorRuntime(
+            reader._planning_task, mifrost._neutral_core.SemanticColorEncoderConfig()
+        )
+        stream = runtime.make_stream()
+    else:
+        runtime = PyTyrHGraphRuntime(
+            reader._planning_task, mifrost._neutral_core.SemanticHGraphEncoderConfig()
+        )
+        stream = runtime.make_stream(mutable=True)
+
+    for state in states:
+        stream.append(state)
+    expected = runtime.engine.encode_batch([runtime._input(s) for s in states])
+
+    _assert_encoding_deep_equal(stream.flush(), expected)
+    # Prepared handles are borrowed, not consumed: a second flush repeats.
+    _assert_encoding_deep_equal(stream.flush(), expected)

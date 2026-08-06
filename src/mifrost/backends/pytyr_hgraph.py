@@ -32,7 +32,7 @@ class _PyTyrHGraphStream:
         self.reset()
 
     def append(self, state: object, **kwargs: Any) -> int:
-        item = self._runtime._input(state, **kwargs)
+        item = self._runtime._prepared(state, **kwargs)
         if self._reuse_removed and self._removed:
             stream_id = min(self._removed)
             self._removed.remove(stream_id)
@@ -48,7 +48,7 @@ class _PyTyrHGraphStream:
             raise NotImplementedError("update is not implemented for this stream")
         if stream_id not in self._items:
             raise KeyError(stream_id)
-        self._items[stream_id] = self._runtime._input(state, **kwargs)
+        self._items[stream_id] = self._runtime._prepared(state, **kwargs)
 
     def remove(self, stream_id: int) -> None:
         if not self._mutable:
@@ -62,7 +62,9 @@ class _PyTyrHGraphStream:
         self._reuse_removed = bool(value)
 
     def flush(self) -> Any:
-        return self._runtime.engine.encode_batch(
+        # Each appended step was prepared immediately, so the stream holds no
+        # borrowed Tyr state between calls.
+        return self._runtime._direct.encode_prepared(
             [self._items[key] for key in sorted(self._items)]
         )
 
@@ -80,13 +82,14 @@ class PyTyrHGraphRuntime:
     def __init__(self, planning_task: object, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_hgraph_engine(config)
+        self._direct = self._adapter.make_direct_hgraph_encoder(config)
         self._relation_dict = MappingProxyType(dict(self.engine.relation_arities))
 
     @property
     def relation_dict(self) -> Any:
         return self._relation_dict
 
-    def _input(
+    def _checked_lanes(
         self,
         state: object,
         *,
@@ -95,7 +98,7 @@ class PyTyrHGraphRuntime:
         subgoal_layers: object = None,
         history_subgoals: object = None,
         history_max_steps: int | None = None,
-    ) -> Any:
+    ) -> dict[str, Any]:
         if not _is_state(state):
             raise TypeError(
                 "a PyTyr HGraphEncoder expects a lifted or ground PyTyr state, "
@@ -114,23 +117,35 @@ class PyTyrHGraphRuntime:
             state_index=0,
             max_goal_level=int(self.engine.config.max_goal_level),
         )
-        return self._adapter.make_input(
-            state,
-            action_values,
-            goals=cast(Iterable[object] | None, goals),
-            subgoal_layers=layers,
-            history=cast(
+        return {
+            "actions": action_values,
+            "goals": cast(Iterable[object] | None, goals),
+            "subgoal_layers": layers,
+            "history": cast(
                 Iterable[tuple[int, Iterable[object]]],
                 () if history_subgoals is None else history_subgoals,
             ),
-            history_max_steps=history_max_steps,
-        )
+            "history_max_steps": history_max_steps,
+        }
+
+    def _input(self, state: object, **kwargs: Any) -> Any:
+        lanes = self._checked_lanes(state, **kwargs)
+        return self._adapter.make_input(state, lanes.pop("actions"), **lanes)
+
+    def _prepared(self, state: object, **kwargs: Any) -> Any:
+        lanes = self._checked_lanes(state, **kwargs)
+        return self._direct.prepare(state, lanes.pop("actions"), **lanes)
 
     def append_into_builder(self, state: object, builder: Any, **kwargs: Any) -> None:
+        # The caller owns a core-module `BatchBuilder`, which the PyTyr module
+        # cannot accept across the nanobind ABI split; this path stays on the
+        # owned-input route for that reason alone.
         self.engine.encode(self._input(state, **kwargs), builder)
 
     def encode_one(self, state: object, **kwargs: Any) -> Any:
-        return self.engine.encode(self._input(state, **kwargs))
+        lanes = self._checked_lanes(state, **kwargs)
+        # Direct-View encode inside the PyTyr module; no owning semantic input.
+        return self._direct.encode(state, lanes.pop("actions"), **lanes)
 
     def encode_batch(
         self,
@@ -177,7 +192,8 @@ class PyTyrHGraphRuntime:
                 max_goal_level=int(self.engine.config.max_goal_level),
             )
         history_values = _history_values(history_subgoals, state_count=count)
-        inputs = self._adapter.make_inputs(
+        # Direct-View batch: prepared and encoded in one native crossing.
+        return self._direct.encode_batch(
             state_values,
             [() if values is None else values for values in action_values],
             goals=goal_values,
@@ -187,11 +203,14 @@ class PyTyrHGraphRuntime:
             history=[() if values is None else values for values in history_values],
             history_max_steps=history_max_steps,
         )
-        return self.engine.encode_batch(inputs)
 
     def update_relations(self, relation_dict: Any) -> None:
         relations = relation_arities(relation_dict)
+        # Both engines: the direct encoder owns its own instance, so updating
+        # only the compatibility engine would leave every encode on the stale
+        # arity table.
         self.engine.update_relations(relations)
+        self._direct.update_relations(relations)
         self._relation_dict = MappingProxyType(dict(relations))
 
     def make_stream(self, *, mutable: bool) -> Any:
