@@ -139,6 +139,15 @@ class DirectEncoder:
         capsule = self._native._encode_prepared_capsule(list(prepared))
         return _neutral_core._consume_batch_encoding_capsule(capsule)
 
+    def update_relations(self, relations: Any) -> None:
+        """Replace the relation arity table on this encoder's own engine.
+
+        The direct encoder holds its own engine instance, so a runtime that
+        also keeps a compatibility engine must update both -- otherwise the
+        direct path keeps encoding against the table it was built with.
+        """
+        self._native._update_relations(relations)
+
     def encode_batch(
         self,
         states: Iterable[object],
@@ -230,6 +239,10 @@ class DirectSuccessorEncoder:
         return self._native._prepare_capsules(
             current, successor, compact_goals, compact_layers
         )
+
+    def update_relations(self, relations: Any) -> None:
+        """See `DirectEncoder.update_relations`: this encoder owns its engine."""
+        self._native._update_relations(relations)
 
     def encode_prepared(self, prepared: Iterable[tuple[Any, Any]]) -> Any:
         from mifrost import _neutral_core

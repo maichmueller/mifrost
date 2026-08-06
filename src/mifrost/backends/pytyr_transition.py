@@ -227,7 +227,11 @@ class PyTyrTransitionRuntime:
 
     def update_relations(self, relation_dict: Any) -> None:
         relations = relation_arities(relation_dict)
+        # Both engines: the direct encoder owns its own instance, so updating
+        # only the compatibility engine would leave every encode on the stale
+        # arity table.
         self.engine.update_relations(relations)
+        self._direct.update_relations(relations)
         self._relation_dict = MappingProxyType(dict(relations))
 
     def make_stream(self) -> Any:

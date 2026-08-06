@@ -1,11 +1,14 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -258,6 +261,19 @@ class DirectEncoder {
 
    [[nodiscard]] const Engine& engine() const noexcept { return engine_; }
 
+   /**
+    * Replace the relation arity table.
+    *
+    * The direct encoder owns its own engine instance, so a runtime that also
+    * keeps a compatibility engine has to update both; otherwise the direct
+    * path keeps encoding against the table it was constructed with.
+    */
+   void update_relations(std::map< std::string, int > relations)
+      requires requires(Engine& engine) { engine.update_relations(std::move(relations)); }
+   {
+      engine_.update_relations(std::move(relations));
+   }
+
    /** Encode one state through granular Views over the caller's own values. */
    template < typename State >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
@@ -440,6 +456,12 @@ class DirectSuccessorEncoder {
    }
 
    [[nodiscard]] const Engine& engine() const noexcept { return engine_; }
+
+   /** See `DirectEncoder::update_relations`: this encoder owns its own engine. */
+   void update_relations(std::map< std::string, int > relations)
+   {
+      engine_.update_relations(std::move(relations));
+   }
 
    template < typename CurrentState, typename SuccessorState >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
@@ -773,8 +795,8 @@ NB_MODULE(_pytyr_adapter, m)
                                        const char* name, const char* config_capsule_name
                                     ) {
       using Encoder = DirectEncoder< Engine >;
-      nb::class_< Encoder >(m, name)
-         .def(
+      auto cls = nb::class_< Encoder >(m, name);
+      cls.def(
             "__init__",
             [config_capsule_name](
                Encoder* self, const Adapter& adapter, nb::handle config_capsule
@@ -791,7 +813,7 @@ NB_MODULE(_pytyr_adapter, m)
             "config_capsule"_a,
             // The encoder borrows the adapter's View context for its lifetime.
             nb::keep_alive< 1, 2 >()
-         )
+      )
          .def(
             "_encode_capsule",
             [owned_capsule](
@@ -949,6 +971,13 @@ NB_MODULE(_pytyr_adapter, m)
             "history"_a = std::vector< std::vector< CompactHistoryEntry > >{},
             "history_max_steps"_a = nb::none()
          );
+      // Only the relation-based families keep an arity table a caller can
+      // replace after construction.
+      if constexpr(requires(Encoder& encoder) {
+                      encoder.update_relations(std::map< std::string, int >{});
+                   }) {
+         cls.def("_update_relations", &Encoder::update_relations, "relations"_a);
+      }
    };
 
    bind_direct_encoder.template operator()< SemanticFlatRelationEncoderEngine >(
@@ -1032,6 +1061,7 @@ NB_MODULE(_pytyr_adapter, m)
       m, "_NativeDirectSuccessorEncoder"
    );
    successor_encoder
+      .def("_update_relations", &DirectSuccessorEncoder::update_relations, "relations"_a)
       .def(
          "__init__",
          [](DirectSuccessorEncoder* self, const Adapter& adapter, nb::handle config_capsule) {
