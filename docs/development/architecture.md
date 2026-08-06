@@ -68,6 +68,33 @@ schema construction, graph emission, and batch collation stay in
 native behavior belongs in `core/` or `input_handling/`, not in multiple binding
 initializers.
 
+### Header layering
+
+The encoder stack is layered strictly bottom-up, and each layer may only
+depend on the ones above it in this list:
+
+```text
+core/semantic/records.hpp          semantic record and key definitions
+    core/views/concepts.hpp        View concepts
+    core/views/semantic_preparation.hpp   borrowed inputs, compact pools
+        core/encoders/<family>/    family preparation and canonical algorithms
+            backends/<backend>/    backend adapters and exported engines
+```
+
+`core/semantic/records.hpp` holds `SemanticAtom`, `SemanticLiteral`,
+`SemanticGroundAction`, `SemanticHistoryEntry`, `SemanticTaskContext`, the
+owning `SemanticFlatRelationInput` compatibility DTO, and their hash/ordering
+helpers. It depends on no encoder, batch, or View header.
+`semantic_flat_relation_encoder.hpp` includes it and re-exports every name from
+namespace `mifrost`, so the exported ABI and existing includes are unchanged.
+
+The View layer must not include an encoder header. It used to include the Flat
+encoder header while the Flat encoder header includes the Flat View bridge,
+which includes the View layer again; that cycle made the headers
+order-sensitive. `tests/cpp/view_preparation_scaling_test.cpp` includes
+`core/views/semantic_preparation.hpp` and nothing else from the encoder stack,
+so the cycle cannot silently return.
+
 ### Planning Views
 
 The canonical encoder algorithms use the operation-bearing concepts in
@@ -98,8 +125,11 @@ Native backend entry points use a direct path whenever the input is still a
 borrowed planning value:
 
 ```text
-backend value + task context -> granular backend Views
-                              -> encoder-local preparation -> BatchEncoding
+backend values
+  -> granular borrowed Views
+  -> canonical statically dispatched family algorithm
+  -> graph-derived intern/index/working structures
+  -> BatchBuilder
 ```
 
 The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
@@ -122,6 +152,21 @@ does not copy the complete input into another graph carrier. This keeps
 planner-library types out of the neutral core without duplicating backend
 algorithms.
 
+Color, HGraph, and the successor encoder each have exactly one canonical
+algorithm, templated on the input type and instantiated for both the borrowed
+preparation and the owning compatibility DTO; the lane accessors
+(`semantic_state_facts`, `semantic_actions`, `semantic_history`, ...) resolve
+statically. There is no second algorithm per backend.
+
+Flat is not yet fully converted. Its `PreparedRelationGraph` still selects
+between the two storage modes with a nullable-pointer check, and the
+`SemanticAtomRange` / `SemanticActionRange` / `SemanticLiteralRange` /
+`SemanticHistoryRange` carriers repeat that check per element. That is a
+performance and clarity wart, not a correctness one -- both modes run the same
+source algorithm -- but it is the intended next conversion: those carriers
+should become concrete ranges chosen once at the public entry point, with the
+Flat algorithm templated over the accessor.
+
 Direct does not mean that the final graph is emitted without planning state.
 The neutral engine still creates a graph-local preparation object for schema
 ordering, validation, and relation emission. Unlike a compatibility input, that
@@ -137,11 +182,56 @@ range. New canonical algorithms should continue to use the operation-based View
 concepts directly and should not introduce backend-specific type erasure into
 those concepts.
 
+### What is borrowed, what is owned
+
+These five categories are deliberately distinct. "Preparation" never means a
+full per-lane owning copy of the input.
+
+| Category | Example | Lifetime |
+| --- | --- | --- |
+| Borrowed input range | `NativeGoalLiteralsView`, `StateView`, action `TransformRange` | Valid only while the backend problem/state, the task context, and the `views::Context` are alive. Consumed synchronously inside one encode call. |
+| Compact graph-derived pool | `ViewPreparation::atom_pool` / `action_pool` plus their hash indices, goal-level refs, filtered history refs, fact-membership set | Private to one encode call. Holds each unique graph identity once; lanes keep only indices, so lane order and multiplicity survive deduplication. |
+| Owning compatibility DTO | `SemanticFlatRelationInput` | Owned by the caller. Used by capsules, semantic transition DAGs, and callers that intentionally snapshot. Consumed through borrowed references to its existing lanes, not copied into another carrier. |
+| Capsule / ABI snapshot | PyTyr `_make_input_capsule` | Required because Pymimir and PyTyr are built against incompatible nanobind ABI generations. This is an explicit ABI transport, not a native-View path. |
+| Stream lifetime snapshot | `HGraphStreamEncoder`, flat/horizon stream caches | Stores the completed native batch encoding, never a lazy View, so the source state may be released after `append` returns. |
+
 Task contexts and backend planning repositories must remain alive through every
-encode or stream append that consumes a View. A stream stores the resulting
-native batch encoding, not a lazy View, so a View's source state may be released
-after append returns. Batch adapters materialize each input while its source
-ranges are alive and retain only the resulting native batch encoding.
+encode or stream append that consumes a View. Batch adapters materialize each
+input while its source ranges are alive and retain only the resulting native
+batch encoding.
+
+Two lifetime rules are enforced in the types rather than by convention:
+
+- `NativeGoalLayersView` owns its occupied-level list, so
+  `adapter.make_goal_views(goals).subgoal_layers_view()` -- where the
+  `NativeGoalViews` is a temporary -- is safe. The literal spans it carries are
+  still borrowed from the `GoalInputs`, which must outlive the iteration.
+- Interning is a lookup index, never an ordering. `atom_pool` and `action_pool`
+  keep first-use insertion order and are the only things iterated;
+  `atom_indices` / `action_indices` exist purely for O(1) lookup.
+
+### Goal levels: sparse by default
+
+Native goal Views represent goal levels sparsely: `NativeGoalLayersView` visits
+only occupied levels, so a single goal at a very high level costs one entry
+rather than a dense run of empty layers.
+
+`SemanticFlatRelationInput::subgoal_layers` is positional, so the compatibility
+conversion in `SemanticProblemAdapter::make_input` has to build a dense vector.
+That conversion takes the *consuming encoder's* configured `max_goal_level` from
+its caller, and additionally clamps to `kDenseGoalLayerTransportLimit`, which is
+a transport-safety bound on the vector -- not an encoder capability limit. Each
+encoder family independently rejects levels it cannot represent, using its own
+configuration, before suffix or schema indexing. No family's limit is baked into
+the backend-neutral adapter.
+
+### Lane-aware preparation
+
+Preparation populates only the lanes the selected path actually reads. The
+successor side of the successor-HGraph algorithm reads the object table and the
+successor state facts and nothing else, so it uses
+`canonical::detail::make_state_only_view_preparation` rather than building
+default-goal, action, and history records that are immediately discarded.
 
 ## Adding an Encoder Family
 

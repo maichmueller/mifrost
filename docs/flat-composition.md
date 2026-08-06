@@ -118,6 +118,32 @@ the owned compatibility input. Both paths emit directly into the runtime's
 `BatchBuilder`; neither constructs `FlatCompositionInput`, callback ranges, or
 an intermediate encoding.
 
+The overall boundary is:
+
+```text
+backend values
+  -> granular borrowed Views
+  -> canonical statically dispatched family algorithm
+  -> graph-derived intern/index/working structures
+  -> BatchBuilder
+```
+
+"Graph-derived structures" means compact identity pools and indices into them
+-- the atom and action intern pools, goal-level references, entity indices,
+unique target identities, occurrence ordering, fact membership, relation-major
+metadata, history ordering, and composition-plan state. It does not mean a
+per-lane owning mirror of the input: the direct path never builds
+`std::vector<SemanticAtom> state_facts` / `std::vector<SemanticLiteral> goals` /
+`std::vector<SemanticGroundAction> actions` copies just to cross from the View
+API into the algorithm, and the compatibility path is read through borrowed
+references to the lanes `SemanticFlatRelationInput` already owns.
+
+One conversion is still outstanding on this path: `PreparedRelationGraph`
+selects its storage mode with a nullable-pointer check that the range carriers
+repeat per element. Both modes execute the same source algorithm, so output is
+unaffected, but those carriers are intended to become concrete ranges selected
+once at the public entry point.
+
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
 candidate identities, exact transition deltas, and goal-membership sets. A
 transition-semantic component emits state, goal, action, and effect tuples;
