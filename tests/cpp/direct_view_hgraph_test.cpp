@@ -491,6 +491,62 @@ TEST_P(DirectViewSuccessorTest, RepeatedGoalLevelsMatchWithSuccessorSatisfaction
    );
 }
 
+// The prepared-batch entry point holds both lanes of every transition before
+// encoding any of them; a stream flushes exactly this way.
+TEST_P(DirectViewSuccessorTest, PreparedBatchMatchesCompatibilityBatch)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto [successor, action] = mifrost_test::find_successor(ctx);
+   (void) action;
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto goals = mifrost_test::make_goal_inputs(ctx.problem);
+
+   mifrost::SemanticSuccessorHGraphEncoderConfig config;
+   config.max_goal_level = 3;
+   config.support_literals = true;
+   config.include_successor_goal_satisfaction = true;
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context(), config);
+
+   const auto current_view = adapter.make_state_view(ctx.root);
+   const auto successor_view = adapter.make_state_view(successor);
+   const auto goal_views = adapter.make_goal_views(goals);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+
+   // Two transitions with different lanes: one takes the task context's default
+   // goals, the other explicit layered goals.
+   const std::vector< mifrost::SemanticFlatRelationInput > currents{
+      adapter.make_input(ctx.root), adapter.make_input(ctx.root, goals, 3)
+   };
+   const std::vector< mifrost::SemanticFlatRelationInput > successors{
+      adapter.make_input(successor), adapter.make_input(successor)
+   };
+
+   const std::vector< mifrost::canonical::detail::ViewPreparation > prepared_currents{
+      engine.prepare_current(current_view, empty_actions),
+      engine.prepare_current(
+         current_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), empty_actions
+      ),
+   };
+   const std::vector< mifrost::canonical::detail::ViewPreparation > prepared_successors{
+      engine.prepare_successor(successor_view),
+      engine.prepare_successor(successor_view),
+   };
+   std::vector< const mifrost::canonical::detail::ViewPreparation* > current_refs;
+   std::vector< const mifrost::canonical::detail::ViewPreparation* > successor_refs;
+   for(size_t index = 0; index < prepared_currents.size(); ++index) {
+      current_refs.push_back(&prepared_currents[index]);
+      successor_refs.push_back(&prepared_successors[index]);
+   }
+
+   expect_encoding_equal(
+      engine.encode_batch(currents, successors),
+      engine.encode_batch(std::span{current_refs}, std::span{successor_refs})
+   );
+}
+
 // The successor engine forwards the arity table to its inner HGraph engine.
 TEST_P(DirectViewSuccessorTest, RelationUpdatePreservesParity)
 {

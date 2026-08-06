@@ -229,6 +229,68 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
    direct.next_graph();
 
    expect_encoding_equal(engine.encode_batch(inputs), direct.build());
+
+   // The prepared-batch entry point is not the loop above: it holds every
+   // graph before encoding any of them, which is what the flat batch's
+   // cross-graph passes need. Same four graphs, same lanes, one call.
+   const std::vector< mifrost::canonical::detail::ViewPreparation > prepared{
+      engine.prepare(root_view, empty_actions),
+      engine.prepare(
+         successor_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         empty_actions,
+         history_view,
+         std::nullopt
+      ),
+      engine.prepare(
+         root_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         action_views,
+         history_view,
+         std::nullopt
+      ),
+      engine.prepare(successor_view, empty_actions),
+   };
+   std::vector< const mifrost::canonical::detail::ViewPreparation* > prepared_refs;
+   for(const auto& graph : prepared) {
+      prepared_refs.push_back(&graph);
+   }
+   expect_encoding_equal(
+      engine.encode_batch(inputs), engine.encode_batch(std::span{prepared_refs}), "prepared batch"
+   );
+
+   // A preparation survives its source state, which is what lets a stream hold
+   // graphs between appends. Encoding the same handles twice must also be
+   // stable: the batch borrows them, it does not consume them.
+   expect_encoding_equal(
+      engine.encode_batch(std::span{prepared_refs}),
+      engine.encode_batch(std::span{prepared_refs}),
+      "prepared batch replay"
+   );
+}
+
+// A preparation from another engine's task context indexes a different object
+// table, so the batch must reject it instead of silently encoding foreign ids.
+TEST_P(DirectViewFlatTest, ForeignPreparationsAreRejected)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const mifrost::pymimir::SemanticProblemAdapter other(*ctx.problem);
+
+   const auto config = rich_config();
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine foreign(other.get_task_context(), config);
+
+   const auto empty_actions = other.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const auto preparation = foreign.prepare(other.make_state_view(ctx.root), empty_actions);
+   const std::vector< const mifrost::canonical::detail::ViewPreparation* > refs{&preparation};
+
+   EXPECT_THROW((void) engine.encode_batch(std::span{refs}), std::invalid_argument);
 }
 
 // A legacy input owns its object table instead of sharing a task context. That

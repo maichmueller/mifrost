@@ -257,6 +257,11 @@ template < typename Input >
 std::vector< PreparedGoal > prepare_goals(const Input& input)
 {
    if constexpr(requires { input.goal_levels(); }) {
+      // A View preparation records the level each occurrence was written at,
+      // but this family resolves a repeated goal to its highest level -- the
+      // compatibility branch below gets that from `semantic_goal_level`, which
+      // returns the last of an equal range. Occurrence order and multiplicity
+      // are preserved either way; only the level is shared.
       std::vector< SemanticGoalLevel > occurrences;
       occurrences.reserve(input.goal_levels().size());
       for(const auto& goal : input.goal_levels()) {
@@ -2143,6 +2148,27 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
    builder.set_graph_kind("hetero");
    for(const auto& input : inputs) {
       impl_->encode(input, builder);
+      builder.next_graph();
+   }
+   return builder.build();
+}
+
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
+   std::span< const canonical::detail::ViewPreparation* const > preparations
+) const
+{
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   for(const auto* preparation : preparations) {
+      if(preparation == nullptr) {
+         throw std::invalid_argument("semantic hgraph batch preparations must not be null");
+      }
+      if(preparation->task_context != impl_->task_context) {
+         throw std::invalid_argument(
+            "semantic hgraph batch preparations must come from this engine's task context"
+         );
+      }
+      encode_view_preparation(*preparation, builder);
       builder.next_graph();
    }
    return builder.build();

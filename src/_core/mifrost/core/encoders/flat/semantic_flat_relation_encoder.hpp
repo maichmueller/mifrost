@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -112,8 +113,50 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       BatchBuilder& builder
    ) const;
 
+   /**
+    * Prepare one direct-View graph without encoding it.
+    *
+    * The family owns which preparation its algorithm consumes; a caller that
+    * needs to hold graphs (a batch, a stream) asks the engine rather than
+    * picking a preparation helper itself.
+    */
+   template < views::StateView State, views::GroundActionRange Actions >
+   [[nodiscard]] canonical::detail::ViewPreparation
+   prepare(const State& state, Actions&& actions) const;
+
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions,
+      views::HistoryRange History >
+   [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions,
+      History&& history,
+      std::optional< int64_t > history_max_steps = std::nullopt
+   ) const;
+
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
+   ) const;
+
+   /**
+    * Encode a batch of already prepared direct-View graphs.
+    *
+    * A `ViewPreparation` owns its compact pools and borrows nothing from the
+    * backend state it was built from, so it is the natural unit for a batch or
+    * a stream: the caller may build one per state and hold them until flush.
+    *
+    * This is not a loop over the single-graph append: the flat batch has a
+    * genuine cross-graph pass (target-name suppression and shared batch
+    * constants), so appending graph by graph would silently diverge from
+    * `encode_batch(inputs)`.
+    */
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const canonical::detail::ViewPreparation* const > preparations
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 

@@ -497,6 +497,26 @@ BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode_batch(
    return builder.build();
 }
 
+BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode_batch(
+   std::span< const canonical::detail::ViewPreparation* const > preparations
+) const
+{
+   BatchBuilder builder;
+   for(const auto* preparation : preparations) {
+      if(preparation == nullptr) {
+         throw std::invalid_argument("semantic color batch preparations must not be null");
+      }
+      if(preparation->task_context != task_context_) {
+         throw std::invalid_argument(
+            "semantic color batch preparations must come from this engine's task context"
+         );
+      }
+      encode_view_preparation(*preparation, builder);
+      builder.next_graph();
+   }
+   return builder.build();
+}
+
 const SemanticColorEncoderConfig& SemanticColorEncoderEngine::get_config() const
 {
    return config_;

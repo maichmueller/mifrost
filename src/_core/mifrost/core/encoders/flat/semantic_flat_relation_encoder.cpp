@@ -3130,18 +3130,15 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       composition_plan->append_graph(FlatInputView::from(prepared), builder);
    }
 
-   BatchBuilder::BatchEncoding compose_many(
-      std::span< const SemanticFlatRelationInput > inputs
-   ) const
+   /**
+    * The batch tail shared by every storage mode.
+    *
+    * The target-name suppression pass reads every graph before any of them is
+    * encoded, so it cannot be expressed as a per-graph append. Owned inputs and
+    * direct-View preparations differ only in how `graphs` was produced.
+    */
+   BatchBuilder::BatchEncoding compose_prepared(std::vector< PreparedRelationGraph > graphs) const
    {
-      if(composition_plan == nullptr) {
-         throw std::logic_error("semantic flat composition plan is not available");
-      }
-      std::vector< PreparedRelationGraph > graphs;
-      graphs.reserve(inputs.size());
-      for(const auto& input : inputs) {
-         graphs.push_back(prepare_relation_graph(input));
-      }
       if(not target_group_names.empty() and config.export_node_names
          and std::ranges::any_of(graphs, [](const auto& graph) {
                 return not graph.context.target_columns.names.empty();
@@ -3156,6 +3153,44 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          views.push_back(FlatInputView::from(graph));
       }
       return composition_plan->encode_batch(std::span{views});
+   }
+
+   BatchBuilder::BatchEncoding compose_many(
+      std::span< const SemanticFlatRelationInput > inputs
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      std::vector< PreparedRelationGraph > graphs;
+      graphs.reserve(inputs.size());
+      for(const auto& input : inputs) {
+         graphs.push_back(prepare_relation_graph(input));
+      }
+      return compose_prepared(std::move(graphs));
+   }
+
+   BatchBuilder::BatchEncoding compose_many_views(
+      std::span< const canonical::detail::ViewPreparation* const > inputs
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      std::vector< PreparedRelationGraph > graphs;
+      graphs.reserve(inputs.size());
+      for(const auto* input : inputs) {
+         if(input == nullptr) {
+            throw std::invalid_argument("semantic flat batch preparations must not be null");
+         }
+         if(input->task_context != task_context) {
+            throw std::invalid_argument(
+               "semantic flat batch preparations must come from this engine's task context"
+            );
+         }
+         graphs.push_back(prepare_relation_graph(*input));
+      }
+      return compose_prepared(std::move(graphs));
    }
 
    void append_view_preparation(
@@ -3234,6 +3269,13 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
 ) const
 {
    return impl_->encode_many(std::span{inputs});
+}
+
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
+   std::span< const canonical::detail::ViewPreparation* const > preparations
+) const
+{
+   return impl_->compose_many_views(preparations);
 }
 
 void SemanticFlatRelationEncoderEngine::finalize_batch_encoding(

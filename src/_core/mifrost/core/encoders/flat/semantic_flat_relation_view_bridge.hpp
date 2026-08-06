@@ -228,6 +228,41 @@ template <
 namespace mifrost {
 
 template < views::StateView State, views::GroundActionRange Actions >
+canonical::detail::ViewPreparation
+SemanticFlatRelationEncoderEngine::prepare(const State& state, Actions&& actions) const
+{
+   return canonical::detail::make_flat_view_preparation(
+      get_task_context(), state, std::forward< Actions >(actions)
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+canonical::detail::ViewPreparation SemanticFlatRelationEncoderEngine::prepare(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps
+) const
+{
+   return canonical::detail::make_flat_view_preparation(
+      get_task_context(),
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps
+   );
+}
+
+template < views::StateView State, views::GroundActionRange Actions >
 BatchBuilder::BatchEncoding
 SemanticFlatRelationEncoderEngine::encode(const State& state, Actions&& actions) const
 {

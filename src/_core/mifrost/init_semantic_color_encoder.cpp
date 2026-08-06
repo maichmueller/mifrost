@@ -78,7 +78,13 @@ void init_semantic_color_encoder(nb::module_& m)
          "input"_a,
          "builder"_a
       )
-      .def("encode_batch", &SemanticColorEncoderEngine::encode_batch, "inputs"_a);
+      .def(
+         "encode_batch",
+         static_cast< BatchBuilder::BatchEncoding (SemanticColorEncoderEngine::*)(
+            const std::vector< SemanticFlatRelationInput >&
+         ) const >(&SemanticColorEncoderEngine::encode_batch),
+         "inputs"_a
+      );
 
    m.def(
       "_semantic_color_config_capsule",

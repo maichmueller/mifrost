@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -147,8 +148,44 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       std::optional< int64_t > history_max_steps,
       BatchBuilder& builder
    ) const;
+   /**
+    * Prepare one direct-View graph without encoding it.
+    *
+    * The family owns which preparation its algorithm consumes; a caller that
+    * needs to hold graphs (a batch, a stream) asks the engine rather than
+    * picking a preparation helper itself.
+    */
+   template < views::StateView State, views::GroundActionRange Actions >
+   [[nodiscard]] canonical::detail::ViewPreparation
+   prepare(const State& state, Actions&& actions) const;
+
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions,
+      views::HistoryRange History >
+   [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions,
+      History&& history,
+      std::optional< int64_t > history_max_steps = std::nullopt
+   ) const;
+
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
+   ) const;
+   /**
+    * Encode a batch of already prepared direct-View graphs.
+    *
+    * A `ViewPreparation` owns its compact pools and borrows nothing from the
+    * backend state it was built from, so a caller may build one per state and
+    * hold them until the batch is flushed.
+    */
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const canonical::detail::ViewPreparation* const > preparations
    ) const;
 
    [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
@@ -198,6 +235,41 @@ class MIFROST_API SemanticHGraphEncoderEngine {
 }  // namespace mifrost
 
 namespace mifrost {
+
+template < views::StateView State, views::GroundActionRange Actions >
+canonical::detail::ViewPreparation
+SemanticHGraphEncoderEngine::prepare(const State& state, Actions&& actions) const
+{
+   return canonical::detail::make_hgraph_view_preparation(
+      get_task_context(), state, std::forward< Actions >(actions)
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+canonical::detail::ViewPreparation SemanticHGraphEncoderEngine::prepare(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps
+) const
+{
+   return canonical::detail::make_hgraph_view_preparation(
+      get_task_context(),
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps
+   );
+}
 
 template < views::StateView State, views::GroundActionRange Actions >
 BatchBuilder::BatchEncoding

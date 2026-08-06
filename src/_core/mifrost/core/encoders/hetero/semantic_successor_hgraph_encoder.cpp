@@ -129,6 +129,34 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_batch(
    return builder.build();
 }
 
+BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_batch(
+   std::span< const canonical::detail::ViewPreparation* const > currents,
+   std::span< const canonical::detail::ViewPreparation* const > successors
+) const
+{
+   if(currents.size() != successors.size()) {
+      throw std::invalid_argument("current and successor batches must have equal length");
+   }
+   const auto& context = get_task_context();
+   BatchBuilder builder;
+   builder.set_graph_kind("hetero");
+   for(size_t index = 0; index < currents.size(); ++index) {
+      const auto* current = currents[index];
+      const auto* successor = successors[index];
+      if(current == nullptr or successor == nullptr) {
+         throw std::invalid_argument("semantic successor batch preparations must not be null");
+      }
+      if(current->task_context != context or successor->task_context != context) {
+         throw std::invalid_argument(
+            "semantic successor batch preparations must come from this engine's task context"
+         );
+      }
+      encode_views(*current, *successor, builder);
+      builder.next_graph();
+   }
+   return builder.build();
+}
+
 const SemanticSuccessorHGraphEncoderEngine::Config&
 SemanticSuccessorHGraphEncoderEngine::get_config() const
 {

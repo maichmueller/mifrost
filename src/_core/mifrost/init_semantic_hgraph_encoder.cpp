@@ -87,7 +87,13 @@ void init_semantic_hgraph_encoder(nb::module_& m)
          "input"_a,
          "builder"_a
       )
-      .def("encode_batch", &SemanticHGraphEncoderEngine::encode_batch, "inputs"_a);
+      .def(
+         "encode_batch",
+         static_cast< BatchBuilder::BatchEncoding (SemanticHGraphEncoderEngine::*)(
+            const std::vector< SemanticFlatRelationInput >&
+         ) const >(&SemanticHGraphEncoderEngine::encode_batch),
+         "inputs"_a
+      );
 
    nb::enum_< SemanticHorizonMode >(m, "SemanticHorizonEncoderMode")
       .value("full", SemanticHorizonMode::full)
@@ -289,7 +295,10 @@ void init_semantic_hgraph_encoder(nb::module_& m)
       )
       .def(
          "encode_batch",
-         &SemanticSuccessorHGraphEncoderEngine::encode_batch,
+         static_cast< BatchBuilder::BatchEncoding (SemanticSuccessorHGraphEncoderEngine::*)(
+            const std::vector< SemanticFlatRelationInput >&,
+            const std::vector< SemanticFlatRelationInput >&
+         ) const >(&SemanticSuccessorHGraphEncoderEngine::encode_batch),
          "currents"_a,
          "successors"_a
       );

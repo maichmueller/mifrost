@@ -4,6 +4,7 @@
 #include <boost/describe.hpp>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -123,9 +124,46 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       SuccessorActions&& successor_actions,
       BatchBuilder& builder
    ) const;
+   /**
+    * Prepare the two lanes of one transition without encoding it.
+    *
+    * The lanes are deliberately not symmetric: the successor side reads only
+    * the object table and the successor state facts, so preparing it as a full
+    * graph would materialize goals the algorithm never inspects.
+    */
+   template < views::StateView State, views::GroundActionRange Actions >
+   [[nodiscard]] canonical::detail::ViewPreparation
+   prepare_current(const State& state, Actions&& actions) const;
+
+   template <
+      views::StateView State,
+      views::LiteralRange Goals,
+      views::LiteralLayerRange SubgoalLayers,
+      views::GroundActionRange Actions >
+   [[nodiscard]] canonical::detail::ViewPreparation prepare_current(
+      const State& state,
+      Goals&& goals,
+      SubgoalLayers&& subgoal_layers,
+      Actions&& actions
+   ) const;
+
+   template < views::StateView State >
+   [[nodiscard]] canonical::detail::ViewPreparation prepare_successor(const State& state) const;
+
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& currents,
       const std::vector< SemanticFlatRelationInput >& successors
+   ) const;
+   /**
+    * Encode a batch of already prepared aligned current/successor graphs.
+    *
+    * A `ViewPreparation` owns its compact pools and borrows nothing from the
+    * backend state it was built from, so a caller may build one pair per
+    * transition and hold them until the batch is flushed.
+    */
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const canonical::detail::ViewPreparation* const > currents,
+      std::span< const canonical::detail::ViewPreparation* const > successors
    ) const;
 
    [[nodiscard]] const Config& get_config() const;
@@ -149,6 +187,44 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
 }  // namespace mifrost
 
 namespace mifrost {
+
+template < views::StateView State, views::GroundActionRange Actions >
+canonical::detail::ViewPreparation
+SemanticSuccessorHGraphEncoderEngine::prepare_current(const State& state, Actions&& actions) const
+{
+   return canonical::detail::make_hgraph_view_preparation(
+      get_task_context(), state, std::forward< Actions >(actions)
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange SubgoalLayers,
+   views::GroundActionRange Actions >
+canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare_current(
+   const State& state,
+   Goals&& goals,
+   SubgoalLayers&& subgoal_layers,
+   Actions&& actions
+) const
+{
+   return canonical::detail::make_hgraph_view_preparation(
+      get_task_context(),
+      state,
+      std::forward< Goals >(goals),
+      std::forward< SubgoalLayers >(subgoal_layers),
+      std::forward< Actions >(actions)
+   );
+}
+
+template < views::StateView State >
+canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare_successor(
+   const State& state
+) const
+{
+   return canonical::detail::make_state_only_view_preparation(get_task_context(), state);
+}
 
 template <
    views::StateView CurrentState,
