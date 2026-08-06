@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Sequence
 
 import yaml
-from conan.api.model import RecipeReference
 
 
 @dataclass(frozen=True)
@@ -19,6 +18,35 @@ class LocalRecipeExport:
     name: str
     version: str
     recipe_dir: Path
+
+
+@dataclass(frozen=True)
+class RecipeReference:
+    """Minimal ``name/version`` view of a Conan recipe reference.
+
+    CMake invokes this script with the interpreter that builds the project,
+    which is not required to have the ``conan`` Python package importable --
+    Conan itself is located separately as an executable via ``--conan_cmd``.
+    Parsing the handful of reference strings in ``conandata.yml`` locally keeps
+    the script runnable under a bare interpreter.
+    """
+
+    name: str
+    version: str
+
+    @classmethod
+    def loads(cls, text: str) -> RecipeReference:
+        reference = text.strip()
+        if not reference:
+            raise ValueError("empty Conan recipe reference")
+        # Drop the optional revision (``#rrev``) and user/channel (``@u/c``)
+        # parts; only name and version select a local recipe directory.
+        reference = reference.split("#", 1)[0]
+        reference = reference.split("@", 1)[0]
+        name, separator, version = reference.partition("/")
+        if not separator or not name or not version:
+            raise ValueError(f"malformed Conan recipe reference: {text!r}")
+        return cls(name=name, version=version)
 
 
 def _load_conandata(conandata_path: Path) -> dict[str, object]:

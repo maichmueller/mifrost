@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,6 +41,56 @@ def test_local_recipe_exports_uses_conandata_requirements(tmp_path: Path) -> Non
         conan_export.LocalRecipeExport("loki", "abc123", loki_dir),
         conan_export.LocalRecipeExport("nauty", "2.8.8", nauty_dir),
     ]
+
+
+def test_module_runs_without_the_conan_package(tmp_path: Path) -> None:
+    # CMake runs this script with the interpreter that builds the project, which
+    # is not required to have the ``conan`` package importable -- Conan itself is
+    # located separately as an executable via --conan_cmd. Re-import the module
+    # in a subprocess with ``conan`` blocked to keep that guarantee enforced.
+    blocker = tmp_path / "sitecustomize.py"
+    blocker.write_text(
+        "import sys\n"
+        "class _Block:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'conan' or name.startswith('conan.'):\n"
+        "            raise ImportError('conan is intentionally unavailable')\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, _Block())\n"
+    )
+    repo_root = Path(conan_export.__file__).resolve().parent
+    env = dict(os.environ, PYTHONPATH=f"{tmp_path}{os.pathsep}{repo_root}")
+
+    completed = subprocess.run(
+        [sys.executable, str(repo_root / "conan_export.py"), "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("reference", "expected"),
+    [
+        ("dlpack/1.2", ("dlpack", "1.2")),
+        ("  loki/abc123  ", ("loki", "abc123")),
+        ("nauty/2.8.8@user/channel", ("nauty", "2.8.8")),
+        ("valla/1.0#rev0123", ("valla", "1.0")),
+        ("strong_type/v10@user/channel#rev0123", ("strong_type", "v10")),
+    ],
+)
+def test_recipe_reference_parsing(reference: str, expected: tuple[str, str]) -> None:
+    parsed = conan_export.RecipeReference.loads(reference)
+
+    assert (parsed.name, parsed.version) == expected
+
+
+@pytest.mark.parametrize("reference", ["", "   ", "nameonly", "/1.0", "name/"])
+def test_recipe_reference_rejects_malformed(reference: str) -> None:
+    with pytest.raises(ValueError):
+        conan_export.RecipeReference.loads(reference)
 
 
 def test_local_recipe_exports_rejects_missing_requirements(tmp_path: Path) -> None:
