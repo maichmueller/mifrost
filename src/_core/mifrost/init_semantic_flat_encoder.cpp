@@ -366,6 +366,18 @@ void init_semantic_flat_encoder(nb::module_& m)
       },
       "capsule"_a
    );
+   // The direct-View PyTyr encoders run entirely inside the PyTyr module and
+   // hand back only this neutral result, so no owning semantic input has to
+   // cross the ABI boundary for a normal encode.
+   m.def(
+      "_consume_batch_encoding_capsule",
+      [](nb::handle capsule) {
+         return capsule_bridge::take< BatchBuilder::BatchEncoding >(
+            capsule.ptr(), capsule_bridge::batch_encoding_name
+         );
+      },
+      "capsule"_a
+   );
    m.def(
       "_consume_semantic_flat_engine_capsule",
       [](nb::handle capsule) {

@@ -394,3 +394,139 @@ def test_native_backends_remain_independent_when_interleaved() -> None:
         pytyr_engine.engine,
         mifrost._neutral_core.SemanticFlatRelationEncoderEngine,
     )
+
+
+# --- Direct-View PyTyr encoding -------------------------------------------
+#
+# The normal PyTyr encode runs the canonical engine inside the PyTyr module, so
+# a Tyr state and its actions reach the algorithm as granular Views instead of
+# as an owning SemanticFlatRelationInput. Only the finished neutral encoding
+# crosses back through a capsule, because PyTyr and Pymimir ship incompatible
+# nanobind ABI generations. These tests pin that the direct path agrees exactly
+# with the compatibility path it replaced, for every family that has one.
+
+
+def _assert_deep_equal(actual: Any, expected: Any, path: str = "") -> None:
+    """Tensor-aware recursive equality.
+
+    The hetero payload nests tensors inside tuples and dicts, where a bare `==`
+    yields a tensor rather than a bool, so the flat comparison above cannot be
+    reused for every family.
+    """
+    if torch.is_tensor(actual) or torch.is_tensor(expected):
+        assert torch.is_tensor(actual) and torch.is_tensor(expected), path
+        assert torch.equal(actual, expected), path
+        return
+    if isinstance(actual, dict):
+        assert isinstance(expected, dict), path
+        assert actual.keys() == expected.keys(), path
+        for key in actual:
+            _assert_deep_equal(actual[key], expected[key], f"{path}.{key}")
+        return
+    if isinstance(actual, (list, tuple)):
+        assert isinstance(expected, (list, tuple)), path
+        assert len(actual) == len(expected), path
+        for index, (left, right) in enumerate(zip(actual, expected, strict=True)):
+            _assert_deep_equal(left, right, f"{path}[{index}]")
+        return
+    assert actual == expected, path
+
+
+def _assert_encoding_deep_equal(actual: Any, expected: Any) -> None:
+    _assert_deep_equal(actual.as_pyg().to_dict(), expected.as_pyg().to_dict())
+
+
+def _direct_cases() -> tuple[tuple[str, str, str], ...]:
+    """(family, direct factory, engine factory) triples."""
+    return (
+        ("flat", "make_direct_flat_encoder", "make_flat_engine"),
+        ("color", "make_direct_color_encoder", "make_color_engine"),
+        ("hgraph", "make_direct_hgraph_encoder", "make_hgraph_engine"),
+    )
+
+
+def _family_config(family: str) -> Any:
+    if family == "flat":
+        return _config()
+    if family == "color":
+        return mifrost._neutral_core.SemanticColorEncoderConfig()
+    return mifrost._neutral_core.SemanticHGraphEncoderConfig(
+        target_sources={mifrost.TargetSource.goals}
+    )
+
+
+@pytest.mark.parametrize(
+    ("family", "direct_factory", "engine_factory"), _direct_cases()
+)
+@pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
+def test_direct_view_encode_matches_owned_input(
+    family: str, direct_factory: str, engine_factory: str, domain: str, problem: str
+) -> None:
+    reader, successor_generator = _pytyr_pair(domain, problem)
+    state = successor_generator.get_initial_node().get_state()
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    config = _family_config(family)
+
+    direct = getattr(adapter, direct_factory)(config)
+    engine = getattr(adapter, engine_factory)(config)
+
+    _assert_encoding_deep_equal(
+        direct.encode(state, compact_literal=adapter._compact_literal),
+        engine.encode(adapter.make_input(state)),
+    )
+
+
+@pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
+def test_direct_view_flat_optional_lanes_match_owned_input(
+    domain: str, problem: str
+) -> None:
+    reader, successor_generator = _pytyr_pair(domain, problem)
+    root = successor_generator.get_initial_node()
+    state = root.get_state()
+    actions = [
+        successor.label
+        for successor in successor_generator.get_labeled_successor_nodes(root)
+    ]
+    config = mifrost.FlatRelationEncoderConfig(
+        max_goal_level=2,
+        target_sources={
+            mifrost.TargetSource.actions,
+            mifrost.TargetSource.goals,
+            mifrost.TargetSource.subgoals,
+            mifrost.TargetSource.history,
+        },
+    )
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    direct = adapter.make_direct_flat_encoder(config)
+    engine = adapter.make_flat_engine(config)
+
+    goals = list(reader.problem_snapshot().goals)
+    lanes: dict[str, Any] = {
+        "goals": goals,
+        "subgoal_layers": [goals, goals],
+        "history": [(-1, goals), (-2, goals)],
+        "history_max_steps": 2,
+    }
+
+    _assert_encoding_deep_equal(
+        direct.encode(
+            state, actions, compact_literal=adapter._compact_literal, **lanes
+        ),
+        engine.encode(adapter.make_input(state, actions, **lanes)),
+    )
+
+
+def test_direct_view_encoder_keeps_its_adapter_alive() -> None:
+    """The encoder borrows the adapter's View context, so it must own a reference."""
+    reader, successor_generator = _pytyr_pair("blocks", "small")
+    state = successor_generator.get_initial_node().get_state()
+
+    def make() -> Any:
+        adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+        return adapter.make_direct_flat_encoder(_config())
+
+    direct = make()
+    import gc
+
+    gc.collect()
+    assert direct.encode(state).num_graphs == 1

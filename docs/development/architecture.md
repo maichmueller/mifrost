@@ -119,6 +119,31 @@ context must outlive every View and every lazy range derived from it. Native
 templates are instantiated separately in each adapter, preserving PyTyr and
 Pymimir ABI isolation while sharing the algorithm source.
 
+### PyTyr and the ABI boundary
+
+PyTyr and Pymimir link different nanobind ABI generations, so a Tyr state
+cannot be passed to an engine object owned by the core extension module: the
+two modules do not share a type registry. That constraint is about *nanobind*,
+not about C++. Both modules link the same neutral library, so the canonical
+engines are ordinary C++ objects that either module can construct and call.
+
+The PyTyr direct-View encoders (`_NativeDirectFlatEncoder`,
+`_NativeDirectColorEncoder`, `_NativeDirectHGraphEncoder`) exploit exactly that:
+the engine is constructed and run inside the PyTyr module, where Tyr types are
+visible, so a state and its actions reach the canonical algorithm as granular
+Views. Only the finished, planner-neutral `BatchEncoding` crosses back, as a
+capsule. No owning `SemanticFlatRelationInput` is built for a normal encode.
+
+Two things still cross as owned records, for reasons that are not removable by
+restructuring:
+
+- Goal, subgoal, and history literals arrive from Python as compact tuples.
+  There is no native planning value to borrow from, so they are expanded into
+  `SemanticLiteral` vectors and then borrowed by semantic Views.
+- `make_input` / `make_inputs` remain the explicit compatibility route for
+  callers that want the semantic records themselves, and the successor, horizon
+  and flat-horizon families still encode from owned inputs.
+
 ### Direct and compatibility encoder paths
 
 Native backend entry points use a direct path whenever the input is still a
@@ -133,9 +158,12 @@ backend values
 ```
 
 The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
-this path. The semantic engines also retain an explicit compatibility path for
-owned `SemanticFlatRelationInput` records. That path is required by capsules,
-semantic transition DAGs, and callers that intentionally snapshot inputs:
+this path, and so do the PyTyr Flat, Color, and HGraph entry points -- see
+"PyTyr and the ABI boundary" below for how a direct path is possible across two
+nanobind ABI generations. The semantic engines also retain an explicit
+compatibility path for owned `SemanticFlatRelationInput` records. That path is
+required by capsules, semantic transition DAGs, and callers that intentionally
+snapshot inputs:
 
 ```text
 owned semantic records -> semantic compatibility encoder -> BatchEncoding
@@ -193,7 +221,7 @@ full per-lane owning copy of the input.
 | Borrowed input range | `NativeGoalLiteralsView`, `StateView`, action `TransformRange` | Valid only while the backend problem/state, the task context, and the `views::Context` are alive. Consumed synchronously inside one encode call. |
 | Compact graph-derived pool | `ViewPreparation::atom_pool` / `action_pool` plus their hash indices, goal-level refs, filtered history refs, fact-membership set | Private to one encode call. Holds each unique graph identity once; lanes keep only indices, so lane order and multiplicity survive deduplication. |
 | Owning compatibility DTO | `SemanticFlatRelationInput` | Owned by the caller. Used by capsules, semantic transition DAGs, and callers that intentionally snapshot. Consumed through borrowed references to its existing lanes, not copied into another carrier. |
-| Capsule / ABI snapshot | PyTyr `_make_input_capsule` | Required because Pymimir and PyTyr are built against incompatible nanobind ABI generations. This is an explicit ABI transport, not a native-View path. |
+| Capsule / ABI snapshot | PyTyr `_make_input_capsule`, `_encode_capsule` | Required because Pymimir and PyTyr are built against incompatible nanobind ABI generations. A capsule is an explicit ABI transport, never evidence that a path is or is not View-based: `_make_input_capsule` transports an owning input, while `_encode_capsule` transports only the finished neutral encoding produced by a direct-View encode. |
 | Stream lifetime snapshot | `HGraphStreamEncoder`, flat/horizon stream caches | Stores the completed native batch encoding, never a lazy View, so the source state may be released after `append` returns. |
 
 Task contexts and backend planning repositories must remain alive through every

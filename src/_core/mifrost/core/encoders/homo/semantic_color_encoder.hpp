@@ -20,6 +20,9 @@ struct SemanticColorEncoderConfig {
 
 class MIFROST_API SemanticColorEncoderEngine {
   public:
+   /// Matches the other family engines, so generic code can name the policy type.
+   using Config = SemanticColorEncoderConfig;
+
    SemanticColorEncoderEngine(
       std::vector< SemanticPredicateSpec > predicates,
       SemanticColorEncoderConfig config = {}

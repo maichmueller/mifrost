@@ -203,7 +203,33 @@ class PyTyrFlatRuntime:
         )
 
     def encode_one(self, state: object, **kwargs: Any) -> Any:
-        return self.engine.encode(self._input(state, **kwargs))
+        if not _is_state(state):
+            raise TypeError(
+                "a PyTyr FlatRelationEncoder expects a lifted or ground PyTyr "
+                f"state, got {type(state)!r}"
+            )
+        # Direct-View encode inside the PyTyr module; no owning semantic input.
+        return self._adapter.encode(
+            state,
+            cast(
+                Iterable[object],
+                () if kwargs.get("actions") is None else kwargs["actions"],
+            ),
+            goals=cast(Iterable[object] | None, kwargs.get("goals")),
+            subgoal_layers=cast(
+                Iterable[Iterable[object]],
+                ()
+                if kwargs.get("subgoal_layers") is None
+                else kwargs["subgoal_layers"],
+            ),
+            history=cast(
+                Iterable[tuple[int, Iterable[object]]],
+                ()
+                if kwargs.get("history_subgoals") is None
+                else kwargs["history_subgoals"],
+            ),
+            history_max_steps=kwargs.get("history_max_steps"),
+        )
 
     def encode_batch(
         self,

@@ -84,6 +84,33 @@ TEST_P(DirectViewFlatTest, NullaryRelationTogglesMatchCompatibilityInput)
    }
 }
 
+// The compatibility one-shot encode finalizes through the compiled plan. The
+// direct one builds its own BatchBuilder, so it has to finalize too -- a
+// relation-major layout that reaches only one path is a silent divergence
+// (`relation_args_layout` differs while every tensor still matches).
+TEST_P(DirectViewFlatTest, RelationMajorPackingMatchesCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto semantic_input = adapter.make_input(ctx.root);
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+
+   for(const bool relation_major : {false, true}) {
+      auto config = rich_config();
+      config.pack_relation_args_relation_major = relation_major;
+      const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+      expect_encoding_equal(
+         engine.encode(semantic_input),
+         engine.encode(state_view, empty_actions),
+         std::string("relation_major=") + (relation_major ? "1" : "0")
+      );
+   }
+}
+
 // Polarity selects a different relation suffix per predicate category. The
 // fixtures only supply the polarity their PDDL has, so the negative branch is
 // reached by flipping owned literals and reading them back through a semantic

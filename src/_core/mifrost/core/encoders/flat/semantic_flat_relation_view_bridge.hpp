@@ -234,7 +234,12 @@ SemanticFlatRelationEncoderEngine::encode(const State& state, Actions&& actions)
    BatchBuilder builder;
    encode(state, std::forward< Actions >(actions), builder);
    builder.next_graph();
-   return builder.build();
+   // The compatibility one-shot encode finalizes through the compiled plan, so
+   // the direct one must too: otherwise relation-major packing silently applies
+   // to one path only.
+   auto encoding = builder.build();
+   finalize_batch_encoding(encoding);
+   return encoding;
 }
 
 template < views::StateView State, views::GroundActionRange Actions >
@@ -260,7 +265,12 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
    BatchBuilder builder;
    encode(state, std::forward< Goals >(goals), std::forward< Actions >(actions), builder);
    builder.next_graph();
-   return builder.build();
+   // The compatibility one-shot encode finalizes through the compiled plan, so
+   // the direct one must too: otherwise relation-major packing silently applies
+   // to one path only.
+   auto encoding = builder.build();
+   finalize_batch_encoding(encoding);
+   return encoding;
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
@@ -303,7 +313,12 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
       builder
    );
    builder.next_graph();
-   return builder.build();
+   // The compatibility one-shot encode finalizes through the compiled plan, so
+   // the direct one must too: otherwise relation-major packing silently applies
+   // to one path only.
+   auto encoding = builder.build();
+   finalize_batch_encoding(encoding);
+   return encoding;
 }
 
 template <

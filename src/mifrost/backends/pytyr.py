@@ -45,6 +45,51 @@ def _literal_key(literal: Any, category: PredicateCategory) -> LiteralKey:
     )
 
 
+class DirectEncoder:
+    """A canonical family encoder that runs inside the PyTyr native module.
+
+    PyTyr and Pymimir ship incompatible nanobind ABI generations, so a Tyr
+    state cannot be handed to an engine object owned by the core module. The
+    engine therefore runs on the PyTyr side, where the state and its actions
+    reach the canonical algorithm as granular Views, and only the finished
+    planner-neutral batch encoding crosses back through a capsule.
+
+    This is the normal PyTyr encode path. `SemanticPlanningTaskAdapter
+    .make_input` remains the explicit compatibility route for callers that want
+    the owned semantic records themselves.
+    """
+
+    def __init__(self, native: Any) -> None:
+        self._native = native
+
+    def encode(
+        self,
+        state: object,
+        actions: Iterable[object] = (),
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+        history: Iterable[tuple[int, Iterable[object]]] = (),
+        history_max_steps: int | None = None,
+        compact_literal: Any = None,
+    ) -> Any:
+        from mifrost import _neutral_core
+
+        to_compact = compact_literal or (lambda value: value)
+        capsule = self._native._encode_capsule(
+            state,
+            list(actions),
+            None if goals is None else [to_compact(value) for value in goals],
+            [[to_compact(value) for value in layer] for layer in subgoal_layers],
+            [
+                (int(delta), [to_compact(value) for value in literals])
+                for delta, literals in history
+            ],
+            history_max_steps,
+        )
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+
 class PyTyrSnapshotReader:
     """Read canonical snapshots from one PyTyr planning task."""
 
@@ -175,6 +220,7 @@ class SemanticPlanningTaskAdapter:
                 "(or both)."
             ) from error
 
+        self._native_module = native_module
         self._native = native_module._NativeSemanticPlanningTaskAdapter(planning_task)
         # Native literals and FDR facts use their stable repository indices all
         # the way to the capsule. A semantic `LiteralKey` is a legacy/public
@@ -191,6 +237,36 @@ class SemanticPlanningTaskAdapter:
         config_capsule = _neutral_core._flat_relation_config_capsule(config)
         engine_capsule = self._native._make_engine_capsule(config_capsule)
         return _neutral_core._consume_semantic_flat_engine_capsule(engine_capsule)
+
+    def make_direct_flat_encoder(self, config: Any) -> DirectEncoder:
+        """Direct-View Flat encoder that runs inside the PyTyr module."""
+        from mifrost import _neutral_core
+
+        return DirectEncoder(
+            self._native_module._NativeDirectFlatEncoder(
+                self._native, _neutral_core._flat_relation_config_capsule(config)
+            )
+        )
+
+    def make_direct_color_encoder(self, config: Any) -> DirectEncoder:
+        """Direct-View Color encoder that runs inside the PyTyr module."""
+        from mifrost import _neutral_core
+
+        return DirectEncoder(
+            self._native_module._NativeDirectColorEncoder(
+                self._native, _neutral_core._semantic_color_config_capsule(config)
+            )
+        )
+
+    def make_direct_hgraph_encoder(self, config: Any) -> DirectEncoder:
+        """Direct-View HGraph encoder that runs inside the PyTyr module."""
+        from mifrost import _neutral_core
+
+        return DirectEncoder(
+            self._native_module._NativeDirectHGraphEncoder(
+                self._native, _neutral_core._semantic_hgraph_config_capsule(config)
+            )
+        )
 
     def make_color_engine(self, config: Any) -> Any:
         """Build a neutral Color engine from this task adapter's cached schema."""
@@ -439,6 +515,7 @@ class SemanticFlatRelationEncoder(SemanticPlanningTaskAdapter):
             config = _neutral_core.FlatRelationEncoderConfig()
         super().__init__(planning_task)
         self._engine = self.make_flat_engine(config)
+        self._direct = self.make_direct_flat_encoder(config)
 
     @property
     def engine(self) -> Any:
@@ -454,13 +531,15 @@ class SemanticFlatRelationEncoder(SemanticPlanningTaskAdapter):
         history: Iterable[tuple[int, Iterable[object]]] = (),
         history_max_steps: int | None = None,
     ) -> Any:
-        return self._engine.encode(
-            self.make_input(
-                state,
-                actions,
-                goals=goals,
-                subgoal_layers=subgoal_layers,
-                history=history,
-                history_max_steps=history_max_steps,
-            )
+        # Direct-View path: the state and its actions never become an owning
+        # semantic input. `make_input` stays available for callers that want the
+        # records; see DirectEncoder for why the engine runs module-side.
+        return self._direct.encode(
+            state,
+            actions,
+            goals=goals,
+            subgoal_layers=subgoal_layers,
+            history=history,
+            history_max_steps=history_max_steps,
+            compact_literal=self._compact_literal,
         )

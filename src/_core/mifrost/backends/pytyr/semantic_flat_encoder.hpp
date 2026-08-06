@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <ranges>
 #include <tyr/formalism/planning/ground_action_view.hpp>
 #include <tyr/formalism/planning/planning_task.hpp>
 #include <tyr/planning/ground/state_view.hpp>
@@ -15,6 +16,7 @@
 #include "mifrost/backends/pytyr/views.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
+#include "mifrost/core/views/ranges.hpp"
 
 namespace mifrost::pytyr {
 
@@ -56,6 +58,23 @@ class MIFROST_API SemanticPlanningTaskAdapter {
    [[nodiscard]] views::
       StateView< tyr::planning::StateView< tyr::planning::GroundTag >, tyr::planning::GroundTag >
       make_view(const tyr::planning::StateView< tyr::planning::GroundTag >& state) const;
+
+   /**
+    * Borrow a range of Tyr ground actions as granular action Views.
+    *
+    * The returned range holds no action of its own; the caller's container must
+    * outlive it, exactly as for `make_view`.
+    */
+   template < std::ranges::input_range Actions >
+   [[nodiscard]] auto make_action_views(Actions&& actions) const
+   {
+      using NativeAction = std::remove_cvref_t< std::ranges::range_value_t< Actions > >;
+      return mifrost::views::TransformRange{
+         std::forward< Actions >(actions), [context = &get_view_context()](const auto& action) {
+            return views::GroundActionView< NativeAction >{action, *context};
+         }
+      };
+   }
 
   private:
    struct Impl;

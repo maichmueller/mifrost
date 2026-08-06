@@ -191,6 +191,10 @@ The reusable implementation lives in the planner-neutral core:
   Pymimir, keeping native types and nanobind ABI domains isolated. Semantic
   snapshot adapters remain an explicit compatibility boundary for callers that
   request owned records; they are not required by the View contract.
+- The PyTyr Flat, Color, and HGraph encoders run their engine inside the PyTyr
+  extension module, so a Tyr state reaches the algorithm as Views and only the
+  finished neutral encoding crosses the ABI boundary as a capsule. A capsule
+  says where a value crossed, not how it was produced.
 
 The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
 retain their historical constructors and streaming contracts while adapting
