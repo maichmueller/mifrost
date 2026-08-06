@@ -711,9 +711,9 @@ def test_hgraph_runtime_update_relations_reaches_the_direct_path() -> None:
     )
     state = states[0]
 
-    before = runtime.encode_one(state, actions=actions)
+    before = runtime.encode(state, actions=actions)
     runtime.update_relations(_relation_probe(runtime))
-    after = runtime.encode_one(state, actions=actions)
+    after = runtime.encode(state, actions=actions)
 
     assert set(after.as_pyg().node_types) != set(before.as_pyg().node_types)
     _assert_encoding_deep_equal(
@@ -733,9 +733,9 @@ def test_transition_runtime_update_relations_reaches_the_direct_path() -> None:
     )
     current, successor = states[0], states[1]
 
-    before = runtime.encode_one(current, successor)
+    before = runtime.encode(current, successor)
     runtime.update_relations(_relation_probe(runtime))
-    after = runtime.encode_one(current, successor)
+    after = runtime.encode(current, successor)
 
     assert set(after.as_pyg().node_types) != set(before.as_pyg().node_types)
     _assert_encoding_deep_equal(
@@ -758,7 +758,7 @@ def test_color_and_hgraph_runtimes_match_their_owned_route(
         reader._planning_task, mifrost._neutral_core.SemanticColorEncoderConfig()
     )
     _assert_encoding_deep_equal(
-        color.encode_one(states[0], goals=goals),
+        color.encode(states[0], goals=goals),
         color.engine.encode(color._input(states[0], goals=goals)),
     )
     _assert_encoding_deep_equal(
@@ -773,7 +773,7 @@ def test_color_and_hgraph_runtimes_match_their_owned_route(
     )
     lanes: dict[str, Any] = {"goals": goals, "actions": actions}
     _assert_encoding_deep_equal(
-        hgraph.encode_one(states[0], **lanes),
+        hgraph.encode(states[0], **lanes),
         hgraph.engine.encode(hgraph._input(states[0], **lanes)),
     )
     _assert_encoding_deep_equal(

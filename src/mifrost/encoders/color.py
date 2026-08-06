@@ -124,7 +124,7 @@ class ColorEncoder(EncoderBase[Data]):
         subgoal_layers: SubgoalLayersInput = None,
     ) -> HomoEncoding:
         """Encode one state into homogeneous encoding dictionary."""
-        return self._runtime.encode_one(
+        return self._runtime.encode(
             state,
             goals=goals,
             actions=actions,

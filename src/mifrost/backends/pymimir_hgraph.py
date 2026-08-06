@@ -105,7 +105,7 @@ class PymimirHGraphRuntime:
         else:
             self.engine.encode(native_state, goals, actions, builder)
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         from .._core import BatchBuilder
 
         builder = BatchBuilder()

@@ -95,7 +95,7 @@ class PymimirHorizonRuntime:
     ) -> None:
         self.engine.encode(*self._payload(root, dag, **kwargs), builder)
 
-    def encode_one(self, root: object, dag: object = None, **kwargs: Any) -> Any:
+    def encode(self, root: object, dag: object = None, **kwargs: Any) -> Any:
         return self.engine.encode(*self._payload(root, dag, **kwargs))
 
     def encode_batch(

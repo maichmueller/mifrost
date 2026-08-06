@@ -142,7 +142,7 @@ class PyTyrHGraphRuntime:
         # owned-input route for that reason alone.
         self.engine.encode(self._input(state, **kwargs), builder)
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         lanes = self._checked_lanes(state, **kwargs)
         # Direct-View encode inside the PyTyr module; no owning semantic input.
         return self._direct.encode(state, lanes.pop("actions"), **lanes)

@@ -355,7 +355,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
             state_index=0,
             max_goal_level=int(self._config.max_goal_level),
         )
-        return self._runtime.encode_one(
+        return self._runtime.encode(
             root,
             dag,
             goals=goals,

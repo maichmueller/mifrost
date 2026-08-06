@@ -106,7 +106,7 @@ class PymimirFlatRuntime:
         else:
             self.engine.encode(adv_state, split_goals, builder)
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         from .._core import BatchBuilder
 
         builder = BatchBuilder()

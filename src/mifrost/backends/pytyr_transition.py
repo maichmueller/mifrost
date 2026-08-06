@@ -154,7 +154,7 @@ class PyTyrTransitionRuntime:
         current_input, successor_input = self._inputs(current, successor, **kwargs)
         self.engine.encode(current_input, successor_input, builder)
 
-    def encode_one(self, current: object, successor: object, **kwargs: Any) -> Any:
+    def encode(self, current: object, successor: object, **kwargs: Any) -> Any:
         goals, layers = self._checked_lanes(current, successor, **kwargs)
         return self._direct.encode(
             current, successor, goals=cast(Any, goals), subgoal_layers=layers

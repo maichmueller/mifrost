@@ -16,7 +16,7 @@ class ColorRuntime(Protocol):
     @property
     def backend_name(self) -> str: ...
 
-    def encode_one(
+    def encode(
         self,
         state: object,
         *,

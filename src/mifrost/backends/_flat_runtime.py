@@ -19,7 +19,7 @@ class FlatRuntime(Protocol):
     @property
     def relation_dict(self) -> Any: ...
 
-    def encode_one(
+    def encode(
         self,
         state: object,
         *,

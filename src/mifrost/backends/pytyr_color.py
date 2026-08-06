@@ -108,7 +108,7 @@ class PyTyrColorRuntime:
             subgoal_layers=layers,
         )
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         goals, layers = self._checked_lanes(state, **kwargs)
         # Direct-View encode inside the PyTyr module; no owning semantic input.
         return self._direct.encode(

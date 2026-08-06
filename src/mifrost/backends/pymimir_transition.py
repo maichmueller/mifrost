@@ -95,7 +95,7 @@ class PymimirTransitionRuntime:
         )
         self.engine.encode(native_current, native_successor, goals, builder)
 
-    def encode_one(self, current: object, successor: object, **kwargs: Any) -> Any:
+    def encode(self, current: object, successor: object, **kwargs: Any) -> Any:
         from .._core import BatchBuilder
 
         builder = BatchBuilder()

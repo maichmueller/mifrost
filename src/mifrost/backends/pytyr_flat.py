@@ -235,7 +235,7 @@ class PyTyrFlatRuntime:
             history_max_steps=kwargs.get("history_max_steps"),
         )
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         if not _is_state(state):
             raise TypeError(
                 "a PyTyr FlatRelationEncoder expects a lifted or ground PyTyr "

@@ -155,7 +155,7 @@ class _TransitionEncoderBase(HGraphEncoder):
             history_subgoals=history_subgoals,
             history_max_steps=history_max_steps,
         )
-        return self._runtime.encode_one(
+        return self._runtime.encode(
             state,
             successor,
             goals=goals,

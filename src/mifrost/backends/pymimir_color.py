@@ -71,7 +71,7 @@ class PymimirColorRuntime:
             action_values,
         )
 
-    def encode_one(self, state: object, **kwargs: Any) -> Any:
+    def encode(self, state: object, **kwargs: Any) -> Any:
         native_state, goals, actions = self._single_payload(state, **kwargs)
         if goals is None:
             return self.engine.encode(native_state)
