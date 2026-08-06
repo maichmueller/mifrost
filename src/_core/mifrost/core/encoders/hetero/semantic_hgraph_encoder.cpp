@@ -257,10 +257,17 @@ template < typename Input >
 std::vector< PreparedGoal > prepare_goals(const Input& input)
 {
    if constexpr(requires { input.goal_levels(); }) {
-      std::vector< PreparedGoal > result;
-      result.reserve(input.goal_levels().size());
+      std::vector< SemanticGoalLevel > occurrences;
+      occurrences.reserve(input.goal_levels().size());
       for(const auto& goal : input.goal_levels()) {
-         result.push_back({goal.literal, goal.level});
+         occurrences.push_back(goal);
+      }
+      auto levels = occurrences;
+      std::ranges::sort(levels);
+      std::vector< PreparedGoal > result;
+      result.reserve(occurrences.size());
+      for(const auto& goal : occurrences) {
+         result.push_back({goal.literal, semantic_goal_level(levels, goal.literal)});
       }
       return result;
    } else {

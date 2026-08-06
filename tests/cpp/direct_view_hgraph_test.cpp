@@ -274,6 +274,66 @@ TEST_P(DirectViewHGraphTest, NegativeGoalLiteralsMatchCompatibilityInput)
    }
 }
 
+/**
+ * One input whose every goal literal appears at two different levels.
+ *
+ * The native `GoalInputs` carrier stores one level per literal, so it cannot
+ * express this shape and `make_scenario` never reaches it -- but a caller that
+ * supplies the goal and subgoal lanes separately can, and the public PyTyr and
+ * Pymimir transition APIs do exactly that. This family resolves a repeated goal
+ * to its highest level, so both occurrences must land on the same node.
+ */
+struct RepeatedLevelInput {
+   mifrost::SemanticFlatRelationInput compatibility;
+   std::vector< std::vector< mifrost::SemanticLiteral > > layers;
+};
+
+RepeatedLevelInput repeated_level_input(
+   const mifrost_test::Context& ctx,
+   const mifrost::pymimir::SemanticProblemAdapter& adapter
+)
+{
+   RepeatedLevelInput result;
+   result.compatibility = adapter.make_input(ctx.root);
+   result.compatibility.use_default_goals = false;
+   result.compatibility.goals = adapter.get_task_context()->default_goals;
+   result.compatibility.subgoal_layers = {result.compatibility.goals};
+   result.layers = result.compatibility.subgoal_layers;
+   return result;
+}
+
+// A goal repeated across levels must resolve to one level on both paths.
+TEST_P(DirectViewHGraphTest, RepeatedGoalLevelsMatchCompatibilityInput)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto input = repeated_level_input(ctx, adapter);
+   if(input.compatibility.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const mifrost::semantic::LiteralsView goals_view{std::span{input.compatibility.goals}};
+   const mifrost::semantic::SubgoalLayersView layers_view{std::span{input.layers}};
+   const std::vector< mifrost::SemanticHistoryEntry > empty_history;
+   const mifrost::semantic::HistoryView history_view{std::span{empty_history}};
+
+   for(const auto& [name, config] : policy_matrix()) {
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+      expect_encoding_equal(
+         engine.encode(input.compatibility),
+         engine.encode(
+            state_view, goals_view, layers_view, empty_actions, history_view, std::nullopt
+         ),
+         name
+      );
+   }
+}
+
 // `update_relations` replaces the relation arity table after construction. The
 // direct path caches graph-derived preparation state; the compatibility path
 // does not. A stale cache would only show up after the table changed.
@@ -386,6 +446,49 @@ TEST_P(DirectViewSuccessorTest, SuccessorModesMatchCompatibilityInputs)
          );
       }
    }
+}
+
+// Successor goal satisfaction re-reads the prepared goals against the successor
+// state facts, so it is the pass most exposed to a goal whose level was
+// resolved differently on the two paths.
+TEST_P(DirectViewSuccessorTest, RepeatedGoalLevelsMatchWithSuccessorSatisfaction)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const auto [successor, action] = mifrost_test::find_successor(ctx);
+   (void) action;
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto input = repeated_level_input(ctx, adapter);
+   const auto successor_input = adapter.make_input(successor);
+   if(input.compatibility.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   const auto current_view = adapter.make_state_view(ctx.root);
+   const auto successor_view = adapter.make_state_view(successor);
+   const mifrost::semantic::LiteralsView goals_view{std::span{input.compatibility.goals}};
+   const mifrost::semantic::SubgoalLayersView layers_view{std::span{input.layers}};
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+
+   mifrost::SemanticSuccessorHGraphEncoderConfig config;
+   config.max_goal_level = 3;
+   config.support_literals = true;
+   config.include_successor_goal_satisfaction = true;
+   config.goal_derivations = {
+      mifrost::GoalDerivation::plain,
+      mifrost::GoalDerivation::satisfied,
+      mifrost::GoalDerivation::unsatisfied,
+   };
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context(), config);
+
+   expect_encoding_equal(
+      engine.encode(input.compatibility, successor_input),
+      engine.encode(
+         current_view, goals_view, layers_view, empty_actions, successor_view, empty_actions
+      )
+   );
 }
 
 // The successor engine forwards the arity table to its inner HGraph engine.
