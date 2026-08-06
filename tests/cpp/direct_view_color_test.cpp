@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "encoding_parity.hpp"
 #include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
 #include "mifrost/core/semantic/views.hpp"
@@ -28,59 +29,7 @@
 
 namespace {
 
-using mifrost::BatchBuilder;
-
-template < typename Variant >
-void expect_numeric_variant_equal(
-   const Variant& expected,
-   const Variant& actual,
-   const std::string& label
-)
-{
-   ASSERT_EQ(expected.index(), actual.index()) << label;
-   std::visit(
-      [&]< typename T >(const T& expected_values) {
-         ASSERT_TRUE(std::holds_alternative< T >(actual)) << label;
-         EXPECT_EQ(expected_values, std::get< T >(actual)) << label;
-      },
-      expected
-   );
-}
-
-void expect_encoding_equal(
-   const BatchBuilder::BatchEncoding& expected,
-   const BatchBuilder::BatchEncoding& actual,
-   const std::string& label
-)
-{
-   EXPECT_EQ(expected.graph_kind, actual.graph_kind) << label;
-   EXPECT_EQ(expected.schema_flags, actual.schema_flags) << label;
-   EXPECT_EQ(expected.node_names, actual.node_names) << label;
-   EXPECT_EQ(expected.object_names, actual.object_names) << label;
-   EXPECT_EQ(expected.node_feature_dims, actual.node_feature_dims) << label;
-   EXPECT_EQ(expected.graph_attrs, actual.graph_attrs) << label;
-   EXPECT_EQ(expected.node_counts, actual.node_counts) << label;
-   EXPECT_EQ(expected.ptrs, actual.ptrs) << label;
-   EXPECT_EQ(expected.num_graphs, actual.num_graphs) << label;
-   ASSERT_EQ(expected.columns.size(), actual.columns.size()) << label;
-   for(const auto& [key, expected_column] : expected.columns) {
-      const auto actual_it = actual.columns.find(key);
-      ASSERT_NE(actual_it, actual.columns.end()) << label << " " << key;
-      EXPECT_EQ(expected_column.dim, actual_it->second.dim) << label << " " << key;
-      expect_numeric_variant_equal(
-         expected_column.data, actual_it->second.data, label + " " + key
-      );
-   }
-   ASSERT_EQ(expected.graph_fields.size(), actual.graph_fields.size()) << label;
-   for(const auto& [key, expected_field] : expected.graph_fields) {
-      const auto actual_it = actual.graph_fields.find(key);
-      ASSERT_NE(actual_it, actual.graph_fields.end()) << label << " " << key;
-      EXPECT_EQ(expected_field.spec, actual_it->second.spec) << label << " " << key;
-      expect_numeric_variant_equal(
-         expected_field.values, actual_it->second.values, label + " " + key
-      );
-   }
-}
+using mifrost_test::expect_encoding_equal;
 
 /** Every combination of the three Color configuration flags. */
 std::vector< mifrost::SemanticColorEncoderConfig > all_configs()
