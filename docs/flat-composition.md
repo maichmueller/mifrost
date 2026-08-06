@@ -138,11 +138,19 @@ per-lane owning mirror of the input: the direct path never builds
 API into the algorithm, and the compatibility path is read through borrowed
 references to the lanes `SemanticFlatRelationInput` already owns.
 
-One conversion is still outstanding on this path: `PreparedRelationGraph`
-selects its storage mode with a nullable-pointer check that the range carriers
-repeat per element. Both modes execute the same source algorithm, so output is
-unaffected, but those carriers are intended to become concrete ranges selected
-once at the public entry point.
+The storage mode is chosen exactly once. `ViewSource` and
+`CompatibilitySource` are two concrete borrowed accessors over their own
+storage; `validate_source`, `make_context` and `prepare_source` are templated
+over them and instantiated for both. Preparation returns a fully resolved
+`PreparedRelationGraph` holding borrowed spans settled once plus compact
+graph-derived state, so no emitter re-tests which kind of input it came from.
+
+On the goal lane specifically, occurrences are stored once and the
+category-grouped list holds `{entry_index, effective_level}` rather than copied
+literals. The effective level of a repeated goal — the highest level it appears
+at — is resolved once during preparation, not by a binary search on each
+emission pass. Repeated goals keep every occurrence and every occurrence keeps
+the same effective level, matching the historical map-assignment semantics.
 
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
 candidate identities, exact transition deltas, and goal-membership sets. A

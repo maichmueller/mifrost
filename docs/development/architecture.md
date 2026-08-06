@@ -152,20 +152,21 @@ does not copy the complete input into another graph carrier. This keeps
 planner-library types out of the neutral core without duplicating backend
 algorithms.
 
-Color, HGraph, and the successor encoder each have exactly one canonical
-algorithm, templated on the input type and instantiated for both the borrowed
-preparation and the owning compatibility DTO; the lane accessors
-(`semantic_state_facts`, `semantic_actions`, `semantic_history`, ...) resolve
-statically. There is no second algorithm per backend.
+Every family has exactly one canonical algorithm, templated on the input and
+instantiated for both the borrowed preparation and the owning compatibility
+DTO. There is no second algorithm per backend, and no runtime storage-mode
+flag reaches per-element code.
 
-Flat is not yet fully converted. Its `PreparedRelationGraph` still selects
-between the two storage modes with a nullable-pointer check, and the
-`SemanticAtomRange` / `SemanticActionRange` / `SemanticLiteralRange` /
-`SemanticHistoryRange` carriers repeat that check per element. That is a
-performance and clarity wart, not a correctness one -- both modes run the same
-source algorithm -- but it is the intended next conversion: those carriers
-should become concrete ranges chosen once at the public entry point, with the
-Flat algorithm templated over the accessor.
+- Color, HGraph and the successor encoder template `encode_impl` on the input
+  type; the lane accessors (`semantic_state_facts`, `semantic_actions`,
+  `semantic_history`, ...) resolve statically.
+- Flat declares two concrete borrowed sources, `ViewSource` and
+  `CompatibilitySource`, and templates `validate_source`, `make_context` and
+  `prepare_source` over them. Preparation is the only code that knows which
+  kind of input is being encoded; it produces a fully resolved
+  `PreparedRelationGraph` — borrowed spans and pointers settled once, plus
+  compact graph-derived working state — so the emitters have nothing left to
+  test.
 
 Direct does not mean that the final graph is emitted without planning state.
 The neutral engine still creates a graph-local preparation object for schema
