@@ -1354,6 +1354,7 @@ if (BUILD_TESTING)
             mifrost_tests
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/batch_builder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/color_encoder_test.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/direct_view_color_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/direct_view_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_horizon_encoder_test.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/../tests/cpp/flat_relation_encoder_test.cpp"
