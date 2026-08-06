@@ -19,8 +19,11 @@
 #include <variant>
 #include <vector>
 
+// This layer sits *below* the encoder families: it may depend on the semantic
+// record definitions and the View concepts, never on an encoder header.
 #include "mifrost/core/common_types.hpp"
-#include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
+#include "mifrost/core/semantic/records.hpp"
+#include "mifrost/core/views/concepts.hpp"
 
 namespace mifrost::canonical::detail {
 
