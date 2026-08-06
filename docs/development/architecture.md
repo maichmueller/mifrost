@@ -128,21 +128,33 @@ not about C++. Both modules link the same neutral library, so the canonical
 engines are ordinary C++ objects that either module can construct and call.
 
 The PyTyr direct-View encoders (`_NativeDirectFlatEncoder`,
-`_NativeDirectColorEncoder`, `_NativeDirectHGraphEncoder`) exploit exactly that:
-the engine is constructed and run inside the PyTyr module, where Tyr types are
-visible, so a state and its actions reach the canonical algorithm as granular
-Views. Only the finished, planner-neutral `BatchEncoding` crosses back, as a
-capsule. No owning `SemanticFlatRelationInput` is built for a normal encode.
+`_NativeDirectColorEncoder`, `_NativeDirectHGraphEncoder`,
+`_NativeDirectSuccessorEncoder`) exploit exactly that: the engine is constructed
+and run inside the PyTyr module, where Tyr types are visible, so a state and its
+actions reach the canonical algorithm as granular Views. Only the finished,
+planner-neutral `BatchEncoding` crosses back, as a capsule. No owning
+`SemanticFlatRelationInput` is built for a normal encode.
 
-Two things still cross as owned records, for reasons that are not removable by
+Batches and streams use the same boundary. A batch prepares and encodes every
+state in one crossing. A stream cannot do that -- it must hold graphs between
+appends -- so each appended step is prepared immediately into a
+`ViewPreparation`, which owns compact pools and borrows nothing from the Tyr
+state; the handle travels as a capsule that the flush *borrows* rather than
+consumes, so the same handles can be flushed repeatedly.
+
+Three things still cross as owned records, for reasons that are not removable by
 restructuring:
 
 - Goal, subgoal, and history literals arrive from Python as compact tuples.
   There is no native planning value to borrow from, so they are expanded into
   `SemanticLiteral` vectors and then borrowed by semantic Views.
+- `append_into_builder` takes a `BatchBuilder` registered in the core module's
+  nanobind registry, which the PyTyr module cannot accept. This is the one path
+  where the ABI split itself, not the encoding, forces an owned input.
 - `make_input` / `make_inputs` remain the explicit compatibility route for
-  callers that want the semantic records themselves, and the successor, horizon
-  and flat-horizon families still encode from owned inputs.
+  callers that want the semantic records themselves, and the horizon and
+  flat-horizon families still encode from owned inputs -- a horizon DAG is
+  itself an owned semantic snapshot.
 
 ### Direct and compatibility encoder paths
 
@@ -158,7 +170,8 @@ backend values
 ```
 
 The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
-this path, and so do the PyTyr Flat, Color, and HGraph entry points -- see
+this path, and so do the PyTyr Flat, Color, HGraph, and successor entry points,
+including their batch and stream forms -- see
 "PyTyr and the ABI boundary" below for how a direct path is possible across two
 nanobind ABI generations. The semantic engines also retain an explicit
 compatibility path for owned `SemanticFlatRelationInput` records. That path is

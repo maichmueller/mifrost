@@ -191,10 +191,16 @@ The reusable implementation lives in the planner-neutral core:
   Pymimir, keeping native types and nanobind ABI domains isolated. Semantic
   snapshot adapters remain an explicit compatibility boundary for callers that
   request owned records; they are not required by the View contract.
-- The PyTyr Flat, Color, and HGraph encoders run their engine inside the PyTyr
-  extension module, so a Tyr state reaches the algorithm as Views and only the
-  finished neutral encoding crosses the ABI boundary as a capsule. A capsule
-  says where a value crossed, not how it was produced.
+- The PyTyr Flat, Color, HGraph, and successor encoders run their engine inside
+  the PyTyr extension module, so a Tyr state reaches the algorithm as Views and
+  only the finished neutral encoding crosses the ABI boundary as a capsule. A
+  capsule says where a value crossed, not how it was produced.
+- Each family also exposes `prepare(...)` plus a prepared-batch `encode_batch`.
+  A `ViewPreparation` owns its compact pools and borrows nothing from the
+  backend state, so it is the unit a batch or a stream holds. This is not a loop
+  over the single-graph append: the flat batch has genuine cross-graph passes
+  (target-name suppression, shared batch constants) that must see every graph
+  before any of them is encoded.
 
 The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
 retain their historical constructors and streaming contracts while adapting
@@ -213,12 +219,16 @@ neutral engine.
 
 ### View lifetime and streaming
 
-Direct backend streams encode each appended step immediately and retain only
-the resulting native batch encoding. A caller must keep the planning task,
+Direct backend streams resolve each appended step immediately and retain only
+planner-neutral state -- a native batch encoding, or a `ViewPreparation` when
+the flush needs every graph at once. A caller must keep the planning task,
 problem, and View context alive through the append call; a stream must not
 retain a lazy range after its source state has been destroyed. Deferred flush
 tests should exercise both mutable removal and replacement so a stale View
 cannot be observed.
+
+A prepared handle is borrowed by the flush, never consumed, so flushing the same
+stream twice is well defined and returns the same encoding.
 
 ## Generic composition capabilities
 
