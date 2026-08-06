@@ -1278,6 +1278,26 @@ if (MIFROST_BUILD_BENCHMARKS)
     target_compile_definitions(mifrost_bench_flat_relation PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
 
     add_executable(
+            mifrost_bench_encoder_phases
+            "${CMAKE_SOURCE_DIR}/bench/bench_encoder_phases.cpp"
+    )
+    target_link_libraries(
+            mifrost_bench_encoder_phases
+            PRIVATE
+            mifrost_pymimir_adapter
+            benchmark::benchmark
+            argparse::argparse
+            ${_python_embed_target}
+    )
+    target_compile_definitions(
+            mifrost_bench_encoder_phases
+            PRIVATE
+            MIFROST_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+    )
+    target_compile_definitions(mifrost_bench_encoder_phases PRIVATE MIFROST_BENCH_DEFAULT_DOMAIN="blocks")
+    target_compile_definitions(mifrost_bench_encoder_phases PRIVATE MIFROST_BENCH_DEFAULT_PROBLEM="smedium")
+
+    add_executable(
             mifrost_bench_relation_encoders
             "${CMAKE_SOURCE_DIR}/bench/bench_relation_encoder_compare.cpp"
     )
