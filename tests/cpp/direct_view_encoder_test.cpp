@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <mimir/formalism/domain.hpp>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 
@@ -251,6 +253,120 @@ TEST_P(DirectViewEncoderTest, NativeGoalLayersKeepSparseOccupiedLevels)
    EXPECT_EQ((*iterator).level(), 1'000'000U);
    EXPECT_EQ(++iterator, layers.end());
    EXPECT_THROW((void) adapter.make_input(ctx.root, sparse_goals), std::invalid_argument);
+}
+
+// The occupied-level list is owned by NativeGoalLayersView, so a layer view
+// taken from a temporary NativeGoalViews stays valid. Only the literal spans
+// and the view context are borrowed, and both outlive this expression.
+TEST_P(DirectViewEncoderTest, NativeGoalLayersFromTemporaryGoalViewsStayValid)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs sparse_goals;
+   if(not source_goals.static_goals.empty()) {
+      sparse_goals.append(source_goals.static_goals.front(), 2);
+   } else if(not source_goals.fluent_goals.empty()) {
+      sparse_goals.append(source_goals.fluent_goals.front(), 2);
+   } else if(not source_goals.derived_goals.empty()) {
+      sparse_goals.append(source_goals.derived_goals.front(), 2);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   // The NativeGoalViews temporary dies at the end of the full expression; the
+   // returned layer view must not reference it.
+   const auto layers = adapter.make_goal_views(sparse_goals).subgoal_layers_view();
+
+   ASSERT_EQ(layers.size(), 1U);
+   ASSERT_EQ(layers.occupied_levels().size(), 1U);
+   EXPECT_EQ(layers.occupied_levels().front(), 2U);
+   size_t visited = 0;
+   for(const auto layer : layers) {
+      EXPECT_EQ(layer.level(), 2U);
+      EXPECT_EQ(layer.size(), 1U);
+      ++visited;
+   }
+   EXPECT_EQ(visited, 1U);
+}
+
+// The dense-layer bound belongs to the compatibility conversion, not to any one
+// encoder family. It must be caller-configurable and must reject before the
+// dense resize.
+TEST_P(DirectViewEncoderTest, CompatibilityGoalLevelBoundIsCallerConfigurable)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs level_five_goals;
+   if(not source_goals.static_goals.empty()) {
+      level_five_goals.append(source_goals.static_goals.front(), 5);
+   } else if(not source_goals.fluent_goals.empty()) {
+      level_five_goals.append(source_goals.fluent_goals.front(), 5);
+   } else if(not source_goals.derived_goals.empty()) {
+      level_five_goals.append(source_goals.derived_goals.front(), 5);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   // A caller whose own configuration allows level 5 gets a level-5 conversion:
+   // the adapter no longer hardcodes any family's three-level limit.
+   const auto permitted = adapter.make_input(ctx.root, level_five_goals, 5);
+   ASSERT_EQ(permitted.subgoal_layers.size(), 5U);
+   EXPECT_EQ(permitted.subgoal_layers.at(4).size(), 1U);
+   for(size_t level = 0; level < 4; ++level) {
+      EXPECT_TRUE(permitted.subgoal_layers.at(level).empty());
+   }
+
+   // A caller whose configuration only reaches level 3 is rejected, and the
+   // message names the responsible boundary rather than an encoder.
+   EXPECT_THROW(
+      {
+         try {
+            (void) adapter.make_input(ctx.root, level_five_goals, 3);
+         } catch(const std::invalid_argument& error) {
+            EXPECT_NE(
+               std::string_view{error.what()}.find("SemanticProblemAdapter"), std::string_view::npos
+            );
+            throw;
+         }
+      },
+      std::invalid_argument
+   );
+}
+
+// A sparse level far above the transport bound must be rejected outright rather
+// than resized into a huge vector of empty layers.
+TEST_P(DirectViewEncoderTest, CompatibilityConversionRejectsHugeSparseGoalLevel)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const auto source_goals = mifrost_test::make_goal_inputs(ctx.problem);
+   mifrost::GoalInputs huge_goals;
+   constexpr size_t huge_level = mifrost::pymimir::kDenseGoalLayerTransportLimit + 1;
+   if(not source_goals.static_goals.empty()) {
+      huge_goals.append(source_goals.static_goals.front(), huge_level);
+   } else if(not source_goals.fluent_goals.empty()) {
+      huge_goals.append(source_goals.fluent_goals.front(), huge_level);
+   } else if(not source_goals.derived_goals.empty()) {
+      huge_goals.append(source_goals.derived_goals.front(), huge_level);
+   } else {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+
+   // Even when the caller asks for an unlimited bound, the transport limit wins.
+   EXPECT_THROW(
+      (void) adapter.make_input(ctx.root, huge_goals, std::numeric_limits< size_t >::max()),
+      std::invalid_argument
+   );
+
+   // The native layer view still represents the same level sparsely.
+   const auto layers = adapter.make_goal_views(huge_goals).subgoal_layers_view();
+   ASSERT_EQ(layers.occupied_levels().size(), 1U);
+   EXPECT_EQ(layers.occupied_levels().front(), huge_level);
 }
 
 TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)

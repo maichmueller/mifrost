@@ -12,6 +12,7 @@
 #include <ranges>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -202,6 +203,21 @@ using NativeFluentGoalLevels = std::remove_cvref_t<
 using NativeDerivedGoalLevels = std::remove_cvref_t<
    decltype(std::declval< GoalInputs& >().derived_goal_levels) >;
 
+/**
+ * Transport-safety bound for the owning compatibility DTO -- NOT an encoder
+ * capability limit.
+ *
+ * `SemanticFlatRelationInput::subgoal_layers` is positional, so converting a
+ * sparse `(level, literals)` goal set into it requires a dense vector sized by
+ * the maximum level. This constant caps that vector so a single goal at, say,
+ * level 2^30 cannot request a huge allocation. Encoder families declare their
+ * own, much smaller, supported level ranges and validate against them
+ * independently; nothing here should be read as "the encoders support this many
+ * levels". Direct native Views never pass through this conversion and remain
+ * sparse regardless of level magnitude.
+ */
+inline constexpr size_t kDenseGoalLayerTransportLimit = 1024;
+
 struct NativeGoalSources {
    std::span< const StaticLiteral > static_goals;
    std::span< const FluentLiteral > fluent_goals;
@@ -219,6 +235,16 @@ struct NativeGoalSources {
  * borrowed lists and filters by the existing level maps without allocating a
  * second native goal container. `NativeGoalLayersView` visits only occupied
  * levels, so a sparse high level does not expand into empty intermediate lanes.
+ *
+ * Lifetime: the literal spans and the level maps in `NativeGoalSources` are
+ * borrowed. The `GoalInputs` (or problem) they refer to, and the
+ * `views::Context`, must outlive every iteration of this view. Only the small
+ * occupied-level list is owned -- see `NativeGoalLayersView`.
+ *
+ * These members are deliberately not `noexcept`: the level maps are looked up
+ * with `at()`, which throws when a goal literal has no recorded level. An
+ * externally mutated or inconsistent goal map must surface as an exception, not
+ * as a call to std::terminate.
  */
 class NativeGoalLiteralsView {
   public:
@@ -240,19 +266,19 @@ class NativeGoalLiteralsView {
          skip_unmatched();
       }
 
-      [[nodiscard]] NativeLiteralView operator*() const noexcept
+      [[nodiscard]] NativeLiteralView operator*() const
       {
          return NativeLiteralView{owner_->literal(source_, index_), *owner_->context_};
       }
 
-      iterator& operator++() noexcept
+      iterator& operator++()
       {
          ++index_;
          skip_unmatched();
          return *this;
       }
 
-      iterator operator++(int) noexcept
+      iterator operator++(int)
       {
          auto copy = *this;
          ++*this;
@@ -262,7 +288,7 @@ class NativeGoalLiteralsView {
       friend bool operator==(const iterator&, const iterator&) = default;
 
      private:
-      void skip_unmatched() noexcept
+      void skip_unmatched()
       {
          while(source_ < 3) {
             if(index_ >= owner_->source_size(source_)) {
@@ -282,12 +308,24 @@ class NativeGoalLiteralsView {
       size_t index_ = 0;
    };
 
-   [[nodiscard]] iterator begin() const noexcept { return iterator{this, 0, 0}; }
-   [[nodiscard]] iterator end() const noexcept { return iterator{this, 3, 0}; }
+   [[nodiscard]] iterator begin() const { return iterator{this, 0, 0}; }
+   [[nodiscard]] iterator end() const { return iterator{this, 3, 0}; }
 
-   [[nodiscard]] size_t size() const noexcept
+   /**
+    * Count the goals at this level.
+    *
+    * Deliberately *not* `std::ranges::distance(*this)`: this class exposes a
+    * member `size()`, so it models `sized_range`, and `ranges::distance` would
+    * short-circuit to `ranges::size(*this)` -- calling this function again and
+    * recursing until the stack overflows. Walk the filtered iterators instead.
+    */
+   [[nodiscard]] size_t size() const
    {
-      return static_cast< size_t >(std::ranges::distance(*this));
+      size_t count = 0;
+      for(auto cursor = begin(); cursor != end(); ++cursor) {
+         ++count;
+      }
+      return count;
    }
    [[nodiscard]] size_t level() const noexcept { return level_; }
 
@@ -302,7 +340,7 @@ class NativeGoalLiteralsView {
       }
    }
 
-   [[nodiscard]] size_t source_level(size_t source, size_t index) const noexcept
+   [[nodiscard]] size_t source_level(size_t source, size_t index) const
    {
       switch(source) {
          case 0:
@@ -321,7 +359,7 @@ class NativeGoalLiteralsView {
       }
    }
 
-   [[nodiscard]] bool matches(size_t source, size_t index) const noexcept
+   [[nodiscard]] bool matches(size_t source, size_t index) const
    {
       return source_level(source, index) == level_;
    }
@@ -343,14 +381,27 @@ class NativeGoalLiteralsView {
    friend class NativeGoalViews;
 };
 
+/**
+ * Sparse layer view: one `NativeGoalLiteralsView` per *occupied* subgoal level.
+ *
+ * The occupied-level list is owned by value rather than borrowed from the
+ * producing `NativeGoalViews`. That makes
+ * `adapter.make_goal_views(goals).subgoal_layers_view()` -- where the
+ * `NativeGoalViews` is a temporary -- safe by construction. The list is bounded
+ * by the number of distinct goal levels actually present (typically 0-3), so
+ * owning it costs nothing measurable.
+ *
+ * The literal spans inside `sources` are still borrowed; see
+ * `NativeGoalLiteralsView` for that lifetime requirement.
+ */
 class NativeGoalLayersView {
   public:
    NativeGoalLayersView(
       NativeGoalSources sources,
       const views::Context& context,
-      const std::vector< size_t >& occupied_levels
+      std::vector< size_t > occupied_levels
    )
-       : sources_(sources), context_(&context), occupied_levels_(&occupied_levels)
+       : sources_(sources), context_(&context), occupied_levels_(std::move(occupied_levels))
    {
    }
 
@@ -363,10 +414,10 @@ class NativeGoalLayersView {
       iterator() = default;
       iterator(const NativeGoalLayersView* owner, size_t index) : owner_(owner), index_(index) {}
 
-      [[nodiscard]] NativeGoalLiteralsView operator*() const noexcept
+      [[nodiscard]] NativeGoalLiteralsView operator*() const
       {
          return NativeGoalLiteralsView{
-            owner_->sources_, *owner_->context_, owner_->occupied_levels_->at(index_)
+            owner_->sources_, *owner_->context_, owner_->occupied_levels_.at(index_)
          };
       }
 
@@ -391,13 +442,19 @@ class NativeGoalLayersView {
    };
 
    [[nodiscard]] iterator begin() const noexcept { return iterator{this, 0}; }
-   [[nodiscard]] iterator end() const noexcept { return iterator{this, occupied_levels_->size()}; }
-   [[nodiscard]] size_t size() const noexcept { return occupied_levels_->size(); }
+   [[nodiscard]] iterator end() const noexcept { return iterator{this, occupied_levels_.size()}; }
+   [[nodiscard]] size_t size() const noexcept { return occupied_levels_.size(); }
+
+   /** The occupied subgoal levels, ascending and unique. Never dense. */
+   [[nodiscard]] std::span< const size_t > occupied_levels() const noexcept
+   {
+      return occupied_levels_;
+   }
 
   private:
    NativeGoalSources sources_;
    const views::Context* context_;
-   const std::vector< size_t >* occupied_levels_;
+   std::vector< size_t > occupied_levels_;
 };
 
 struct NativeGoalViews {
@@ -603,8 +660,29 @@ class SemanticProblemAdapter {
 
    [[nodiscard]] const views::Context& get_view_context() const noexcept { return view_context_; }
 
-   [[nodiscard]] SemanticFlatRelationInput
-   make_input(const mimir::search::State& state, const GoalInputs& goals) const
+   /**
+    * Convert a state and explicit goals into the owning compatibility DTO.
+    *
+    * This is the *compatibility* boundary, not the normal encoding path: direct
+    * native encoders consume `make_state_view` / `make_goal_views` and keep goal
+    * levels sparse. `SemanticFlatRelationInput` indexes subgoal layers by
+    * position, so it can only carry a dense layer vector -- hence the explicit
+    * bound.
+    *
+    * @param max_dense_goal_level The highest subgoal level this conversion may
+    *   materialize. Callers pass the *consuming encoder's* configured
+    *   `max_goal_level` so that no encoder family's capability limit is baked
+    *   into this backend-neutral adapter. The default is a transport-safety
+    *   bound on the dense vector only (see `kDenseGoalLayerTransportLimit`); it
+    *   is not an encoder capability limit, and each family still rejects levels
+    *   it cannot represent using its own configuration before suffix/schema
+    *   indexing.
+    */
+   [[nodiscard]] SemanticFlatRelationInput make_input(
+      const mimir::search::State& state,
+      const GoalInputs& goals,
+      size_t max_dense_goal_level = kDenseGoalLayerTransportLimit
+   ) const
    {
       SemanticFlatRelationInput result;
       result.task_context = task_context_;
@@ -616,12 +694,18 @@ class SemanticProblemAdapter {
       for(const auto literal : goal_views.goals_view()) {
          result.goals.push_back(canonical::materialize_semantic_literal(literal));
       }
-      // The owning compatibility DTO indexes subgoal layers by position, so
-      // reject levels that the semantic encoders cannot represent before
-      // attempting a potentially huge dense resize.
-      constexpr size_t max_compatibility_goal_level = 3;
-      if(goal_views.max_level > max_compatibility_goal_level) {
-         throw std::invalid_argument("Pymimir goal level exceeds the semantic compatibility limit");
+      // Reject before the dense resize, so a single sparse high level cannot
+      // turn into a huge allocation of empty layers.
+      const auto effective_limit = std::min(max_dense_goal_level, kDenseGoalLayerTransportLimit);
+      if(goal_views.max_level > effective_limit) {
+         throw std::invalid_argument(
+            "SemanticProblemAdapter cannot materialize a dense subgoal layer vector up to goal "
+            "level " + std::to_string(goal_views.max_level) + " (limit "
+            + std::to_string(effective_limit)
+            + "). This is the owning compatibility-DTO conversion boundary, not an encoder "
+              "capability limit: raise the consuming encoder's max_goal_level, or encode from "
+              "native goal Views, which stay sparse."
+         );
       }
       result.subgoal_layers.resize(goal_views.max_level);
       for(const auto layer : goal_views.subgoal_layers_view()) {

@@ -88,7 +88,8 @@ SemanticTransitionDAG materialize_dag(
    const TransitionDAG& dag,
    const mimir::search::State& root,
    const GoalInputs& goals,
-   const pymimir::SemanticProblemAdapter& adapter
+   const pymimir::SemanticProblemAdapter& adapter,
+   size_t max_goal_level
 )
 {
    std::vector< SemanticTransitionDAG::Node > nodes;
@@ -97,8 +98,12 @@ SemanticTransitionDAG materialize_dag(
    const auto context = adapter.get_task_context();
    for(const auto& node : dag.nodes()) {
       SemanticTransitionDAG::Node semantic_node;
-      semantic_node.state = node.index == dag.root_index() ? adapter.make_input(root, goals)
-                                                           : adapter.make_input(node.state);
+      // The horizon DAG is an owning semantic snapshot by design, so the root
+      // goals cross the compatibility boundary. Bound the dense subgoal vector
+      // by this engine's own configured level rather than by any other family's.
+      semantic_node.state = node.index == dag.root_index()
+                               ? adapter.make_input(root, goals, max_goal_level)
+                               : adapter.make_input(node.state);
       semantic_node.index = node.index;
       semantic_node.depth = node.depth;
       semantic_node.display_name = state_display_name(node.state);
@@ -200,7 +205,7 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
    make_dag(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
    {
       ensure_problem(root);
-      return materialize_dag(dag, root, goals, *problem_adapter);
+      return materialize_dag(dag, root, goals, *problem_adapter, config.max_goal_level);
    }
 };
 
