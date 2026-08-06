@@ -321,6 +321,10 @@ void BM_Phase5_BatchFinalization(benchmark::State& state)
  * The compatibility DTO must be *borrowed*, not copied into another carrier.
  * If a regression reintroduces a copy, this diverges from the direct path by
  * roughly the cost of one full lane duplication.
+ *
+ * This case reuses one already-built input, so it measures the encode alone.
+ * It is NOT comparable to `BM_DirectViewEncode`, which adapts a live state on
+ * every iteration -- see `BM_CompatibilityAdaptAndEncode` for the pair that is.
  */
 void BM_CompatibilityInputEncode(benchmark::State& state)
 {
@@ -335,7 +339,32 @@ void BM_CompatibilityInputEncode(benchmark::State& state)
       benchmark::DoNotOptimize(builder.current_node_counts.size());
    }
    state.counters["state_facts"] = static_cast< double >(input.state_facts.size());
-   state.SetLabel("owning compatibility DTO, borrowed lanes");
+   state.SetLabel("owning compatibility DTO, borrowed lanes (encode only)");
+}
+
+/**
+ * The like-for-like counterpart to `BM_DirectViewEncode`.
+ *
+ * A caller encoding a live planning state pays for the adaptation too, so the
+ * honest comparison between the two routes includes it on both sides. The gap
+ * that remains is the direct path's compact-pool preparation (interning, fact
+ * membership) against the owned DTO's plain lane vectors -- that is the real
+ * price of not materializing an owning semantic mirror, and it is what a
+ * backend batch or stream actually pays.
+ */
+void BM_CompatibilityAdaptAndEncode(benchmark::State& state)
+{
+   auto& ctx = context();
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context());
+
+   for(auto _ : state) {
+      const auto input = adapter.make_input(ctx.root);
+      mifrost::BatchBuilder builder;
+      engine.encode(input, builder);
+      benchmark::DoNotOptimize(builder.current_node_counts.size());
+   }
+   state.SetLabel("owning compatibility DTO, adapt + encode");
 }
 
 void BM_DirectViewEncode(benchmark::State& state)
@@ -519,6 +548,7 @@ BENCHMARK(BM_Phase34_FlatPrepareAndEmit);
 BENCHMARK(BM_Phase34_HGraphPrepareAndEmit);
 BENCHMARK(BM_Phase5_BatchFinalization);
 BENCHMARK(BM_CompatibilityInputEncode);
+BENCHMARK(BM_CompatibilityAdaptAndEncode);
 BENCHMARK(BM_DirectViewEncode);
 BENCHMARK(BM_Scaling_Interning)->RangeMultiplier(4)->Range(64, 16384);
 BENCHMARK(BM_Scaling_FlatDirectEncode)->RangeMultiplier(4)->Range(64, 4096);
