@@ -10,6 +10,12 @@ class LocalBuildMode:
     config: str = "Release"
     default_target: str = "all"
     with_benchmarks: bool = False
+    #: Stage the importable ``mifrost`` package into ``src/`` rather than into
+    #: the build directory. Only the stub build needs this, because packaging
+    #: reads the generated ``src/mifrost/*.pyi`` files afterwards. Every other
+    #: mode keeps its compiled artifacts to itself so that two build
+    #: directories cannot overwrite each other's shared libraries.
+    stages_in_source: bool = False
     description: str = ""
 
 
@@ -29,6 +35,7 @@ LOCAL_BUILD_MODES = (
         name="stubs",
         build_dir="build/stubs",
         default_target="mifrost_module_stubs",
+        stages_in_source=True,
         description="generated stub build",
     ),
     LocalBuildMode(

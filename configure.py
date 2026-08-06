@@ -190,6 +190,11 @@ def main():
     if with_benchmarks:
         cmake_args.append("-DMIFROST_BUILD_BENCHMARKS=ON")
 
+    if build_mode.stages_in_source:
+        # Packaging reads the generated stubs from the source tree, so this mode
+        # deliberately claims src/ as its staging root; see MIFROST_DEV_PACKAGE_ROOT.
+        cmake_args.append(f"-DMIFROST_DEV_PACKAGE_ROOT={source_dir / 'src'}")
+
     if args.backends is not None:
         cmake_args.extend(
             [

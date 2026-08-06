@@ -20,6 +20,10 @@ build_*
 !docs/development/build-and-test.md
 **/*.pyi
 
+# Dev-package staging ownership stamp (see MIFROST_DEV_PACKAGE_ROOT)
+.mifrost-dev-owner
+**/.mifrost-dev-owner
+
 # MkDocs build output
 /site/
 

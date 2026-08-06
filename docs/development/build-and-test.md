@@ -36,6 +36,29 @@ configs, benchmark toggle, and default build targets stay in one place:
 Avoid ad hoc root-level build directories like `build_*_probe` unless they are
 short-lived ignored experiments.
 
+### Dev package staging
+
+A dev-mode build stages an importable `mifrost` package: the native extension
+modules, the shared libraries they load at runtime, and the generated stubs.
+`MIFROST_DEV_PACKAGE_ROOT` controls where that package is written.
+
+- Plain CMake builds stage into `<build-dir>/python`, so each configuration
+  keeps its artifacts to itself.
+- The scikit-build-core editable install and `--mode stubs` stage into `src/`,
+  because an editable install imports from the source tree and packaging reads
+  the generated `src/mifrost/*.pyi` files afterwards.
+
+Sharing one staging root between build directories with different compile
+settings is what makes a sanitizer or Debug build replace the shared library
+that another build directory's already linked tests and benchmarks load. The
+symptom is not a build error; it is spurious sanitizer reports, slow
+benchmarks, or an aborted stub generation in the *other* build tree. Configure
+rejects that overlap and names both build directories. Pass
+`-DMIFROST_DEV_PACKAGE_ROOT=<dir>` to move a build elsewhere.
+
+If you do build a sanitizer or Debug tree that stages into `src/`, rebuild the
+editable install afterwards so the source tree holds Release artifacts again.
+
 The Python helpers treat those modes as the canonical local build roots:
 
 - `configure.py` prepares a build tree and installs dependencies.

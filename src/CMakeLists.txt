@@ -365,6 +365,107 @@ endif ()
 set(MIFROST_RPATH_MODE "dev" CACHE STRING "RPATH mode: dev or wheel")
 set_property(CACHE MIFROST_RPATH_MODE PROPERTY STRINGS dev wheel)
 
+# --- Dev staging root ---
+# A dev-mode build stages an importable `mifrost` package: the native modules,
+# the shared libraries they load at runtime, and the generated stubs. Two build
+# directories that stage into the same root overwrite each other's artifacts,
+# and the symptom is not a build error but a corrupt runtime: a sanitizer or
+# Debug build replaces the shared library that another build directory's already
+# linked tests and benchmarks load, so those binaries then report spurious
+# failures. Each configuration therefore stages inside its own binary directory
+# unless it is explicitly one of the two builds that own the source tree -- the
+# scikit-build-core editable install, and the stub build that has to produce
+# `src/mifrost/*.pyi` for packaging.
+if (SKBUILD)
+    set(_mifrost_default_dev_root "${CMAKE_SOURCE_DIR}/src")
+else ()
+    set(_mifrost_default_dev_root "${CMAKE_BINARY_DIR}/python")
+endif ()
+set(MIFROST_DEV_PACKAGE_ROOT "${_mifrost_default_dev_root}" CACHE PATH
+    "Directory holding the staged 'mifrost' Python package in dev RPATH mode.")
+unset(_mifrost_default_dev_root)
+set(MIFROST_DEV_PACKAGE_DIR "${MIFROST_DEV_PACKAGE_ROOT}/mifrost")
+set(MIFROST_DEV_PACKAGE_LIB_DIR "${MIFROST_DEV_PACKAGE_DIR}/lib")
+if (MIFROST_DEV_PACKAGE_ROOT STREQUAL "${CMAKE_SOURCE_DIR}/src")
+    set(MIFROST_DEV_PACKAGE_IN_SOURCE TRUE)
+else ()
+    set(MIFROST_DEV_PACKAGE_IN_SOURCE FALSE)
+endif ()
+
+# Claim the staging root. Two build directories may legitimately share one root
+# when they produce interchangeable artifacts (the editable install and the stub
+# build are both dev-mode Release builds); they may not when their compile
+# settings differ, because then the shared libraries are not interchangeable.
+if (MIFROST_RPATH_MODE STREQUAL "dev")
+    set(_mifrost_dev_owner_stamp "${MIFROST_DEV_PACKAGE_DIR}/.mifrost-dev-owner")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _mifrost_dev_config)
+    string(JOIN "|" _mifrost_dev_signature
+        "${CMAKE_BUILD_TYPE}"
+        "${CMAKE_CXX_FLAGS}"
+        "${CMAKE_CXX_FLAGS_${_mifrost_dev_config}}"
+        "${CMAKE_EXE_LINKER_FLAGS}"
+    )
+    unset(_mifrost_dev_config)
+    if (EXISTS "${_mifrost_dev_owner_stamp}")
+        file(READ "${_mifrost_dev_owner_stamp}" _mifrost_dev_owner_contents)
+        string(REGEX MATCH "^([^\n]*)\n([^\n]*)" _mifrost_dev_owner_match "${_mifrost_dev_owner_contents}")
+        set(_mifrost_dev_owner_dir "${CMAKE_MATCH_1}")
+        set(_mifrost_dev_owner_signature "${CMAKE_MATCH_2}")
+        if (NOT _mifrost_dev_owner_dir STREQUAL "${CMAKE_BINARY_DIR}"
+                AND NOT _mifrost_dev_owner_signature STREQUAL "${_mifrost_dev_signature}")
+            message(FATAL_ERROR
+                "Build directory '${CMAKE_BINARY_DIR}' would stage the mifrost dev package "
+                "into '${MIFROST_DEV_PACKAGE_DIR}', which is already staged by "
+                "'${_mifrost_dev_owner_dir}' with different compile settings.\n"
+                "  this build:  ${_mifrost_dev_signature}\n"
+                "  other build: ${_mifrost_dev_owner_signature}\n"
+                "Overwriting it would leave the other build's tests and benchmarks loading "
+                "incompatible shared libraries. Point this build elsewhere with "
+                "-DMIFROST_DEV_PACKAGE_ROOT=<dir>, or remove the other build directory."
+            )
+        endif ()
+        unset(_mifrost_dev_owner_contents)
+        unset(_mifrost_dev_owner_match)
+        unset(_mifrost_dev_owner_dir)
+        unset(_mifrost_dev_owner_signature)
+    endif ()
+    file(WRITE "${_mifrost_dev_owner_stamp}" "${CMAKE_BINARY_DIR}\n${_mifrost_dev_signature}\n")
+    unset(_mifrost_dev_owner_stamp)
+    unset(_mifrost_dev_signature)
+endif ()
+
+# A staging root outside the source tree holds only the compiled artifacts, so
+# the pure-Python package has to be mirrored into it before anything can import
+# `mifrost` from there (stub generation does). Only the tracked `.py` sources are
+# copied: mirroring the whole directory would drag another build's compiled
+# modules along and recreate the collision this staging root exists to avoid.
+add_custom_target(mifrost_stage_python)
+if (MIFROST_RPATH_MODE STREQUAL "dev" AND NOT MIFROST_DEV_PACKAGE_IN_SOURCE)
+    file(GLOB_RECURSE _mifrost_pure_python
+        RELATIVE "${CMAKE_SOURCE_DIR}/src"
+        CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/src/mifrost/*.py"
+    )
+    set(_mifrost_staged_python "")
+    foreach (_mifrost_rel IN LISTS _mifrost_pure_python)
+        add_custom_command(
+            OUTPUT "${MIFROST_DEV_PACKAGE_ROOT}/${_mifrost_rel}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/src/${_mifrost_rel}"
+                "${MIFROST_DEV_PACKAGE_ROOT}/${_mifrost_rel}"
+            DEPENDS "${CMAKE_SOURCE_DIR}/src/${_mifrost_rel}"
+            COMMENT "Staging ${_mifrost_rel}"
+            VERBATIM
+        )
+        list(APPEND _mifrost_staged_python "${MIFROST_DEV_PACKAGE_ROOT}/${_mifrost_rel}")
+    endforeach ()
+    add_custom_target(mifrost_stage_python_files DEPENDS ${_mifrost_staged_python})
+    add_dependencies(mifrost_stage_python mifrost_stage_python_files)
+    unset(_mifrost_pure_python)
+    unset(_mifrost_staged_python)
+    unset(_mifrost_rel)
+endif ()
+
 # --- RPATH helpers for editable installs ---
 function(_mifrost_append_rpath_from_target out_var target_name)
     if (NOT TARGET "${target_name}")
@@ -470,8 +571,8 @@ set_target_properties(
 )
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_neutral_core PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+        LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
     )
 endif ()
 
@@ -546,7 +647,7 @@ if (MIFROST_BUILD_PYTHON)
         set_target_properties(
             mifrost_neutral_core_module
             PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
+            LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_DIR}"
         )
     endif ()
 endif ()
@@ -676,7 +777,7 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
 
         if (MIFROST_RPATH_MODE STREQUAL "dev")
             set_target_properties(mifrost_pytyr_adapter_module PROPERTIES
-                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
+                LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_DIR}"
             )
         endif ()
         unset(_mifrost_pytyr_nanobind_library)
@@ -684,8 +785,8 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
     endif ()
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         set_target_properties(mifrost_pytyr_adapter PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+            LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
         )
     endif ()
 endif ()
@@ -940,14 +1041,14 @@ if (MIFROST_BUILD_PYTHON)
     )
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         set_target_properties(mifrost_pymimir_adapter_module PROPERTIES
-                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost"
+                LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_DIR}"
         )
     endif ()
 endif ()
 if (MIFROST_RPATH_MODE STREQUAL "dev")
     set_target_properties(mifrost_pymimir_adapter PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mifrost/lib"
+        LIBRARY_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${MIFROST_DEV_PACKAGE_LIB_DIR}"
     )
 endif ()
 add_custom_command(
@@ -1117,13 +1218,13 @@ set(_mifrost_dev_stub_targets "")
 if (MIFROST_BUILD_PYTHON AND MIFROST_GENERATE_STUBS)
     set(_mifrost_neutral_stub_output "mifrost/_neutral_core.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
-        string(PREPEND _mifrost_neutral_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        string(PREPEND _mifrost_neutral_stub_output "${MIFROST_DEV_PACKAGE_ROOT}/")
         nanobind_add_stub(
             mifrost_neutral_core_module_stubs
             INCLUDE_PRIVATE
             MODULE mifrost._neutral_core
             OUTPUT "${_mifrost_neutral_stub_output}"
-            PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+            PYTHON_PATH "${MIFROST_DEV_PACKAGE_ROOT}"
             DEPENDS mifrost_neutral_core_module
         )
         list(APPEND _mifrost_dev_stub_targets mifrost_neutral_core_module_stubs)
@@ -1143,13 +1244,13 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_
     set(_mifrost_stub_output "mifrost/_pymimir_adapter.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
         # Dev mode: keep stubs in source tree so IDEs can pick them up directly.
-        STRING(PREPEND _mifrost_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        STRING(PREPEND _mifrost_stub_output "${MIFROST_DEV_PACKAGE_ROOT}/")
         nanobind_add_stub(
                 mifrost_pymimir_adapter_module_stubs
                 INCLUDE_PRIVATE
                 MODULE mifrost._pymimir_adapter
                 OUTPUT "${_mifrost_stub_output}"
-                PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+                PYTHON_PATH "${MIFROST_DEV_PACKAGE_ROOT}"
                 DEPENDS mifrost_pymimir_adapter_module
         )
         list(APPEND _mifrost_dev_stub_targets mifrost_pymimir_adapter_module_stubs)
@@ -1169,13 +1270,13 @@ endif ()
 if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYTYR_ADAPTER AND MIFROST_GENERATE_STUBS)
     set(_mifrost_pytyr_stub_output "mifrost/_pytyr_adapter.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
-        string(PREPEND _mifrost_pytyr_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        string(PREPEND _mifrost_pytyr_stub_output "${MIFROST_DEV_PACKAGE_ROOT}/")
         nanobind_add_stub(
             mifrost_pytyr_adapter_module_stubs
             INCLUDE_PRIVATE
             MODULE mifrost._pytyr_adapter
             OUTPUT "${_mifrost_pytyr_stub_output}"
-            PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+            PYTHON_PATH "${MIFROST_DEV_PACKAGE_ROOT}"
             DEPENDS mifrost_pytyr_adapter_module
         )
         list(APPEND _mifrost_dev_stub_targets mifrost_pytyr_adapter_module_stubs)
@@ -1197,13 +1298,13 @@ endif ()
 if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_STUBS)
     set(_mifrost_compat_stub_output "mifrost/_core.pyi")
     if (MIFROST_RPATH_MODE STREQUAL "dev")
-        string(PREPEND _mifrost_compat_stub_output "${CMAKE_SOURCE_DIR}/src/")
+        string(PREPEND _mifrost_compat_stub_output "${MIFROST_DEV_PACKAGE_ROOT}/")
         nanobind_add_stub(
             mifrost_core_module_stubs
             INCLUDE_PRIVATE
             MODULE mifrost._core
             OUTPUT "${_mifrost_compat_stub_output}"
-            PYTHON_PATH "${CMAKE_SOURCE_DIR}/src"
+            PYTHON_PATH "${MIFROST_DEV_PACKAGE_ROOT}"
             DEPENDS
                 mifrost_neutral_core_module
                 mifrost_pymimir_adapter_module
@@ -1223,6 +1324,12 @@ if (MIFROST_BUILD_PYTHON AND MIFROST_BUILD_PYMIMIR_ADAPTER AND MIFROST_GENERATE_
 endif ()
 
 if (_mifrost_dev_stub_targets)
+    # nanobind imports the staged package to introspect it, so the pure-Python
+    # modules have to be in place before any stub target runs.
+    foreach (_mifrost_stub_target IN LISTS _mifrost_dev_stub_targets)
+        add_dependencies("${_mifrost_stub_target}" mifrost_stage_python)
+    endforeach ()
+    unset(_mifrost_stub_target)
     add_custom_target(mifrost_module_stubs DEPENDS ${_mifrost_dev_stub_targets})
 endif ()
 
