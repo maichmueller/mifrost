@@ -9,7 +9,6 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
-#include <map>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -57,24 +56,57 @@ class SemanticGoalRange;
 
 struct ViewPreparation {
    std::shared_ptr< const SemanticTaskContext > task_context;
+   /**
+    * Compact graph-derived identity pools.
+    *
+    * `atom_pool` and `action_pool` hold each unique identity once, in first-use
+    * order; every lane keeps only indices into them, which preserves both lane
+    * order and multiplicity. `atom_indices` / `action_indices` exist purely for
+    * O(1) lookup during interning -- iteration order is always taken from the
+    * pools, never from the maps, so emission stays deterministic.
+    */
    std::vector< SemanticAtom > atom_pool;
+   hash_map< SemanticAtom, size_t, SemanticAtomHash > atom_indices;
    std::vector< size_t > state_fact_indices;
    std::vector< ViewGoalLevelRef > goal_level_refs;
    size_t goal_layer_count = 0;
    std::vector< SemanticGroundAction > action_pool;
+   hash_map< SemanticGroundAction, size_t, SemanticGroundActionHash > action_indices;
    std::vector< size_t > action_occurrence_indices;
    std::vector< ViewHistoryEntryData > history_data;
    hash_set< SemanticAtom, SemanticAtomHash > fact_lookup;
 
+   /** Reserve pool storage when an input lane can cheaply report its size. */
+   void reserve_atoms(size_t count)
+   {
+      atom_pool.reserve(atom_pool.size() + count);
+      atom_indices.reserve(atom_indices.size() + count);
+      fact_lookup.reserve(fact_lookup.size() + count);
+   }
+
+   void reserve_actions(size_t count)
+   {
+      action_pool.reserve(action_pool.size() + count);
+      action_indices.reserve(action_indices.size() + count);
+      action_occurrence_indices.reserve(action_occurrence_indices.size() + count);
+   }
+
    [[nodiscard]] size_t intern_atom(SemanticAtom atom)
    {
-      for(size_t index = 0; index < atom_pool.size(); ++index) {
-         if(atom_pool[index] == atom) {
-            return index;
-         }
+      const auto [it, inserted] = atom_indices.try_emplace(atom, atom_pool.size());
+      if(inserted) {
+         atom_pool.push_back(std::move(atom));
       }
-      atom_pool.push_back(std::move(atom));
-      return atom_pool.size() - 1;
+      return it->second;
+   }
+
+   [[nodiscard]] size_t intern_action(SemanticGroundAction action)
+   {
+      const auto [it, inserted] = action_indices.try_emplace(action, action_pool.size());
+      if(inserted) {
+         action_pool.push_back(std::move(action));
+      }
+      return it->second;
    }
 
    [[nodiscard]] SemanticLiteral materialize_literal(const ViewLiteralRef& literal) const
@@ -514,6 +546,14 @@ inline void add_fact(ViewPreparation& preparation, SemanticAtom atom)
 template < views::StateView State >
 void append_view_state(const State& state, ViewPreparation& preparation)
 {
+   const auto fluent_atoms = state.fluent_atoms();
+   const auto derived_atoms = state.derived_atoms();
+   if constexpr(std::ranges::sized_range< decltype(fluent_atoms) >
+                and std::ranges::sized_range< decltype(derived_atoms) >) {
+      const auto count = std::ranges::size(fluent_atoms) + std::ranges::size(derived_atoms);
+      preparation.reserve_atoms(count);
+      preparation.state_fact_indices.reserve(preparation.state_fact_indices.size() + count);
+   }
    for(const auto atom : state.fluent_atoms()) {
       add_fact(preparation, view_materialize_atom(atom));
    }
@@ -525,6 +565,11 @@ void append_view_state(const State& state, ViewPreparation& preparation)
 template < views::LiteralRange Goals >
 void append_view_goals(Goals&& goals, size_t level, ViewPreparation& preparation)
 {
+   if constexpr(std::ranges::sized_range< Goals >) {
+      preparation.goal_level_refs.reserve(
+         preparation.goal_level_refs.size() + std::ranges::size(goals)
+      );
+   }
    for(const auto& goal : goals) {
       const auto literal = view_materialize_literal(goal);
       preparation.goal_level_refs.push_back(
@@ -553,14 +598,16 @@ template < typename Layer >
 template < views::GroundActionRange Actions >
 void append_view_actions(Actions&& actions, ViewPreparation& preparation)
 {
-   std::map< SemanticGroundAction, size_t > indices;
+   if constexpr(std::ranges::sized_range< Actions >) {
+      preparation.reserve_actions(std::ranges::size(actions));
+   }
+   // Deduplicate into the action pool while recording one occurrence index per
+   // input action, so repeated occurrences survive even though graph nodes are
+   // shared.
    for(const auto& action : actions) {
-      auto value = view_materialize_action(action);
-      const auto [it, inserted] = indices.emplace(value, preparation.action_pool.size());
-      if(inserted) {
-         preparation.action_pool.push_back(std::move(value));
-      }
-      preparation.action_occurrence_indices.push_back(it->second);
+      preparation.action_occurrence_indices.push_back(
+         preparation.intern_action(view_materialize_action(action))
+      );
    }
 }
 
@@ -609,7 +656,9 @@ inline void append_view_default_goals(ViewPreparation& preparation)
 
 inline void append_view_static_facts(ViewPreparation& preparation)
 {
-   for(const auto& fact : preparation.task_context->static_facts) {
+   const auto& static_facts = preparation.task_context->static_facts;
+   preparation.fact_lookup.reserve(preparation.fact_lookup.size() + static_facts.size());
+   for(const auto& fact : static_facts) {
       preparation.fact_lookup.emplace(fact);
    }
 }

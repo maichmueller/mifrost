@@ -146,6 +146,23 @@ struct SemanticGroundAction {
    auto operator<=>(const SemanticGroundAction&) const = default;
 };
 
+/**
+ * Hash functor for `SemanticGroundAction`. Same caveat as `SemanticAtomHash`:
+ * only for membership/identity lookup, never for a container whose iteration
+ * order determines emission order.
+ */
+struct SemanticGroundActionHash {
+   [[nodiscard]] size_t operator()(const SemanticGroundAction& action) const noexcept
+   {
+      size_t value = 0;
+      mix_semantic_hash(value, action.action);
+      for(const auto argument : action.arguments) {
+         mix_semantic_hash(value, argument);
+      }
+      return value;
+   }
+};
+
 /** One history row before stable time-delta ordering and distance filtering. */
 struct SemanticHistoryEntry {
    int64_t dt = 0;
