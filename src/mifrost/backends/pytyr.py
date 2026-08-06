@@ -59,8 +59,25 @@ class DirectEncoder:
     the owned semantic records themselves.
     """
 
-    def __init__(self, native: Any) -> None:
+    def __init__(self, native: Any, compact_literal: Any = None) -> None:
         self._native = native
+        self._compact = compact_literal or (lambda value: value)
+
+    def _lanes(
+        self,
+        goals: Iterable[object] | None,
+        subgoal_layers: Iterable[Iterable[object]],
+        history: Iterable[tuple[int, Iterable[object]]],
+    ) -> tuple[list[Any] | None, list[list[Any]], list[tuple[int, list[Any]]]]:
+        to_compact = self._compact
+        return (
+            None if goals is None else [to_compact(value) for value in goals],
+            [[to_compact(value) for value in layer] for layer in subgoal_layers],
+            [
+                (int(delta), [to_compact(value) for value in literals])
+                for delta, literals in history
+            ],
+        )
 
     def encode(
         self,
@@ -71,21 +88,183 @@ class DirectEncoder:
         subgoal_layers: Iterable[Iterable[object]] = (),
         history: Iterable[tuple[int, Iterable[object]]] = (),
         history_max_steps: int | None = None,
-        compact_literal: Any = None,
     ) -> Any:
         from mifrost import _neutral_core
 
-        to_compact = compact_literal or (lambda value: value)
+        compact_goals, compact_layers, compact_history = self._lanes(
+            goals, subgoal_layers, history
+        )
         capsule = self._native._encode_capsule(
             state,
             list(actions),
+            compact_goals,
+            compact_layers,
+            compact_history,
+            history_max_steps,
+        )
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+    def prepare(
+        self,
+        state: object,
+        actions: Iterable[object] = (),
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+        history: Iterable[tuple[int, Iterable[object]]] = (),
+        history_max_steps: int | None = None,
+    ) -> Any:
+        """Prepare one graph and keep it as an opaque native handle.
+
+        The returned capsule owns compact pools only; it borrows nothing from
+        `state`, so a stream may hold it after the Tyr state has gone away. It
+        is borrowed, not consumed, by `encode_prepared`, so the same handle can
+        be flushed repeatedly.
+        """
+        compact_goals, compact_layers, compact_history = self._lanes(
+            goals, subgoal_layers, history
+        )
+        return self._native._prepare_capsule(
+            state,
+            list(actions),
+            compact_goals,
+            compact_layers,
+            compact_history,
+            history_max_steps,
+        )
+
+    def encode_prepared(self, prepared: Iterable[Any]) -> Any:
+        from mifrost import _neutral_core
+
+        capsule = self._native._encode_prepared_capsule(list(prepared))
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+    def encode_batch(
+        self,
+        states: Iterable[object],
+        actions: Iterable[Iterable[object]] = (),
+        *,
+        goals: Iterable[Iterable[object] | None] = (),
+        subgoal_layers: Iterable[Iterable[Iterable[object]]] = (),
+        history: Iterable[Iterable[tuple[int, Iterable[object]]]] = (),
+        history_max_steps: int | None = None,
+    ) -> Any:
+        """Prepare and encode a whole batch in one crossing.
+
+        Unlike `prepare` plus `encode_prepared` this never builds a handle per
+        graph; it is the path for callers that have all states at once.
+        """
+        from mifrost import _neutral_core
+
+        state_values = list(states)
+        count = len(state_values)
+        lanes = [
+            self._lanes(entry_goals, entry_layers, entry_history)
+            for entry_goals, entry_layers, entry_history in zip(
+                list(goals) or [None] * count,
+                list(subgoal_layers) or [()] * count,
+                list(history) or [()] * count,
+                strict=True,
+            )
+        ]
+        capsule = self._native._encode_batch_capsule(
+            state_values,
+            [list(values) for values in actions],
+            [entry[0] for entry in lanes],
+            [entry[1] for entry in lanes],
+            [entry[2] for entry in lanes],
+            history_max_steps,
+        )
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+
+class DirectSuccessorEncoder:
+    """The successor family's direct-View encoder inside the PyTyr module.
+
+    A transition carries two state lanes, and they are not symmetric: the
+    successor side supplies only state facts, so it is prepared without goals,
+    actions or history. See `DirectEncoder` for why the engine runs module-side.
+    """
+
+    def __init__(self, native: Any, compact_literal: Any = None) -> None:
+        self._native = native
+        self._compact = compact_literal or (lambda value: value)
+
+    def _lanes(
+        self,
+        goals: Iterable[object] | None,
+        subgoal_layers: Iterable[Iterable[object]],
+    ) -> tuple[list[Any] | None, list[list[Any]]]:
+        to_compact = self._compact
+        return (
             None if goals is None else [to_compact(value) for value in goals],
             [[to_compact(value) for value in layer] for layer in subgoal_layers],
-            [
-                (int(delta), [to_compact(value) for value in literals])
-                for delta, literals in history
-            ],
-            history_max_steps,
+        )
+
+    def encode(
+        self,
+        current: object,
+        successor: object,
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+    ) -> Any:
+        from mifrost import _neutral_core
+
+        compact_goals, compact_layers = self._lanes(goals, subgoal_layers)
+        capsule = self._native._encode_capsule(
+            current, successor, compact_goals, compact_layers
+        )
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+    def prepare(
+        self,
+        current: object,
+        successor: object,
+        *,
+        goals: Iterable[object] | None = None,
+        subgoal_layers: Iterable[Iterable[object]] = (),
+    ) -> tuple[Any, Any]:
+        """Prepare both lanes of one transition as opaque native handles."""
+        compact_goals, compact_layers = self._lanes(goals, subgoal_layers)
+        return self._native._prepare_capsules(
+            current, successor, compact_goals, compact_layers
+        )
+
+    def encode_prepared(self, prepared: Iterable[tuple[Any, Any]]) -> Any:
+        from mifrost import _neutral_core
+
+        pairs = list(prepared)
+        capsule = self._native._encode_prepared_capsule(
+            [current for current, _successor in pairs],
+            [successor for _current, successor in pairs],
+        )
+        return _neutral_core._consume_batch_encoding_capsule(capsule)
+
+    def encode_batch(
+        self,
+        currents: Iterable[object],
+        successors: Iterable[object],
+        *,
+        goals: Iterable[Iterable[object] | None] = (),
+        subgoal_layers: Iterable[Iterable[Iterable[object]]] = (),
+    ) -> Any:
+        from mifrost import _neutral_core
+
+        current_values = list(currents)
+        lanes = [
+            self._lanes(entry_goals, entry_layers)
+            for entry_goals, entry_layers in zip(
+                list(goals) or [None] * len(current_values),
+                list(subgoal_layers) or [()] * len(current_values),
+                strict=True,
+            )
+        ]
+        capsule = self._native._encode_batch_capsule(
+            current_values,
+            list(successors),
+            [entry[0] for entry in lanes],
+            [entry[1] for entry in lanes],
         )
         return _neutral_core._consume_batch_encoding_capsule(capsule)
 
@@ -245,7 +424,8 @@ class SemanticPlanningTaskAdapter:
         return DirectEncoder(
             self._native_module._NativeDirectFlatEncoder(
                 self._native, _neutral_core._flat_relation_config_capsule(config)
-            )
+            ),
+            self._compact_literal,
         )
 
     def make_direct_color_encoder(self, config: Any) -> DirectEncoder:
@@ -255,7 +435,8 @@ class SemanticPlanningTaskAdapter:
         return DirectEncoder(
             self._native_module._NativeDirectColorEncoder(
                 self._native, _neutral_core._semantic_color_config_capsule(config)
-            )
+            ),
+            self._compact_literal,
         )
 
     def make_direct_hgraph_encoder(self, config: Any) -> DirectEncoder:
@@ -265,7 +446,20 @@ class SemanticPlanningTaskAdapter:
         return DirectEncoder(
             self._native_module._NativeDirectHGraphEncoder(
                 self._native, _neutral_core._semantic_hgraph_config_capsule(config)
-            )
+            ),
+            self._compact_literal,
+        )
+
+    def make_direct_successor_encoder(self, config: Any) -> DirectSuccessorEncoder:
+        """Direct-View successor encoder that runs inside the PyTyr module."""
+        from mifrost import _neutral_core
+
+        return DirectSuccessorEncoder(
+            self._native_module._NativeDirectSuccessorEncoder(
+                self._native,
+                _neutral_core._semantic_successor_hgraph_config_capsule(config),
+            ),
+            self._compact_literal,
         )
 
     def make_color_engine(self, config: Any) -> Any:
@@ -541,5 +735,8 @@ class SemanticFlatRelationEncoder(SemanticPlanningTaskAdapter):
             subgoal_layers=subgoal_layers,
             history=history,
             history_max_steps=history_max_steps,
-            compact_literal=self._compact_literal,
         )
+
+    @property
+    def direct(self) -> DirectEncoder:
+        return self._direct

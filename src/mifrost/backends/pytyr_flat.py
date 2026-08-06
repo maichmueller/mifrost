@@ -111,7 +111,7 @@ class _PyTyrFlatStream:
         self.reset()
 
     def append(self, state: object, **kwargs: Any) -> int:
-        item = self._runtime._input(state, **kwargs)
+        item = self._runtime._prepared(state, **kwargs)
         if self._reuse_removed and self._removed:
             stream_id = min(self._removed)
             self._removed.remove(stream_id)
@@ -127,7 +127,7 @@ class _PyTyrFlatStream:
             raise NotImplementedError("update is not implemented for this stream")
         if stream_id not in self._items:
             raise KeyError(stream_id)
-        self._items[stream_id] = self._runtime._input(state, **kwargs)
+        self._items[stream_id] = self._runtime._prepared(state, **kwargs)
 
     def remove(self, stream_id: int) -> None:
         if not self._mutable:
@@ -141,8 +141,11 @@ class _PyTyrFlatStream:
         self._reuse_removed = bool(value)
 
     def flush(self) -> Any:
+        # Each appended step was prepared immediately, so the stream holds no
+        # borrowed Tyr state between calls; the handles are borrowed, not
+        # consumed, so a flush may be repeated.
         values = [self._items[key] for key in sorted(self._items)]
-        return self._runtime.engine.encode_batch(values)
+        return self._runtime._direct.encode_prepared(values)
 
     def reset(self) -> None:
         self._items: dict[int, Any] = {}
@@ -158,6 +161,7 @@ class PyTyrFlatRuntime:
     def __init__(self, planning_task: object, config: Any) -> None:
         self._adapter = SemanticFlatRelationEncoder(planning_task, config)
         self.engine = self._adapter.engine
+        self._direct = self._adapter.direct
         self._relation_dict = MappingProxyType(
             dict(
                 zip(
@@ -200,6 +204,35 @@ class PyTyrFlatRuntime:
                 () if history_subgoals is None else history_subgoals,
             ),
             history_max_steps=history_max_steps,
+        )
+
+    def _prepared(self, state: object, **kwargs: Any) -> Any:
+        """Prepare one appended step without building an owning input."""
+        if not _is_state(state):
+            raise TypeError(
+                "a PyTyr FlatRelationEncoder expects a lifted or ground PyTyr "
+                f"state, got {type(state)!r}"
+            )
+        return self._direct.prepare(
+            state,
+            cast(
+                Iterable[object],
+                () if kwargs.get("actions") is None else kwargs["actions"],
+            ),
+            goals=cast(Iterable[object] | None, kwargs.get("goals")),
+            subgoal_layers=cast(
+                Iterable[Iterable[object]],
+                ()
+                if kwargs.get("subgoal_layers") is None
+                else kwargs["subgoal_layers"],
+            ),
+            history=cast(
+                Iterable[tuple[int, Iterable[object]]],
+                ()
+                if kwargs.get("history_subgoals") is None
+                else kwargs["history_subgoals"],
+            ),
+            history_max_steps=kwargs.get("history_max_steps"),
         )
 
     def encode_one(self, state: object, **kwargs: Any) -> Any:
@@ -271,7 +304,9 @@ class PyTyrFlatRuntime:
                 max_goal_level=int(self.engine.config.max_goal_level),
             )
         history_values = _history_values(history_subgoals, state_count=count)
-        inputs = self._adapter.make_inputs(
+        # Direct-View batch: the states are prepared and encoded in one native
+        # crossing, so no owning semantic input exists at any point.
+        return self._direct.encode_batch(
             state_values,
             [() if values is None else values for values in action_values],
             goals=goal_values,
@@ -281,9 +316,12 @@ class PyTyrFlatRuntime:
             history=[() if values is None else values for values in history_values],
             history_max_steps=history_max_steps,
         )
-        return self.engine.encode_batch(inputs)
 
     def append_into_builder(self, state: object, builder: Any, **kwargs: Any) -> None:
+        # The caller owns a `BatchBuilder` registered in the core module's
+        # nanobind registry, which the PyTyr module cannot accept. This is the
+        # one flat path that still crosses as an owned input, and the reason is
+        # the ABI split itself, not the encoding.
         self.engine.encode(self._input(state, **kwargs), builder)
 
     def make_stream(self, *, mutable: bool) -> Any:

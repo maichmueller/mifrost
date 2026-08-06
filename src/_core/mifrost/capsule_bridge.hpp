@@ -27,6 +27,12 @@ inline constexpr char
 inline constexpr char flat_horizon_config_name[] = "mifrost.SemanticFlatHorizonEncoderConfig.v1";
 inline constexpr char flat_horizon_engine_name[] = "mifrost.SemanticFlatHorizonEncoderEngine.v1";
 inline constexpr char batch_encoding_name[] = "mifrost.BatchEncoding.v1";
+/**
+ * A direct-View preparation. Unlike the other capsules this one is never
+ * consumed by the core module: it stays owned by the backend module that
+ * produced it and is borrowed again on every batch flush.
+ */
+inline constexpr char view_preparation_name[] = "mifrost.ViewPreparation.v1";
 inline constexpr char consumed_name[] = "mifrost.consumed.v1";
 
 template < typename T >

@@ -25,7 +25,7 @@ class _PyTyrTransitionStream:
         self.reset()
 
     def append(self, current: object, successor: object, **kwargs: Any) -> int:
-        item = self._runtime._inputs(current, successor, **kwargs)
+        item = self._runtime._prepared(current, successor, **kwargs)
         if self._reuse_removed and self._removed:
             stream_id = min(self._removed)
             self._removed.remove(stream_id)
@@ -45,7 +45,7 @@ class _PyTyrTransitionStream:
     ) -> None:
         if stream_id not in self._items:
             raise KeyError(stream_id)
-        self._items[stream_id] = self._runtime._inputs(current, successor, **kwargs)
+        self._items[stream_id] = self._runtime._prepared(current, successor, **kwargs)
 
     def remove(self, stream_id: int) -> None:
         if stream_id not in self._items:
@@ -57,11 +57,10 @@ class _PyTyrTransitionStream:
         self._reuse_removed = bool(value)
 
     def flush(self) -> Any:
+        # Each appended transition was prepared immediately, so the stream holds
+        # no borrowed Tyr state between calls.
         pairs = [self._items[key] for key in sorted(self._items)]
-        return self._runtime.engine.encode_batch(
-            [current for current, _successor in pairs],
-            [successor for _current, successor in pairs],
-        )
+        return self._runtime._direct.encode_prepared(pairs)
 
     def reset(self) -> None:
         self._items: dict[int, tuple[Any, Any]] = {}
@@ -77,6 +76,7 @@ class PyTyrTransitionRuntime:
     def __init__(self, planning_task: object, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_successor_hgraph_engine(config)
+        self._direct = self._adapter.make_direct_successor_encoder(config)
         self._relation_dict = MappingProxyType(dict(self.engine.relation_arities))
 
     @property
@@ -90,14 +90,14 @@ class PyTyrTransitionRuntime:
                 f"got {type(value)!r}"
             )
 
-    def _inputs(
+    def _checked_lanes(
         self,
         current: object,
         successor: object,
         *,
         goals: object = None,
         subgoal_layers: object = None,
-    ) -> tuple[Any, Any]:
+    ) -> tuple[Any, list[Any]]:
         self._validate_state(current, lane="current")
         self._validate_state(successor, lane="successor")
         layers = (
@@ -110,6 +110,15 @@ class PyTyrTransitionRuntime:
             state_index=0,
             max_goal_level=int(self.engine.config.max_goal_level),
         )
+        return goals, layers
+
+    def _inputs(
+        self,
+        current: object,
+        successor: object,
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
+        goals, layers = self._checked_lanes(current, successor, **kwargs)
         current_input = self._adapter.make_input(
             current,
             goals=cast(Any, goals),
@@ -118,6 +127,20 @@ class PyTyrTransitionRuntime:
         successor_input = self._adapter.make_input(successor)
         return current_input, successor_input
 
+    def _prepared(
+        self,
+        current: object,
+        successor: object,
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
+        goals, layers = self._checked_lanes(current, successor, **kwargs)
+        return self._direct.prepare(
+            current,
+            successor,
+            goals=cast(Any, goals),
+            subgoal_layers=layers,
+        )
+
     def append_into_builder(
         self,
         current: object,
@@ -125,11 +148,17 @@ class PyTyrTransitionRuntime:
         builder: Any,
         **kwargs: Any,
     ) -> None:
+        # The caller owns a core-module `BatchBuilder`, which the PyTyr module
+        # cannot accept across the nanobind ABI split; this path stays on the
+        # owned-input route for that reason alone.
         current_input, successor_input = self._inputs(current, successor, **kwargs)
         self.engine.encode(current_input, successor_input, builder)
 
     def encode_one(self, current: object, successor: object, **kwargs: Any) -> Any:
-        return self.engine.encode(*self._inputs(current, successor, **kwargs))
+        goals, layers = self._checked_lanes(current, successor, **kwargs)
+        return self._direct.encode(
+            current, successor, goals=cast(Any, goals), subgoal_layers=layers
+        )
 
     @staticmethod
     def _successor_values(value: object, *, state_count: int) -> list[Any]:
@@ -185,19 +214,16 @@ class PyTyrTransitionRuntime:
                 state_index=index,
                 max_goal_level=int(self.engine.config.max_goal_level),
             )
-        current_inputs = self._adapter.make_inputs(
+        # Direct-View batch: both lanes are prepared and encoded in one native
+        # crossing, so no owning semantic input exists at any point.
+        return self._direct.encode_batch(
             current_values,
-            [()] * count,
+            successor_values,
             goals=goal_values,
             subgoal_layers=[
                 () if values is None else values for values in subgoal_values
             ],
         )
-        successor_inputs = self._adapter.make_inputs(
-            successor_values,
-            [()] * count,
-        )
-        return self.engine.encode_batch(current_inputs, successor_inputs)
 
     def update_relations(self, relation_dict: Any) -> None:
         relations = relation_arities(relation_dict)

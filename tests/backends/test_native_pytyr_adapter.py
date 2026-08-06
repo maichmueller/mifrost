@@ -471,7 +471,7 @@ def test_direct_view_encode_matches_owned_input(
     engine = getattr(adapter, engine_factory)(config)
 
     _assert_encoding_deep_equal(
-        direct.encode(state, compact_literal=adapter._compact_literal),
+        direct.encode(state),
         engine.encode(adapter.make_input(state)),
     )
 
@@ -509,9 +509,7 @@ def test_direct_view_flat_optional_lanes_match_owned_input(
     }
 
     _assert_encoding_deep_equal(
-        direct.encode(
-            state, actions, compact_literal=adapter._compact_literal, **lanes
-        ),
+        direct.encode(state, actions, **lanes),
         engine.encode(adapter.make_input(state, actions, **lanes)),
     )
 
@@ -530,3 +528,161 @@ def test_direct_view_encoder_keeps_its_adapter_alive() -> None:
 
     gc.collect()
     assert direct.encode(state).num_graphs == 1
+
+
+def _two_states(domain: str, problem: str) -> tuple[Any, list[Any], list[Any]]:
+    """A root and one successor, plus the root's applicable actions."""
+    reader, successor_generator = _pytyr_pair(domain, problem)
+    root = successor_generator.get_initial_node()
+    labeled = list(successor_generator.get_labeled_successor_nodes(root))
+    states = [root.get_state()]
+    if labeled:
+        states.append(labeled[0].node.get_state())
+    return reader, states, [entry.label for entry in labeled]
+
+
+@pytest.mark.parametrize(
+    ("family", "direct_factory", "engine_factory"), _direct_cases()
+)
+@pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
+def test_direct_view_batch_matches_owned_input_batch(
+    family: str, direct_factory: str, engine_factory: str, domain: str, problem: str
+) -> None:
+    reader, states, actions = _two_states(domain, problem)
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    config = _family_config(family)
+    direct = getattr(adapter, direct_factory)(config)
+    engine = getattr(adapter, engine_factory)(config)
+
+    # Mixed lanes: the first graph carries actions, the second does not. Color
+    # has no action lane at all and rejects one outright.
+    action_lanes: list[Any] = (
+        [()] * len(states)
+        if family == "color"
+        else [actions] + [()] * (len(states) - 1)
+    )
+
+    _assert_encoding_deep_equal(
+        direct.encode_batch(states, action_lanes),
+        engine.encode_batch(adapter.make_inputs(states, action_lanes)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("family", "direct_factory", "engine_factory"), _direct_cases()
+)
+def test_direct_view_prepared_batch_matches_direct_batch(
+    family: str, direct_factory: str, engine_factory: str
+) -> None:
+    """A stream prepares per append and flushes the handles; same result, replayable."""
+    reader, states, actions = _two_states("blocks", "small")
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    config = _family_config(family)
+    direct = getattr(adapter, direct_factory)(config)
+
+    action_lanes: list[Any] = (
+        [()] * len(states)
+        if family == "color"
+        else [actions] + [()] * (len(states) - 1)
+    )
+    prepared = [
+        direct.prepare(state, lane)
+        for state, lane in zip(states, action_lanes, strict=True)
+    ]
+    expected = direct.encode_batch(states, action_lanes)
+
+    _assert_encoding_deep_equal(direct.encode_prepared(prepared), expected)
+    # Borrowed, not consumed: flushing the same handles again is well defined.
+    _assert_encoding_deep_equal(direct.encode_prepared(prepared), expected)
+
+
+def test_direct_view_prepared_handle_outlives_its_state() -> None:
+    """A preparation owns compact pools, so the Tyr state may go away first."""
+    import gc
+
+    reader, states, actions = _two_states("blocks", "small")
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    direct = adapter.make_direct_flat_encoder(_config())
+
+    expected = direct.encode_batch(states[:1], [actions])
+    prepared = [direct.prepare(states[0], actions)]
+    del states
+    gc.collect()
+
+    _assert_encoding_deep_equal(direct.encode_prepared(prepared), expected)
+
+
+def _successor_config() -> Any:
+    return mifrost._neutral_core.SemanticSuccessorHGraphEncoderConfig(
+        max_goal_level=1,
+        support_literals=True,
+        include_successor_goal_satisfaction=True,
+        goal_derivations={
+            mifrost.GoalDerivation.plain,
+            mifrost.GoalDerivation.satisfied,
+            mifrost.GoalDerivation.unsatisfied,
+        },
+    )
+
+
+@pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
+def test_direct_view_successor_matches_owned_inputs(domain: str, problem: str) -> None:
+    reader, states, _actions = _two_states(domain, problem)
+    if len(states) < 2:
+        pytest.skip("fixture exposes no successor state")
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    config = _successor_config()
+    direct = adapter.make_direct_successor_encoder(config)
+    engine = adapter.make_successor_hgraph_engine(config)
+
+    # A goal repeated across levels resolves to its highest level; the owned and
+    # direct routes must agree on that, not just on the flat lanes.
+    goals = list(reader.problem_snapshot().goals)
+    current, successor = states[0], states[1]
+
+    _assert_encoding_deep_equal(
+        direct.encode(current, successor, goals=goals, subgoal_layers=[goals]),
+        engine.encode(
+            adapter.make_input(current, goals=goals, subgoal_layers=[goals]),
+            adapter.make_input(successor),
+        ),
+    )
+    _assert_encoding_deep_equal(
+        direct.encode_batch(
+            [current, current],
+            [successor, successor],
+            goals=[goals, None],
+            subgoal_layers=[[goals], []],
+        ),
+        engine.encode_batch(
+            adapter.make_inputs(
+                [current, current],
+                [(), ()],
+                goals=[goals, None],
+                subgoal_layers=[[goals], []],
+            ),
+            adapter.make_inputs([successor, successor], [(), ()]),
+        ),
+    )
+
+
+def test_direct_view_successor_prepared_batch_matches_batch() -> None:
+    reader, states, _actions = _two_states("blocks", "small")
+    if len(states) < 2:
+        pytest.skip("fixture exposes no successor state")
+    adapter = SemanticPlanningTaskAdapter(reader._planning_task)
+    direct = adapter.make_direct_successor_encoder(_successor_config())
+    goals = list(reader.problem_snapshot().goals)
+    current, successor = states[0], states[1]
+
+    expected = direct.encode_batch(
+        [current, current],
+        [successor, successor],
+        goals=[goals, None],
+        subgoal_layers=[[goals], []],
+    )
+    prepared = [
+        direct.prepare(current, successor, goals=goals, subgoal_layers=[goals]),
+        direct.prepare(current, successor),
+    ]
+    _assert_encoding_deep_equal(direct.encode_prepared(prepared), expected)
