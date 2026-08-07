@@ -334,6 +334,64 @@ TEST_P(DirectViewHGraphTest, RepeatedGoalLevelsMatchCompatibilityInput)
    }
 }
 
+/**
+ * The configurable ceiling and the representable ceiling are different things.
+ *
+ * `allow_subgoal_layers_beyond_max_goal_level` relaxes the *policy* limit, but
+ * this family can only name four goal levels -- `kGoalSuffixes` has four
+ * entries and the constructor rejects a `max_goal_level` beyond them. Without
+ * an unconditional check a relaxed input walks past the emitter's suffix table
+ * and dies there with an opaque out-of-range instead of a contract error.
+ */
+TEST_P(DirectViewHGraphTest, LevelsBeyondTheRepresentableRangeAreRejected)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+
+   auto semantic_input = adapter.make_input(ctx.root);
+   semantic_input.use_default_goals = false;
+   semantic_input.goals = adapter.get_task_context()->default_goals;
+   if(semantic_input.goals.empty()) {
+      GTEST_SKIP() << "Fixture does not provide goal literals.";
+   }
+   // Four layers put the deepest goal at level 4; only 0..3 can be named.
+   semantic_input.subgoal_layers = {
+      semantic_input.goals, semantic_input.goals, semantic_input.goals, semantic_input.goals
+   };
+   const auto layers = semantic_input.subgoal_layers;
+
+   const auto state_view = adapter.make_state_view(ctx.root);
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const mifrost::semantic::LiteralsView goals_view{std::span{semantic_input.goals}};
+   const mifrost::semantic::SubgoalLayersView layers_view{std::span{layers}};
+   const std::vector< mifrost::SemanticHistoryEntry > empty_history;
+   const mifrost::semantic::HistoryView history_view{std::span{empty_history}};
+
+   // Node names are what index the suffix table directly, so the limit has to
+   // hold with them off as well -- otherwise the encoder would only be safe by
+   // accident of which relation happens to be named first.
+   for(const bool export_node_names : {true, false}) {
+      mifrost::SemanticHGraphEncoderConfig config;
+      config.max_goal_level = 3;
+      config.allow_subgoal_layers_beyond_max_goal_level = true;
+      config.export_node_names = export_node_names;
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+
+      EXPECT_THROW((void) engine.encode(semantic_input), std::invalid_argument)
+         << "compatibility input, export_node_names=" << export_node_names;
+      EXPECT_THROW(
+         (void) engine.encode(
+            state_view, goals_view, layers_view, empty_actions, history_view, std::nullopt
+         ),
+         std::invalid_argument
+      ) << "direct View, export_node_names="
+        << export_node_names;
+   }
+}
+
 // `update_relations` replaces the relation arity table after construction. The
 // direct path caches graph-derived preparation state; the compatibility path
 // does not. A stale cache would only show up after the table changed.

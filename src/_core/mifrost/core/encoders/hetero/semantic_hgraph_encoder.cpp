@@ -182,13 +182,24 @@ void validate_input(
 {
    const auto& objects = semantic_objects(input);
    const auto& static_facts = semantic_static_facts(input);
-   if constexpr(requires { input.goal_levels(); }) {
-      if(not config.allow_subgoal_layers_beyond_max_goal_level
-         and input.goal_layer_count > config.max_goal_level) {
-         throw std::invalid_argument("subgoal layer exceeds max_goal_level");
+
+   // Two different limits. `max_goal_level` is policy and
+   // `allow_subgoal_layers_beyond_max_goal_level` may relax it; the size of
+   // `kGoalSuffixes` is what this family can actually represent, and nothing
+   // relaxes that. Without the unconditional check a relaxed input reaches the
+   // emitter and dies inside `kGoalSuffixes.at()` with an opaque out-of-range.
+   const size_t input_max_level = [&] {
+      if constexpr(requires { input.goal_levels(); }) {
+         return input.goal_layer_count;
+      } else {
+         return input.subgoal_layers.size();
       }
-   } else if(not config.allow_subgoal_layers_beyond_max_goal_level
-             and input.subgoal_layers.size() > config.max_goal_level) {
+   }();
+   if(input_max_level >= kGoalSuffixes.size()) {
+      throw std::invalid_argument("Semantic HGraph supports at most three subgoal layers");
+   }
+   if(not config.allow_subgoal_layers_beyond_max_goal_level
+      and input_max_level > config.max_goal_level) {
       throw std::invalid_argument("subgoal layer exceeds max_goal_level");
    }
    std::set< std::string > object_names;
