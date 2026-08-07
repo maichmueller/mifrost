@@ -145,12 +145,22 @@ over them and instantiated for both. Preparation returns a fully resolved
 `PreparedRelationGraph` holding borrowed spans settled once plus compact
 graph-derived state, so no emitter re-tests which kind of input it came from.
 
-On the goal lane specifically, occurrences are stored once and the
-category-grouped list holds `{entry_index, effective_level}` rather than copied
-literals. The effective level of a repeated goal — the highest level it appears
-at — is resolved once during preparation, not by a binary search on each
-emission pass. Repeated goals keep every occurrence and every occurrence keeps
-the same effective level, matching the historical map-assignment semantics.
+On the goal lane specifically, the category-grouped list holds
+`{entry_index, effective_level}` rather than copied literals, so the *emission*
+passes share one occurrence list instead of each rebuilding one. The effective
+level of a repeated goal — the highest level it appears at — is resolved once
+during preparation rather than on each emission pass. Repeated goals keep every
+occurrence and every occurrence keeps the same effective level, matching the
+historical map-assignment semantics.
+
+Preparation itself is not copy-free, and the claim above is about emission, not
+about the whole encode. Resolving effective levels sorts a copy of the
+occurrence list, and each family then builds its own grouped view of it; the
+flat history lane likewise materializes its references into
+`PreparedHistoryEntry`. These are bounded graph-working structures, not a
+per-lane mirror of the input, but "each identity materialized exactly once" is
+not true end to end. Replacing the sorted copy with an effective-level index
+over the compact references is a known, unclaimed optimization.
 
 The semantic horizon encoder uses the same runtime. Its graph plan prepares
 candidate identities, exact transition deltas, and goal-membership sets. A
