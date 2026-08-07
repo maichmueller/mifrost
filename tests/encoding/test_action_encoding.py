@@ -62,20 +62,27 @@ def test_action_encoding_includes_all_applicable_actions(small_blocks):
     symbol_names = list(getattr(data[symbol_type], "node_names", []))
 
     formatter = mifrost.RelationFormatter
-    seen = set()
+    # The encoder mints its own dense action-symbol id, handed out in the order
+    # distinct actions are supplied. That is deliberately not the planner's
+    # global ground action index: it is the candidate id downstream consumers
+    # use to line outputs up with the supplied action list, so it has to be
+    # dense and backend-agnostic. Mirror that numbering here rather than reading
+    # `adv.get_index()`, whose grounding order is unspecified and does vary
+    # across platforms.
+    symbol_ids: dict[str, int] = {}
     for action in actions:
         adv = adv_action(action)
         action_node = formatter.format_action(adv)
-        if action_node in seen:
+        if action_node in symbol_ids:
             continue
-        seen.add(action_node)
+        symbol_id = symbol_ids.setdefault(action_node, len(symbol_ids))
         action_type = formatter.format_action_schema(adv.get_action())
         node_names = list(getattr(data[action_type], "node_names", []))
         assert action_node in node_names, (
             f"Missing action node {action_node} of type {action_type}."
         )
 
-        action_symbol = f"target:{adv.get_index()}|{action_node}"
+        action_symbol = f"target:{symbol_id}|{action_node}"
         assert action_symbol in symbol_names, (
             f"Missing action symbol node {action_symbol} for action {action_node}."
         )
