@@ -245,6 +245,16 @@ struct NativeGoalSources {
  * with `at()`, which throws when a goal literal has no recorded level. An
  * externally mutated or inconsistent goal map must surface as an exception, not
  * as a call to std::terminate.
+ *
+ * Cost: filtering rescans all three goal lists per level, and `size()` is one
+ * such scan on top of the traversal, so adapting G goals over K occupied levels
+ * is O(K*G). K is bounded at four for anything that encodes -- every family
+ * names goal levels through a four-entry suffix table and rejects a deeper
+ * input -- so this is O(G) in practice. It is *not* bounded before that
+ * rejection: adaptation runs before validation, so an input with many distinct
+ * levels pays the full O(K*G) and is then refused. Making it unconditionally
+ * linear means building one compact `(level, category, index)` list, grouping
+ * it by level once, and letting each layer iterate only its own entries.
  */
 class NativeGoalLiteralsView {
   public:
