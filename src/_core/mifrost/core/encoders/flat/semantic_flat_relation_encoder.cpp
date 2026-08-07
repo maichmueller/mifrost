@@ -35,15 +35,15 @@ namespace {
 
 using SemanticFieldDeclaration = std::pair< std::string, GraphFieldSpec >;
 
-const std::shared_ptr< const SemanticTaskContext >& require_task_context(
-   const std::shared_ptr< const SemanticTaskContext >& task_context,
+const std::shared_ptr< const SemanticSchemaContext >& require_schema_context(
+   const std::shared_ptr< const SemanticSchemaContext >& schema,
    std::string_view encoder_name
 )
 {
-   if(not task_context) {
-      throw std::invalid_argument(std::string(encoder_name) + " task context must not be null");
+   if(not schema) {
+      throw std::invalid_argument(std::string(encoder_name) + " schema context must not be null");
    }
-   return task_context;
+   return schema;
 }
 
 constexpr std::array< SemanticPredicateCategory, 3 > kCategoryOrder = {
@@ -507,12 +507,12 @@ struct SemanticFlatRelationEncoderEngine::Impl {
 
       [[nodiscard]] const std::vector< std::string >& objects() const
       {
-         return input->task_context->objects;
+         return input->problem_context->objects;
       }
       [[nodiscard]] std::span< const SemanticAtom > static_facts() const
       {
-         return input->task_context
-                   ? std::span< const SemanticAtom >{input->task_context->static_facts}
+         return input->problem_context
+                   ? std::span< const SemanticAtom >{input->problem_context->static_facts}
                    : std::span< const SemanticAtom >{};
       }
       [[nodiscard]] std::span< const SemanticAtom > state_facts() const
@@ -522,9 +522,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       [[nodiscard]] auto actions() const { return input->actions(); }
       [[nodiscard]] auto history() const { return input->history(); }
       [[nodiscard]] std::optional< int64_t > history_max_steps() const { return std::nullopt; }
-      [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
+      [[nodiscard]] const std::shared_ptr< const SemanticProblemContext >&
+      problem_context_ptr() const
       {
-         return input->task_context;
+         return input->problem_context;
       }
       /**
        * Fact membership is already interned while traversing the Views, so the
@@ -587,9 +588,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       {
          return input->history_max_steps;
       }
-      [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
+      [[nodiscard]] const std::shared_ptr< const SemanticProblemContext >&
+      problem_context_ptr() const
       {
-         return input->task_context;
+         return input->problem_context;
       }
       /** The owning DTO has no interned membership set; the graph builds one. */
       [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >*
@@ -655,7 +657,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       const std::vector< std::string >* objects_lane = nullptr;
       std::span< const SemanticAtom > static_facts_lane;
       std::span< const SemanticAtom > state_facts_lane;
-      std::shared_ptr< const SemanticTaskContext > task_context;
+      std::shared_ptr< const SemanticProblemContext > problem_context;
 
       /** Goal occurrences in input order; the only owned copy of the goal lane. */
       std::vector< SemanticGoalLevel > goal_entries;
@@ -673,9 +675,10 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       {
          return static_facts_lane;
       }
-      [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& task_context_ptr() const
+      [[nodiscard]] const std::shared_ptr< const SemanticProblemContext >&
+      problem_context_ptr() const
       {
-         return task_context;
+         return problem_context;
       }
       [[nodiscard]] const hash_set< SemanticAtom, SemanticAtomHash >& fact_membership() const
       {
@@ -981,7 +984,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    };
 
    Config config;
-   std::shared_ptr< const SemanticTaskContext > task_context;
+   std::shared_ptr< const SemanticSchemaContext > schema_context;
    const std::vector< SemanticPredicateSpec >& predicates;
    const std::vector< SemanticActionSpec >& actions;
    FlatRelationSchema schema_;
@@ -1009,7 +1012,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       Config encoder_config
    )
        : Impl(
-            std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+            std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
                .predicates = std::move(predicate_specs),
                .actions = std::move(action_specs),
             }),
@@ -1018,11 +1021,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    {
    }
 
-   Impl(std::shared_ptr< const SemanticTaskContext > context, Config encoder_config)
+   Impl(std::shared_ptr< const SemanticSchemaContext > context, Config encoder_config)
        : config(std::move(encoder_config)),
-         task_context(require_task_context(context, "Semantic flat")),
-         predicates(task_context->predicates),
-         actions(task_context->actions)
+         schema_context(require_schema_context(context, "Semantic flat")),
+         predicates(schema_context->predicates),
+         actions(schema_context->actions)
    {
       validate_config();
       validate_unique_names(predicates, "predicate");
@@ -1815,9 +1818,11 @@ struct SemanticFlatRelationEncoderEngine::Impl {
    template < typename Source >
    void validate_source(const Source& source) const
    {
-      if(source.task_context_ptr() and source.task_context_ptr() != task_context) {
-         throw std::invalid_argument(
-            "Semantic flat input belongs to a different task context than the encoder"
+      // A legacy standalone input carries no problem context at all and brings
+      // its own object table; only a context-backed one has a schema to check.
+      if(source.problem_context_ptr()) {
+         require_semantic_schema_compatible(
+            source.problem_context_ptr(), schema_context, "Semantic flat input"
          );
       }
       const auto& objects = source.objects();
@@ -2107,7 +2112,7 @@ struct SemanticFlatRelationEncoderEngine::Impl {
       prepared.objects_lane = &source.objects();
       prepared.static_facts_lane = source.static_facts();
       prepared.state_facts_lane = source.state_facts();
-      prepared.task_context = source.task_context_ptr();
+      prepared.problem_context = source.problem_context_ptr();
       prepared.fact_membership_ptr = source.borrowed_fact_membership();
 
       // Goal occurrences in input order: plain goals first, then each subgoal
@@ -3183,11 +3188,9 @@ struct SemanticFlatRelationEncoderEngine::Impl {
          if(input == nullptr) {
             throw std::invalid_argument("semantic flat batch preparations must not be null");
          }
-         if(input->task_context != task_context) {
-            throw std::invalid_argument(
-               "semantic flat batch preparations must come from this engine's task context"
-            );
-         }
+         require_semantic_schema_compatible(
+            input->problem_context, schema_context, "semantic flat batch preparation"
+         );
          graphs.push_back(prepare_relation_graph(*input));
       }
       return compose_prepared(std::move(graphs));
@@ -3224,10 +3227,10 @@ SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
 }
 
 SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
-   std::shared_ptr< const SemanticTaskContext > task_context,
+   std::shared_ptr< const SemanticSchemaContext > schema,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
+    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config)))
 {
 }
 
@@ -3291,10 +3294,10 @@ SemanticFlatRelationEncoderEngine::get_config() const
    return impl_->config;
 }
 
-const std::shared_ptr< const SemanticTaskContext >&
-SemanticFlatRelationEncoderEngine::get_task_context() const
+const std::shared_ptr< const SemanticSchemaContext >&
+SemanticFlatRelationEncoderEngine::get_schema_context() const
 {
-   return impl_->task_context;
+   return impl_->schema_context;
 }
 
 const std::vector< SemanticPredicateSpec >&

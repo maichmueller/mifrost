@@ -4,9 +4,10 @@
  *
  * This is the bottom layer of the encoder stack. It declares the owned
  * semantic value types (atoms, literals, ground actions, history entries, the
- * shared task context and the owning `SemanticFlatRelationInput` compatibility
- * DTO) plus their hash/ordering helpers, and nothing else: no encoder engine,
- * no View adapter, no batch machinery.
+ * shared schema and problem contexts and the owning
+ * `SemanticFlatRelationInput` compatibility DTO) plus their hash/ordering
+ * helpers, and nothing else: no encoder engine, no View adapter, no batch
+ * machinery.
  *
  * Keeping these definitions here is what lets the View layer
  * (`core/views/semantic_preparation.hpp`) describe borrowed inputs in terms of
@@ -34,6 +35,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -172,17 +174,105 @@ struct SemanticHistoryEntry {
 };
 
 /**
- * Immutable schema/problem data shared by all semantic state inputs for one
- * planning task. Backends translate their stable local identities into the
- * compact IDs in this context once during adapter construction.
+ * Immutable *domain*-level schema: the predicate and action declarations every
+ * problem of one domain shares.
+ *
+ * This is the only context an encoder engine needs. Its relation universe is a
+ * function of the predicate/action schemas and the encoder configuration, not
+ * of how many objects a particular instance has, what its static facts are, or
+ * what it is asked to achieve. Keeping the schema separate is what lets one
+ * engine encode graphs from many problems into a single batch.
  */
-struct SemanticTaskContext {
+struct SemanticSchemaContext {
    std::vector< SemanticPredicateSpec > predicates;
    std::vector< SemanticActionSpec > actions;
+
+   auto operator<=>(const SemanticSchemaContext&) const = default;
+};
+
+/**
+ * Immutable *problem*-level data for one planning instance.
+ *
+ * Backends translate their stable local identities into the compact IDs in
+ * this context once during adapter construction. Every graph carries its own
+ * problem context (through its input or its `ViewPreparation`); the engine
+ * never holds one, so graphs from different instances batch together as long
+ * as their schemas agree.
+ *
+ * Object indices are deliberately *graph*-local: object 0 of one problem and
+ * object 0 of another are unrelated nodes, and `BatchBuilder` offsets them
+ * independently. Predicate and action indices, by contrast, are schema-local
+ * and therefore identical across every problem of the same domain.
+ */
+struct SemanticProblemContext {
+   std::shared_ptr< const SemanticSchemaContext > schema;
    std::vector< std::string > objects;
    std::vector< SemanticAtom > static_facts;
    std::vector< SemanticLiteral > default_goals;
+
+   [[nodiscard]] const std::vector< SemanticPredicateSpec >& predicates() const
+   {
+      return require_schema().predicates;
+   }
+   [[nodiscard]] const std::vector< SemanticActionSpec >& actions() const
+   {
+      return require_schema().actions;
+   }
+
+  private:
+   [[nodiscard]] const SemanticSchemaContext& require_schema() const
+   {
+      if(not schema) {
+         throw std::invalid_argument("semantic problem context carries no schema context");
+      }
+      return *schema;
+   }
 };
+
+/**
+ * Whether a graph built against `lhs` may be encoded by an engine holding `rhs`.
+ *
+ * Pointer equality is the fast path -- backends share one schema instance per
+ * domain -- but two structurally identical schemas from independently parsed
+ * copies of the same domain are equally encodable, so fall back to comparing
+ * the declarations themselves. What must *not* be required is that both graphs
+ * came from the same problem.
+ */
+[[nodiscard]] inline bool semantic_schema_compatible(
+   const std::shared_ptr< const SemanticSchemaContext >& lhs,
+   const std::shared_ptr< const SemanticSchemaContext >& rhs
+)
+{
+   if(lhs == rhs) {
+      return true;
+   }
+   if(not lhs or not rhs) {
+      return false;
+   }
+   return *lhs == *rhs;
+}
+
+/**
+ * Reject a graph whose schema the engine cannot encode.
+ *
+ * This is the *only* cross-graph precondition a batch has: what a batch may
+ * not mix is incompatible domains, not distinct problems.
+ */
+inline void require_semantic_schema_compatible(
+   const std::shared_ptr< const SemanticProblemContext >& graph_context,
+   const std::shared_ptr< const SemanticSchemaContext >& engine_schema,
+   std::string_view what
+)
+{
+   if(not graph_context) {
+      throw std::invalid_argument(std::string(what) + " carries no problem context");
+   }
+   if(not semantic_schema_compatible(graph_context->schema, engine_schema)) {
+      throw std::invalid_argument(
+         std::string(what) + " was built against a schema this encoder cannot encode"
+      );
+   }
+}
 
 /**
  * @brief Owned semantic input for one flat graph.
@@ -192,13 +282,13 @@ struct SemanticTaskContext {
  * or cross-repository identities.
  */
 struct SemanticFlatRelationInput {
-   /** Shared immutable schema/problem data; absent for legacy standalone inputs. */
-   std::shared_ptr< const SemanticTaskContext > task_context;
-   /** Legacy object table when no task context is supplied. */
+   /** Shared immutable problem data; absent for legacy standalone inputs. */
+   std::shared_ptr< const SemanticProblemContext > problem_context;
+   /** Legacy object table when no problem context is supplied. */
    std::vector< std::string > objects;
-   /** Dynamic state facts only when task_context is supplied. */
+   /** Dynamic state facts only when problem_context is supplied. */
    std::vector< SemanticAtom > state_facts;
-   /** Explicit goal override; defaults come from task_context when requested. */
+   /** Explicit goal override; defaults come from problem_context when requested. */
    std::vector< SemanticLiteral > goals;
    bool use_default_goals = false;
    std::vector< SemanticGroundAction > actions;
@@ -211,15 +301,15 @@ struct SemanticFlatRelationInput {
    const SemanticFlatRelationInput& input
 )
 {
-   return input.task_context ? input.task_context->objects : input.objects;
+   return input.problem_context ? input.problem_context->objects : input.objects;
 }
 
 [[nodiscard]] inline const std::vector< SemanticLiteral >& semantic_goals(
    const SemanticFlatRelationInput& input
 )
 {
-   return input.task_context and input.use_default_goals ? input.task_context->default_goals
-                                                         : input.goals;
+   return input.problem_context and input.use_default_goals ? input.problem_context->default_goals
+                                                            : input.goals;
 }
 
 [[nodiscard]] inline const std::vector< SemanticAtom >& semantic_static_facts(
@@ -227,7 +317,7 @@ struct SemanticFlatRelationInput {
 )
 {
    static const std::vector< SemanticAtom > empty;
-   return input.task_context ? input.task_context->static_facts : empty;
+   return input.problem_context ? input.problem_context->static_facts : empty;
 }
 
 /** One sorted literal-to-effective-goal-level entry. */
@@ -293,7 +383,7 @@ semantic_goal_level(const std::vector< SemanticGoalLevel >& levels, const Semant
    const SemanticFlatRelationInput& rhs
 )
 {
-   return lhs.task_context and lhs.task_context == rhs.task_context;
+   return lhs.problem_context and lhs.problem_context == rhs.problem_context;
 }
 
 }  // namespace mifrost

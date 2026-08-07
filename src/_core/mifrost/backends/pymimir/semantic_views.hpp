@@ -604,10 +604,48 @@ void append_semantic_predicates(
    return predicates;
 }
 
+/**
+ * Build the domain-level schema every problem of `domain` shares.
+ *
+ * Nothing here reads the problem: the predicate and action declarations come
+ * from the domain, which is why one encoder can serve every instance of it.
+ */
+[[nodiscard]] inline std::shared_ptr< const SemanticSchemaContext > build_semantic_schema_context(
+   const mimir::formalism::DomainImpl& domain
+)
+{
+   auto schema = std::make_shared< SemanticSchemaContext >();
+   schema->predicates = make_semantic_predicates(domain);
+   auto actions = domain.get_actions();
+   std::ranges::sort(actions, [](const auto lhs, const auto rhs) {
+      return std::tuple{lhs->get_name(), lhs->get_arity(), lhs->get_index()}
+             < std::tuple{rhs->get_name(), rhs->get_arity(), rhs->get_index()};
+   });
+   schema->actions.reserve(actions.size());
+   for(const auto action : actions) {
+      schema->actions.push_back(
+         SemanticActionSpec{
+            std::string(action->get_name()), static_cast< int64_t >(action->get_arity())
+         }
+      );
+   }
+   return schema;
+}
+
 class SemanticProblemAdapter {
   public:
-   explicit SemanticProblemAdapter(const mimir::formalism::ProblemImpl& problem)
-       : view_context_(problem), task_context_(build_task_context(problem))
+   /**
+    * @param problem the instance whose objects, static facts and goals this
+    *        adapter materializes.
+    * @param schema the domain-level schema to share. Pass the encoder's own so
+    *        every adapter it builds compares equal by pointer; omit it and the
+    *        adapter derives an equivalent one from the problem's domain.
+    */
+   explicit SemanticProblemAdapter(
+      const mimir::formalism::ProblemImpl& problem,
+      std::shared_ptr< const SemanticSchemaContext > schema = nullptr
+   )
+       : view_context_(problem), problem_context_(build_problem_context(problem, std::move(schema)))
    {
       build_problem_lanes(problem);
    }
@@ -615,15 +653,22 @@ class SemanticProblemAdapter {
    [[nodiscard]] SemanticFlatRelationInput make_input(const mimir::search::State& state) const
    {
       SemanticFlatRelationInput result;
-      result.task_context = task_context_;
+      result.problem_context = problem_context_;
       result.use_default_goals = true;
       materialize_state_in_native_order(views::make_state_view(state, view_context_), result);
       return result;
    }
 
-   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const noexcept
+   [[nodiscard]] std::shared_ptr< const SemanticProblemContext >
+   get_problem_context() const noexcept
    {
-      return task_context_;
+      return problem_context_;
+   }
+
+   [[nodiscard]] const std::shared_ptr< const SemanticSchemaContext >&
+   get_schema_context() const noexcept
+   {
+      return problem_context_->schema;
    }
 
    [[nodiscard]] views::StateView make_state_view(const mimir::search::State& state) const
@@ -695,7 +740,7 @@ class SemanticProblemAdapter {
    ) const
    {
       SemanticFlatRelationInput result;
-      result.task_context = task_context_;
+      result.problem_context = problem_context_;
       result.use_default_goals = false;
       const auto state_view = views::make_state_view(state, view_context_);
       materialize_state_in_native_order(state_view, result);
@@ -741,26 +786,14 @@ class SemanticProblemAdapter {
       }
    }
 
-   static std::shared_ptr< SemanticTaskContext > build_task_context(
-      const mimir::formalism::ProblemImpl& problem
+   static std::shared_ptr< SemanticProblemContext > build_problem_context(
+      const mimir::formalism::ProblemImpl& problem,
+      std::shared_ptr< const SemanticSchemaContext > schema
    )
    {
-      auto context = std::make_shared< SemanticTaskContext >();
-      const auto domain = problem.get_domain();
-      context->predicates = make_semantic_predicates(*domain);
-      auto actions = domain->get_actions();
-      std::ranges::sort(actions, [](const auto lhs, const auto rhs) {
-         return std::tuple{lhs->get_name(), lhs->get_arity(), lhs->get_index()}
-                < std::tuple{rhs->get_name(), rhs->get_arity(), rhs->get_index()};
-      });
-      context->actions.reserve(actions.size());
-      for(const auto action : actions) {
-         context->actions.push_back(
-            SemanticActionSpec{
-               std::string(action->get_name()), static_cast< int64_t >(action->get_arity())
-            }
-         );
-      }
+      auto context = std::make_shared< SemanticProblemContext >();
+      context->schema = schema ? std::move(schema)
+                               : build_semantic_schema_context(*problem.get_domain());
 
       auto objects = problem.get_problem_and_domain_objects();
       std::ranges::sort(objects, [](const auto lhs, const auto rhs) {
@@ -832,7 +865,7 @@ class SemanticProblemAdapter {
             const views::LiteralView< NativeLiteral, views::Category::static_predicate > view{
                literal, view_context_
             };
-            task_context_->static_facts.push_back(
+            problem_context_->static_facts.push_back(
                canonical::materialize_semantic_atom(view.atom())
             );
          }
@@ -854,12 +887,12 @@ class SemanticProblemAdapter {
       for(const auto& literal : values) {
          using NativeLiteral = std::remove_cvref_t< decltype(literal) >;
          const views::LiteralView< NativeLiteral, Category > view{literal, view_context_};
-         task_context_->default_goals.push_back(canonical::materialize_semantic_literal(view));
+         problem_context_->default_goals.push_back(canonical::materialize_semantic_literal(view));
       }
    }
 
    views::Context view_context_;
-   std::shared_ptr< SemanticTaskContext > task_context_;
+   std::shared_ptr< SemanticProblemContext > problem_context_;
 };
 
 }  // namespace mifrost::pymimir

@@ -225,10 +225,11 @@ TEST_P(DirectViewHGraphTest, PolicyMatrixMatchesCompatibilityInput)
    );
 
    for(const auto& [name, config] : policy_matrix()) {
-      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(scenario.compatibility),
          engine.encode(
+            adapter.get_problem_context(),
             state_view,
             goal_views.goals_view(),
             goal_views.subgoal_layers_view(),
@@ -252,7 +253,7 @@ TEST_P(DirectViewHGraphTest, NegativeGoalLiteralsMatchCompatibilityInput)
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
    auto semantic_input = adapter.make_input(ctx.root);
    semantic_input.use_default_goals = false;
-   semantic_input.goals = adapter.get_task_context()->default_goals;
+   semantic_input.goals = adapter.get_problem_context()->default_goals;
    if(semantic_input.goals.empty()) {
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
@@ -267,9 +268,11 @@ TEST_P(DirectViewHGraphTest, NegativeGoalLiteralsMatchCompatibilityInput)
    const mifrost::semantic::LiteralsView goals{std::span{semantic_input.goals}};
 
    for(const auto& [name, config] : policy_matrix()) {
-      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
-         engine.encode(semantic_input), engine.encode(state_view, goals, empty_actions), name
+         engine.encode(semantic_input),
+         engine.encode(adapter.get_problem_context(), state_view, goals, empty_actions),
+         name
       );
    }
 }
@@ -296,7 +299,7 @@ RepeatedLevelInput repeated_level_input(
    RepeatedLevelInput result;
    result.compatibility = adapter.make_input(ctx.root);
    result.compatibility.use_default_goals = false;
-   result.compatibility.goals = adapter.get_task_context()->default_goals;
+   result.compatibility.goals = adapter.get_problem_context()->default_goals;
    result.compatibility.subgoal_layers = {result.compatibility.goals};
    result.layers = result.compatibility.subgoal_layers;
    return result;
@@ -323,11 +326,17 @@ TEST_P(DirectViewHGraphTest, RepeatedGoalLevelsMatchCompatibilityInput)
    const mifrost::semantic::HistoryView history_view{std::span{empty_history}};
 
    for(const auto& [name, config] : policy_matrix()) {
-      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(input.compatibility),
          engine.encode(
-            state_view, goals_view, layers_view, empty_actions, history_view, std::nullopt
+            adapter.get_problem_context(),
+            state_view,
+            goals_view,
+            layers_view,
+            empty_actions,
+            history_view,
+            std::nullopt
          ),
          name
       );
@@ -351,7 +360,7 @@ TEST_P(DirectViewHGraphTest, LevelsBeyondTheRepresentableRangeAreRejected)
 
    auto semantic_input = adapter.make_input(ctx.root);
    semantic_input.use_default_goals = false;
-   semantic_input.goals = adapter.get_task_context()->default_goals;
+   semantic_input.goals = adapter.get_problem_context()->default_goals;
    if(semantic_input.goals.empty()) {
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
@@ -378,13 +387,19 @@ TEST_P(DirectViewHGraphTest, LevelsBeyondTheRepresentableRangeAreRejected)
       config.max_goal_level = 3;
       config.allow_subgoal_layers_beyond_max_goal_level = true;
       config.export_node_names = export_node_names;
-      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
 
       EXPECT_THROW((void) engine.encode(semantic_input), std::invalid_argument)
          << "compatibility input, export_node_names=" << export_node_names;
       EXPECT_THROW(
          (void) engine.encode(
-            state_view, goals_view, layers_view, empty_actions, history_view, std::nullopt
+            adapter.get_problem_context(),
+            state_view,
+            goals_view,
+            layers_view,
+            empty_actions,
+            history_view,
+            std::nullopt
          ),
          std::invalid_argument
       ) << "direct View, export_node_names="
@@ -411,12 +426,13 @@ TEST_P(DirectViewHGraphTest, RelationUpdatePreservesParity)
    mifrost::SemanticHGraphEncoderConfig config;
    config.max_goal_level = 3;
    config.ignore_actions = false;
-   mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+   mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
 
    const auto encode_both = [&] {
       expect_encoding_equal(
          engine.encode(scenario.compatibility),
          engine.encode(
+            adapter.get_problem_context(),
             state_view,
             goal_views.goals_view(),
             goal_views.subgoal_layers_view(),
@@ -488,11 +504,12 @@ TEST_P(DirectViewSuccessorTest, SuccessorModesMatchCompatibilityInputs)
                                    + " goal_satisfaction=" + (goal_satisfaction ? "1" : "0");
 
          const mifrost::SemanticSuccessorHGraphEncoderEngine engine(
-            adapter.get_task_context(), config
+            adapter.get_schema_context(), config
          );
          expect_encoding_equal(
             engine.encode(current_input, successor_input),
             engine.encode(
+               adapter.get_problem_context(),
                current_view,
                goal_views.goals_view(),
                goal_views.subgoal_layers_view(),
@@ -539,12 +556,18 @@ TEST_P(DirectViewSuccessorTest, RepeatedGoalLevelsMatchWithSuccessorSatisfaction
       mifrost::GoalDerivation::satisfied,
       mifrost::GoalDerivation::unsatisfied,
    };
-   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_schema_context(), config);
 
    expect_encoding_equal(
       engine.encode(input.compatibility, successor_input),
       engine.encode(
-         current_view, goals_view, layers_view, empty_actions, successor_view, empty_actions
+         adapter.get_problem_context(),
+         current_view,
+         goals_view,
+         layers_view,
+         empty_actions,
+         successor_view,
+         empty_actions
       )
    );
 }
@@ -564,7 +587,7 @@ TEST_P(DirectViewSuccessorTest, PreparedBatchMatchesCompatibilityBatch)
    config.max_goal_level = 3;
    config.support_literals = true;
    config.include_successor_goal_satisfaction = true;
-   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_schema_context(), config);
 
    const auto current_view = adapter.make_state_view(ctx.root);
    const auto successor_view = adapter.make_state_view(successor);
@@ -583,14 +606,18 @@ TEST_P(DirectViewSuccessorTest, PreparedBatchMatchesCompatibilityBatch)
    };
 
    const std::vector< mifrost::canonical::detail::ViewPreparation > prepared_currents{
-      engine.prepare_current(current_view, empty_actions),
+      engine.prepare_current(adapter.get_problem_context(), current_view, empty_actions),
       engine.prepare_current(
-         current_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), empty_actions
+         adapter.get_problem_context(),
+         current_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         empty_actions
       ),
    };
    const std::vector< mifrost::canonical::detail::ViewPreparation > prepared_successors{
-      engine.prepare_successor(successor_view),
-      engine.prepare_successor(successor_view),
+      engine.prepare_successor(adapter.get_problem_context(), successor_view),
+      engine.prepare_successor(adapter.get_problem_context(), successor_view),
    };
    std::vector< const mifrost::canonical::detail::ViewPreparation* > current_refs;
    std::vector< const mifrost::canonical::detail::ViewPreparation* > successor_refs;
@@ -621,11 +648,17 @@ TEST_P(DirectViewSuccessorTest, RelationUpdatePreservesParity)
       std::span< const mimir::formalism::GroundAction >{}
    );
 
-   mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context());
+   mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_schema_context());
    const auto encode_both = [&] {
       expect_encoding_equal(
          engine.encode(current_input, successor_input),
-         engine.encode(current_view, empty_actions, successor_view, empty_actions)
+         engine.encode(
+            adapter.get_problem_context(),
+            current_view,
+            empty_actions,
+            successor_view,
+            empty_actions
+         )
       );
    };
    encode_both();
@@ -652,14 +685,14 @@ TEST_P(DirectViewSuccessorTest, MismatchedObjectTablesAreRejected)
    auto foreign_input = adapter.make_input(successor);
    // Objects come from the shared task context unless the input owns a table of
    // its own, so drop the context to give the successor lane a shorter one.
-   foreign_input.objects = adapter.get_task_context()->objects;
+   foreign_input.objects = adapter.get_problem_context()->objects;
    if(foreign_input.objects.size() < 2) {
       GTEST_SKIP() << "Fixture does not provide enough objects.";
    }
    foreign_input.objects.pop_back();
-   foreign_input.task_context.reset();
+   foreign_input.problem_context.reset();
 
-   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(adapter.get_schema_context());
    EXPECT_THROW((void) engine.encode(current_input, foreign_input), std::invalid_argument);
 
    // Direct path: both lanes carry the engine's own object table by construction.
@@ -669,18 +702,18 @@ TEST_P(DirectViewSuccessorTest, MismatchedObjectTablesAreRejected)
       std::span< const mimir::formalism::GroundAction >{}
    );
    const auto current_prepared = mifrost::canonical::detail::make_hgraph_view_preparation(
-      adapter.get_task_context(), current_view, empty_actions
+      adapter.get_problem_context(), current_view, empty_actions
    );
    const auto successor_prepared = mifrost::canonical::detail::make_state_only_view_preparation(
-      adapter.get_task_context(), successor_view
+      adapter.get_problem_context(), successor_view
    );
    EXPECT_EQ(
       mifrost::canonical::detail::semantic_objects(current_prepared),
       mifrost::canonical::detail::semantic_objects(successor_prepared)
    );
-   EXPECT_NO_THROW(
-      (void) engine.encode(current_view, empty_actions, successor_view, empty_actions)
-   );
+   EXPECT_NO_THROW((void) engine.encode(
+      adapter.get_problem_context(), current_view, empty_actions, successor_view, empty_actions
+   ));
 }
 
 INSTANTIATE_TEST_SUITE_P(

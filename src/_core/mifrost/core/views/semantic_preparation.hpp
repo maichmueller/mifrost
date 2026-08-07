@@ -54,7 +54,11 @@ class SemanticHistoryRange;
 class SemanticGoalRange;
 
 struct ViewPreparation {
-   std::shared_ptr< const SemanticTaskContext > task_context;
+   /**
+    * The problem this graph came from. Held per preparation, never per engine:
+    * a batch may mix preparations from different problems of one domain.
+    */
+   std::shared_ptr< const SemanticProblemContext > problem_context;
    /**
     * Compact graph-derived identity pools.
     *
@@ -382,14 +386,14 @@ using borrowed_range_t = decltype(std::views::all(std::declval< Range >()));
 
 template < typename State, typename Goals, typename Layers, typename Actions, typename History >
 [[nodiscard]] ViewPreparation prepare_borrowed_view_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const BorrowedViewInput< State, Goals, Layers, Actions, History >& input
 )
 {
    if(not context) {
-      throw std::invalid_argument("semantic View input requires a task context");
+      throw std::invalid_argument("semantic View input requires a problem context");
    }
-   ViewPreparation result{.task_context = context};
+   ViewPreparation result{.problem_context = context};
    append_view_static_facts(result);
    append_view_state(*input.state, result);
    if constexpr(not std::same_as< Goals, std::monostate >) {
@@ -574,7 +578,7 @@ void append_view_history(
 
 inline void append_view_default_goals(ViewPreparation& preparation)
 {
-   for(const auto& goal : preparation.task_context->default_goals) {
+   for(const auto& goal : preparation.problem_context->default_goals) {
       preparation.goal_level_refs.push_back(
          ViewGoalLevelRef{
             .literal =
@@ -590,7 +594,7 @@ inline void append_view_default_goals(ViewPreparation& preparation)
 
 inline void append_view_static_facts(ViewPreparation& preparation)
 {
-   const auto& static_facts = preparation.task_context->static_facts;
+   const auto& static_facts = preparation.problem_context->static_facts;
    preparation.fact_lookup.reserve(preparation.fact_lookup.size() + static_facts.size());
    for(const auto& fact : static_facts) {
       preparation.fact_lookup.emplace(fact);
@@ -604,7 +608,7 @@ inline void append_view_static_facts(ViewPreparation& preparation)
  * from its input: the object table (for name formatting and the shared-table
  * check) and the successor state facts. It never inspects successor goals,
  * subgoal layers, actions or history. Running the full preparation there
- * materialized the task context's default goals into the atom pool and the
+ * materialized the problem context's default goals into the atom pool and the
  * goal-level lane on every encode, purely to be discarded.
  *
  * This builds only the static-fact membership set and the state-fact lane; the
@@ -613,14 +617,14 @@ inline void append_view_static_facts(ViewPreparation& preparation)
  */
 template < views::StateView State >
 [[nodiscard]] ViewPreparation make_state_only_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state
 )
 {
    if(not context) {
-      throw std::invalid_argument("semantic View input requires a task context");
+      throw std::invalid_argument("semantic View input requires a problem context");
    }
-   ViewPreparation result{.task_context = context};
+   ViewPreparation result{.problem_context = context};
    append_view_static_facts(result);
    append_view_state(state, result);
    return result;
@@ -628,7 +632,7 @@ template < views::StateView State >
 
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
@@ -645,7 +649,7 @@ template < views::StateView State, views::GroundActionRange Actions >
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
@@ -669,7 +673,7 @@ template <
    views::LiteralLayerRange Layers,
    views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -696,7 +700,7 @@ template <
    views::LiteralLayerRange Layers,
    views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_hgraph_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -719,7 +723,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 [[nodiscard]] ViewPreparation make_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -747,7 +751,7 @@ template <
 
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_flat_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
@@ -757,7 +761,7 @@ template < views::StateView State, views::GroundActionRange Actions >
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_flat_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
@@ -775,7 +779,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 [[nodiscard]] ViewPreparation make_flat_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -797,7 +801,7 @@ template <
 
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_hgraph_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
@@ -807,7 +811,7 @@ template < views::StateView State, views::GroundActionRange Actions >
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_hgraph_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
@@ -825,7 +829,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 [[nodiscard]] ViewPreparation make_hgraph_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -847,7 +851,7 @@ template <
 
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_color_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
@@ -857,7 +861,7 @@ template < views::StateView State, views::GroundActionRange Actions >
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_color_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
@@ -874,7 +878,7 @@ template <
    views::LiteralLayerRange Layers,
    views::GroundActionRange Actions >
 [[nodiscard]] ViewPreparation make_color_view_preparation(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Layers&& layers,
@@ -892,15 +896,15 @@ template <
 
 inline const std::vector< std::string >& semantic_objects(const ViewPreparation& input)
 {
-   if(not input.task_context) {
+   if(not input.problem_context) {
       throw std::invalid_argument("semantic View preparation requires an object table");
    }
-   return input.task_context->objects;
+   return input.problem_context->objects;
 }
 
 inline const std::vector< SemanticAtom >& semantic_static_facts(const ViewPreparation& input)
 {
-   return input.task_context->static_facts;
+   return input.problem_context->static_facts;
 }
 
 }  // namespace mifrost::canonical::detail

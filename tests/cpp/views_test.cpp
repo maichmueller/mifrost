@@ -23,7 +23,7 @@ namespace mifrost {
 namespace {
 
 struct ViewEncoderProbe {
-   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const
+   [[nodiscard]] std::shared_ptr< const SemanticProblemContext > get_problem_context() const
    {
       return {};
    }
@@ -47,12 +47,17 @@ static_assert(views::LiteralLayerRange< semantic::SubgoalLayersView >);
 static_assert(views::HistoryRange< semantic::HistoryView >);
 static_assert(requires(
    const SemanticFlatRelationEncoderEngine& encoder,
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const semantic::StateView& state,
    semantic::LiteralsView goals,
    semantic::SubgoalLayersView subgoal_layers,
    semantic::GroundActionsView actions,
    semantic::HistoryView history
-) { encoder.encode(state, goals, subgoal_layers, actions, history, std::optional< int64_t >{}); });
+) {
+   encoder.encode(
+      problem_context, state, goals, subgoal_layers, actions, history, std::optional< int64_t >{}
+   );
+});
 
 static_assert(views::PredicateView< semantic::PredicateView >);
 static_assert(views::ObjectView< semantic::ObjectView >);
@@ -172,8 +177,8 @@ TEST(ViewsTest, SemanticViewBridgeMaterializesCanonicalInput)
       semantic::AtomsView(std::span{&fluent, 1}),
       semantic::AtomsView(std::span{&derived, 1}),
    };
-   const auto context = std::make_shared< const SemanticTaskContext >(
-      SemanticTaskContext{.objects = {"a", "b"}}
+   const auto context = std::make_shared< const SemanticProblemContext >(
+      SemanticProblemContext{.objects = {"a", "b"}}
    );
 
    const auto input = canonical::make_semantic_flat_relation_input(

@@ -616,17 +616,45 @@ TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
    EXPECT_EQ(encoding.num_graphs, 1);
 }
 
-TEST(FlatCompositionTest, SemanticRelationRejectsForeignTaskContext)
+TEST(FlatCompositionTest, SemanticRelationAcceptsAnotherProblemOfTheSameSchema)
 {
-   const auto first_context = std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+   const auto schema = std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
       .predicates = {{SemanticPredicateCategory::fluent, "at", 1}},
+   });
+   const auto first_context = std::make_shared< SemanticProblemContext >(SemanticProblemContext{
+      .schema = schema,
       .objects = {"a"},
    });
-   const auto second_context = std::make_shared< SemanticTaskContext >(*first_context);
-   SemanticFlatRelationEncoderEngine engine(first_context);
+   // A different instance: its own object table, and deliberately not the
+   // context the engine was built from.
+   const auto second_context = std::make_shared< SemanticProblemContext >(SemanticProblemContext{
+      .schema = schema,
+      .objects = {"b", "c"},
+   });
+   SemanticFlatRelationEncoderEngine engine(schema);
    SemanticFlatRelationInput input;
-   input.task_context = second_context;
-   input.state_facts = {{0, {0}}};
+   input.problem_context = second_context;
+   input.state_facts = {{0, {1}}};
+
+   EXPECT_EQ(engine.encode(input).num_graphs, 1);
+}
+
+TEST(FlatCompositionTest, SemanticRelationRejectsForeignSchema)
+{
+   const auto schema = std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
+      .predicates = {{SemanticPredicateCategory::fluent, "at", 1}},
+   });
+   const auto foreign_schema = std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
+      .predicates = {{SemanticPredicateCategory::fluent, "on", 2}},
+   });
+   const auto foreign_context = std::make_shared< SemanticProblemContext >(SemanticProblemContext{
+      .schema = foreign_schema,
+      .objects = {"a", "b"},
+   });
+   SemanticFlatRelationEncoderEngine engine(schema);
+   SemanticFlatRelationInput input;
+   input.problem_context = foreign_context;
+   input.state_facts = {{0, {0, 1}}};
 
    EXPECT_THROW((void) engine.encode(input), std::invalid_argument);
 }

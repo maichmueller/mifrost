@@ -31,15 +31,19 @@ TEST_P(DirectViewEncoderTest, FlatDirectViewMatchesSemanticCompatibilityInput)
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const auto semantic_input = adapter.make_input(ctx.root);
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const mifrost::SemanticFlatRelationEncoderEngine engine(semantic_context);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(semantic_schema);
 
-   expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(adapter.get_problem_context(), state_view, action_views)
+   );
 }
 
 TEST_P(DirectViewEncoderTest, FlatExplicitGoalsAndActionsMatchSemanticCompatibilityInput)
@@ -62,11 +66,13 @@ TEST_P(DirectViewEncoderTest, FlatExplicitGoalsAndActionsMatchSemanticCompatibil
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(actions);
    const auto goal_views = adapter.make_goal_views(goals);
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context());
 
    expect_encoding_equal(
       engine.encode(semantic_input),
-      engine.encode(state_view, goal_views.goals_view(), action_views)
+      engine.encode(
+         adapter.get_problem_context(), state_view, goal_views.goals_view(), action_views
+      )
    );
 }
 
@@ -113,11 +119,12 @@ TEST_P(DirectViewEncoderTest, FlatNativeGoalAndHistoryViewsMatchCompatibilityInp
    );
    mifrost::FlatRelationEncoderConfig config;
    config.target_sources = {mifrost::TargetSource::goals, mifrost::TargetSource::history};
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
 
    expect_encoding_equal(
       engine.encode(semantic_input),
       engine.encode(
+         adapter.get_problem_context(),
          state_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -161,11 +168,12 @@ TEST_P(DirectViewEncoderTest, FlatSparseRepeatedNativeGoalLevelsMatchCompatibili
    const mifrost::semantic::HistoryView history_view(std::span{empty_history});
    mifrost::FlatRelationEncoderConfig config;
    config.max_goal_level = 3;
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
 
    expect_encoding_equal(
       engine.encode(semantic_input),
       engine.encode(
+         adapter.get_problem_context(),
          state_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -325,15 +333,19 @@ TEST_P(DirectViewEncoderTest, ColorDirectViewMatchesSemanticCompatibilityInput)
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const auto semantic_input = adapter.make_input(ctx.root);
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const mifrost::SemanticColorEncoderEngine engine(semantic_context);
+   const mifrost::SemanticColorEncoderEngine engine(semantic_schema);
 
-   expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(adapter.get_problem_context(), state_view, action_views)
+   );
 }
 
 TEST_P(DirectViewEncoderTest, ColorDirectGoalAndSubgoalViewsMatchCompatibilityInput)
@@ -356,11 +368,13 @@ TEST_P(DirectViewEncoderTest, ColorDirectGoalAndSubgoalViewsMatchCompatibilityIn
    const mifrost::semantic::SubgoalLayersView subgoal_layers(
       std::span{semantic_input.subgoal_layers}
    );
-   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context());
 
    expect_encoding_equal(
       engine.encode(semantic_input),
-      engine.encode(state_view, goal_views, subgoal_layers, action_views)
+      engine.encode(
+         adapter.get_problem_context(), state_view, goal_views, subgoal_layers, action_views
+      )
    );
 }
 
@@ -393,12 +407,16 @@ TEST_P(DirectViewEncoderTest, ColorSparseRepeatedNativeGoalLevelsMatchCompatibil
       std::span< const mimir::formalism::GroundAction >{}
    );
    const auto goal_views = adapter.make_goal_views(sparse_goals);
-   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context());
 
    expect_encoding_equal(
       engine.encode(semantic_input),
       engine.encode(
-         state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), action_views
+         adapter.get_problem_context(),
+         state_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         action_views
       )
    );
 }
@@ -408,15 +426,19 @@ TEST_P(DirectViewEncoderTest, HGraphDirectViewMatchesSemanticCompatibilityInput)
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const auto semantic_input = adapter.make_input(ctx.root);
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const mifrost::SemanticHGraphEncoderEngine engine(semantic_context);
+   const mifrost::SemanticHGraphEncoderEngine engine(semantic_schema);
 
-   expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(adapter.get_problem_context(), state_view, action_views)
+   );
 }
 
 TEST_P(DirectViewEncoderTest, HGraphSparseRepeatedNativeGoalLevelsMatchCompatibilityInput)
@@ -452,11 +474,12 @@ TEST_P(DirectViewEncoderTest, HGraphSparseRepeatedNativeGoalLevelsMatchCompatibi
    const mifrost::semantic::HistoryView history_view(std::span{empty_history});
    mifrost::SemanticHGraphEncoderConfig config;
    config.max_goal_level = 3;
-   const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticHGraphEncoderEngine engine(adapter.get_schema_context(), config);
 
    expect_encoding_equal(
       engine.encode(semantic_input),
       engine.encode(
+         adapter.get_problem_context(),
          state_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -472,7 +495,8 @@ TEST_P(DirectViewEncoderTest, SuccessorDirectViewsMatchSemanticCompatibilityInpu
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const auto [successor, action] = mifrost_test::find_successor(ctx);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const auto current_input = adapter.make_input(ctx.root);
    const auto successor_input = adapter.make_input(successor);
    const auto current_view = adapter.make_state_view(ctx.root);
@@ -480,12 +504,14 @@ TEST_P(DirectViewEncoderTest, SuccessorDirectViewsMatchSemanticCompatibilityInpu
    const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(semantic_context);
+   const mifrost::SemanticSuccessorHGraphEncoderEngine engine(semantic_schema);
 
    (void) action;
    expect_encoding_equal(
       engine.encode(current_input, successor_input),
-      engine.encode(current_view, empty_actions, successor_view, empty_actions)
+      engine.encode(
+         adapter.get_problem_context(), current_view, empty_actions, successor_view, empty_actions
+      )
    );
 }
 
@@ -524,11 +550,14 @@ TEST_P(DirectViewEncoderTest, DuplicateActionOccurrencesMatchCompatibilityInput)
 
    mifrost::FlatRelationEncoderConfig config;
    config.target_sources = {mifrost::TargetSource::actions};
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(action_span);
 
-   expect_encoding_equal(engine.encode(semantic_input), engine.encode(state_view, action_views));
+   expect_encoding_equal(
+      engine.encode(semantic_input),
+      engine.encode(adapter.get_problem_context(), state_view, action_views)
+   );
 }
 
 // The successor lane must not build goal/action/history records the successor
@@ -539,7 +568,8 @@ TEST_P(DirectViewEncoderTest, SuccessorPreparationIsStateOnly)
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const auto [successor, action] = mifrost_test::find_successor(ctx);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const auto successor_view = adapter.make_state_view(successor);
    const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
@@ -577,21 +607,22 @@ TEST_P(DirectViewEncoderTest, FlatViewBatchMatchesSemanticCompatibilityBatch)
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const auto [successor, action] = mifrost_test::find_successor(ctx);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto semantic_context = adapter.get_task_context();
+   const auto semantic_context = adapter.get_problem_context();
+   const auto semantic_schema = adapter.get_schema_context();
    const std::vector< mifrost::SemanticFlatRelationInput > semantic_inputs{
       adapter.make_input(ctx.root),
       adapter.make_input(successor),
    };
-   const mifrost::SemanticFlatRelationEncoderEngine engine(semantic_context);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(semantic_schema);
    const auto root_view = adapter.make_state_view(ctx.root);
    const auto successor_view = adapter.make_state_view(successor);
    const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
    BatchBuilder direct_builder;
-   engine.encode(root_view, empty_actions, direct_builder);
+   engine.encode(adapter.get_problem_context(), root_view, empty_actions, direct_builder);
    direct_builder.next_graph();
-   engine.encode(successor_view, empty_actions, direct_builder);
+   engine.encode(adapter.get_problem_context(), successor_view, empty_actions, direct_builder);
    direct_builder.next_graph();
 
    (void) action;
@@ -605,7 +636,7 @@ TEST_P(DirectViewEncoderTest, FlatViewSubgoalAndHistoryLanesMatchCompatibilityIn
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
    auto semantic_input = adapter.make_input(ctx.root);
    semantic_input.use_default_goals = false;
-   semantic_input.goals = adapter.get_task_context()->default_goals;
+   semantic_input.goals = adapter.get_problem_context()->default_goals;
    if(semantic_input.goals.empty()) {
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
@@ -622,7 +653,7 @@ TEST_P(DirectViewEncoderTest, FlatViewSubgoalAndHistoryLanesMatchCompatibilityIn
       mifrost::TargetSource::subgoals,
       mifrost::TargetSource::history,
    };
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
@@ -643,7 +674,13 @@ TEST_P(DirectViewEncoderTest, FlatViewSubgoalAndHistoryLanesMatchCompatibilityIn
    expect_encoding_equal(
       engine.encode(semantic_input),
       engine.encode(
-         state_view, goals, subgoal_layers, empty_actions, history, semantic_input.history_max_steps
+         adapter.get_problem_context(),
+         state_view,
+         goals,
+         subgoal_layers,
+         empty_actions,
+         history,
+         semantic_input.history_max_steps
       )
    );
 }
@@ -675,15 +712,15 @@ TEST_P(DirectViewEncoderTest, DirectViewsRemainValidForTheEncodeCall)
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   auto task_input_context = adapter.get_task_context();
+   auto schema_handle = adapter.get_schema_context();
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto action_views = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const mifrost::SemanticFlatRelationEncoderEngine engine(task_input_context);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(schema_handle);
 
-   task_input_context.reset();
-   EXPECT_NO_THROW((void) engine.encode(state_view, action_views));
+   schema_handle.reset();
+   EXPECT_NO_THROW((void) engine.encode(adapter.get_problem_context(), state_view, action_views));
 }
 
 INSTANTIATE_TEST_SUITE_P(

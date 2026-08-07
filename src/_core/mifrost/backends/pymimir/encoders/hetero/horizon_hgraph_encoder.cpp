@@ -121,7 +121,7 @@ HorizonHGraphEncoderEngine::HorizonHGraphEncoderEngine(
 
 SemanticTransitionDAG HorizonHGraphEncoderEngine::materialize_dag(
    const TransitionDAG& dag,
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const pymimir::hetero_bridge::Schema& schema,
    const pymimir::views::Context& view_context,
    const GoalInputs& goals
@@ -200,7 +200,7 @@ void HorizonHGraphEncoderEngine::encode(
       }
    }
 
-   auto context = make_task_context(root);
+   auto context = problem_context(root);
    const auto& view_context = this->view_context(root);
    auto semantic_dag = materialize_dag(dag, context, schema_, view_context, goals);
    semantic_horizon_->encode(semantic_dag, builder);

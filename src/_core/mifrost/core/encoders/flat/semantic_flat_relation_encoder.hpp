@@ -35,7 +35,7 @@ struct ViewPreparation;
 
 /*
  * The semantic record and key definitions (SemanticAtom, SemanticLiteral,
- * SemanticGroundAction, SemanticHistoryEntry, SemanticTaskContext,
+ * SemanticGroundAction, SemanticHistoryEntry, SemanticSchemaContext, SemanticProblemContext,
  * SemanticFlatRelationInput and their hash/ordering helpers) live in
  * core/semantic/records.hpp so that the View layer can describe borrowed inputs
  * without including this encoder header. They are re-exported here unchanged.
@@ -57,7 +57,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       Config config = {}
    );
    SemanticFlatRelationEncoderEngine(
-      std::shared_ptr< const SemanticTaskContext > task_context,
+      std::shared_ptr< const SemanticSchemaContext > schema,
       Config config = {}
    );
    SemanticFlatRelationEncoderEngine(const SemanticFlatRelationEncoderEngine&) = delete;
@@ -70,17 +70,36 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
 
    template < views::StateView State, views::GroundActionRange Actions >
-   [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions
+   ) const;
 
    template < views::StateView State, views::GroundActionRange Actions >
-   void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
+   void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions,
+      BatchBuilder& builder
+   ) const;
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-   [[nodiscard]] BatchBuilder::BatchEncoding
-   encode(const State& state, Goals&& goals, Actions&& actions) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Goals&& goals,
+      Actions&& actions
+   ) const;
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-   void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
+   void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Goals&& goals,
+      Actions&& actions,
+      BatchBuilder& builder
+   ) const;
 
    template <
       views::StateView State,
@@ -89,6 +108,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -104,6 +124,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -119,10 +140,17 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
     * The family owns which preparation its algorithm consumes; a caller that
     * needs to hold graphs (a batch, a stream) asks the engine rather than
     * picking a preparation helper itself.
+    *
+    * The problem the graph belongs to is passed in per call, not held by the
+    * engine: preparations from different problems of this domain may be mixed
+    * freely in one `encode_batch`.
     */
    template < views::StateView State, views::GroundActionRange Actions >
-   [[nodiscard]] canonical::detail::ViewPreparation
-   prepare(const State& state, Actions&& actions) const;
+   [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions
+   ) const;
 
    template <
       views::StateView State,
@@ -131,6 +159,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -154,6 +183,10 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
     * genuine cross-graph pass (target-name suppression and shared batch
     * constants), so appending graph by graph would silently diverge from
     * `encode_batch(inputs)`.
+    *
+    * The preparations need not come from one problem: each is closed with
+    * `BatchBuilder::next_graph()` and carries its own object table, so only
+    * their schemas have to agree with this engine's.
     */
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       std::span< const canonical::detail::ViewPreparation* const > preparations
@@ -161,7 +194,7 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
    [[nodiscard]] const Config& get_config() const;
-   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticSchemaContext >& get_schema_context() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
    [[nodiscard]] const std::vector< std::string >& get_relation_names() const;

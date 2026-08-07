@@ -38,9 +38,9 @@ struct SemanticHorizonHGraphEncoderEngine::Impl {
       hgraph.configure_horizon(config);
    }
 
-   Impl(std::shared_ptr< const SemanticTaskContext > task_context, Config encoder_config)
+   Impl(std::shared_ptr< const SemanticSchemaContext > schema, Config encoder_config)
        : config(normalize_horizon_config(std::move(encoder_config))),
-         hgraph(std::move(task_context), base_config(config))
+         hgraph(std::move(schema), base_config(config))
    {
       hgraph.configure_horizon(config);
    }
@@ -56,10 +56,10 @@ SemanticHorizonHGraphEncoderEngine::SemanticHorizonHGraphEncoderEngine(
 }
 
 SemanticHorizonHGraphEncoderEngine::SemanticHorizonHGraphEncoderEngine(
-   std::shared_ptr< const SemanticTaskContext > task_context,
+   std::shared_ptr< const SemanticSchemaContext > schema,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
+    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config)))
 {
 }
 

@@ -54,7 +54,7 @@ class MIFROST_API SemanticFlatHorizonEncoderEngine {
       Config config = {}
    );
    SemanticFlatHorizonEncoderEngine(
-      std::shared_ptr< const SemanticTaskContext > task_context,
+      std::shared_ptr< const SemanticSchemaContext > schema,
       Config config = {}
    );
    SemanticFlatHorizonEncoderEngine(const SemanticFlatHorizonEncoderEngine&) = delete;

@@ -52,7 +52,7 @@ class MIFROST_API HorizonHGraphEncoderEngine: public HGraphEncoderEngine {
    static SemanticHorizonHGraphEncoderConfig semantic_config(const Config& config);
    static SemanticTransitionDAG materialize_dag(
       const TransitionDAG& dag,
-      const std::shared_ptr< const SemanticTaskContext >& context,
+      const std::shared_ptr< const SemanticProblemContext >& context,
       const pymimir::hetero_bridge::Schema& schema,
       const pymimir::views::Context& view_context,
       const GoalInputs& goals

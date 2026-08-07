@@ -97,7 +97,8 @@ HGraphEncoderEngine::HGraphEncoderEngine(
             std::move(semantic_config_value)
          )
       ),
-      relation_dict_(relation_dict(domain, config_))
+      relation_dict_(relation_dict(domain, config_)),
+      problems_(domain, pymimir::build_semantic_schema_context(domain))
 {
 }
 
@@ -117,39 +118,32 @@ HGraphEncoderEngine::HGraphEncoderEngine(
             std::move(semantic_config_value)
          )
       ),
-      relation_dict_(relation_dict(domain_, config_))
+      relation_dict_(relation_dict(domain_, config_)),
+      problems_(domain_, pymimir::build_semantic_schema_context(domain_))
 {
 }
 
 HGraphEncoderEngine::~HGraphEncoderEngine() = default;
 
-std::shared_ptr< const SemanticTaskContext > HGraphEncoderEngine::make_task_context(
+std::shared_ptr< const SemanticProblemContext > HGraphEncoderEngine::problem_context(
    const mimir::search::State& state
 ) const
 {
-   ensure_problem(state);
-   return problem_adapter_->get_task_context();
+   return problems_.problem_context(state);
 }
 
-void HGraphEncoderEngine::ensure_problem(const mimir::search::State& state) const
+pymimir::SemanticProblemAdapter& HGraphEncoderEngine::problem_adapter(
+   const mimir::search::State& state
+) const
 {
-   const auto* problem = &state.get_problem();
-   if(problem_ == problem) {
-      return;
-   }
-   problem_ = problem;
-   problem_adapter_ = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
-   semantic_ = std::make_unique< SemanticHGraphEncoderEngine >(
-      problem_adapter_->get_task_context(), semantic_config(config_)
-   );
+   return problems_.adapter_for(state);
 }
 
 const pymimir::views::Context& HGraphEncoderEngine::view_context(
    const mimir::search::State& state
 ) const
 {
-   ensure_problem(state);
-   return problem_adapter_->get_view_context();
+   return problem_adapter(state).get_view_context();
 }
 
 SemanticFlatRelationInput HGraphEncoderEngine::make_input(
@@ -160,7 +154,7 @@ SemanticFlatRelationInput HGraphEncoderEngine::make_input(
    std::optional< int > history_max_steps
 ) const
 {
-   auto input = pymimir::hetero_bridge::input(make_task_context(state), state, goals, actions);
+   auto input = pymimir::hetero_bridge::input(problem_context(state), state, goals, actions);
    if(not history.empty()) {
       pymimir::hetero_bridge::add_history(input, history, view_context(state));
    }
@@ -172,8 +166,7 @@ SemanticFlatRelationInput HGraphEncoderEngine::make_default_input(
    const mimir::search::State& state
 ) const
 {
-   ensure_problem(state);
-   return problem_adapter_->make_input(state);
+   return problem_adapter(state).make_input(state);
 }
 
 void HGraphEncoderEngine::encode_semantic(
@@ -202,16 +195,16 @@ void HGraphEncoderEngine::encode_impl(
    BatchBuilder& builder
 ) const
 {
-   ensure_problem(state);
-   const auto state_view = problem_adapter_->make_state_view(state);
-   const auto action_views = problem_adapter_->make_action_views(actions);
+   auto& adapter = problem_adapter(state);
+   const auto problem_context_value = adapter.get_problem_context();
+   const auto state_view = adapter.make_state_view(state);
+   const auto action_views = adapter.make_action_views(actions);
    const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
-   const auto goal_views = problem_adapter_->make_goal_views(goals);
-   const auto history_view = pymimir::make_history_view(
-      history, problem_adapter_->get_view_context()
-   );
+   const auto goal_views = adapter.make_goal_views(goals);
+   const auto history_view = pymimir::make_history_view(history, adapter.get_view_context());
    if(same_schema(state_schema, schema_)) {
       semantic_->encode(
+         problem_context_value,
          state_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -222,10 +215,16 @@ void HGraphEncoderEngine::encode_impl(
       );
       return;
    }
+   // A state from a *different domain* than this encoder was built for. Its
+   // relation universe differs, so it needs its own engine -- but that is the
+   // only case left; a different problem of the same domain goes through the
+   // engine above. The engine is built from the adapter's schema so that its
+   // predicate/action ids are the ones the adapter's views materialize against.
    SemanticHGraphEncoderEngine compatible_engine(
-      problem_adapter_->get_task_context(), semantic_config(config_)
+      adapter.get_schema_context(), semantic_config(config_)
    );
    compatible_engine.encode(
+      problem_context_value,
       state_view,
       goal_views.goals_view(),
       goal_views.subgoal_layers_view(),
@@ -238,13 +237,26 @@ void HGraphEncoderEngine::encode_impl(
 
 void HGraphEncoderEngine::encode(const mimir::search::State& state, BatchBuilder& builder)
 {
-   ensure_problem(state);
-   const auto state_view = problem_adapter_->make_state_view(state);
-   const auto action_views = problem_adapter_->make_action_views(
+   auto& adapter = problem_adapter(state);
+   const auto state_view = adapter.make_state_view(state);
+   const auto action_views = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const auto goal_views = problem_adapter_->make_default_goal_views();
-   semantic_->encode(state_view, goal_views.goals_view(), action_views, builder);
+   const auto goal_views = adapter.make_default_goal_views();
+   const auto state_schema = pymimir::hetero_bridge::schema(*state.get_problem().get_domain());
+   if(same_schema(state_schema, schema_)) {
+      semantic_->encode(
+         adapter.get_problem_context(), state_view, goal_views.goals_view(), action_views, builder
+      );
+      return;
+   }
+   // See `encode_impl`: a state from another *domain* still needs its own engine.
+   SemanticHGraphEncoderEngine compatible_engine(
+      adapter.get_schema_context(), semantic_config(config_)
+   );
+   compatible_engine.encode(
+      adapter.get_problem_context(), state_view, goal_views.goals_view(), action_views, builder
+   );
 }
 
 void HGraphEncoderEngine::encode(

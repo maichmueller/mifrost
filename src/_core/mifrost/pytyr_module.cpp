@@ -254,8 +254,14 @@ class DirectEncoder {
   public:
    using Preparation = canonical::detail::ViewPreparation;
 
+   /**
+    * The engine is built from the adapter's *schema*, not its problem, so it is
+    * reusable across every task of that domain. This facade still holds one
+    * adapter, and therefore still encodes one task; what it no longer does is
+    * bake that task into the engine.
+    */
    DirectEncoder(const SemanticPlanningTaskAdapter& adapter, typename Engine::Config config)
-       : adapter_(&adapter), engine_(adapter.get_task_context(), std::move(config))
+       : adapter_(&adapter), engine_(adapter.get_schema_context(), std::move(config))
    {
    }
 
@@ -396,20 +402,22 @@ class DirectEncoder {
       const auto action_views = adapter_->make_action_views(actions);
       const auto lanes = expand_lanes(*adapter_, goals, subgoal_layers, history);
 
-      const semantic::LiteralsView goals_view{
-         std::span{lanes.explicit_goals ? lanes.goals : adapter_->get_task_context()->default_goals}
-      };
+      const semantic::LiteralsView goals_view{std::span{
+         lanes.explicit_goals ? lanes.goals : adapter_->get_problem_context()->default_goals
+      }};
       const semantic::SubgoalLayersView layers_view{std::span{lanes.layers}};
       const semantic::HistoryView history_view{std::span{lanes.history}};
 
       // No explicit goals and no other optional lane: let the engine apply its
       // own default-goal handling rather than restating it here.
+      const auto problem_context = adapter_->get_problem_context();
       if(lanes.only_defaults()) {
-         return call(state_view, action_views);
+         return call(problem_context, state_view, action_views);
       }
       // Color has no history lane at all; every other family takes one.
       if constexpr(requires {
                       call(
+                         problem_context,
                          state_view,
                          goals_view,
                          layers_view,
@@ -419,7 +427,13 @@ class DirectEncoder {
                       );
                    }) {
          return call(
-            state_view, goals_view, layers_view, action_views, history_view, history_max_steps
+            problem_context,
+            state_view,
+            goals_view,
+            layers_view,
+            action_views,
+            history_view,
+            history_max_steps
          );
       } else {
          if(not lanes.history.empty()) {
@@ -427,7 +441,7 @@ class DirectEncoder {
          }
          (void) history_view;
          (void) history_max_steps;
-         return call(state_view, goals_view, layers_view, action_views);
+         return call(problem_context, state_view, goals_view, layers_view, action_views);
       }
    }
 
@@ -451,7 +465,7 @@ class DirectSuccessorEncoder {
       const SemanticPlanningTaskAdapter& adapter,
       SemanticSuccessorHGraphEncoderConfig config
    )
-       : adapter_(&adapter), engine_(adapter.get_task_context(), std::move(config))
+       : adapter_(&adapter), engine_(adapter.get_schema_context(), std::move(config))
    {
    }
 
@@ -477,15 +491,24 @@ class DirectSuccessorEncoder {
       const std::vector< tyr::formalism::planning::GroundActionView > no_actions;
       const auto action_views = adapter_->make_action_views(no_actions);
 
+      const auto problem_context = adapter_->get_problem_context();
       if(lanes.only_defaults()) {
-         return engine_.encode(current_view, action_views, successor_view, action_views);
+         return engine_.encode(
+            problem_context, current_view, action_views, successor_view, action_views
+         );
       }
-      const semantic::LiteralsView goals_view{
-         std::span{lanes.explicit_goals ? lanes.goals : adapter_->get_task_context()->default_goals}
-      };
+      const semantic::LiteralsView goals_view{std::span{
+         lanes.explicit_goals ? lanes.goals : adapter_->get_problem_context()->default_goals
+      }};
       const semantic::SubgoalLayersView layers_view{std::span{lanes.layers}};
       return engine_.encode(
-         current_view, goals_view, layers_view, action_views, successor_view, action_views
+         problem_context,
+         current_view,
+         goals_view,
+         layers_view,
+         action_views,
+         successor_view,
+         action_views
       );
    }
 
@@ -501,20 +524,23 @@ class DirectSuccessorEncoder {
       const std::vector< tyr::formalism::planning::GroundActionView > no_actions;
       const auto action_views = adapter_->make_action_views(no_actions);
 
+      const auto problem_context = adapter_->get_problem_context();
       if(lanes.only_defaults()) {
-         return engine_.prepare_current(state_view, action_views);
+         return engine_.prepare_current(problem_context, state_view, action_views);
       }
-      const semantic::LiteralsView goals_view{
-         std::span{lanes.explicit_goals ? lanes.goals : adapter_->get_task_context()->default_goals}
-      };
+      const semantic::LiteralsView goals_view{std::span{
+         lanes.explicit_goals ? lanes.goals : adapter_->get_problem_context()->default_goals
+      }};
       const semantic::SubgoalLayersView layers_view{std::span{lanes.layers}};
-      return engine_.prepare_current(state_view, goals_view, layers_view, action_views);
+      return engine_.prepare_current(
+         problem_context, state_view, goals_view, layers_view, action_views
+      );
    }
 
    template < typename State >
    [[nodiscard]] Preparation prepare_successor(const State& state) const
    {
-      return engine_.prepare_successor(adapter_->make_view(state));
+      return engine_.prepare_successor(adapter_->get_problem_context(), adapter_->make_view(state));
    }
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode_prepared(
@@ -699,7 +725,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticFlatRelationEncoderEngine(self.get_task_context(), *config),
+               SemanticFlatRelationEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::engine_name
             );
          },
@@ -715,7 +741,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticColorEncoderEngine(self.get_task_context(), *config),
+               SemanticColorEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::color_engine_name
             );
          },
@@ -731,7 +757,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticHGraphEncoderEngine(self.get_task_context(), *config),
+               SemanticHGraphEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::hgraph_engine_name
             );
          },
@@ -747,7 +773,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticSuccessorHGraphEncoderEngine(self.get_task_context(), *config),
+               SemanticSuccessorHGraphEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::successor_hgraph_engine_name
             );
          },
@@ -763,7 +789,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticHorizonHGraphEncoderEngine(self.get_task_context(), *config),
+               SemanticHorizonHGraphEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::horizon_hgraph_engine_name
             );
          },
@@ -779,7 +805,7 @@ NB_MODULE(_pytyr_adapter, m)
                throw nb::python_error();
             }
             return owned_capsule(
-               SemanticFlatHorizonEncoderEngine(self.get_task_context(), *config),
+               SemanticFlatHorizonEncoderEngine(self.get_schema_context(), *config),
                capsule_bridge::flat_horizon_engine_name
             );
          },

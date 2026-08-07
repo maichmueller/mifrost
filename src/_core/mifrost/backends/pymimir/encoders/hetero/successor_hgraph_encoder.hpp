@@ -47,7 +47,6 @@ class MIFROST_API SuccessorHGraphEncoderEngine: public HGraphEncoderEngine {
    static SemanticSuccessorHGraphEncoderConfig semantic_config(const Config& config);
    Config successor_config_;
    std::unique_ptr< SemanticSuccessorHGraphEncoderEngine > semantic_successor_;
-   std::shared_ptr< const SemanticTaskContext > semantic_task_context_;
    std::map< std::string, int > semantic_relation_arities_;
 };
 

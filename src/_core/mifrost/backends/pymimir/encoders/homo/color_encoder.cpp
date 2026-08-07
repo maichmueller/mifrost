@@ -36,7 +36,8 @@ ColorEncoderEngine::ColorEncoderEngine(const mimir::formalism::DomainImpl& domai
             pymimir::make_semantic_predicates(domain),
             semantic_config(config_)
          )
-      )
+      ),
+      problems_(domain, pymimir::build_semantic_schema_context(domain))
 {
 }
 
@@ -54,32 +55,22 @@ ColorEncoderEngine::ColorEncoderEngine(mimir::formalism::Domain domain, Config c
             pymimir::make_semantic_predicates(domain_),
             semantic_config(config_)
          )
-      )
+      ),
+      problems_(domain_, pymimir::build_semantic_schema_context(domain_))
 {
-}
-
-void ColorEncoderEngine::ensure_problem(const mimir::search::State& state)
-{
-   const auto* problem = &state.get_problem();
-   if(problem_ == problem) {
-      return;
-   }
-   problem_ = problem;
-   problem_adapter_ = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
-   semantic_engine_ = std::make_unique< SemanticColorEncoderEngine >(
-      problem_adapter_->get_task_context(), semantic_config(config_)
-   );
 }
 
 void ColorEncoderEngine::encode_state_impl(const mimir::search::State& state, BatchBuilder& builder)
 {
-   ensure_problem(state);
-   const auto state_view = problem_adapter_->make_state_view(state);
-   const auto actions = problem_adapter_->make_action_views(
+   auto& adapter = problems_.adapter_for(state);
+   const auto state_view = adapter.make_state_view(state);
+   const auto actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const auto goal_views = problem_adapter_->make_default_goal_views();
-   semantic_engine_->encode(state_view, goal_views.goals_view(), actions, builder);
+   const auto goal_views = adapter.make_default_goal_views();
+   semantic_engine_->encode(
+      adapter.get_problem_context(), state_view, goal_views.goals_view(), actions, builder
+   );
 }
 
 void ColorEncoderEngine::encode_impl(
@@ -92,12 +83,17 @@ void ColorEncoderEngine::encode_impl(
    if(not actions.empty()) {
       throw std::invalid_argument("ColorEncoderEngine does not support action encoding");
    }
-   ensure_problem(state);
-   const auto state_view = problem_adapter_->make_state_view(state);
-   const auto goal_views = problem_adapter_->make_goal_views(goals);
-   const auto action_views = problem_adapter_->make_action_views(actions);
+   auto& adapter = problems_.adapter_for(state);
+   const auto state_view = adapter.make_state_view(state);
+   const auto goal_views = adapter.make_goal_views(goals);
+   const auto action_views = adapter.make_action_views(actions);
    semantic_engine_->encode(
-      state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), action_views, builder
+      adapter.get_problem_context(),
+      state_view,
+      goal_views.goals_view(),
+      goal_views.subgoal_layers_view(),
+      action_views,
+      builder
    );
 }
 

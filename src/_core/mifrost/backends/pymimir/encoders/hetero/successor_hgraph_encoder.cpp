@@ -107,25 +107,19 @@ void SuccessorHGraphEncoderEngine::encode(
          "SuccessorHGraphEncoder states must belong to the same planning problem"
       );
    }
-   ensure_problem(current);
-   const auto task_context = problem_adapter_->get_task_context();
-   if(semantic_task_context_ != task_context) {
-      semantic_successor_ = std::make_unique< SemanticSuccessorHGraphEncoderEngine >(
-         task_context, semantic_config(successor_config_)
-      );
-      semantic_task_context_ = task_context;
-      if(not semantic_relation_arities_.empty()) {
-         semantic_successor_->update_relations(semantic_relation_arities_);
-      }
-   }
-
-   const auto current_view = problem_adapter_->make_state_view(current);
-   const auto successor_view = problem_adapter_->make_state_view(successor);
-   const auto empty_actions = problem_adapter_->make_action_views(
+   // The engine is built from the domain and stays put: it is the problem
+   // context that changes per transition, and `update_relations()` therefore
+   // can no longer be discarded by a rebuild.
+   auto& adapter = problem_adapter(current);
+   const auto problem_context_value = adapter.get_problem_context();
+   const auto current_view = adapter.make_state_view(current);
+   const auto successor_view = adapter.make_state_view(successor);
+   const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const auto goal_views = problem_adapter_->make_goal_views(goals);
+   const auto goal_views = adapter.make_goal_views(goals);
    semantic_successor_->encode(
+      problem_context_value,
       current_view,
       goal_views.goals_view(),
       goal_views.subgoal_layers_view(),

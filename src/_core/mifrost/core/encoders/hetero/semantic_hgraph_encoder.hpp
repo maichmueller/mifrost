@@ -94,7 +94,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       Config config = {}
    );
    SemanticHGraphEncoderEngine(
-      std::shared_ptr< const SemanticTaskContext > task_context,
+      std::shared_ptr< const SemanticSchemaContext > schema,
       Config config = {}
    );
    SemanticHGraphEncoderEngine(const SemanticHGraphEncoderEngine&) = delete;
@@ -105,11 +105,19 @@ class MIFROST_API SemanticHGraphEncoderEngine {
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
    template < views::StateView State, views::GroundActionRange Actions >
-   [[nodiscard]] BatchBuilder::BatchEncoding encode(const State& state, Actions&& actions) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions
+   ) const;
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-   [[nodiscard]] BatchBuilder::BatchEncoding
-   encode(const State& state, Goals&& goals, Actions&& actions) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Goals&& goals,
+      Actions&& actions
+   ) const;
 
    template <
       views::StateView State,
@@ -118,6 +126,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -128,10 +137,21 @@ class MIFROST_API SemanticHGraphEncoderEngine {
 
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
    template < views::StateView State, views::GroundActionRange Actions >
-   void encode(const State& state, Actions&& actions, BatchBuilder& builder) const;
+   void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions,
+      BatchBuilder& builder
+   ) const;
 
    template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-   void encode(const State& state, Goals&& goals, Actions&& actions, BatchBuilder& builder) const;
+   void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Goals&& goals,
+      Actions&& actions,
+      BatchBuilder& builder
+   ) const;
 
    template <
       views::StateView State,
@@ -140,6 +160,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -154,10 +175,17 @@ class MIFROST_API SemanticHGraphEncoderEngine {
     * The family owns which preparation its algorithm consumes; a caller that
     * needs to hold graphs (a batch, a stream) asks the engine rather than
     * picking a preparation helper itself.
+    *
+    * The problem the graph belongs to is passed in per call, not held by the
+    * engine: preparations from different problems of this domain may be mixed
+    * freely in one `encode_batch`.
     */
    template < views::StateView State, views::GroundActionRange Actions >
-   [[nodiscard]] canonical::detail::ViewPreparation
-   prepare(const State& state, Actions&& actions) const;
+   [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions
+   ) const;
 
    template <
       views::StateView State,
@@ -166,6 +194,7 @@ class MIFROST_API SemanticHGraphEncoderEngine {
       views::GroundActionRange Actions,
       views::HistoryRange History >
    [[nodiscard]] canonical::detail::ViewPreparation prepare(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -182,13 +211,16 @@ class MIFROST_API SemanticHGraphEncoderEngine {
     *
     * A `ViewPreparation` owns its compact pools and borrows nothing from the
     * backend state it was built from, so a caller may build one per state and
-    * hold them until the batch is flushed.
+    * hold them until the batch is flushed. The preparations need not come from
+    * one problem: each is closed with `BatchBuilder::next_graph()` and carries
+    * its own object table, so only their schemas have to agree with this
+    * engine's.
     */
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       std::span< const canonical::detail::ViewPreparation* const > preparations
    ) const;
 
-   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticSchemaContext >& get_schema_context() const;
    [[nodiscard]] const Config& get_config() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
@@ -237,11 +269,14 @@ class MIFROST_API SemanticHGraphEncoderEngine {
 namespace mifrost {
 
 template < views::StateView State, views::GroundActionRange Actions >
-canonical::detail::ViewPreparation
-SemanticHGraphEncoderEngine::prepare(const State& state, Actions&& actions) const
+canonical::detail::ViewPreparation SemanticHGraphEncoderEngine::prepare(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Actions&& actions
+) const
 {
    return canonical::detail::make_hgraph_view_preparation(
-      get_task_context(), state, std::forward< Actions >(actions)
+      problem_context, state, std::forward< Actions >(actions)
    );
 }
 
@@ -252,6 +287,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 canonical::detail::ViewPreparation SemanticHGraphEncoderEngine::prepare(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -261,7 +297,7 @@ canonical::detail::ViewPreparation SemanticHGraphEncoderEngine::prepare(
 ) const
 {
    return canonical::detail::make_hgraph_view_preparation(
-      get_task_context(),
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -272,40 +308,55 @@ canonical::detail::ViewPreparation SemanticHGraphEncoderEngine::prepare(
 }
 
 template < views::StateView State, views::GroundActionRange Actions >
-BatchBuilder::BatchEncoding
-SemanticHGraphEncoderEngine::encode(const State& state, Actions&& actions) const
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Actions&& actions
+) const
 {
    BatchBuilder builder;
-   encode(state, std::forward< Actions >(actions), builder);
+   encode(problem_context, state, std::forward< Actions >(actions), builder);
    builder.next_graph();
    return builder.build();
 }
 
 template < views::StateView State, views::GroundActionRange Actions >
 void SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Actions&& actions,
    BatchBuilder& builder
 ) const
 {
    auto preparation = canonical::detail::make_hgraph_view_preparation(
-      get_task_context(), state, std::forward< Actions >(actions)
+      problem_context, state, std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
-BatchBuilder::BatchEncoding
-SemanticHGraphEncoderEngine::encode(const State& state, Goals&& goals, Actions&& actions) const
+BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Goals&& goals,
+   Actions&& actions
+) const
 {
    BatchBuilder builder;
-   encode(state, std::forward< Goals >(goals), std::forward< Actions >(actions), builder);
+   encode(
+      problem_context,
+      state,
+      std::forward< Goals >(goals),
+      std::forward< Actions >(actions),
+      builder
+   );
    builder.next_graph();
    return builder.build();
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 void SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    Actions&& actions,
@@ -313,7 +364,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    auto preparation = canonical::detail::make_hgraph_view_preparation(
-      get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+      problem_context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
 }
@@ -325,6 +376,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -335,6 +387,7 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode(
 {
    BatchBuilder builder;
    encode(
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -354,6 +407,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 void SemanticHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -364,7 +418,7 @@ void SemanticHGraphEncoderEngine::encode(
 ) const
 {
    auto preparation = canonical::detail::make_hgraph_view_preparation(
-      get_task_context(),
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),

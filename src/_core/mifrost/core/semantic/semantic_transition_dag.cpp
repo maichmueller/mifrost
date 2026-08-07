@@ -206,12 +206,12 @@ SemanticTransitionDAG::SemanticTransitionDAG(
             "SemanticTransitionDAG nodes require identical ordered object tables"
          );
       }
-      if(root_state.task_context and node.state.task_context != root_state.task_context) {
+      if(root_state.problem_context and node.state.problem_context != root_state.problem_context) {
          throw std::invalid_argument(
-            "SemanticTransitionDAG context-backed nodes must share one task context"
+            "SemanticTransitionDAG context-backed nodes must share one problem context"
          );
       }
-      if(not root_state.task_context and node.state.task_context) {
+      if(not root_state.problem_context and node.state.problem_context) {
          throw std::invalid_argument(
             "SemanticTransitionDAG cannot mix legacy and context-backed state inputs"
          );

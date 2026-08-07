@@ -50,7 +50,9 @@ class MIFROST_API SemanticPlanningTaskAdapter {
       bool positive
    ) const;
 
-   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > get_task_context() const;
+   [[nodiscard]] std::shared_ptr< const SemanticProblemContext > get_problem_context() const;
+   /** The domain-level schema, shared by every task of this domain. */
+   [[nodiscard]] std::shared_ptr< const SemanticSchemaContext > get_schema_context() const;
    [[nodiscard]] const views::Context& get_view_context() const noexcept;
    [[nodiscard]] views::
       StateView< tyr::planning::StateView< tyr::planning::LiftedTag >, tyr::planning::LiftedTag >

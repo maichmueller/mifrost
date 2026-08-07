@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "mifrost/backends/pymimir/encoders/hetero/semantic_hgraph_view_bridge.hpp"
+#include "mifrost/backends/pymimir/problem_adapter_cache.hpp"
 #include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/input_handling/batch_input_parser.hpp"
@@ -69,9 +70,11 @@ std::vector< SemanticActionSpec > semantic_actions(const mimir::formalism::Domai
    return result;
 }
 
-std::shared_ptr< SemanticTaskContext > schema_context(const mimir::formalism::DomainImpl& domain)
+std::shared_ptr< const SemanticSchemaContext > schema_context(
+   const mimir::formalism::DomainImpl& domain
+)
 {
-   auto result = std::make_shared< SemanticTaskContext >();
+   auto result = std::make_shared< SemanticSchemaContext >();
    result->predicates = pymimir::make_semantic_predicates(domain);
    result->actions = semantic_actions(domain);
    return result;
@@ -95,7 +98,7 @@ SemanticTransitionDAG materialize_dag(
    std::vector< SemanticTransitionDAG::Node > nodes;
    nodes.reserve(dag.nodes().size());
    const auto& view_context = adapter.get_view_context();
-   const auto context = adapter.get_task_context();
+   const auto context = adapter.get_problem_context();
    for(const auto& node : dag.nodes()) {
       SemanticTransitionDAG::Node semantic_node;
       // The horizon DAG is an owning semantic snapshot by design, so the root
@@ -136,8 +139,8 @@ SemanticTransitionDAG materialize_dag(
       edges.emplace_back(parent, child);
    }
    return SemanticTransitionDAG{
-      context->predicates,
-      context->actions,
+      context->predicates(),
+      context->actions(),
       std::move(nodes),
       std::move(edges),
    };
@@ -164,48 +167,37 @@ void fill_relation_dict(
 struct FlatHorizonEncoderEngine::SemanticImpl {
    Config config;
    SemanticFlatHorizonEncoderConfig semantic_config;
+   /// Built once from the domain schema. The relation dict follows from it and
+   /// is therefore also settled once: it never depended on the problem.
    std::unique_ptr< SemanticFlatHorizonEncoderEngine > encoder;
-   std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter;
+   /// Everything that *is* per instance. One DAG is rooted in one problem, but
+   /// successive DAGs need not be, so this is a cache rather than a binding.
+   pymimir::ProblemAdapterCache problems;
    RelationDict relation_dict;
-   const mimir::formalism::ProblemImpl* problem = nullptr;
 
    SemanticImpl(const mimir::formalism::DomainImpl& domain, Config value)
-       : config(std::move(value)),
-         semantic_config(::mifrost::semantic_config(config)),
-         encoder(
-            std::make_unique< SemanticFlatHorizonEncoderEngine >(
-               schema_context(domain),
-               semantic_config
-            )
-         )
+       : SemanticImpl(domain, schema_context(domain), std::move(value))
    {
-      fill_relation_dict(relation_dict, *encoder, config);
-   }
-
-   void ensure_problem(const mimir::search::State& state)
-   {
-      const auto* value = &state.get_problem();
-      if(problem != nullptr) {
-         if(problem != value) {
-            throw std::invalid_argument(
-               "FlatHorizonEncoder state belongs to a different planning problem"
-            );
-         }
-         return;
-      }
-      problem = value;
-      problem_adapter = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
-      encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(
-         problem_adapter->get_task_context(), semantic_config
-      );
-      fill_relation_dict(relation_dict, *encoder, config);
    }
 
    SemanticTransitionDAG
    make_dag(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
    {
-      ensure_problem(root);
-      return materialize_dag(dag, root, goals, *problem_adapter, config.max_goal_level);
+      return materialize_dag(dag, root, goals, problems.adapter_for(root), config.max_goal_level);
+   }
+
+  private:
+   SemanticImpl(
+      const mimir::formalism::DomainImpl& domain,
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config value
+   )
+       : config(std::move(value)),
+         semantic_config(::mifrost::semantic_config(config)),
+         encoder(std::make_unique< SemanticFlatHorizonEncoderEngine >(schema, semantic_config)),
+         problems(domain, std::move(schema))
+   {
+      fill_relation_dict(relation_dict, *encoder, config);
    }
 };
 

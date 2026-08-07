@@ -208,7 +208,7 @@ TEST(ViewPreparationContract, StateLanesAreRequestedExactlyOnce)
    std::vector< SemanticAtom > fluent{make_atom(1), make_atom(2), make_atom(3)};
    std::vector< SemanticAtom > derived{make_atom(4), make_atom(5)};
    const SinglePassState state{std::span{fluent}, std::span{derived}};
-   const auto context = std::make_shared< const mifrost::SemanticTaskContext >();
+   const auto context = std::make_shared< const mifrost::SemanticProblemContext >();
 
    const auto prepared = mifrost::canonical::detail::make_state_only_view_preparation(
       context, state

@@ -14,6 +14,7 @@
 
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_dict.hpp"
+#include "mifrost/backends/pymimir/problem_adapter_cache.hpp"
 #include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
@@ -104,7 +105,7 @@ class MIFROST_API HGraphEncoderEngine {
    [[nodiscard]] const pymimir::hetero_bridge::Schema& schema() const { return schema_; }
    [[nodiscard]] SemanticHGraphEncoderEngine& semantic_engine() { return *semantic_; }
    [[nodiscard]] const SemanticHGraphEncoderEngine& semantic_engine() const { return *semantic_; }
-   [[nodiscard]] std::shared_ptr< const SemanticTaskContext > make_task_context(
+   [[nodiscard]] std::shared_ptr< const SemanticProblemContext > problem_context(
       const mimir::search::State& state
    ) const;
    [[nodiscard]] const pymimir::views::Context& view_context(
@@ -133,16 +134,20 @@ class MIFROST_API HGraphEncoderEngine {
       std::optional< int > history_max_steps,
       BatchBuilder& builder
    ) const;
-   void ensure_problem(const mimir::search::State& state) const;
+   [[nodiscard]] pymimir::SemanticProblemAdapter& problem_adapter(
+      const mimir::search::State& state
+   ) const;
 
    Config config_;
    mimir::formalism::Domain domain_holder_;
    const mimir::formalism::DomainImpl& domain_;
    pymimir::hetero_bridge::Schema schema_;
-   mutable std::unique_ptr< SemanticHGraphEncoderEngine > semantic_;
+   /// Built once from the domain and never replaced. `update_relations()` is
+   /// applied to this engine, so a state from another problem can no longer
+   /// silently discard it by triggering a rebuild.
+   std::unique_ptr< SemanticHGraphEncoderEngine > semantic_;
    RelationDict relation_dict_;
-   mutable std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter_;
-   mutable const mimir::formalism::ProblemImpl* problem_ = nullptr;
+   pymimir::ProblemAdapterCache problems_;
 };
 
 BOOST_DESCRIBE_STRUCT(

@@ -14,14 +14,14 @@
 namespace mifrost {
 namespace {
 
-const std::shared_ptr< const SemanticTaskContext >& require_task_context(
-   const std::shared_ptr< const SemanticTaskContext >& task_context
+const std::shared_ptr< const SemanticSchemaContext >& require_schema_context(
+   const std::shared_ptr< const SemanticSchemaContext >& schema
 )
 {
-   if(not task_context) {
-      throw std::invalid_argument("Semantic color task context must not be null");
+   if(not schema) {
+      throw std::invalid_argument("Semantic color schema context must not be null");
    }
-   return task_context;
+   return schema;
 }
 
 constexpr std::array< std::string_view, 4 > kGoalSuffixes = {"[g]", "[sg]", "[ssg]", "[sssg]"};
@@ -279,8 +279,8 @@ SemanticColorEncoderEngine::SemanticColorEncoderEngine(
    SemanticColorEncoderConfig config
 )
     : SemanticColorEncoderEngine(
-         std::make_shared< SemanticTaskContext >(
-            SemanticTaskContext{.predicates = std::move(predicates)}
+         std::make_shared< SemanticSchemaContext >(
+            SemanticSchemaContext{.predicates = std::move(predicates)}
          ),
          config
       )
@@ -288,11 +288,11 @@ SemanticColorEncoderEngine::SemanticColorEncoderEngine(
 }
 
 SemanticColorEncoderEngine::SemanticColorEncoderEngine(
-   std::shared_ptr< const SemanticTaskContext > task_context,
+   std::shared_ptr< const SemanticSchemaContext > schema,
    SemanticColorEncoderConfig config
 )
-    : task_context_(require_task_context(task_context)),
-      predicates_(task_context_->predicates),
+    : schema_context_(require_schema_context(schema)),
+      predicates_(schema_context_->predicates),
       config_(config)
 {
 }
@@ -506,11 +506,9 @@ BatchBuilder::BatchEncoding SemanticColorEncoderEngine::encode_batch(
       if(preparation == nullptr) {
          throw std::invalid_argument("semantic color batch preparations must not be null");
       }
-      if(preparation->task_context != task_context_) {
-         throw std::invalid_argument(
-            "semantic color batch preparations must come from this engine's task context"
-         );
-      }
+      require_semantic_schema_compatible(
+         preparation->problem_context, schema_context_, "semantic color batch preparation"
+      );
       encode_view_preparation(*preparation, builder);
       builder.next_graph();
    }

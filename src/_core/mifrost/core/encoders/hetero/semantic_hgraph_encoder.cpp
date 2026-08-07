@@ -24,14 +24,14 @@
 namespace mifrost {
 namespace {
 
-const std::shared_ptr< const SemanticTaskContext >& require_task_context(
-   const std::shared_ptr< const SemanticTaskContext >& task_context
+const std::shared_ptr< const SemanticSchemaContext >& require_schema_context(
+   const std::shared_ptr< const SemanticSchemaContext >& schema
 )
 {
-   if(not task_context) {
-      throw std::invalid_argument("Semantic HGraph task context must not be null");
+   if(not schema) {
+      throw std::invalid_argument("Semantic HGraph schema context must not be null");
    }
-   return task_context;
+   return schema;
 }
 
 constexpr std::array< SemanticPredicateCategory, 3 > kCategoryOrder = {
@@ -335,7 +335,7 @@ struct SemanticHGraphEncoderEngine::Impl {
       int64_t next_target_index = 0;
    };
 
-   std::shared_ptr< const SemanticTaskContext > task_context;
+   std::shared_ptr< const SemanticSchemaContext > schema_context;
    const std::vector< SemanticPredicateSpec >& predicates;
    const std::vector< SemanticActionSpec >& actions;
    Config config;
@@ -380,7 +380,7 @@ struct SemanticHGraphEncoderEngine::Impl {
       Config encoder_config
    )
        : Impl(
-            std::make_shared< SemanticTaskContext >(SemanticTaskContext{
+            std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
                .predicates = std::move(predicate_specs),
                .actions = std::move(action_specs),
             }),
@@ -389,10 +389,10 @@ struct SemanticHGraphEncoderEngine::Impl {
    {
    }
 
-   Impl(std::shared_ptr< const SemanticTaskContext > context, Config encoder_config)
-       : task_context(require_task_context(context)),
-         predicates(task_context->predicates),
-         actions(task_context->actions),
+   Impl(std::shared_ptr< const SemanticSchemaContext > context, Config encoder_config)
+       : schema_context(require_schema_context(context)),
+         predicates(schema_context->predicates),
+         actions(schema_context->actions),
          config(std::move(encoder_config))
    {
       validate_schema(predicates, actions);
@@ -2067,10 +2067,10 @@ SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
 }
 
 SemanticHGraphEncoderEngine::SemanticHGraphEncoderEngine(
-   std::shared_ptr< const SemanticTaskContext > task_context,
+   std::shared_ptr< const SemanticSchemaContext > schema,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
+    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config)))
 {
 }
 
@@ -2174,21 +2174,19 @@ BatchBuilder::BatchEncoding SemanticHGraphEncoderEngine::encode_batch(
       if(preparation == nullptr) {
          throw std::invalid_argument("semantic hgraph batch preparations must not be null");
       }
-      if(preparation->task_context != impl_->task_context) {
-         throw std::invalid_argument(
-            "semantic hgraph batch preparations must come from this engine's task context"
-         );
-      }
+      require_semantic_schema_compatible(
+         preparation->problem_context, impl_->schema_context, "semantic hgraph batch preparation"
+      );
       encode_view_preparation(*preparation, builder);
       builder.next_graph();
    }
    return builder.build();
 }
 
-const std::shared_ptr< const SemanticTaskContext >&
-SemanticHGraphEncoderEngine::get_task_context() const
+const std::shared_ptr< const SemanticSchemaContext >&
+SemanticHGraphEncoderEngine::get_schema_context() const
 {
-   return impl_->task_context;
+   return impl_->schema_context;
 }
 
 const SemanticHGraphEncoderEngine::Config& SemanticHGraphEncoderEngine::get_config() const

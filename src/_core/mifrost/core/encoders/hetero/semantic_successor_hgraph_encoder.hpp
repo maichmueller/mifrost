@@ -51,7 +51,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       Config config = {}
    );
    SemanticSuccessorHGraphEncoderEngine(
-      std::shared_ptr< const SemanticTaskContext > task_context,
+      std::shared_ptr< const SemanticSchemaContext > schema,
       Config config = {}
    );
    SemanticSuccessorHGraphEncoderEngine(const SemanticSuccessorHGraphEncoderEngine&) = delete;
@@ -71,6 +71,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       views::StateView SuccessorState,
       views::GroundActionRange SuccessorActions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const CurrentState& current_state,
       CurrentActions&& current_actions,
       const SuccessorState& successor_state,
@@ -87,6 +88,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       views::StateView SuccessorState,
       views::GroundActionRange SuccessorActions >
    void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const CurrentState& current_state,
       CurrentActions&& current_actions,
       const SuccessorState& successor_state,
@@ -101,6 +103,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       views::StateView SuccessorState,
       views::GroundActionRange SuccessorActions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const CurrentState& current_state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -116,6 +119,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       views::StateView SuccessorState,
       views::GroundActionRange SuccessorActions >
    void encode(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const CurrentState& current_state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -130,10 +134,17 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
     * The lanes are deliberately not symmetric: the successor side reads only
     * the object table and the successor state facts, so preparing it as a full
     * graph would materialize goals the algorithm never inspects.
+    *
+    * Both lanes of one transition take the same problem context -- a state and
+    * its successor necessarily belong to one instance -- but two transitions in
+    * the same batch may come from different problems.
     */
    template < views::StateView State, views::GroundActionRange Actions >
-   [[nodiscard]] canonical::detail::ViewPreparation
-   prepare_current(const State& state, Actions&& actions) const;
+   [[nodiscard]] canonical::detail::ViewPreparation prepare_current(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state,
+      Actions&& actions
+   ) const;
 
    template <
       views::StateView State,
@@ -141,6 +152,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
       views::LiteralLayerRange SubgoalLayers,
       views::GroundActionRange Actions >
    [[nodiscard]] canonical::detail::ViewPreparation prepare_current(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
       const State& state,
       Goals&& goals,
       SubgoalLayers&& subgoal_layers,
@@ -148,7 +160,10 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    ) const;
 
    template < views::StateView State >
-   [[nodiscard]] canonical::detail::ViewPreparation prepare_successor(const State& state) const;
+   [[nodiscard]] canonical::detail::ViewPreparation prepare_successor(
+      const std::shared_ptr< const SemanticProblemContext >& problem_context,
+      const State& state
+   ) const;
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& currents,
@@ -167,7 +182,7 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
    ) const;
 
    [[nodiscard]] const Config& get_config() const;
-   [[nodiscard]] const std::shared_ptr< const SemanticTaskContext >& get_task_context() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticSchemaContext >& get_schema_context() const;
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
    [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
    [[nodiscard]] const std::map< std::string, int >& get_relation_arities() const;
@@ -189,11 +204,14 @@ class MIFROST_API SemanticSuccessorHGraphEncoderEngine {
 namespace mifrost {
 
 template < views::StateView State, views::GroundActionRange Actions >
-canonical::detail::ViewPreparation
-SemanticSuccessorHGraphEncoderEngine::prepare_current(const State& state, Actions&& actions) const
+canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare_current(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Actions&& actions
+) const
 {
    return canonical::detail::make_hgraph_view_preparation(
-      get_task_context(), state, std::forward< Actions >(actions)
+      problem_context, state, std::forward< Actions >(actions)
    );
 }
 
@@ -203,6 +221,7 @@ template <
    views::LiteralLayerRange SubgoalLayers,
    views::GroundActionRange Actions >
 canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare_current(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -210,7 +229,7 @@ canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare
 ) const
 {
    return canonical::detail::make_hgraph_view_preparation(
-      get_task_context(),
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -220,10 +239,11 @@ canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare
 
 template < views::StateView State >
 canonical::detail::ViewPreparation SemanticSuccessorHGraphEncoderEngine::prepare_successor(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state
 ) const
 {
-   return canonical::detail::make_state_only_view_preparation(get_task_context(), state);
+   return canonical::detail::make_state_only_view_preparation(problem_context, state);
 }
 
 template <
@@ -232,6 +252,7 @@ template <
    views::StateView SuccessorState,
    views::GroundActionRange SuccessorActions >
 BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const CurrentState& current_state,
    CurrentActions&& current_actions,
    const SuccessorState& successor_state,
@@ -240,6 +261,7 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
 {
    BatchBuilder builder;
    encode(
+      problem_context,
       current_state,
       std::forward< CurrentActions >(current_actions),
       successor_state,
@@ -256,6 +278,7 @@ template <
    views::StateView SuccessorState,
    views::GroundActionRange SuccessorActions >
 void SemanticSuccessorHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const CurrentState& current_state,
    CurrentActions&& current_actions,
    const SuccessorState& successor_state,
@@ -268,13 +291,13 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    (void) successor_actions;
    encode_views(
       canonical::detail::make_hgraph_view_preparation(
-         get_task_context(), current_state, std::forward< CurrentActions >(current_actions)
+         problem_context, current_state, std::forward< CurrentActions >(current_actions)
       ),
       // The successor side reads only the object table and the successor state
       // facts; goals, subgoal layers, actions and history are never inspected
       // there. Prepare only what the algorithm consumes instead of
-      // materializing the task context's default goals to discard them.
-      canonical::detail::make_state_only_view_preparation(get_task_context(), successor_state),
+      // materializing the problem context's default goals to discard them.
+      canonical::detail::make_state_only_view_preparation(problem_context, successor_state),
       builder
    );
 }
@@ -287,6 +310,7 @@ template <
    views::StateView SuccessorState,
    views::GroundActionRange SuccessorActions >
 BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const CurrentState& current_state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -297,6 +321,7 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode(
 {
    BatchBuilder builder;
    encode(
+      problem_context,
       current_state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -317,6 +342,7 @@ template <
    views::StateView SuccessorState,
    views::GroundActionRange SuccessorActions >
 void SemanticSuccessorHGraphEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const CurrentState& current_state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -331,7 +357,7 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
    (void) successor_actions;
    encode_views(
       canonical::detail::make_hgraph_view_preparation(
-         get_task_context(),
+         problem_context,
          current_state,
          std::forward< Goals >(goals),
          std::forward< SubgoalLayers >(subgoal_layers),
@@ -340,8 +366,8 @@ void SemanticSuccessorHGraphEncoderEngine::encode(
       // The successor side reads only the object table and the successor state
       // facts; goals, subgoal layers, actions and history are never inspected
       // there. Prepare only what the algorithm consumes instead of
-      // materializing the task context's default goals to discard them.
-      canonical::detail::make_state_only_view_preparation(get_task_context(), successor_state),
+      // materializing the problem context's default goals to discard them.
+      canonical::detail::make_state_only_view_preparation(problem_context, successor_state),
       builder
    );
 }

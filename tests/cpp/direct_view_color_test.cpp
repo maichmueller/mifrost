@@ -72,10 +72,10 @@ TEST_P(DirectViewColorTest, StateOnlyMatchesAcrossTheConfigMatrix)
    );
 
    for(const auto& config : all_configs()) {
-      const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(semantic_input),
-         engine.encode(state_view, empty_actions),
+         engine.encode(adapter.get_problem_context(), state_view, empty_actions),
          config_label(config)
       );
    }
@@ -115,11 +115,15 @@ TEST_P(DirectViewColorTest, NativePymimirGoalsAndLayersMatchAcrossTheConfigMatri
    const auto goal_views = adapter.make_goal_views(layered);
 
    for(const auto& config : all_configs()) {
-      const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(semantic_input),
          engine.encode(
-            state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), empty_actions
+            adapter.get_problem_context(),
+            state_view,
+            goal_views.goals_view(),
+            goal_views.subgoal_layers_view(),
+            empty_actions
          ),
          config_label(config)
       );
@@ -135,7 +139,7 @@ TEST_P(DirectViewColorTest, NegativeGoalLiteralsMatchCompatibilityInput)
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
    auto semantic_input = adapter.make_input(ctx.root);
    semantic_input.use_default_goals = false;
-   semantic_input.goals = adapter.get_task_context()->default_goals;
+   semantic_input.goals = adapter.get_problem_context()->default_goals;
    if(semantic_input.goals.empty()) {
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
@@ -150,10 +154,10 @@ TEST_P(DirectViewColorTest, NegativeGoalLiteralsMatchCompatibilityInput)
    const mifrost::semantic::LiteralsView goals{std::span{semantic_input.goals}};
 
    for(const auto& config : all_configs()) {
-      const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(semantic_input),
-         engine.encode(state_view, goals, empty_actions),
+         engine.encode(adapter.get_problem_context(), state_view, goals, empty_actions),
          config_label(config)
       );
    }
@@ -177,7 +181,7 @@ TEST_P(DirectViewColorTest, RejectsUnsupportedSubgoalLevelOnBothPaths)
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
 
-   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context());
    const auto state_view = adapter.make_state_view(ctx.root);
    const auto empty_actions = adapter.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
@@ -187,7 +191,11 @@ TEST_P(DirectViewColorTest, RejectsUnsupportedSubgoalLevelOnBothPaths)
    // Direct path: Color rejects level 4 using its own suffix table.
    EXPECT_THROW(
       (void) engine.encode(
-         state_view, goal_views.goals_view(), goal_views.subgoal_layers_view(), empty_actions
+         adapter.get_problem_context(),
+         state_view,
+         goal_views.goals_view(),
+         goal_views.subgoal_layers_view(),
+         empty_actions
       ),
       std::invalid_argument
    );
@@ -208,12 +216,15 @@ TEST_P(DirectViewColorTest, RejectsActionsOnBothPaths)
       GTEST_SKIP() << "Fixture does not provide applicable actions.";
    }
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const mifrost::SemanticColorEncoderEngine engine(adapter.get_task_context());
+   const mifrost::SemanticColorEncoderEngine engine(adapter.get_schema_context());
    const auto state_view = adapter.make_state_view(ctx.root);
    const std::span< const mimir::formalism::GroundAction > actions{ctx.actions};
    const auto action_views = adapter.make_action_views(actions);
 
-   EXPECT_THROW((void) engine.encode(state_view, action_views), std::invalid_argument);
+   EXPECT_THROW(
+      (void) engine.encode(adapter.get_problem_context(), state_view, action_views),
+      std::invalid_argument
+   );
 
    auto semantic_input = adapter.make_input(ctx.root);
    const auto& view_context = adapter.get_view_context();

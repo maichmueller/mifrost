@@ -25,7 +25,7 @@ namespace mifrost::canonical {
  * constrained templates below.
  */
 MIFROST_API void require_semantic_view_context(
-   const std::shared_ptr< const SemanticTaskContext >& context
+   const std::shared_ptr< const SemanticProblemContext >& context
 );
 
 namespace detail {
@@ -88,14 +88,14 @@ void append_state(const State& state, Target& result)
 
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] SemanticFlatRelationInput make_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
 {
    require_semantic_view_context(context);
    SemanticFlatRelationInput result;
-   result.task_context = context;
+   result.problem_context = context;
    result.use_default_goals = true;
    append_state(state, result);
    for(const auto& action : actions) {
@@ -129,7 +129,7 @@ template < views::GroundActionView Action >
  */
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 [[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    Actions&& actions
@@ -149,7 +149,7 @@ template <
    views::LiteralLayerRange SubgoalLayers,
    views::GroundActionRange Actions >
 [[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -169,12 +169,12 @@ template <
 }
 
 /**
- * Materialize a state and actions while selecting the task context's default
+ * Materialize a state and actions while selecting the problem context's default
  * goals. This overload is the normal path for a planning task adapter.
  */
 template < views::StateView State, views::GroundActionRange Actions >
 [[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Actions&& actions
 )
@@ -189,7 +189,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 [[nodiscard]] SemanticFlatRelationInput make_semantic_flat_relation_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -228,11 +228,14 @@ template <
 namespace mifrost {
 
 template < views::StateView State, views::GroundActionRange Actions >
-canonical::detail::ViewPreparation
-SemanticFlatRelationEncoderEngine::prepare(const State& state, Actions&& actions) const
+canonical::detail::ViewPreparation SemanticFlatRelationEncoderEngine::prepare(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Actions&& actions
+) const
 {
    return canonical::detail::make_flat_view_preparation(
-      get_task_context(), state, std::forward< Actions >(actions)
+      problem_context, state, std::forward< Actions >(actions)
    );
 }
 
@@ -243,6 +246,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 canonical::detail::ViewPreparation SemanticFlatRelationEncoderEngine::prepare(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -252,7 +256,7 @@ canonical::detail::ViewPreparation SemanticFlatRelationEncoderEngine::prepare(
 ) const
 {
    return canonical::detail::make_flat_view_preparation(
-      get_task_context(),
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -263,11 +267,14 @@ canonical::detail::ViewPreparation SemanticFlatRelationEncoderEngine::prepare(
 }
 
 template < views::StateView State, views::GroundActionRange Actions >
-BatchBuilder::BatchEncoding
-SemanticFlatRelationEncoderEngine::encode(const State& state, Actions&& actions) const
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
+   const State& state,
+   Actions&& actions
+) const
 {
    BatchBuilder builder;
-   encode(state, std::forward< Actions >(actions), builder);
+   encode(problem_context, state, std::forward< Actions >(actions), builder);
    builder.next_graph();
    // The compatibility one-shot encode finalizes through the compiled plan, so
    // the direct one must too: otherwise relation-major packing silently applies
@@ -279,26 +286,34 @@ SemanticFlatRelationEncoderEngine::encode(const State& state, Actions&& actions)
 
 template < views::StateView State, views::GroundActionRange Actions >
 void SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Actions&& actions,
    BatchBuilder& builder
 ) const
 {
    const auto preparation = canonical::detail::make_flat_view_preparation(
-      get_task_context(), state, std::forward< Actions >(actions)
+      problem_context, state, std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
 }
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    Actions&& actions
 ) const
 {
    BatchBuilder builder;
-   encode(state, std::forward< Goals >(goals), std::forward< Actions >(actions), builder);
+   encode(
+      problem_context,
+      state,
+      std::forward< Goals >(goals),
+      std::forward< Actions >(actions),
+      builder
+   );
    builder.next_graph();
    // The compatibility one-shot encode finalizes through the compiled plan, so
    // the direct one must too: otherwise relation-major packing silently applies
@@ -310,6 +325,7 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
 
 template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
 void SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    Actions&& actions,
@@ -317,7 +333,7 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    const auto preparation = canonical::detail::make_flat_view_preparation(
-      get_task_context(), state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+      problem_context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
    );
    encode_view_preparation(preparation, builder);
 }
@@ -329,6 +345,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -339,6 +356,7 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
 {
    BatchBuilder builder;
    encode(
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),
@@ -363,6 +381,7 @@ template <
    views::GroundActionRange Actions,
    views::HistoryRange History >
 void SemanticFlatRelationEncoderEngine::encode(
+   const std::shared_ptr< const SemanticProblemContext >& problem_context,
    const State& state,
    Goals&& goals,
    SubgoalLayers&& subgoal_layers,
@@ -373,7 +392,7 @@ void SemanticFlatRelationEncoderEngine::encode(
 ) const
 {
    const auto preparation = canonical::detail::make_flat_view_preparation(
-      get_task_context(),
+      problem_context,
       state,
       std::forward< Goals >(goals),
       std::forward< SubgoalLayers >(subgoal_layers),

@@ -93,7 +93,12 @@ Category category_from_raw(int64_t value)
 
 struct SemanticPlanningTaskAdapter::Impl {
    tyr::formalism::planning::PlanningTask task;
-   std::shared_ptr< SemanticTaskContext > task_context = std::make_shared< SemanticTaskContext >();
+   std::shared_ptr< SemanticSchemaContext >
+      schema_context = std::make_shared< SemanticSchemaContext >();
+   std::shared_ptr< SemanticProblemContext >
+      problem_context = std::make_shared< SemanticProblemContext >(
+         SemanticProblemContext{.schema = schema_context}
+      );
    std::vector< int64_t > static_predicate_ids;
    std::vector< int64_t > fluent_predicate_ids;
    std::vector< int64_t > derived_predicate_ids;
@@ -154,7 +159,8 @@ struct SemanticPlanningTaskAdapter::Impl {
 
    void build_schema()
    {
-      auto& context = *task_context;
+      auto& schema = *schema_context;
+      auto& context = *problem_context;
       std::vector< PredicateSeed > predicates;
       const auto domain = task.get_task().get_domain();
       const auto append_predicates = [&predicates](const auto& views, Category category) {
@@ -182,11 +188,11 @@ struct SemanticPlanningTaskAdapter::Impl {
          return std::tuple(canonical_category_rank(lhs.category), lhs.name, lhs.arity)
                 < std::tuple(canonical_category_rank(rhs.category), rhs.name, rhs.arity);
       });
-      context.predicates.reserve(predicates.size());
+      schema.predicates.reserve(predicates.size());
       for(const auto& predicate : predicates) {
          auto& ids = predicate_ids(predicate.category);
-         set_dense_id(ids, predicate.raw, static_cast< int64_t >(context.predicates.size()));
-         context.predicates.push_back(
+         set_dense_id(ids, predicate.raw, static_cast< int64_t >(schema.predicates.size()));
+         schema.predicates.push_back(
             SemanticPredicateSpec{predicate.category, predicate.name, predicate.arity}
          );
       }
@@ -204,10 +210,10 @@ struct SemanticPlanningTaskAdapter::Impl {
       std::ranges::sort(actions, [](const ActionSeed& lhs, const ActionSeed& rhs) {
          return std::tie(lhs.name, lhs.arity) < std::tie(rhs.name, rhs.arity);
       });
-      context.actions.reserve(actions.size());
+      schema.actions.reserve(actions.size());
       for(const auto& action : actions) {
-         set_dense_id(action_ids, action.raw, static_cast< int64_t >(context.actions.size()));
-         context.actions.push_back(SemanticActionSpec{action.name, action.arity});
+         set_dense_id(action_ids, action.raw, static_cast< int64_t >(schema.actions.size()));
+         schema.actions.push_back(SemanticActionSpec{action.name, action.arity});
       }
 
       std::vector< ObjectSeed > objects;
@@ -382,7 +388,7 @@ struct SemanticPlanningTaskAdapter::Impl {
 
    void build_static_facts()
    {
-      auto& facts = task_context->static_facts;
+      auto& facts = problem_context->static_facts;
       facts.reserve(static_atoms.size());
       for(const auto& atom_value : static_atoms) {
          if(atom_value.predicate >= 0) {
@@ -394,7 +400,7 @@ struct SemanticPlanningTaskAdapter::Impl {
 
    void build_goals()
    {
-      auto& goals = task_context->default_goals;
+      auto& goals = problem_context->default_goals;
       const auto goal = task.get_task().get_goal();
       for(const auto value : goal.template get_literals< tyr::formalism::StaticTag >()) {
          goals.push_back(literal(value, Category::static_predicate));
@@ -430,7 +436,9 @@ struct SemanticPlanningTaskAdapter::Impl {
                                       };
                                    }
                                 );
-      return canonical::make_semantic_flat_relation_input(task_context, state_view, action_views);
+      return canonical::make_semantic_flat_relation_input(
+         problem_context, state_view, action_views
+      );
    }
 };
 
@@ -476,9 +484,16 @@ SemanticFlatRelationInput SemanticPlanningTaskAdapter::make_input(
    return impl_->make_input(state, actions);
 }
 
-std::shared_ptr< const SemanticTaskContext > SemanticPlanningTaskAdapter::get_task_context() const
+std::shared_ptr< const SemanticProblemContext >
+SemanticPlanningTaskAdapter::get_problem_context() const
 {
-   return impl_->task_context;
+   return impl_->problem_context;
+}
+
+std::shared_ptr< const SemanticSchemaContext >
+SemanticPlanningTaskAdapter::get_schema_context() const
+{
+   return impl_->schema_context;
 }
 
 const views::Context& SemanticPlanningTaskAdapter::get_view_context() const noexcept

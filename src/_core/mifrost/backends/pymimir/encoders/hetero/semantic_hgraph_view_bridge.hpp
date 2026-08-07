@@ -63,12 +63,13 @@ inline Schema schema(const mimir::formalism::DomainImpl& domain)
    return result;
 }
 
-inline std::shared_ptr< SemanticTaskContext >
-task_context(const mimir::formalism::ProblemImpl& problem, const Schema& schema)
+inline std::shared_ptr< SemanticProblemContext >
+problem_context(const mimir::formalism::ProblemImpl& problem, const Schema& schema)
 {
-   auto result = std::make_shared< SemanticTaskContext >();
-   result->predicates = schema.predicates;
-   result->actions = schema.actions;
+   auto result = std::make_shared< SemanticProblemContext >();
+   result->schema = std::make_shared< SemanticSchemaContext >(
+      SemanticSchemaContext{.predicates = schema.predicates, .actions = schema.actions}
+   );
    const auto view_context = views::make_context(problem);
 
    auto objects = problem.get_problem_and_domain_objects();
@@ -161,7 +162,7 @@ materialize_action(const mimir::formalism::GroundAction& action, const views::Co
 }
 
 inline SemanticFlatRelationInput state_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const mimir::search::State& state,
    std::span< const mimir::formalism::GroundAction > actions,
    const views::Context& view_context
@@ -185,7 +186,7 @@ inline SemanticFlatRelationInput state_input(
 }
 
 inline SemanticFlatRelationInput state_input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const mimir::search::State& state,
    std::span< const mimir::formalism::GroundAction > actions = {}
 )
@@ -212,7 +213,7 @@ inline void append_goal(
 }
 
 inline SemanticFlatRelationInput input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const mimir::search::State& state,
    const GoalInputs& goals,
    std::span< const mimir::formalism::GroundAction > actions,
@@ -244,7 +245,7 @@ inline SemanticFlatRelationInput input(
 }
 
 inline SemanticFlatRelationInput input(
-   const std::shared_ptr< const SemanticTaskContext >& context,
+   const std::shared_ptr< const SemanticProblemContext >& context,
    const mimir::search::State& state,
    const GoalInputs& goals,
    std::span< const mimir::formalism::GroundAction > actions = {}

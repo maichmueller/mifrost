@@ -2,10 +2,10 @@
 
 namespace mifrost::canonical {
 
-void require_semantic_view_context(const std::shared_ptr< const SemanticTaskContext >& context)
+void require_semantic_view_context(const std::shared_ptr< const SemanticProblemContext >& context)
 {
    if(not context) {
-      throw std::invalid_argument("semantic View task context must not be null");
+      throw std::invalid_argument("semantic View problem context must not be null");
    }
 }
 

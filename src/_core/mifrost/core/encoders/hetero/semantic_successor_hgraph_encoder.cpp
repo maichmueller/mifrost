@@ -37,9 +37,9 @@ struct SemanticSuccessorHGraphEncoderEngine::Impl {
    {
    }
 
-   Impl(std::shared_ptr< const SemanticTaskContext > task_context, Config encoder_config)
+   Impl(std::shared_ptr< const SemanticSchemaContext > schema, Config encoder_config)
        : config(normalize_successor_config(std::move(encoder_config))),
-         hgraph(std::move(task_context), base_config(config))
+         hgraph(std::move(schema), base_config(config))
    {
    }
 };
@@ -54,10 +54,10 @@ SemanticSuccessorHGraphEncoderEngine::SemanticSuccessorHGraphEncoderEngine(
 }
 
 SemanticSuccessorHGraphEncoderEngine::SemanticSuccessorHGraphEncoderEngine(
-   std::shared_ptr< const SemanticTaskContext > task_context,
+   std::shared_ptr< const SemanticSchemaContext > schema,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(task_context), std::move(config)))
+    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config)))
 {
 }
 
@@ -137,7 +137,7 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_batch(
    if(currents.size() != successors.size()) {
       throw std::invalid_argument("current and successor batches must have equal length");
    }
-   const auto& context = get_task_context();
+   const auto& schema = get_schema_context();
    BatchBuilder builder;
    builder.set_graph_kind("hetero");
    for(size_t index = 0; index < currents.size(); ++index) {
@@ -146,9 +146,17 @@ BatchBuilder::BatchEncoding SemanticSuccessorHGraphEncoderEngine::encode_batch(
       if(current == nullptr or successor == nullptr) {
          throw std::invalid_argument("semantic successor batch preparations must not be null");
       }
-      if(current->task_context != context or successor->task_context != context) {
+      require_semantic_schema_compatible(
+         current->problem_context, schema, "semantic successor batch preparation"
+      );
+      require_semantic_schema_compatible(
+         successor->problem_context, schema, "semantic successor batch preparation"
+      );
+      // A transition is one instance's: the two lanes share an object table, so
+      // the pair must agree even though pairs across the batch need not.
+      if(current->problem_context != successor->problem_context) {
          throw std::invalid_argument(
-            "semantic successor batch preparations must come from this engine's task context"
+            "semantic successor batch pairs must come from one problem per transition"
          );
       }
       encode_views(*current, *successor, builder);
@@ -163,10 +171,10 @@ SemanticSuccessorHGraphEncoderEngine::get_config() const
    return impl_->config;
 }
 
-const std::shared_ptr< const SemanticTaskContext >&
-SemanticSuccessorHGraphEncoderEngine::get_task_context() const
+const std::shared_ptr< const SemanticSchemaContext >&
+SemanticSuccessorHGraphEncoderEngine::get_schema_context() const
 {
-   return impl_->hgraph.get_task_context();
+   return impl_->hgraph.get_schema_context();
 }
 
 const std::vector< SemanticPredicateSpec >&

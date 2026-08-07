@@ -75,10 +75,12 @@ TEST_P(DirectViewFlatTest, NullaryRelationTogglesMatchCompatibilityInput)
                                    + (ignore_zero_arity ? "1" : "0")
                                    + " virtual_nodes=" + (predicate_virtual_nodes ? "1" : "0");
          const mifrost::SemanticFlatRelationEncoderEngine engine(
-            adapter.get_task_context(), config
+            adapter.get_schema_context(), config
          );
          expect_encoding_equal(
-            engine.encode(semantic_input), engine.encode(state_view, action_views), label
+            engine.encode(semantic_input),
+            engine.encode(adapter.get_problem_context(), state_view, action_views),
+            label
          );
       }
    }
@@ -102,10 +104,10 @@ TEST_P(DirectViewFlatTest, RelationMajorPackingMatchesCompatibilityInput)
    for(const bool relation_major : {false, true}) {
       auto config = rich_config();
       config.pack_relation_args_relation_major = relation_major;
-      const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(semantic_input),
-         engine.encode(state_view, empty_actions),
+         engine.encode(adapter.get_problem_context(), state_view, empty_actions),
          std::string("relation_major=") + (relation_major ? "1" : "0")
       );
    }
@@ -122,7 +124,7 @@ TEST_P(DirectViewFlatTest, NegativeLiteralsAcrossCategoriesMatchCompatibilityInp
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
    auto semantic_input = adapter.make_input(ctx.root);
    semantic_input.use_default_goals = false;
-   semantic_input.goals = adapter.get_task_context()->default_goals;
+   semantic_input.goals = adapter.get_problem_context()->default_goals;
    if(semantic_input.goals.empty()) {
       GTEST_SKIP() << "Fixture does not provide goal literals.";
    }
@@ -144,10 +146,12 @@ TEST_P(DirectViewFlatTest, NegativeLiteralsAcrossCategoriesMatchCompatibilityInp
          const std::string label = std::string("support_literals=") + (support_literals ? "1" : "0")
                                    + " include_static=" + (include_static ? "1" : "0");
          const mifrost::SemanticFlatRelationEncoderEngine engine(
-            adapter.get_task_context(), config
+            adapter.get_schema_context(), config
          );
          expect_encoding_equal(
-            engine.encode(semantic_input), engine.encode(state_view, goals, empty_actions), label
+            engine.encode(semantic_input),
+            engine.encode(adapter.get_problem_context(), state_view, goals, empty_actions),
+            label
          );
       }
    }
@@ -189,7 +193,7 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
    };
 
    const auto config = rich_config();
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
 
    const auto root_view = adapter.make_state_view(ctx.root);
    const auto successor_view = adapter.make_state_view(successor);
@@ -203,9 +207,10 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
 
    mifrost::BatchBuilder direct;
    direct.set_graph_kind("flat");
-   engine.encode(root_view, empty_actions, direct);
+   engine.encode(adapter.get_problem_context(), root_view, empty_actions, direct);
    direct.next_graph();
    engine.encode(
+      adapter.get_problem_context(),
       successor_view,
       goal_views.goals_view(),
       goal_views.subgoal_layers_view(),
@@ -216,6 +221,7 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
    );
    direct.next_graph();
    engine.encode(
+      adapter.get_problem_context(),
       root_view,
       goal_views.goals_view(),
       goal_views.subgoal_layers_view(),
@@ -225,7 +231,7 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
       direct
    );
    direct.next_graph();
-   engine.encode(successor_view, empty_actions, direct);
+   engine.encode(adapter.get_problem_context(), successor_view, empty_actions, direct);
    direct.next_graph();
 
    expect_encoding_equal(engine.encode_batch(inputs), direct.build());
@@ -234,8 +240,9 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
    // graph before encoding any of them, which is what the flat batch's
    // cross-graph passes need. Same four graphs, same lanes, one call.
    const std::vector< mifrost::canonical::detail::ViewPreparation > prepared{
-      engine.prepare(root_view, empty_actions),
+      engine.prepare(adapter.get_problem_context(), root_view, empty_actions),
       engine.prepare(
+         adapter.get_problem_context(),
          successor_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -244,6 +251,7 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
          std::nullopt
       ),
       engine.prepare(
+         adapter.get_problem_context(),
          root_view,
          goal_views.goals_view(),
          goal_views.subgoal_layers_view(),
@@ -251,7 +259,7 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
          history_view,
          std::nullopt
       ),
-      engine.prepare(successor_view, empty_actions),
+      engine.prepare(adapter.get_problem_context(), successor_view, empty_actions),
    };
    std::vector< const mifrost::canonical::detail::ViewPreparation* > prepared_refs;
    for(const auto& graph : prepared) {
@@ -271,9 +279,12 @@ TEST_P(DirectViewFlatTest, MixedBatchLanesMatchCompatibilityBatch)
    );
 }
 
-// A preparation from another engine's task context indexes a different object
-// table, so the batch must reject it instead of silently encoding foreign ids.
-TEST_P(DirectViewFlatTest, ForeignPreparationsAreRejected)
+// A preparation built by a *second adapter* is not foreign: what a batch needs
+// is that the graph's schema is one this engine can encode, and two adapters of
+// one domain agree on that even when they were built independently. Cross-
+// instance batching is covered in cross_problem_batch_test.cpp; this pins the
+// weaker "another adapter of the same problem" case, which used to throw.
+TEST_P(DirectViewFlatTest, PreparationsFromAnotherAdapterAreAccepted)
 {
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
@@ -281,13 +292,51 @@ TEST_P(DirectViewFlatTest, ForeignPreparationsAreRejected)
    const mifrost::pymimir::SemanticProblemAdapter other(*ctx.problem);
 
    const auto config = rich_config();
-   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
-   const mifrost::SemanticFlatRelationEncoderEngine foreign(other.get_task_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
+   const mifrost::SemanticFlatRelationEncoderEngine foreign(other.get_schema_context(), config);
 
    const auto empty_actions = other.make_action_views(
       std::span< const mimir::formalism::GroundAction >{}
    );
-   const auto preparation = foreign.prepare(other.make_state_view(ctx.root), empty_actions);
+   const auto preparation = foreign.prepare(
+      other.get_problem_context(), other.make_state_view(ctx.root), empty_actions
+   );
+   const std::vector< const mifrost::canonical::detail::ViewPreparation* > refs{&preparation};
+
+   EXPECT_EQ(engine.encode_batch(std::span{refs}).num_graphs, 1);
+}
+
+// What a batch *does* reject: a graph whose relation universe this engine does
+// not have. That is a schema mismatch, not a problem mismatch.
+TEST_P(DirectViewFlatTest, PreparationsWithAForeignSchemaAreRejected)
+{
+   const auto param = GetParam();
+   const auto ctx = mifrost_test::make_context(param.domain, param.problem);
+   const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
+
+   const auto config = rich_config();
+   const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
+
+   // Same instance data, deliberately declared against a schema this engine has
+   // never heard of.
+   const auto foreign_schema = std::make_shared< mifrost::SemanticSchemaContext >(
+      mifrost::SemanticSchemaContext{
+         .predicates = {{mifrost::SemanticPredicateCategory::fluent, "not-in-this-domain", 1}},
+      }
+   );
+   const auto foreign_context = std::make_shared< mifrost::SemanticProblemContext >(
+      mifrost::SemanticProblemContext{
+         .schema = foreign_schema,
+         .objects = adapter.get_problem_context()->objects,
+      }
+   );
+   const auto empty_actions = adapter.make_action_views(
+      std::span< const mimir::formalism::GroundAction >{}
+   );
+   const mifrost::SemanticFlatRelationEncoderEngine foreign(foreign_schema, config);
+   const auto preparation = foreign.prepare(
+      foreign_context, adapter.make_state_view(ctx.root), empty_actions
+   );
    const std::vector< const mifrost::canonical::detail::ViewPreparation* > refs{&preparation};
 
    EXPECT_THROW((void) engine.encode_batch(std::span{refs}), std::invalid_argument);
@@ -302,31 +351,31 @@ TEST_P(DirectViewFlatTest, LegacyObjectTableWithoutTaskContextEncodes)
    const auto param = GetParam();
    const auto ctx = mifrost_test::make_context(param.domain, param.problem);
    const mifrost::pymimir::SemanticProblemAdapter adapter(*ctx.problem);
-   const auto task_context = adapter.get_task_context();
+   const auto problem_context = adapter.get_problem_context();
    const auto shared_input = adapter.make_input(ctx.root);
 
    // Same content, expressed without a task context: objects inline, and the
    // static facts folded into the state lane because a legacy input has no
    // separate static table.
    mifrost::SemanticFlatRelationInput legacy;
-   legacy.objects = task_context->objects;
-   legacy.state_facts = task_context->static_facts;
+   legacy.objects = problem_context->objects;
+   legacy.state_facts = problem_context->static_facts;
    legacy.state_facts.insert(
       legacy.state_facts.end(), shared_input.state_facts.begin(), shared_input.state_facts.end()
    );
-   legacy.goals = task_context->default_goals;
+   legacy.goals = problem_context->default_goals;
 
    const auto config = rich_config();
    const mifrost::SemanticFlatRelationEncoderEngine legacy_engine(
-      task_context->predicates, task_context->actions, config
+      problem_context->predicates(), problem_context->actions(), config
    );
    const auto encoding = legacy_engine.encode(legacy);
 
    EXPECT_EQ(encoding.num_graphs, 1);
-   EXPECT_EQ(encoding.object_names.size(), task_context->objects.size());
+   EXPECT_EQ(encoding.object_names.size(), problem_context->objects.size());
    // The legacy lane must still reach the same object identities.
-   for(size_t index = 0; index < task_context->objects.size(); ++index) {
-      EXPECT_EQ(encoding.object_names[index], task_context->objects[index]);
+   for(size_t index = 0; index < problem_context->objects.size(); ++index) {
+      EXPECT_EQ(encoding.object_names[index], problem_context->objects[index]);
    }
 }
 
@@ -379,10 +428,11 @@ TEST_P(DirectViewFlatTest, HistoryTruncationMatchesCompatibilityInput)
       semantic_input.history_max_steps = max_steps;
 
       const auto config = rich_config();
-      const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_task_context(), config);
+      const mifrost::SemanticFlatRelationEncoderEngine engine(adapter.get_schema_context(), config);
       expect_encoding_equal(
          engine.encode(semantic_input),
          engine.encode(
+            adapter.get_problem_context(),
             state_view,
             goal_views.goals_view(),
             goal_views.subgoal_layers_view(),

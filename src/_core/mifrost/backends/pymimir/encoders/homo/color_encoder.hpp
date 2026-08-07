@@ -20,6 +20,7 @@
 
 #include "mifrost/backends/pymimir/encoders/common/goal_inputs.hpp"
 #include "mifrost/backends/pymimir/encoders/common/relation_formatter.hpp"
+#include "mifrost/backends/pymimir/problem_adapter_cache.hpp"
 #include "mifrost/backends/pymimir/semantic_views.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/common_types.hpp"
@@ -103,7 +104,6 @@ class MIFROST_API ColorEncoderEngine {
       std::span< const mimir::formalism::GroundAction > actions,
       BatchBuilder& builder
    );
-   void ensure_problem(const mimir::search::State& state);
 
    /// Optional owning domain storage for handle-based construction.
    std::optional< mimir::formalism::Domain > domain_holder_;
@@ -112,9 +112,11 @@ class MIFROST_API ColorEncoderEngine {
    /// Effective runtime config.
    Config config_;
    /// Backend-neutral semantic Color engine used for all Pymimir inputs.
+   /// Built once from the domain schema and never replaced, so it encodes every
+   /// instance of this domain -- several of them in one batch if asked.
    std::unique_ptr< SemanticColorEncoderEngine > semantic_engine_;
-   std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter_;
-   const mimir::formalism::ProblemImpl* problem_ = nullptr;
+   /// Everything that *is* per instance.
+   pymimir::ProblemAdapterCache problems_;
 };
 
 /**
