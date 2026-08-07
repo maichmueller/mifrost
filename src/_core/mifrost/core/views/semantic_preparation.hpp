@@ -475,18 +475,23 @@ inline void add_fact(ViewPreparation& preparation, SemanticAtom atom)
 template < views::StateView State >
 void append_view_state(const State& state, ViewPreparation& preparation)
 {
-   const auto fluent_atoms = state.fluent_atoms();
-   const auto derived_atoms = state.derived_atoms();
+   // Request each lane exactly once. `StateView` only promises an input_range,
+   // so a second call is free to return a different range -- or, for a
+   // single-pass source, an already-consumed one. Sizing and traversal must
+   // therefore share the range, which also means it cannot be held by const
+   // reference: an input_range is iterated by mutating it.
+   auto fluent_atoms = state.fluent_atoms();
+   auto derived_atoms = state.derived_atoms();
    if constexpr(std::ranges::sized_range< decltype(fluent_atoms) >
                 and std::ranges::sized_range< decltype(derived_atoms) >) {
       preparation.reserve_state_facts(
          std::ranges::size(fluent_atoms) + std::ranges::size(derived_atoms)
       );
    }
-   for(const auto atom : state.fluent_atoms()) {
+   for(const auto atom : fluent_atoms) {
       add_fact(preparation, view_materialize_atom(atom));
    }
-   for(const auto atom : state.derived_atoms()) {
+   for(const auto atom : derived_atoms) {
       add_fact(preparation, view_materialize_atom(atom));
    }
 }
