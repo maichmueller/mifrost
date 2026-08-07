@@ -1,6 +1,8 @@
 #include "mifrost/backends/pymimir/encoders/flat/flat_relation_encoder.hpp"
 
 #include <algorithm>
+#include <memory>
+#include <mimir/search/state_repository.hpp>
 #include <ranges>
 #include <utility>
 
@@ -11,33 +13,62 @@
 namespace mifrost {
 
 struct FlatRelationEncoderEngine::SemanticImpl {
-   std::unique_ptr< pymimir::SemanticProblemAdapter > problem_adapter;
-   std::unique_ptr< SemanticFlatRelationEncoderEngine > encoder;
-   const mimir::formalism::ProblemImpl* problem = nullptr;
+   /// One problem's encoding machinery. The task context an encoder is built
+   /// from carries that problem's object table (see `build_task_context`),
+   /// which is its only problem-dependent content -- predicates and actions
+   /// come from the domain -- so a binding is exactly "the object table to
+   /// encode against", and nothing about the relation schema.
+   struct ProblemBinding {
+      /// Guards the raw map key. A `ProblemImpl*` is unique only among *live*
+      /// problems, so a dropped problem's address can be recycled onto a new
+      /// one and silently hand back the wrong object table. Rebuilding when
+      /// this no longer names the problem the entry was built for is what
+      /// makes the cache safe against that.
+      std::weak_ptr< mimir::formalism::ProblemImpl > problem;
+      std::unique_ptr< pymimir::SemanticProblemAdapter > adapter;
+      std::unique_ptr< SemanticFlatRelationEncoderEngine > encoder;
+   };
+
+   /// Domain-level encoder. It never encodes a state and so is never bound to
+   /// a problem: it answers the relation-schema queries (names, arities,
+   /// sources, slot roles) and finalizes batches, all of which are functions
+   /// of the domain alone.
+   std::unique_ptr< SemanticFlatRelationEncoderEngine > schema_encoder;
+   ankerl::unordered_dense::map< const mimir::formalism::ProblemImpl*, ProblemBinding > bindings;
 
    SemanticImpl(const mimir::formalism::DomainImpl& domain, const Config& config)
    {
       auto context = std::make_shared< SemanticTaskContext >();
       append_schema(domain, *context);
-      encoder = std::make_unique< SemanticFlatRelationEncoderEngine >(std::move(context), config);
+      schema_encoder = std::make_unique< SemanticFlatRelationEncoderEngine >(
+         std::move(context), config
+      );
    }
 
-   void ensure_problem(const mimir::search::State& state, const Config& config)
+   /// The binding for `state`'s problem, built on first use.
+   ///
+   /// Encoding resolves per problem rather than once per encoder because a
+   /// batch is a sequence of independent graphs -- `encode_batch` closes each
+   /// item with `next_graph()`, so rows are graph-local -- and one batch may
+   /// therefore legitimately span instances. Binding the whole encoder to the
+   /// first problem it happened to see made that impossible to express.
+   ProblemBinding& binding_for(const mimir::search::State& state, const Config& config)
    {
-      const auto* problem_value = &state.get_problem();
-      if(problem != nullptr) {
-         if(problem != problem_value) {
-            throw std::invalid_argument(
-               "FlatRelationEncoder state belongs to a different planning problem"
-            );
-         }
-         return;
+      // Taken from the state's repository rather than `state.get_problem()` so
+      // that the key, the liveness guard and the adapter are the same object by
+      // construction. Every mimir state is unpacked against its repository's
+      // problem, so the two agree.
+      const auto problem = state.get_state_repository()->get_problem();
+      const auto* key = problem.get();
+      auto& binding = bindings[key];
+      if(binding.encoder == nullptr or binding.problem.lock().get() != key) {
+         binding.problem = problem;
+         binding.adapter = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
+         binding.encoder = std::make_unique< SemanticFlatRelationEncoderEngine >(
+            binding.adapter->get_task_context(), config
+         );
       }
-      problem = problem_value;
-      problem_adapter = std::make_unique< pymimir::SemanticProblemAdapter >(*problem);
-      encoder = std::make_unique< SemanticFlatRelationEncoderEngine >(
-         problem_adapter->get_task_context(), config
-      );
+      return binding;
    }
 
    void encode_impl(
@@ -50,7 +81,9 @@ struct FlatRelationEncoderEngine::SemanticImpl {
       BatchBuilder& builder
    )
    {
-      ensure_problem(state, config);
+      auto& binding = binding_for(state, config);
+      auto* const problem_adapter = binding.adapter.get();
+      auto* const encoder = binding.encoder.get();
       const auto state_view = problem_adapter->make_state_view(state);
       const auto action_views = problem_adapter->make_action_views(actions);
       if(goals == nullptr and history.empty() and not history_max_steps.has_value()) {
@@ -168,8 +201,8 @@ FlatRelationEncoderEngine::FlatRelationEncoderEngine(
    relation_config.goal_derivations = config_.goal_derivations;
    relation_dict_ = build_pymimir_relation_dict(domain_, actions, relation_config);
    semantic_ = std::make_unique< SemanticImpl >(domain_, config_);
-   const auto& names = semantic_->encoder->get_relation_names();
-   const auto& arities = semantic_->encoder->get_relation_arities();
+   const auto& names = semantic_->schema_encoder->get_relation_names();
+   const auto& arities = semantic_->schema_encoder->get_relation_arities();
    relation_dict_.arity.clear();
    for(size_t index = 0; index < names.size(); ++index) {
       relation_dict_.arity[names[index]] = static_cast< int >(arities[index]);
@@ -194,8 +227,8 @@ FlatRelationEncoderEngine::FlatRelationEncoderEngine(mimir::formalism::Domain do
    relation_config.goal_derivations = config_.goal_derivations;
    relation_dict_ = build_pymimir_relation_dict(domain_, actions, relation_config);
    semantic_ = std::make_unique< SemanticImpl >(domain_, config_);
-   const auto& names = semantic_->encoder->get_relation_names();
-   const auto& arities = semantic_->encoder->get_relation_arities();
+   const auto& names = semantic_->schema_encoder->get_relation_names();
+   const auto& arities = semantic_->schema_encoder->get_relation_arities();
    relation_dict_.arity.clear();
    for(size_t index = 0; index < names.size(); ++index) {
       relation_dict_.arity[names[index]] = static_cast< int >(arities[index]);
@@ -273,7 +306,6 @@ void FlatRelationEncoderEngine::encode_impl(
    bool
 )
 {
-   semantic_->ensure_problem(state, config_);
    semantic_->encode_impl(
       state, &goals, actions, history_subgoals, history_max_steps, config_, builder
    );
@@ -286,9 +318,8 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
 {
    const size_t state_count = inputs.states.states.size();
    if(state_count == 0) {
-      return semantic_->encoder->encode_batch(std::vector< SemanticFlatRelationInput >{});
+      return semantic_->schema_encoder->encode_batch(std::vector< SemanticFlatRelationInput >{});
    }
-   semantic_->ensure_problem(inputs.states.states.front().state, config_);
    BatchBuilder builder;
    builder.set_graph_kind("flat");
    for(size_t idx = 0; idx < state_count; ++idx) {
@@ -325,13 +356,13 @@ BatchBuilder::BatchEncoding FlatRelationEncoderEngine::encode_batch(
       builder.next_graph();
    }
    auto result = builder.build();
-   semantic_->encoder->finalize_batch_encoding(result);
+   semantic_->schema_encoder->finalize_batch_encoding(result);
    return result;
 }
 
 void FlatRelationEncoderEngine::finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
 {
-   semantic_->encoder->finalize_batch_encoding(encoding);
+   semantic_->schema_encoder->finalize_batch_encoding(encoding);
 }
 
 const RelationDict& FlatRelationEncoderEngine::get_relation_dict() const
@@ -340,35 +371,35 @@ const RelationDict& FlatRelationEncoderEngine::get_relation_dict() const
 }
 const std::vector< std::string >& FlatRelationEncoderEngine::get_relation_names() const
 {
-   return semantic_->encoder->get_relation_names();
+   return semantic_->schema_encoder->get_relation_names();
 }
 const std::vector< int64_t >& FlatRelationEncoderEngine::get_relation_arities() const
 {
-   return semantic_->encoder->get_relation_arities();
+   return semantic_->schema_encoder->get_relation_arities();
 }
 const std::vector< std::string >& FlatRelationEncoderEngine::get_relation_sources() const
 {
-   return semantic_->encoder->get_relation_sources();
+   return semantic_->schema_encoder->get_relation_sources();
 }
 const std::vector< int64_t >& FlatRelationEncoderEngine::get_relation_logical_arities() const
 {
-   return semantic_->encoder->get_relation_logical_arities();
+   return semantic_->schema_encoder->get_relation_logical_arities();
 }
 const std::vector< int64_t >& FlatRelationEncoderEngine::get_relation_encoded_arities() const
 {
-   return semantic_->encoder->get_relation_encoded_arities();
+   return semantic_->schema_encoder->get_relation_encoded_arities();
 }
 const std::vector< int64_t >& FlatRelationEncoderEngine::get_relation_slot_roles() const
 {
-   return semantic_->encoder->get_relation_slot_roles();
+   return semantic_->schema_encoder->get_relation_slot_roles();
 }
 const std::vector< int64_t >& FlatRelationEncoderEngine::get_relation_slot_role_offsets() const
 {
-   return semantic_->encoder->get_relation_slot_role_offsets();
+   return semantic_->schema_encoder->get_relation_slot_role_offsets();
 }
 const std::vector< std::string >& FlatRelationEncoderEngine::get_slot_role_names() const
 {
-   return semantic_->encoder->get_slot_role_names();
+   return semantic_->schema_encoder->get_slot_role_names();
 }
 
 }  // namespace mifrost
