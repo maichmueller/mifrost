@@ -9,8 +9,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <typeindex>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -18,6 +16,7 @@
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/common/default_relations.hpp"
 #include "mifrost/core/encoders/common/root_policy.hpp"
+#include "mifrost/core/encoders/common/semantic_assembly.hpp"
 #include "mifrost/core/encoders/flat/flat_composition.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
@@ -31,74 +30,46 @@ struct SemanticFlatHorizonPreparedGraphAccess;
 }  // namespace detail
 
 /**
- * Immutable graph-local extension data carried alongside a semantic Horizon DAG.
+ * Source- and symbol-compatible Horizon name for the shared annotation carrier.
  *
- * Values are shared as `const` objects. Copying this carrier is cheap and keeps
- * every value alive through synchronous single-graph or batch encoding.
+ * New cross-encoder code may use `SemanticAnnotations` directly. This wrapper
+ * keeps the Horizon-specific public type and its exported `contains()` symbol.
  */
-class MIFROST_API SemanticFlatHorizonAnnotations {
+class MIFROST_API SemanticFlatHorizonAnnotations: public SemanticAnnotations {
   public:
    SemanticFlatHorizonAnnotations() = default;
+   SemanticFlatHorizonAnnotations(SemanticAnnotations annotations)
+       : SemanticAnnotations(std::move(annotations))
+   {
+   }
 
    template < typename T >
    void set(std::string key, std::shared_ptr< const T > value)
    {
-      if(key.empty()) {
-         throw std::invalid_argument("Semantic Horizon annotation key must not be empty");
-      }
-      if(not value) {
-         throw std::invalid_argument("Semantic Horizon annotation value must not be null");
-      }
-      entries_.insert_or_assign(
-         std::move(key), Entry{std::move(value), std::type_index(typeid(T))}
-      );
+      SemanticAnnotations::set< T >(std::move(key), std::move(value));
    }
 
    template < typename T, typename... Args >
    std::shared_ptr< const T > emplace(std::string key, Args&&... args)
    {
-      auto value = std::make_shared< const T >(std::forward< Args >(args)...);
-      set< T >(std::move(key), value);
-      return value;
+      return SemanticAnnotations::emplace< T >(std::move(key), std::forward< Args >(args)...);
    }
 
    template < typename T >
    [[nodiscard]] const T* find(std::string_view key) const
    {
-      const auto it = entries_.find(std::string(key));
-      if(it == entries_.end()) {
-         return nullptr;
-      }
-      if(it->second.type != std::type_index(typeid(T))) {
-         throw std::invalid_argument(
-            "Semantic Horizon annotation '" + std::string(key) + "' has the wrong type"
-         );
-      }
-      return static_cast< const T* >(it->second.value.get());
+      return SemanticAnnotations::find< T >(key);
    }
 
    template < typename T >
    [[nodiscard]] const T& get(std::string_view key) const
    {
-      const auto* value = find< T >(key);
-      if(value == nullptr) {
-         throw std::invalid_argument(
-            "Semantic Horizon annotation '" + std::string(key) + "' is not present"
-         );
-      }
-      return *value;
+      return SemanticAnnotations::get< T >(key);
    }
 
    [[nodiscard]] bool contains(std::string_view key) const;
-   [[nodiscard]] bool empty() const noexcept { return entries_.empty(); }
-   [[nodiscard]] size_t size() const noexcept { return entries_.size(); }
-
-  private:
-   struct Entry {
-      std::shared_ptr< const void > value;
-      std::type_index type;
-   };
-   std::unordered_map< std::string, Entry > entries_;
+   [[nodiscard]] bool empty() const noexcept { return SemanticAnnotations::empty(); }
+   [[nodiscard]] size_t size() const noexcept { return SemanticAnnotations::size(); }
 };
 
 /**
@@ -107,28 +78,23 @@ class MIFROST_API SemanticFlatHorizonAnnotations {
  * A reference-backed input is valid for the duration of `encode` or
  * `encode_batch`. The shared-pointer constructor keeps the DAG alive itself.
  */
-class MIFROST_API SemanticFlatHorizonInput {
+class MIFROST_API SemanticFlatHorizonInput: public SemanticEncoderInput< SemanticTransitionDAG > {
   public:
+   using Base = SemanticEncoderInput< SemanticTransitionDAG >;
+
    explicit SemanticFlatHorizonInput(
       const SemanticTransitionDAG& graph,
       SemanticFlatHorizonAnnotations annotations = {}
    );
    SemanticFlatHorizonInput(SemanticTransitionDAG&&, SemanticFlatHorizonAnnotations = {}) = delete;
+   SemanticFlatHorizonInput(const SemanticTransitionDAG&&, SemanticFlatHorizonAnnotations = {}) =
+      delete;
    explicit SemanticFlatHorizonInput(
       std::shared_ptr< const SemanticTransitionDAG > graph,
       SemanticFlatHorizonAnnotations annotations = {}
    );
 
    [[nodiscard]] const SemanticTransitionDAG& graph() const;
-   [[nodiscard]] const SemanticFlatHorizonAnnotations& annotations() const noexcept
-   {
-      return annotations_;
-   }
-
-  private:
-   std::shared_ptr< const SemanticTransitionDAG > owned_graph_;
-   const SemanticTransitionDAG* graph_ = nullptr;
-   SemanticFlatHorizonAnnotations annotations_;
 };
 
 /**

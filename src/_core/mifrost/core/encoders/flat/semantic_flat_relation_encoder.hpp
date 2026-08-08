@@ -21,6 +21,7 @@
 #include "flat_relation_config.hpp"
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
+#include "mifrost/core/encoders/common/semantic_assembly.hpp"
 #include "mifrost/core/semantic/records.hpp"
 #include "mifrost/core/views/concepts.hpp"
 
@@ -28,6 +29,7 @@ namespace mifrost {
 
 class SemanticFlatHorizonEncoderEngine;
 class SemanticFlatHorizonInput;
+class SemanticFlatRelationAssemblyBuilder;
 class SemanticTransitionDAG;
 struct SemanticFlatHorizonEncoderConfig;
 class FlatEmitterComponent;
@@ -36,7 +38,9 @@ struct ViewPreparation;
 }
 namespace detail {
 struct SemanticFlatHorizonRelationEngineAccess;
-}
+struct SemanticFlatRelationPreparedGraphData;
+struct SemanticFlatRelationPreparedGraphAccess;
+}  // namespace detail
 
 /*
  * The semantic record and key definitions (SemanticAtom, SemanticLiteral,
@@ -45,6 +49,76 @@ struct SemanticFlatHorizonRelationEngineAccess;
  * core/semantic/records.hpp so that the View layer can describe borrowed inputs
  * without including this encoder header. They are re-exported here unchanged.
  */
+
+/** Compatibility DTO carrier with backend-neutral graph-local annotations. */
+class MIFROST_API SemanticFlatRelationGraphInput:
+    public SemanticEncoderInput< SemanticFlatRelationInput > {
+  public:
+   using Base = SemanticEncoderInput< SemanticFlatRelationInput >;
+
+   explicit SemanticFlatRelationGraphInput(
+      const SemanticFlatRelationInput& input,
+      SemanticAnnotations annotations = {}
+   );
+   SemanticFlatRelationGraphInput(SemanticFlatRelationInput&&, SemanticAnnotations = {}) = delete;
+   SemanticFlatRelationGraphInput(const SemanticFlatRelationInput&&, SemanticAnnotations = {}) =
+      delete;
+   explicit SemanticFlatRelationGraphInput(
+      std::shared_ptr< const SemanticFlatRelationInput > input,
+      SemanticAnnotations annotations = {}
+   );
+
+   [[nodiscard]] const SemanticFlatRelationInput& input() const { return source(); }
+};
+
+/**
+ * Stable read-only semantic relation view shared by canonical and extensions.
+ *
+ * Accessors borrow the engine's one compact graph preparation and are valid for
+ * the duration of the current component callback. Components must not retain
+ * this view or any returned span after the callback returns.
+ */
+class MIFROST_API SemanticFlatRelationPreparedGraph {
+  public:
+   SemanticFlatRelationPreparedGraph(const SemanticFlatRelationPreparedGraph&) = delete;
+   SemanticFlatRelationPreparedGraph& operator=(const SemanticFlatRelationPreparedGraph&) = delete;
+   SemanticFlatRelationPreparedGraph(SemanticFlatRelationPreparedGraph&&) noexcept = default;
+   SemanticFlatRelationPreparedGraph& operator=(SemanticFlatRelationPreparedGraph&&) noexcept =
+      default;
+   ~SemanticFlatRelationPreparedGraph();
+
+   [[nodiscard]] const FlatRelationEncoderConfig& config() const;
+   [[nodiscard]] const SemanticAnnotations& annotations() const;
+   [[nodiscard]] std::span< const std::string > objects() const;
+   [[nodiscard]] std::span< const SemanticAtom > static_facts() const;
+   [[nodiscard]] std::span< const SemanticAtom > state_facts() const;
+   [[nodiscard]] std::span< const SemanticGoalLevel > goal_levels() const;
+   [[nodiscard]] const std::shared_ptr< const SemanticProblemContext >& problem_context() const;
+   [[nodiscard]] bool contains_fact(const SemanticAtom& atom) const;
+   [[nodiscard]] int64_t entity_count() const;
+   [[nodiscard]] std::span< const std::string > entity_names() const;
+   [[nodiscard]] std::span< const int64_t > entity_role_ids() const;
+   [[nodiscard]] std::span< const int64_t > object_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > predicate_entity_indices() const;
+   [[nodiscard]] std::span< const SemanticGroundAction > action_identities() const;
+   [[nodiscard]] std::span< const int64_t > history_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > history_steps() const;
+   [[nodiscard]] std::span< const int64_t > target_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > target_entity_group_ids() const;
+   [[nodiscard]] std::span< const int64_t > target_positions() const;
+   [[nodiscard]] std::span< const int64_t > target_indices() const;
+   [[nodiscard]] std::span< const int64_t > target_candidate_ids() const;
+   [[nodiscard]] std::span< const int64_t > target_depths() const;
+   [[nodiscard]] std::span< const int64_t > target_group_ids() const;
+   [[nodiscard]] std::span< const std::string > target_names() const;
+
+  private:
+   friend struct detail::SemanticFlatRelationPreparedGraphAccess;
+   explicit SemanticFlatRelationPreparedGraph(
+      std::shared_ptr< const detail::SemanticFlatRelationPreparedGraphData > data
+   );
+   std::shared_ptr< const detail::SemanticFlatRelationPreparedGraphData > data_;
+};
 
 /**
  * @brief Encode owned semantic values directly to native BatchEncoding.
@@ -72,7 +146,11 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    ~SemanticFlatRelationEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatRelationInput& input) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(
+      const SemanticFlatRelationGraphInput& input
+   ) const;
    void encode(const SemanticFlatRelationInput& input, BatchBuilder& builder) const;
+   void encode(const SemanticFlatRelationGraphInput& input, BatchBuilder& builder) const;
 
    template < views::StateView State, views::GroundActionRange Actions >
    [[nodiscard]] BatchBuilder::BatchEncoding encode(
@@ -176,6 +254,9 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticFlatRelationInput >& inputs
    ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const SemanticFlatRelationGraphInput > inputs
+   ) const;
 
    /**
     * Encode a batch of already prepared direct-View graphs.
@@ -213,12 +294,18 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
   private:
    friend class SemanticFlatHorizonEncoderEngine;
+   friend class SemanticFlatRelationAssemblyBuilder;
    friend struct detail::SemanticFlatHorizonRelationEngineAccess;
 
    SemanticFlatRelationEncoderEngine(
       std::shared_ptr< const SemanticSchemaContext > schema,
       Config config,
       bool compile_relation_plan
+   );
+   SemanticFlatRelationEncoderEngine(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config config,
+      std::vector< std::shared_ptr< FlatEmitterComponent > > components
    );
 
    void configure_horizon(
@@ -254,6 +341,42 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    // Keep the engine's established one-pointer object layout while components
    // receive weak ownership of the shared implementation.
    std::unique_ptr< std::shared_ptr< Impl > > impl_;
+};
+
+/** Mutable canonical semantic relation assembly; `compile()` freezes it. */
+class MIFROST_API SemanticFlatRelationAssemblyBuilder {
+  public:
+   using Config = FlatRelationEncoderConfig;
+
+   SemanticFlatRelationAssemblyBuilder(
+      std::vector< SemanticPredicateSpec > predicates,
+      std::vector< SemanticActionSpec > actions,
+      Config config = {}
+   );
+   SemanticFlatRelationAssemblyBuilder(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config config = {}
+   );
+   SemanticFlatRelationAssemblyBuilder(const SemanticFlatRelationAssemblyBuilder&) = delete;
+   SemanticFlatRelationAssemblyBuilder& operator=(const SemanticFlatRelationAssemblyBuilder&) =
+      delete;
+   SemanticFlatRelationAssemblyBuilder(SemanticFlatRelationAssemblyBuilder&&) noexcept;
+   SemanticFlatRelationAssemblyBuilder& operator=(SemanticFlatRelationAssemblyBuilder&&) noexcept;
+   ~SemanticFlatRelationAssemblyBuilder();
+
+   void add_component(std::unique_ptr< FlatEmitterComponent > component);
+
+   template < typename Component, typename... Args >
+   void emplace_component(Args&&... args)
+   {
+      add_component(std::make_unique< Component >(std::forward< Args >(args)...));
+   }
+
+   [[nodiscard]] SemanticFlatRelationEncoderEngine compile() &&;
+
+  private:
+   struct Impl;
+   std::unique_ptr< Impl > impl_;
 };
 
 namespace detail {

@@ -43,14 +43,14 @@ std::shared_ptr< const SemanticSchemaContext > make_schema_context(
 
 bool SemanticFlatHorizonAnnotations::contains(std::string_view key) const
 {
-   return entries_.contains(std::string(key));
+   return SemanticAnnotations::contains(key);
 }
 
 SemanticFlatHorizonInput::SemanticFlatHorizonInput(
    const SemanticTransitionDAG& graph,
    SemanticFlatHorizonAnnotations annotations
 )
-    : graph_(&graph), annotations_(std::move(annotations))
+    : Base(graph, std::move(annotations))
 {
 }
 
@@ -58,21 +58,13 @@ SemanticFlatHorizonInput::SemanticFlatHorizonInput(
    std::shared_ptr< const SemanticTransitionDAG > graph,
    SemanticFlatHorizonAnnotations annotations
 )
-    : owned_graph_(std::move(graph)),
-      graph_(owned_graph_.get()),
-      annotations_(std::move(annotations))
+    : Base(std::move(graph), std::move(annotations))
 {
-   if(graph_ == nullptr) {
-      throw std::invalid_argument("Semantic Horizon input graph must not be null");
-   }
 }
 
 const SemanticTransitionDAG& SemanticFlatHorizonInput::graph() const
 {
-   if(graph_ == nullptr) {
-      throw std::logic_error("Semantic Horizon input graph is not initialized");
-   }
-   return *graph_;
+   return source();
 }
 
 struct SemanticFlatHorizonEncoderEngine::Impl {
@@ -99,7 +91,7 @@ struct SemanticFlatHorizonEncoderEngine::Impl {
 struct SemanticFlatHorizonAssemblyBuilder::Impl {
    std::shared_ptr< const SemanticSchemaContext > schema;
    Config config;
-   std::vector< std::unique_ptr< FlatEmitterComponent > > components;
+   SemanticAssemblyComponents< FlatEmitterComponent > components;
 };
 
 SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
@@ -303,10 +295,7 @@ void SemanticFlatHorizonAssemblyBuilder::add_component(
    if(not impl_) {
       throw std::logic_error("Semantic Horizon assembly builder was already compiled");
    }
-   if(not component) {
-      throw std::invalid_argument("Semantic Horizon extension component must not be null");
-   }
-   impl_->components.push_back(std::move(component));
+   impl_->components.add(std::move(component));
 }
 
 SemanticFlatHorizonEncoderEngine SemanticFlatHorizonAssemblyBuilder::compile() &&
@@ -315,11 +304,7 @@ SemanticFlatHorizonEncoderEngine SemanticFlatHorizonAssemblyBuilder::compile() &
       throw std::logic_error("Semantic Horizon assembly builder was already compiled");
    }
    auto state = std::move(impl_);
-   std::vector< std::shared_ptr< FlatEmitterComponent > > components;
-   components.reserve(state->components.size());
-   for(auto& component : state->components) {
-      components.emplace_back(std::move(component));
-   }
+   auto components = std::move(state->components).freeze();
    return SemanticFlatHorizonEncoderEngine(
       std::move(state->schema), std::move(state->config), std::move(components)
    );

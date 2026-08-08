@@ -476,7 +476,60 @@ std::vector< FlatCompositionRelationSpec > semantic_relation_specs(const FlatRel
 
 }  // namespace
 
+SemanticFlatRelationGraphInput::SemanticFlatRelationGraphInput(
+   const SemanticFlatRelationInput& input,
+   SemanticAnnotations annotations
+)
+    : Base(input, std::move(annotations))
+{
+}
+
+SemanticFlatRelationGraphInput::SemanticFlatRelationGraphInput(
+   std::shared_ptr< const SemanticFlatRelationInput > input,
+   SemanticAnnotations annotations
+)
+    : Base(std::move(input), std::move(annotations))
+{
+}
+
 namespace detail {
+
+struct SemanticFlatRelationPreparedGraphData {
+   const void* canonical = nullptr;
+   const FlatRelationEncoderConfig* config = nullptr;
+   SemanticAnnotations annotations;
+   std::span< const std::string > objects;
+   std::span< const SemanticAtom > static_facts;
+   std::span< const SemanticAtom > state_facts;
+   std::span< const SemanticGoalLevel > goal_levels;
+   std::shared_ptr< const SemanticProblemContext > problem_context;
+   const hash_set< SemanticAtom, SemanticAtomHash >* fact_membership = nullptr;
+   const SemanticEncodingContext* context = nullptr;
+};
+
+struct SemanticFlatRelationPreparedGraphAccess {
+   static SemanticFlatRelationPreparedGraph create(
+      std::shared_ptr< const SemanticFlatRelationPreparedGraphData > data
+   )
+   {
+      return SemanticFlatRelationPreparedGraph(std::move(data));
+   }
+
+   static const void* canonical(const SemanticFlatRelationPreparedGraph& prepared)
+   {
+      return prepared.data_->canonical;
+   }
+
+   static const SemanticFlatRelationPreparedGraphData& data(
+      const SemanticFlatRelationPreparedGraph& prepared
+   )
+   {
+      if(not prepared.data_) {
+         throw std::logic_error("Semantic flat relation prepared graph is not initialized");
+      }
+      return *prepared.data_;
+   }
+};
 
 struct SemanticFlatHorizonPreparedNode {
    hash_set< SemanticAtom, SemanticAtomHash > fact_keys;
@@ -520,6 +573,169 @@ struct SemanticFlatHorizonPreparedGraphAccess {
 };
 
 }  // namespace detail
+
+namespace {
+
+const detail::SemanticFlatRelationPreparedGraphData& relation_view_data(
+   const SemanticFlatRelationPreparedGraph& prepared
+)
+{
+   return detail::SemanticFlatRelationPreparedGraphAccess::data(prepared);
+}
+
+const SemanticEncodingContext& relation_view_context(
+   const SemanticFlatRelationPreparedGraph& prepared
+)
+{
+   const auto* context = relation_view_data(prepared).context;
+   if(context == nullptr) {
+      throw std::logic_error("Semantic flat relation prepared graph has no encoding context");
+   }
+   return *context;
+}
+
+}  // namespace
+
+SemanticFlatRelationPreparedGraph::SemanticFlatRelationPreparedGraph(
+   std::shared_ptr< const detail::SemanticFlatRelationPreparedGraphData > data
+)
+    : data_(std::move(data))
+{
+   if(not data_) {
+      throw std::invalid_argument("Semantic flat relation prepared graph data must not be null");
+   }
+}
+
+SemanticFlatRelationPreparedGraph::~SemanticFlatRelationPreparedGraph() = default;
+
+const FlatRelationEncoderConfig& SemanticFlatRelationPreparedGraph::config() const
+{
+   const auto* config = relation_view_data(*this).config;
+   if(config == nullptr) {
+      throw std::logic_error("Semantic flat relation prepared graph has no encoder config");
+   }
+   return *config;
+}
+
+const SemanticAnnotations& SemanticFlatRelationPreparedGraph::annotations() const
+{
+   return relation_view_data(*this).annotations;
+}
+
+std::span< const std::string > SemanticFlatRelationPreparedGraph::objects() const
+{
+   return relation_view_data(*this).objects;
+}
+
+std::span< const SemanticAtom > SemanticFlatRelationPreparedGraph::static_facts() const
+{
+   return relation_view_data(*this).static_facts;
+}
+
+std::span< const SemanticAtom > SemanticFlatRelationPreparedGraph::state_facts() const
+{
+   return relation_view_data(*this).state_facts;
+}
+
+std::span< const SemanticGoalLevel > SemanticFlatRelationPreparedGraph::goal_levels() const
+{
+   return relation_view_data(*this).goal_levels;
+}
+
+const std::shared_ptr< const SemanticProblemContext >&
+SemanticFlatRelationPreparedGraph::problem_context() const
+{
+   return relation_view_data(*this).problem_context;
+}
+
+bool SemanticFlatRelationPreparedGraph::contains_fact(const SemanticAtom& atom) const
+{
+   const auto* membership = relation_view_data(*this).fact_membership;
+   if(membership == nullptr) {
+      throw std::logic_error("Semantic flat relation prepared graph has no fact membership");
+   }
+   return membership->contains(atom);
+}
+
+int64_t SemanticFlatRelationPreparedGraph::entity_count() const
+{
+   return relation_view_context(*this).entity_count;
+}
+
+std::span< const std::string > SemanticFlatRelationPreparedGraph::entity_names() const
+{
+   return relation_view_context(*this).entity_names;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::entity_role_ids() const
+{
+   return relation_view_context(*this).entity_role_ids;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::object_entity_indices() const
+{
+   return relation_view_context(*this).object_indices;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::predicate_entity_indices() const
+{
+   return relation_view_context(*this).predicate_entity_indices;
+}
+
+std::span< const SemanticGroundAction > SemanticFlatRelationPreparedGraph::action_identities() const
+{
+   return relation_view_context(*this).unique_actions;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::history_entity_indices() const
+{
+   return relation_view_context(*this).history_entity_indices;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::history_steps() const
+{
+   return relation_view_context(*this).history_entity_dt;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_entity_indices() const
+{
+   return relation_view_context(*this).target_entity_indices;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_entity_group_ids() const
+{
+   return relation_view_context(*this).target_entity_group_ids;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_positions() const
+{
+   return relation_view_context(*this).target_columns.positions;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_indices() const
+{
+   return relation_view_context(*this).target_columns.indices;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_candidate_ids() const
+{
+   return relation_view_context(*this).target_columns.candidate_ids;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_depths() const
+{
+   return relation_view_context(*this).target_columns.depths;
+}
+
+std::span< const int64_t > SemanticFlatRelationPreparedGraph::target_group_ids() const
+{
+   return relation_view_context(*this).target_columns.group_ids;
+}
+
+std::span< const std::string > SemanticFlatRelationPreparedGraph::target_names() const
+{
+   return relation_view_context(*this).target_columns.names;
+}
 
 namespace {
 
@@ -901,6 +1117,7 @@ struct SemanticFlatRelationEncoderEngine::Impl:
     * no storage-mode pointer left for the emitters to test.
     */
    struct PreparedRelationGraph {
+      SemanticAnnotations annotations;
       const std::vector< std::string >* objects_lane = nullptr;
       std::span< const SemanticAtom > static_facts_lane;
       std::span< const SemanticAtom > state_facts_lane;
@@ -937,6 +1154,41 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       }
    };
 
+   [[nodiscard]] static const PreparedRelationGraph& canonical_relation_graph(
+      const SemanticFlatRelationPreparedGraph& prepared
+   )
+   {
+      const auto* value = static_cast< const PreparedRelationGraph* >(
+         detail::SemanticFlatRelationPreparedGraphAccess::canonical(prepared)
+      );
+      if(value == nullptr) {
+         throw std::logic_error("Semantic flat relation view has no canonical preparation");
+      }
+      return *value;
+   }
+
+   [[nodiscard]] SemanticFlatRelationPreparedGraph public_relation_graph(
+      const PreparedRelationGraph& prepared
+   ) const
+   {
+      return detail::SemanticFlatRelationPreparedGraphAccess::create(
+         std::make_shared< detail::SemanticFlatRelationPreparedGraphData >(
+            detail::SemanticFlatRelationPreparedGraphData{
+               .canonical = &prepared,
+               .config = &config,
+               .annotations = prepared.annotations,
+               .objects = prepared.objects(),
+               .static_facts = prepared.static_facts(),
+               .state_facts = prepared.state_facts(),
+               .goal_levels = prepared.goal_entries,
+               .problem_context = prepared.problem_context,
+               .fact_membership = &prepared.fact_membership(),
+               .context = &prepared.context,
+            }
+         )
+      );
+   }
+
    enum class RelationLane {
       facts,
       goals,
@@ -970,11 +1222,11 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       void plan_graph(const FlatInputView& input, FlatNodePlanBuilder& builder) const override
       {
          const auto owner = require_owner(owner_);
-         const auto& prepared = input.get< PreparedRelationGraph >();
-         for(int64_t index = 0; index < prepared.context.entity_count; ++index) {
-            const auto key = owner->config.export_node_names
-                                ? prepared.context.entity_names.at(static_cast< size_t >(index))
-                                : "entity:" + std::to_string(index);
+         const auto& prepared = input.get< SemanticFlatRelationPreparedGraph >();
+         const auto names = prepared.entity_names();
+         for(int64_t index = 0; index < prepared.entity_count(); ++index) {
+            const auto key = owner->config.export_node_names ? names[static_cast< size_t >(index)]
+                                                             : "entity:" + std::to_string(index);
             (void) builder.add_node_from_source(std::string(kFlatEntityNodeType), index, key);
          }
       }
@@ -1019,8 +1271,11 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       }
       void emit(const FlatInputView& input, FlatGraphContext& context) const override
       {
-         require_owner(owner_)->emit_relation_lane(
-            input.get< PreparedRelationGraph >(), lane_, context
+         const auto owner = require_owner(owner_);
+         owner->emit_relation_lane(
+            owner->canonical_relation_graph(input.get< SemanticFlatRelationPreparedGraph >()),
+            lane_,
+            context
          );
       }
 
@@ -1052,8 +1307,14 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       }
       void write_fields(const FlatGraphContext& context, FlatFieldWriter& writer) const override
       {
-         require_owner(owner_)->write_relation_fields(
-            context.input.get< PreparedRelationGraph >(), fields_, context, writer
+         const auto owner = require_owner(owner_);
+         owner->write_relation_fields(
+            owner->canonical_relation_graph(
+               context.input.get< SemanticFlatRelationPreparedGraph >()
+            ),
+            fields_,
+            context,
+            writer
          );
       }
 
@@ -1083,8 +1344,12 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       void
       write_metadata(const FlatGraphContext& context, FlatMetadataWriter& writer) const override
       {
-         require_owner(owner_)->write_relation_metadata(
-            context.input.get< PreparedRelationGraph >(), writer
+         const auto owner = require_owner(owner_);
+         owner->write_relation_metadata(
+            owner->canonical_relation_graph(
+               context.input.get< SemanticFlatRelationPreparedGraph >()
+            ),
+            writer
          );
       }
 
@@ -2383,11 +2648,13 @@ struct SemanticFlatRelationEncoderEngine::Impl:
     * mode.
     */
    template < typename Source >
-   PreparedRelationGraph prepare_source(const Source& source) const
+   PreparedRelationGraph
+   prepare_source(const Source& source, SemanticAnnotations annotations = {}) const
    {
       validate_source(source);
 
       PreparedRelationGraph prepared;
+      prepared.annotations = std::move(annotations);
       prepared.objects_lane = &source.objects();
       prepared.static_facts_lane = source.static_facts();
       prepared.state_facts_lane = source.state_facts();
@@ -2484,6 +2751,11 @@ struct SemanticFlatRelationEncoderEngine::Impl:
    PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationInput& input) const
    {
       return prepare_source(CompatibilitySource{&input});
+   }
+
+   PreparedRelationGraph prepare_relation_graph(const SemanticFlatRelationGraphInput& input) const
+   {
+      return prepare_source(CompatibilitySource{&input.input()}, input.annotations());
    }
 
    void emit_relation_lane(
@@ -3425,7 +3697,18 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       if(composition_plan == nullptr) {
          throw std::logic_error("semantic flat composition plan is not available");
       }
-      composition_plan->append_graph(FlatInputView::from(prepared), builder);
+      const auto view = public_relation_graph(prepared);
+      composition_plan->append_graph(FlatInputView::from(view), builder);
+   }
+
+   void append_composed(const SemanticFlatRelationGraphInput& input, BatchBuilder& builder) const
+   {
+      const auto prepared = prepare_relation_graph(input);
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      const auto view = public_relation_graph(prepared);
+      composition_plan->append_graph(FlatInputView::from(view), builder);
    }
 
    /**
@@ -3446,8 +3729,13 @@ struct SemanticFlatRelationEncoderEngine::Impl:
          }
       }
       std::vector< FlatInputView > views;
-      views.reserve(graphs.size());
+      std::vector< SemanticFlatRelationPreparedGraph > public_views;
+      public_views.reserve(graphs.size());
       for(const auto& graph : graphs) {
+         public_views.push_back(public_relation_graph(graph));
+      }
+      views.reserve(graphs.size());
+      for(const auto& graph : public_views) {
          views.push_back(FlatInputView::from(graph));
       }
       return composition_plan->encode_batch(std::span{views});
@@ -3455,6 +3743,21 @@ struct SemanticFlatRelationEncoderEngine::Impl:
 
    BatchBuilder::BatchEncoding compose_many(
       std::span< const SemanticFlatRelationInput > inputs
+   ) const
+   {
+      if(composition_plan == nullptr) {
+         throw std::logic_error("semantic flat composition plan is not available");
+      }
+      std::vector< PreparedRelationGraph > graphs;
+      graphs.reserve(inputs.size());
+      for(const auto& input : inputs) {
+         graphs.push_back(prepare_relation_graph(input));
+      }
+      return compose_prepared(std::move(graphs));
+   }
+
+   BatchBuilder::BatchEncoding compose_many(
+      std::span< const SemanticFlatRelationGraphInput > inputs
    ) const
    {
       if(composition_plan == nullptr) {
@@ -3498,7 +3801,8 @@ struct SemanticFlatRelationEncoderEngine::Impl:
          throw std::logic_error("semantic flat composition plan is not available");
       }
       const auto prepared = prepare_relation_graph(input);
-      composition_plan->append_graph(FlatInputView::from(prepared), builder);
+      const auto view = public_relation_graph(prepared);
+      composition_plan->append_graph(FlatInputView::from(view), builder);
    }
 
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const
@@ -3508,6 +3812,12 @@ struct SemanticFlatRelationEncoderEngine::Impl:
       );
       writer.finalize(encoding);
    }
+};
+
+struct SemanticFlatRelationAssemblyBuilder::Impl {
+   std::shared_ptr< const SemanticSchemaContext > schema;
+   Config config;
+   SemanticAssemblyComponents< FlatEmitterComponent > components;
 };
 
 SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
@@ -3548,6 +3858,16 @@ SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
    }
 }
 
+SemanticFlatRelationEncoderEngine::SemanticFlatRelationEncoderEngine(
+   std::shared_ptr< const SemanticSchemaContext > schema,
+   Config config,
+   std::vector< std::shared_ptr< FlatEmitterComponent > > components
+)
+    : SemanticFlatRelationEncoderEngine(std::move(schema), std::move(config), false)
+{
+   impl()->build_composition_plan(false, nullptr, std::move(components));
+}
+
 SemanticFlatRelationEncoderEngine::Impl* SemanticFlatRelationEncoderEngine::impl() noexcept
 {
    return impl_->get();
@@ -3576,8 +3896,23 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
    return impl()->encode_many(std::span{&input, size_t{1}});
 }
 
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode(
+   const SemanticFlatRelationGraphInput& input
+) const
+{
+   return impl()->compose_many(std::span{&input, size_t{1}});
+}
+
 void SemanticFlatRelationEncoderEngine::encode(
    const SemanticFlatRelationInput& input,
+   BatchBuilder& builder
+) const
+{
+   impl()->append_composed(input, builder);
+}
+
+void SemanticFlatRelationEncoderEngine::encode(
+   const SemanticFlatRelationGraphInput& input,
    BatchBuilder& builder
 ) const
 {
@@ -3597,6 +3932,13 @@ BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
 ) const
 {
    return impl()->encode_many(std::span{inputs});
+}
+
+BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
+   std::span< const SemanticFlatRelationGraphInput > inputs
+) const
+{
+   return impl()->compose_many(inputs);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatRelationEncoderEngine::encode_batch(
@@ -3718,6 +4060,67 @@ void SemanticFlatRelationEncoderEngine::finalize_horizon_encoding(
 ) const
 {
    impl()->finalize_horizon_encoding(encoding, config);
+}
+
+SemanticFlatRelationAssemblyBuilder::SemanticFlatRelationAssemblyBuilder(
+   std::vector< SemanticPredicateSpec > predicates,
+   std::vector< SemanticActionSpec > actions,
+   Config config
+)
+    : SemanticFlatRelationAssemblyBuilder(
+         std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
+            .predicates = std::move(predicates),
+            .actions = std::move(actions),
+         }),
+         std::move(config)
+      )
+{
+}
+
+SemanticFlatRelationAssemblyBuilder::SemanticFlatRelationAssemblyBuilder(
+   std::shared_ptr< const SemanticSchemaContext > schema,
+   Config config
+)
+    : impl_(
+         std::make_unique< Impl >(
+            Impl{.schema = std::move(schema), .config = std::move(config), .components = {}}
+         )
+      )
+{
+   if(not impl_->schema) {
+      throw std::invalid_argument("Semantic flat relation assembly schema must not be null");
+   }
+}
+
+SemanticFlatRelationAssemblyBuilder::SemanticFlatRelationAssemblyBuilder(
+   SemanticFlatRelationAssemblyBuilder&&
+) noexcept = default;
+
+SemanticFlatRelationAssemblyBuilder& SemanticFlatRelationAssemblyBuilder::operator=(
+   SemanticFlatRelationAssemblyBuilder&&
+) noexcept = default;
+
+SemanticFlatRelationAssemblyBuilder::~SemanticFlatRelationAssemblyBuilder() = default;
+
+void SemanticFlatRelationAssemblyBuilder::add_component(
+   std::unique_ptr< FlatEmitterComponent > component
+)
+{
+   if(not impl_) {
+      throw std::logic_error("Semantic flat relation assembly builder was already compiled");
+   }
+   impl_->components.add(std::move(component));
+}
+
+SemanticFlatRelationEncoderEngine SemanticFlatRelationAssemblyBuilder::compile() &&
+{
+   if(not impl_) {
+      throw std::logic_error("Semantic flat relation assembly builder was already compiled");
+   }
+   auto state = std::move(impl_);
+   return SemanticFlatRelationEncoderEngine(
+      std::move(state->schema), std::move(state->config), std::move(state->components).freeze()
+   );
 }
 
 SemanticFlatRelationEncoderEngine detail::SemanticFlatHorizonRelationEngineAccess::make(
