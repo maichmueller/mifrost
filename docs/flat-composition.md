@@ -170,34 +170,61 @@ Fields and LGAN edges are derived after those components have populated the
 same final sink. One-shot, caller-owned builder, and batch APIs all execute
 these compiled plans.
 
-Downstream native libraries can extend that canonical assembly before it is
-compiled with `SemanticFlatHorizonAssemblyBuilder`. Added components use the
-ordinary `FlatEmitterComponent` lifecycle and receive
-`SemanticFlatHorizonPreparedGraph` through `FlatInputView`; canonical and
-downstream components therefore plan nodes and emit into the same graph-local
-`FlatRelationSink`:
+The assembly ownership model is shared by semantic encoders rather than owned
+by Horizon. `SemanticAnnotations`, `SemanticEncoderInput<Source>`, and
+`SemanticAssemblyComponents<Component>` live in the backend-neutral common
+layer. They define sidecar lifetime, borrowed-or-owned inputs, exclusive
+pre-compilation component ownership, and the one-way freeze operation. Concrete
+encoder families still define their own component contracts and compiled
+runtimes: flat encoders use `FlatEmitterComponent`; heterogeneous and
+homogeneous encoders are not forced through a lowest-common-denominator emitter
+API.
+
+The canonical flat relation and flat Horizon encoders both expose concrete
+assembly builders. Added components use the ordinary `FlatEmitterComponent`
+lifecycle and receive the corresponding public prepared view through
+`FlatInputView`. Canonical and downstream components therefore plan nodes and
+emit into the same graph-local `FlatRelationSink`:
+
+```cpp
+SemanticFlatRelationAssemblyBuilder builder(schema, config);
+builder.add_component(std::make_unique<MyNativeRelationComponent>());
+auto engine = std::move(builder).compile();
+
+SemanticAnnotations annotations;
+annotations.emplace<MyGraphData>("my_data", /* constructor arguments */);
+auto batch = engine.encode(SemanticFlatRelationGraphInput(input, std::move(annotations)));
+```
+
+The Horizon specialization follows the same lifecycle:
 
 ```cpp
 SemanticFlatHorizonAssemblyBuilder builder(schema, config);
 builder.add_component(std::make_unique<MyNativeHorizonComponent>());
 auto engine = std::move(builder).compile();
 
-SemanticFlatHorizonAnnotations annotations;
+SemanticAnnotations annotations;
 annotations.emplace<MyGraphData>("my_data", /* constructor arguments */);
 auto batch = engine.encode(SemanticFlatHorizonInput(dag, std::move(annotations)));
 ```
 
-`SemanticFlatHorizonPreparedGraph` is read-only. It exposes the source DAG,
-canonical entity/state/target mappings, candidate identities, goal and delta
-information, and the graph's extension annotations through accessors and
-spans. Components must not retain the view after a lifecycle callback. A
-reference-backed `SemanticFlatHorizonInput` borrows its DAG through the
-synchronous `encode` or `encode_batch` call; its shared-pointer constructor can
-instead own the DAG. Annotation values are held as `shared_ptr<const T>`, so a
-copied batch input safely shares immutable sidecar data without engine-local or
-global mutable state.
+`SemanticFlatRelationPreparedGraph` and `SemanticFlatHorizonPreparedGraph` are
+read-only. The relation view exposes objects, facts, goals, canonical entity and
+target mappings, action/history identities, fact membership, and annotations.
+The Horizon view additionally exposes the source DAG, candidate identities,
+topology, and exact transition deltas. Both are façades over the canonical
+graph preparation consumed by built-ins; no extension-only prepared graph is
+copied or maintained. Components must not retain a prepared view or returned
+span after a lifecycle callback.
 
-Compilation freezes the canonical and downstream components together. The
+Reference-backed semantic inputs borrow their source through synchronous
+`encode` or `encode_batch`; shared-pointer constructors own the source instead.
+Annotation values are held as `shared_ptr<const T>`, so copied batch inputs
+safely share immutable sidecar data without engine-local or global mutable
+state. `SemanticFlatHorizonAnnotations` remains a source-compatible wrapper for
+`SemanticAnnotations` and preserves the Horizon-specific exported type.
+
+Compilation freezes canonical and downstream components together. The
 resulting engine is immutable and reusable across batches and threads; one
 combined node-planning phase, relation sink, relation-field write, and final
 relation-major collation are performed for each encoding. Relation aliases and
@@ -208,6 +235,15 @@ Component ownership is transferred exclusively into the builder. Since a
 compiled engine may be used concurrently, component lifecycle callbacks must
 remain logically const and thread-safe; graph-local mutable work belongs in
 `FlatGraphScratch`.
+
+This generalization intentionally separates lifecycle from packing kernels.
+The shared common layer is ready for heterogeneous and homogeneous concrete
+builders, but those families need family-specific compiled contexts before they
+can offer the same one-pass extension guarantee. Merely accepting common
+annotations in their current imperative encoders would not make their schema,
+node planning, and relation writes compositional. Flat relation and flat
+Horizon are therefore the first complete family implementations of the shared
+assembly contract.
 
 The neutral C++ suite covers exact output parity between public execution
 forms, the full semantic policy matrix, mixed target-name metadata, relation

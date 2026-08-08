@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <concepts>
 #include <future>
 #include <memory>
 #include <set>
@@ -13,6 +14,10 @@
 
 namespace mifrost {
 namespace {
+
+static_assert(
+   not std::constructible_from< SemanticFlatRelationGraphInput, const SemanticFlatRelationInput&& >
+);
 
 struct DemoInput {
    std::vector< std::string > objects;
@@ -66,6 +71,75 @@ class FactsComponent final: public FlatEmitterComponent {
    void write_fields(const FlatGraphContext& context, FlatFieldWriter& writer) const override
    {
       writer.set("marker", std::span{&context.input.get< DemoInput >().marker, size_t{1}});
+   }
+};
+
+struct RelationExtensionData {
+   int64_t marker = 0;
+};
+
+class SemanticRelationExtensionComponent final: public FlatEmitterComponent {
+  public:
+   [[nodiscard]] std::string_view name() const noexcept override
+   {
+      return "semantic_relation_sdk_test";
+   }
+
+   void declare_schema(FlatSchemaPlanBuilder& builder) const override
+   {
+      builder.register_relation(
+         opaque_relation_key("sdk_relation"),
+         make_nonpredicate_tuple_layout(0, {FlatSlotRole::state_slot}),
+         RelationUsage::parent
+      );
+   }
+
+   void declare_fields(FlatFieldPlanBuilder& builder) const override
+   {
+      builder.register_field(
+         "sdk_relation_marker",
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+      );
+   }
+
+   void declare_metadata(FlatMetadataPlanBuilder& builder) const override
+   {
+      builder.claim_graph_attr("sdk_relation_metadata");
+   }
+
+   void plan_graph(const FlatInputView& input, FlatNodePlanBuilder& builder) const override
+   {
+      const auto& prepared = input.get< SemanticFlatRelationPreparedGraph >();
+      const auto marker = prepared.annotations().get< RelationExtensionData >("sdk").marker;
+      EXPECT_FALSE(prepared.objects().empty());
+      EXPECT_FALSE(prepared.state_facts().empty());
+      EXPECT_TRUE(prepared.contains_fact(prepared.state_facts().front()));
+      (void) builder.add_node(std::string(kFlatEntityNodeType), "sdk:" + std::to_string(marker));
+   }
+
+   void emit(const FlatInputView& input, FlatGraphContext& context) const override
+   {
+      const auto& prepared = input.get< SemanticFlatRelationPreparedGraph >();
+      const auto marker = prepared.annotations().get< RelationExtensionData >("sdk").marker;
+      const auto entity_type = context.nodes.schema().id_for(kFlatEntityNodeType);
+      const std::array< int64_t, 1 > args = {
+         context.nodes.index(entity_type, "sdk:" + std::to_string(marker))
+      };
+      context.emit(opaque_relation_key("sdk_relation"), args);
+   }
+
+   void write_fields(const FlatGraphContext& context, FlatFieldWriter& writer) const override
+   {
+      const auto& marker = context.input.get< SemanticFlatRelationPreparedGraph >()
+                              .annotations()
+                              .get< RelationExtensionData >("sdk")
+                              .marker;
+      writer.set("sdk_relation_marker", std::span{&marker, size_t{1}});
+   }
+
+   void write_metadata(const FlatGraphContext&, FlatMetadataWriter& writer) const override
+   {
+      writer.set_graph_attr("sdk_relation_metadata", std::string("canonical-plus-extension"));
    }
 };
 
@@ -614,6 +688,73 @@ TEST(FlatCompositionTest, SemanticRelationEngineUsesCompiledPlanAfterParity)
    const auto encoding = engine.encode(input);
 
    EXPECT_EQ(encoding.num_graphs, 1);
+}
+
+TEST(FlatCompositionTest, SemanticRelationAssemblyExtendsCanonicalOnePassEncoding)
+{
+   SemanticFlatRelationEncoderEngine::Config config;
+   config.pack_relation_args_relation_major = true;
+   SemanticFlatRelationAssemblyBuilder builder(
+      std::vector< SemanticPredicateSpec >{{SemanticPredicateCategory::fluent, "at", 1}}, {}, config
+   );
+   builder.emplace_component< SemanticRelationExtensionComponent >();
+   auto engine = std::move(builder).compile();
+
+   SemanticFlatRelationInput first;
+   first.objects = {"a", "b"};
+   first.state_facts = {{0, {0}}};
+   auto second = first;
+   second.state_facts = {{0, {1}}};
+
+   SemanticAnnotations first_annotations;
+   first_annotations.emplace< RelationExtensionData >("sdk", RelationExtensionData{7});
+   SemanticAnnotations second_annotations;
+   second_annotations.emplace< RelationExtensionData >("sdk", RelationExtensionData{11});
+   std::vector< SemanticFlatRelationGraphInput > inputs;
+   inputs.emplace_back(first, std::move(first_annotations));
+   inputs.emplace_back(
+      std::make_shared< const SemanticFlatRelationInput >(std::move(second)),
+      std::move(second_annotations)
+   );
+
+   const auto encoding = engine.encode_batch(std::span{inputs});
+
+   EXPECT_EQ(encoding.num_graphs, 2);
+   EXPECT_EQ(
+      std::get< std::vector< int64_t > >(encoding.graph_fields.at("sdk_relation_marker").values),
+      (std::vector< int64_t >{7, 11})
+   );
+   EXPECT_EQ(
+      std::get< std::string >(encoding.graph_attrs.at("sdk_relation_metadata")),
+      "canonical-plus-extension"
+   );
+   const auto relation = std::ranges::find(engine.get_relation_names(), "sdk_relation");
+   ASSERT_NE(relation, engine.get_relation_names().end());
+   const auto relation_id = static_cast< size_t >(
+      std::distance(engine.get_relation_names().begin(), relation)
+   );
+   const auto relation_count = engine.get_relation_names().size();
+   const auto& counts = std::get< std::vector< int64_t > >(
+      encoding.graph_fields.at(std::string(kRelationCountsField)).values
+   );
+   ASSERT_EQ(counts.size(), relation_count * 2);
+   EXPECT_EQ(counts[relation_id], 1);
+   EXPECT_EQ(counts[relation_count + relation_id], 1);
+   EXPECT_EQ(
+      std::get< std::string >(encoding.graph_attrs.at(std::string(kRelationArgsLayoutAttr))),
+      std::string(kRelationArgsRelationMajorLayout)
+   );
+
+   const auto expected_single = engine.encode(inputs.front());
+   BatchBuilder batch_builder;
+   engine.encode(inputs.front(), batch_builder);
+   batch_builder.next_graph();
+   auto appended_single = batch_builder.build();
+   engine.finalize_batch_encoding(appended_single);
+   const auto parity = compare_flat_batch_encodings(expected_single, appended_single);
+   ASSERT_TRUE(parity.equal) << parity.mismatch;
+
+   EXPECT_THROW((void) std::move(builder).compile(), std::logic_error);
 }
 
 TEST(FlatCompositionTest, SemanticRelationAcceptsAnotherProblemOfTheSameSchema)
