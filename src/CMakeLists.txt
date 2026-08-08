@@ -1191,8 +1191,10 @@ else ()
         "core/encoders/hetero/semantic_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
         "core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
+        "core/semantic/records.hpp"
         "core/semantic/semantic_transition_dag.hpp"
         "core/semantic/views.hpp"
+        "core/views/semantic_preparation.hpp"
     )
     foreach (_mifrost_header IN LISTS _mifrost_neutral_public_headers)
         get_filename_component(_mifrost_header_dir "${_mifrost_header}" DIRECTORY)

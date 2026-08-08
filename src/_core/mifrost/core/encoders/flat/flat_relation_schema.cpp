@@ -135,6 +135,20 @@ std::optional< int > FlatRelationSchema::try_id_for(const RelationKey& key) cons
    return it->second;
 }
 
+const RelationKey& FlatRelationSchema::key_for_id(int relation_id) const
+{
+   if(relation_id < 0 or static_cast< size_t >(relation_id) >= size()) {
+      throw std::out_of_range("Flat relation id is out of range");
+   }
+   const auto entry = std::ranges::find(key_to_id_, relation_id, [](const auto& item) {
+      return item.second;
+   });
+   if(entry == key_to_id_.end()) {
+      throw std::logic_error("Flat relation schema is missing a structured key");
+   }
+   return entry->first;
+}
+
 int FlatRelationSchema::id_for(const std::string& name) const
 {
    const auto it = metadata_.relation_name_to_id.find(name);

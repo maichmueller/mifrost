@@ -226,7 +226,13 @@ void init_semantic_hgraph_encoder(nb::module_& m)
          "dag"_a,
          "builder"_a
       )
-      .def("encode_batch", &SemanticFlatHorizonEncoderEngine::encode_batch, "dags"_a)
+      .def(
+         "encode_batch",
+         nb::overload_cast< const std::vector< SemanticTransitionDAG >& >(
+            &SemanticFlatHorizonEncoderEngine::encode_batch, nb::const_
+         ),
+         "dags"_a
+      )
       .def(
          "finalize_batch_encoding",
          &SemanticFlatHorizonEncoderEngine::finalize_batch_encoding,

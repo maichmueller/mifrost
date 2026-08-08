@@ -128,6 +128,8 @@ class FlatRelationSchema {
 
    [[nodiscard]] int id_for(const RelationKey& key) const;
    [[nodiscard]] std::optional< int > try_id_for(const RelationKey& key) const;
+   /** Return the canonical structured key assigned to a compiled relation id. */
+   [[nodiscard]] const RelationKey& key_for_id(int relation_id) const;
    [[nodiscard]] int id_for(const std::string& name) const;
    [[nodiscard]] std::optional< int > try_id_for(const std::string& name) const;
 

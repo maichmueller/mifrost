@@ -27,10 +27,15 @@
 namespace mifrost {
 
 class SemanticFlatHorizonEncoderEngine;
+class SemanticFlatHorizonInput;
 class SemanticTransitionDAG;
 struct SemanticFlatHorizonEncoderConfig;
+class FlatEmitterComponent;
 namespace canonical::detail {
 struct ViewPreparation;
+}
+namespace detail {
+struct SemanticFlatHorizonRelationEngineAccess;
 }
 
 /*
@@ -208,19 +213,29 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
 
   private:
    friend class SemanticFlatHorizonEncoderEngine;
+   friend struct detail::SemanticFlatHorizonRelationEngineAccess;
 
-   void configure_horizon(const SemanticFlatHorizonEncoderConfig& config);
+   SemanticFlatRelationEncoderEngine(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config config,
+      bool compile_relation_plan
+   );
+
+   void configure_horizon(
+      const SemanticFlatHorizonEncoderConfig& config,
+      std::vector< std::shared_ptr< FlatEmitterComponent > > components = {}
+   );
    void encode_horizon(
-      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonInput& input,
       const SemanticFlatHorizonEncoderConfig& config,
       BatchBuilder& builder
    ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_horizon_composed(
-      const SemanticTransitionDAG& dag,
+      const SemanticFlatHorizonInput& input,
       const SemanticFlatHorizonEncoderConfig& config
    ) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_horizon_composed_batch(
-      const std::vector< SemanticTransitionDAG >& dags,
+      std::span< const SemanticFlatHorizonInput > inputs,
       const SemanticFlatHorizonEncoderConfig& config
    ) const;
    void finalize_horizon_encoding(
@@ -234,8 +249,21 @@ class MIFROST_API SemanticFlatRelationEncoderEngine {
    ) const;
 
    struct Impl;
-   std::unique_ptr< Impl > impl_;
+   [[nodiscard]] Impl* impl() noexcept;
+   [[nodiscard]] const Impl* impl() const noexcept;
+   // Keep the engine's established one-pointer object layout while components
+   // receive weak ownership of the shared implementation.
+   std::unique_ptr< std::shared_ptr< Impl > > impl_;
 };
+
+namespace detail {
+struct SemanticFlatHorizonRelationEngineAccess {
+   [[nodiscard]] static SemanticFlatRelationEncoderEngine make(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      SemanticFlatRelationEncoderEngine::Config config
+   );
+};
+}  // namespace detail
 
 }  // namespace mifrost
 

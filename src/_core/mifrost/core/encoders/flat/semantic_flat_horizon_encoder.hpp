@@ -2,19 +2,186 @@
 #pragma once
 
 #include <boost/describe.hpp>
+#include <cstdint>
+#include <initializer_list>
 #include <memory>
+#include <span>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <typeindex>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "mifrost/core/api.hpp"
 #include "mifrost/core/batch_builder.hpp"
 #include "mifrost/core/encoders/common/default_relations.hpp"
 #include "mifrost/core/encoders/common/root_policy.hpp"
+#include "mifrost/core/encoders/flat/flat_composition.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/semantic/semantic_transition_dag.hpp"
 
 namespace mifrost {
+
+namespace detail {
+struct SemanticFlatHorizonPreparedGraphStorage;
+struct SemanticFlatHorizonPreparedGraphAccess;
+}  // namespace detail
+
+/**
+ * Immutable graph-local extension data carried alongside a semantic Horizon DAG.
+ *
+ * Values are shared as `const` objects. Copying this carrier is cheap and keeps
+ * every value alive through synchronous single-graph or batch encoding.
+ */
+class MIFROST_API SemanticFlatHorizonAnnotations {
+  public:
+   SemanticFlatHorizonAnnotations() = default;
+
+   template < typename T >
+   void set(std::string key, std::shared_ptr< const T > value)
+   {
+      if(key.empty()) {
+         throw std::invalid_argument("Semantic Horizon annotation key must not be empty");
+      }
+      if(not value) {
+         throw std::invalid_argument("Semantic Horizon annotation value must not be null");
+      }
+      entries_.insert_or_assign(
+         std::move(key), Entry{std::move(value), std::type_index(typeid(T))}
+      );
+   }
+
+   template < typename T, typename... Args >
+   std::shared_ptr< const T > emplace(std::string key, Args&&... args)
+   {
+      auto value = std::make_shared< const T >(std::forward< Args >(args)...);
+      set< T >(std::move(key), value);
+      return value;
+   }
+
+   template < typename T >
+   [[nodiscard]] const T* find(std::string_view key) const
+   {
+      const auto it = entries_.find(std::string(key));
+      if(it == entries_.end()) {
+         return nullptr;
+      }
+      if(it->second.type != std::type_index(typeid(T))) {
+         throw std::invalid_argument(
+            "Semantic Horizon annotation '" + std::string(key) + "' has the wrong type"
+         );
+      }
+      return static_cast< const T* >(it->second.value.get());
+   }
+
+   template < typename T >
+   [[nodiscard]] const T& get(std::string_view key) const
+   {
+      const auto* value = find< T >(key);
+      if(value == nullptr) {
+         throw std::invalid_argument(
+            "Semantic Horizon annotation '" + std::string(key) + "' is not present"
+         );
+      }
+      return *value;
+   }
+
+   [[nodiscard]] bool contains(std::string_view key) const;
+   [[nodiscard]] bool empty() const noexcept { return entries_.empty(); }
+   [[nodiscard]] size_t size() const noexcept { return entries_.size(); }
+
+  private:
+   struct Entry {
+      std::shared_ptr< const void > value;
+      std::type_index type;
+   };
+   std::unordered_map< std::string, Entry > entries_;
+};
+
+/**
+ * Borrowed-or-owned graph input plus immutable graph-local extension data.
+ *
+ * A reference-backed input is valid for the duration of `encode` or
+ * `encode_batch`. The shared-pointer constructor keeps the DAG alive itself.
+ */
+class MIFROST_API SemanticFlatHorizonInput {
+  public:
+   explicit SemanticFlatHorizonInput(
+      const SemanticTransitionDAG& graph,
+      SemanticFlatHorizonAnnotations annotations = {}
+   );
+   SemanticFlatHorizonInput(SemanticTransitionDAG&&, SemanticFlatHorizonAnnotations = {}) = delete;
+   explicit SemanticFlatHorizonInput(
+      std::shared_ptr< const SemanticTransitionDAG > graph,
+      SemanticFlatHorizonAnnotations annotations = {}
+   );
+
+   [[nodiscard]] const SemanticTransitionDAG& graph() const;
+   [[nodiscard]] const SemanticFlatHorizonAnnotations& annotations() const noexcept
+   {
+      return annotations_;
+   }
+
+  private:
+   std::shared_ptr< const SemanticTransitionDAG > owned_graph_;
+   const SemanticTransitionDAG* graph_ = nullptr;
+   SemanticFlatHorizonAnnotations annotations_;
+};
+
+/**
+ * Stable read-only view shared by canonical and downstream Horizon components.
+ *
+ * The view owns compact graph-local preparation while borrowing the source DAG
+ * for the duration of one synchronous encode operation.
+ */
+class MIFROST_API SemanticFlatHorizonPreparedGraph {
+  public:
+   SemanticFlatHorizonPreparedGraph(const SemanticFlatHorizonPreparedGraph&) = delete;
+   SemanticFlatHorizonPreparedGraph& operator=(const SemanticFlatHorizonPreparedGraph&) = delete;
+   SemanticFlatHorizonPreparedGraph(SemanticFlatHorizonPreparedGraph&&) noexcept = default;
+   SemanticFlatHorizonPreparedGraph& operator=(SemanticFlatHorizonPreparedGraph&&) noexcept =
+      default;
+   ~SemanticFlatHorizonPreparedGraph();
+
+   [[nodiscard]] const SemanticTransitionDAG& source_graph() const;
+   [[nodiscard]] const SemanticFlatHorizonEncoderConfig& config() const;
+   [[nodiscard]] const SemanticFlatHorizonAnnotations& annotations() const;
+   [[nodiscard]] std::span< const SemanticGoalLevel > goal_levels() const;
+   [[nodiscard]] std::span< const SemanticLiteral > goals() const;
+   [[nodiscard]] int64_t entity_count() const;
+   [[nodiscard]] std::span< const std::string > entity_names() const;
+   [[nodiscard]] std::span< const int64_t > entity_role_ids() const;
+   [[nodiscard]] std::span< const int64_t > object_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > predicate_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > state_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > target_entity_indices() const;
+   [[nodiscard]] std::span< const int64_t > target_entity_group_ids() const;
+   [[nodiscard]] std::span< const int64_t > target_positions() const;
+   [[nodiscard]] std::span< const int64_t > target_indices() const;
+   [[nodiscard]] std::span< const int64_t > target_candidate_ids() const;
+   [[nodiscard]] std::span< const int64_t > target_depths() const;
+   [[nodiscard]] std::span< const int64_t > target_group_ids() const;
+   [[nodiscard]] std::span< const std::string > target_names() const;
+   [[nodiscard]] int64_t canonical_state_entity_index(int64_t source_node_index) const;
+   [[nodiscard]] std::span< const SemanticLiteral > node_deltas(int64_t source_node_index) const;
+   [[nodiscard]] bool node_contains_fact(int64_t source_node_index, const SemanticAtom& atom) const;
+   [[nodiscard]] bool node_added_fluent(int64_t source_node_index, const SemanticAtom& atom) const;
+   [[nodiscard]] bool
+   node_removed_fluent(int64_t source_node_index, const SemanticAtom& atom) const;
+   [[nodiscard]] bool node_added_derived(int64_t source_node_index, const SemanticAtom& atom) const;
+   [[nodiscard]] bool
+   node_removed_derived(int64_t source_node_index, const SemanticAtom& atom) const;
+
+  private:
+   friend struct detail::SemanticFlatHorizonPreparedGraphAccess;
+   explicit SemanticFlatHorizonPreparedGraph(
+      std::shared_ptr< detail::SemanticFlatHorizonPreparedGraphStorage > storage
+   );
+   std::shared_ptr< detail::SemanticFlatHorizonPreparedGraphStorage > storage_;
+};
 
 /** Runtime policy for planner-neutral flat Horizon encoding. */
 struct SemanticFlatHorizonEncoderConfig: FlatRelationEncoderConfig {
@@ -64,9 +231,17 @@ class MIFROST_API SemanticFlatHorizonEncoderEngine {
    ~SemanticFlatHorizonEncoderEngine();
 
    [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticTransitionDAG& dag) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode(const SemanticFlatHorizonInput& input) const;
    void encode(const SemanticTransitionDAG& dag, BatchBuilder& builder) const;
+   void encode(const SemanticFlatHorizonInput& input, BatchBuilder& builder) const;
    [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
       const std::vector< SemanticTransitionDAG >& dags
+   ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::initializer_list< SemanticTransitionDAG > dags
+   ) const;
+   [[nodiscard]] BatchBuilder::BatchEncoding encode_batch(
+      std::span< const SemanticFlatHorizonInput > inputs
    ) const;
    void finalize_batch_encoding(BatchBuilder::BatchEncoding& encoding) const;
 
@@ -81,6 +256,49 @@ class MIFROST_API SemanticFlatHorizonEncoderEngine {
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_roles() const;
    [[nodiscard]] const std::vector< int64_t >& get_relation_slot_role_offsets() const;
    [[nodiscard]] const std::vector< std::string >& get_slot_role_names() const;
+
+  private:
+   friend class SemanticFlatHorizonAssemblyBuilder;
+   SemanticFlatHorizonEncoderEngine(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config config,
+      std::vector< std::shared_ptr< FlatEmitterComponent > > components
+   );
+   struct Impl;
+   std::unique_ptr< Impl > impl_;
+};
+
+/** Mutable canonical Horizon assembly; `compile()` freezes all components. */
+class MIFROST_API SemanticFlatHorizonAssemblyBuilder {
+  public:
+   using Config = SemanticFlatHorizonEncoderConfig;
+
+   SemanticFlatHorizonAssemblyBuilder(
+      std::vector< SemanticPredicateSpec > predicates,
+      std::vector< SemanticActionSpec > actions,
+      Config config = {}
+   );
+   SemanticFlatHorizonAssemblyBuilder(
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config config = {}
+   );
+   SemanticFlatHorizonAssemblyBuilder(const SemanticFlatHorizonAssemblyBuilder&) = delete;
+   SemanticFlatHorizonAssemblyBuilder& operator=(const SemanticFlatHorizonAssemblyBuilder&) =
+      delete;
+   SemanticFlatHorizonAssemblyBuilder(SemanticFlatHorizonAssemblyBuilder&&) noexcept;
+   SemanticFlatHorizonAssemblyBuilder& operator=(SemanticFlatHorizonAssemblyBuilder&&) noexcept;
+   ~SemanticFlatHorizonAssemblyBuilder();
+
+   /** Transfer exclusive component ownership into this assembly. */
+   void add_component(std::unique_ptr< FlatEmitterComponent > component);
+
+   template < typename Component, typename... Args >
+   void emplace_component(Args&&... args)
+   {
+      add_component(std::make_unique< Component >(std::forward< Args >(args)...));
+   }
+
+   [[nodiscard]] SemanticFlatHorizonEncoderEngine compile() &&;
 
   private:
    struct Impl;

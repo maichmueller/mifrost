@@ -170,6 +170,45 @@ Fields and LGAN edges are derived after those components have populated the
 same final sink. One-shot, caller-owned builder, and batch APIs all execute
 these compiled plans.
 
+Downstream native libraries can extend that canonical assembly before it is
+compiled with `SemanticFlatHorizonAssemblyBuilder`. Added components use the
+ordinary `FlatEmitterComponent` lifecycle and receive
+`SemanticFlatHorizonPreparedGraph` through `FlatInputView`; canonical and
+downstream components therefore plan nodes and emit into the same graph-local
+`FlatRelationSink`:
+
+```cpp
+SemanticFlatHorizonAssemblyBuilder builder(schema, config);
+builder.add_component(std::make_unique<MyNativeHorizonComponent>());
+auto engine = std::move(builder).compile();
+
+SemanticFlatHorizonAnnotations annotations;
+annotations.emplace<MyGraphData>("my_data", /* constructor arguments */);
+auto batch = engine.encode(SemanticFlatHorizonInput(dag, std::move(annotations)));
+```
+
+`SemanticFlatHorizonPreparedGraph` is read-only. It exposes the source DAG,
+canonical entity/state/target mappings, candidate identities, goal and delta
+information, and the graph's extension annotations through accessors and
+spans. Components must not retain the view after a lifecycle callback. A
+reference-backed `SemanticFlatHorizonInput` borrows its DAG through the
+synchronous `encode` or `encode_batch` call; its shared-pointer constructor can
+instead own the DAG. Annotation values are held as `shared_ptr<const T>`, so a
+copied batch input safely shares immutable sidecar data without engine-local or
+global mutable state.
+
+Compilation freezes the canonical and downstream components together. The
+resulting engine is immutable and reusable across batches and threads; one
+combined node-planning phase, relation sink, relation-field write, and final
+relation-major collation are performed for each encoding. Relation aliases and
+projections declared by downstream components are resolved against that
+combined schema, and canonical relation ids are rebound after compilation so
+additional relation names cannot shift built-in emitters onto the wrong ids.
+Component ownership is transferred exclusively into the builder. Since a
+compiled engine may be used concurrently, component lifecycle callbacks must
+remain logically const and thread-safe; graph-local mutable work belongs in
+`FlatGraphScratch`.
+
 The neutral C++ suite covers exact output parity between public execution
 forms, the full semantic policy matrix, mixed target-name metadata, relation
 argument layouts, and concurrent reuse of one immutable compiled engine.

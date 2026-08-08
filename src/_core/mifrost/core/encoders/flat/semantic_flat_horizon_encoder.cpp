@@ -28,29 +28,78 @@ SemanticFlatHorizonEncoderConfig normalize_config(SemanticFlatHorizonEncoderConf
    return config;
 }
 
+std::shared_ptr< const SemanticSchemaContext > make_schema_context(
+   std::vector< SemanticPredicateSpec > predicates,
+   std::vector< SemanticActionSpec > actions
+)
+{
+   return std::make_shared< SemanticSchemaContext >(SemanticSchemaContext{
+      .predicates = std::move(predicates),
+      .actions = std::move(actions),
+   });
+}
+
 }  // namespace
+
+bool SemanticFlatHorizonAnnotations::contains(std::string_view key) const
+{
+   return entries_.contains(std::string(key));
+}
+
+SemanticFlatHorizonInput::SemanticFlatHorizonInput(
+   const SemanticTransitionDAG& graph,
+   SemanticFlatHorizonAnnotations annotations
+)
+    : graph_(&graph), annotations_(std::move(annotations))
+{
+}
+
+SemanticFlatHorizonInput::SemanticFlatHorizonInput(
+   std::shared_ptr< const SemanticTransitionDAG > graph,
+   SemanticFlatHorizonAnnotations annotations
+)
+    : owned_graph_(std::move(graph)),
+      graph_(owned_graph_.get()),
+      annotations_(std::move(annotations))
+{
+   if(graph_ == nullptr) {
+      throw std::invalid_argument("Semantic Horizon input graph must not be null");
+   }
+}
+
+const SemanticTransitionDAG& SemanticFlatHorizonInput::graph() const
+{
+   if(graph_ == nullptr) {
+      throw std::logic_error("Semantic Horizon input graph is not initialized");
+   }
+   return *graph_;
+}
 
 struct SemanticFlatHorizonEncoderEngine::Impl {
    Config config;
    SemanticFlatRelationEncoderEngine flat;
 
    Impl(
-      std::vector< SemanticPredicateSpec > predicates,
-      std::vector< SemanticActionSpec > actions,
-      Config encoder_config
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config encoder_config,
+      std::vector< std::shared_ptr< FlatEmitterComponent > > components
    )
        : config(normalize_config(std::move(encoder_config))),
-         flat(std::move(predicates), std::move(actions), base_config(config))
+         flat(
+            detail::SemanticFlatHorizonRelationEngineAccess::make(
+               std::move(schema),
+               base_config(config)
+            )
+         )
    {
-      flat.configure_horizon(config);
+      flat.configure_horizon(config, std::move(components));
    }
+};
 
-   Impl(std::shared_ptr< const SemanticSchemaContext > schema, Config encoder_config)
-       : config(normalize_config(std::move(encoder_config))),
-         flat(std::move(schema), base_config(config))
-   {
-      flat.configure_horizon(config);
-   }
+struct SemanticFlatHorizonAssemblyBuilder::Impl {
+   std::shared_ptr< const SemanticSchemaContext > schema;
+   Config config;
+   std::vector< std::unique_ptr< FlatEmitterComponent > > components;
 };
 
 SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
@@ -58,7 +107,11 @@ SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
    std::vector< SemanticActionSpec > actions,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(predicates), std::move(actions), std::move(config)))
+    : SemanticFlatHorizonEncoderEngine(
+         make_schema_context(std::move(predicates), std::move(actions)),
+         std::move(config),
+         {}
+      )
 {
 }
 
@@ -66,7 +119,16 @@ SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
    std::shared_ptr< const SemanticSchemaContext > schema,
    Config config
 )
-    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config)))
+    : SemanticFlatHorizonEncoderEngine(std::move(schema), std::move(config), {})
+{
+}
+
+SemanticFlatHorizonEncoderEngine::SemanticFlatHorizonEncoderEngine(
+   std::shared_ptr< const SemanticSchemaContext > schema,
+   Config config,
+   std::vector< std::shared_ptr< FlatEmitterComponent > > components
+)
+    : impl_(std::make_unique< Impl >(std::move(schema), std::move(config), std::move(components)))
 {
 }
 
@@ -82,7 +144,14 @@ BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode(
    const SemanticTransitionDAG& dag
 ) const
 {
-   return impl_->flat.encode_horizon_composed(dag, impl_->config);
+   return encode(SemanticFlatHorizonInput(dag));
+}
+
+BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode(
+   const SemanticFlatHorizonInput& input
+) const
+{
+   return impl_->flat.encode_horizon_composed(input, impl_->config);
 }
 
 void SemanticFlatHorizonEncoderEngine::encode(
@@ -90,14 +159,41 @@ void SemanticFlatHorizonEncoderEngine::encode(
    BatchBuilder& builder
 ) const
 {
-   impl_->flat.encode_horizon(dag, impl_->config, builder);
+   encode(SemanticFlatHorizonInput(dag), builder);
+}
+
+void SemanticFlatHorizonEncoderEngine::encode(
+   const SemanticFlatHorizonInput& input,
+   BatchBuilder& builder
+) const
+{
+   impl_->flat.encode_horizon(input, impl_->config, builder);
 }
 
 BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode_batch(
    const std::vector< SemanticTransitionDAG >& dags
 ) const
 {
-   return impl_->flat.encode_horizon_composed_batch(dags, impl_->config);
+   std::vector< SemanticFlatHorizonInput > inputs;
+   inputs.reserve(dags.size());
+   for(const auto& dag : dags) {
+      inputs.emplace_back(dag);
+   }
+   return encode_batch(inputs);
+}
+
+BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode_batch(
+   std::initializer_list< SemanticTransitionDAG > dags
+) const
+{
+   return encode_batch(std::vector< SemanticTransitionDAG >(dags));
+}
+
+BatchBuilder::BatchEncoding SemanticFlatHorizonEncoderEngine::encode_batch(
+   std::span< const SemanticFlatHorizonInput > inputs
+) const
+{
+   return impl_->flat.encode_horizon_composed_batch(inputs, impl_->config);
 }
 
 void SemanticFlatHorizonEncoderEngine::finalize_batch_encoding(
@@ -161,6 +257,72 @@ SemanticFlatHorizonEncoderEngine::get_relation_slot_role_offsets() const
 const std::vector< std::string >& SemanticFlatHorizonEncoderEngine::get_slot_role_names() const
 {
    return impl_->flat.get_slot_role_names();
+}
+
+SemanticFlatHorizonAssemblyBuilder::SemanticFlatHorizonAssemblyBuilder(
+   std::vector< SemanticPredicateSpec > predicates,
+   std::vector< SemanticActionSpec > actions,
+   Config config
+)
+    : SemanticFlatHorizonAssemblyBuilder(
+         make_schema_context(std::move(predicates), std::move(actions)),
+         std::move(config)
+      )
+{
+}
+
+SemanticFlatHorizonAssemblyBuilder::SemanticFlatHorizonAssemblyBuilder(
+   std::shared_ptr< const SemanticSchemaContext > schema,
+   Config config
+)
+    : impl_(
+         std::make_unique< Impl >(
+            Impl{.schema = std::move(schema), .config = std::move(config), .components = {}}
+         )
+      )
+{
+   if(not impl_->schema) {
+      throw std::invalid_argument("Semantic Horizon assembly schema must not be null");
+   }
+}
+
+SemanticFlatHorizonAssemblyBuilder::SemanticFlatHorizonAssemblyBuilder(
+   SemanticFlatHorizonAssemblyBuilder&&
+) noexcept = default;
+
+SemanticFlatHorizonAssemblyBuilder& SemanticFlatHorizonAssemblyBuilder::operator=(
+   SemanticFlatHorizonAssemblyBuilder&&
+) noexcept = default;
+
+SemanticFlatHorizonAssemblyBuilder::~SemanticFlatHorizonAssemblyBuilder() = default;
+
+void SemanticFlatHorizonAssemblyBuilder::add_component(
+   std::unique_ptr< FlatEmitterComponent > component
+)
+{
+   if(not impl_) {
+      throw std::logic_error("Semantic Horizon assembly builder was already compiled");
+   }
+   if(not component) {
+      throw std::invalid_argument("Semantic Horizon extension component must not be null");
+   }
+   impl_->components.push_back(std::move(component));
+}
+
+SemanticFlatHorizonEncoderEngine SemanticFlatHorizonAssemblyBuilder::compile() &&
+{
+   if(not impl_) {
+      throw std::logic_error("Semantic Horizon assembly builder was already compiled");
+   }
+   auto state = std::move(impl_);
+   std::vector< std::shared_ptr< FlatEmitterComponent > > components;
+   components.reserve(state->components.size());
+   for(auto& component : state->components) {
+      components.emplace_back(std::move(component));
+   }
+   return SemanticFlatHorizonEncoderEngine(
+      std::move(state->schema), std::move(state->config), std::move(components)
+   );
 }
 
 }  // namespace mifrost
