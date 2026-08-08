@@ -112,6 +112,9 @@ TEST(FlatRelationSchemaTest, StructuredLookupMatchesStringLookup)
 
    ASSERT_TRUE(schema.try_id_for(key).has_value());
    EXPECT_EQ(schema.id_for(key), schema.id_for(std::string("[+]at[g][sat]")));
+   EXPECT_EQ(schema.key_for_id(schema.id_for(key)), key);
+   EXPECT_THROW((void) schema.key_for_id(-1), std::out_of_range);
+   EXPECT_THROW((void) schema.key_for_id(1), std::out_of_range);
    EXPECT_FALSE(schema.try_id_for(predicate_relation_key("nope")).has_value());
    EXPECT_FALSE(schema.try_id_for(std::string("nope")).has_value());
 }
