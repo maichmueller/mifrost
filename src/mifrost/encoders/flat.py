@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 if TYPE_CHECKING:
     import networkx as nx
+    from .flat_data import FlatRelationData
 
 from .._core import (
     BatchBuilder,
@@ -33,7 +34,6 @@ from .base import (
 from ._flat_validation import (
     validate_subgoal_layers_state_payload,
 )
-from .flat_data import FlatRelationData
 from .types import (
     DomainInput,
     FlatEncoding,
@@ -111,7 +111,7 @@ def _relation_name_color(relation_name: str) -> str:
 
 
 @dataclass
-class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
+class FlatRelationEncoderStream(StreamEncoderBase["FlatRelationData"]):
     """Append-only stream for flat state encodings.
 
     Each appended item follows the same input contract as
@@ -163,7 +163,7 @@ class FlatRelationEncoderStream(StreamEncoderBase[FlatRelationData]):
 
 
 @dataclass
-class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
+class FlatRelationMutableEncoderStream(StreamEncoderBase["FlatRelationData"]):
     """Mutable stream for flat state encodings.
 
     This stream accepts the same payloads as
@@ -241,7 +241,7 @@ class FlatRelationMutableEncoderStream(StreamEncoderBase[FlatRelationData]):
         self._stream.reset()
 
 
-class FlatRelationEncoder(EncoderBase[FlatRelationData]):
+class FlatRelationEncoder(EncoderBase["FlatRelationData"]):
     """Encode one planning state as packed flat relations.
 
     The output uses one flat entity table and packed relation tensors instead
