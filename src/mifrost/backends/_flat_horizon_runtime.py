@@ -62,17 +62,22 @@ def create_flat_horizon_runtime(
     config: Any,
     *,
     backend: str | None = None,
+    assembly: Any = None,
 ) -> FlatHorizonRuntime:
     selected = _normalize_backend(backend)
     if selected is None:
         selected = "pytyr" if _looks_like_pytyr_task(domain_or_task) else "pymimir"
     if selected == "pytyr":
+        if assembly is not None:
+            raise ValueError(
+                "Flat Horizon assemblies are not supported by the PyTyr backend"
+            )
         from .pytyr_flat_horizon import PyTyrFlatHorizonRuntime
 
         return PyTyrFlatHorizonRuntime(domain_or_task, config)
     from .pymimir_flat_horizon import PymimirFlatHorizonRuntime
 
-    return PymimirFlatHorizonRuntime(domain_or_task, config)
+    return PymimirFlatHorizonRuntime(domain_or_task, config, assembly=assembly)
 
 
 __all__ = [

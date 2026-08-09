@@ -25,7 +25,7 @@ class PymimirFlatHorizonRuntime:
 
     backend_name: Literal["pymimir"] = "pymimir"
 
-    def __init__(self, domain: object, config: Any) -> None:
+    def __init__(self, domain: object, config: Any, *, assembly: Any = None) -> None:
         from .. import _core
 
         config_type = getattr(_core, "FlatHorizonEncoderConfig")
@@ -57,7 +57,10 @@ class PymimirFlatHorizonRuntime:
             goal_derivations=set(config.goal_derivations),
         )
         engine_type = getattr(_core, "FlatHorizonEncoderEngine")
-        self.engine = engine_type(_advanced_domain(domain), native_config)
+        if assembly is None:
+            self.engine = engine_type(_advanced_domain(domain), native_config)
+        else:
+            self.engine = engine_type(_advanced_domain(domain), native_config, assembly)
 
     @property
     def relation_dict(self) -> Any:

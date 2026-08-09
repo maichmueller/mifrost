@@ -85,8 +85,18 @@ class MIFROST_API FlatHorizonEncoderEngine {
 
    explicit FlatHorizonEncoderEngine(const mimir::formalism::DomainImpl& domain);
    FlatHorizonEncoderEngine(const mimir::formalism::DomainImpl& domain, Config config);
+   FlatHorizonEncoderEngine(
+      const mimir::formalism::DomainImpl& domain,
+      Config config,
+      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   );
    explicit FlatHorizonEncoderEngine(mimir::formalism::Domain domain);
    FlatHorizonEncoderEngine(mimir::formalism::Domain domain, Config config);
+   FlatHorizonEncoderEngine(
+      mimir::formalism::Domain domain,
+      Config config,
+      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   );
    FlatHorizonEncoderEngine(const FlatHorizonEncoderEngine&) = delete;
    FlatHorizonEncoderEngine& operator=(const FlatHorizonEncoderEngine&) = delete;
    FlatHorizonEncoderEngine(FlatHorizonEncoderEngine&&) = delete;

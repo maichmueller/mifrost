@@ -2,6 +2,7 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -13,6 +14,7 @@
 #include "mifrost/bindings.hpp"
 #include "mifrost/capsule_bridge.hpp"
 #include "mifrost/core/encoders/flat/flat_composition.hpp"
+#include "mifrost/core/encoders/flat/semantic_flat_horizon_encoder.hpp"
 #include "mifrost/core/encoders/flat/semantic_flat_relation_encoder.hpp"
 
 namespace nb = nanobind;
@@ -106,6 +108,9 @@ SemanticFlatRelationInput make_compact_semantic_input(
 
 void init_semantic_flat_encoder(nb::module_& m)
 {
+   nb::class_< SemanticFlatHorizonAssemblyExtension >(m, "SemanticFlatHorizonAssemblyExtension")
+      .def(nb::init<>());
+
    nb::enum_< FlatCompositionCapability >(m, "FlatCompositionCapability")
       .value("state_facts", FlatCompositionCapability::state_facts)
       .value("goal_facts", FlatCompositionCapability::goal_facts)

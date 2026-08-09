@@ -92,7 +92,8 @@ SemanticTransitionDAG materialize_dag(
    const mimir::search::State& root,
    const GoalInputs& goals,
    const pymimir::SemanticProblemAdapter& adapter,
-   size_t max_goal_level
+   size_t max_goal_level,
+   bool export_node_names
 )
 {
    std::vector< SemanticTransitionDAG::Node > nodes;
@@ -109,7 +110,9 @@ SemanticTransitionDAG materialize_dag(
                                : adapter.make_input(node.state);
       semantic_node.index = node.index;
       semantic_node.depth = node.depth;
-      semantic_node.display_name = state_display_name(node.state);
+      if(export_node_names) {
+         semantic_node.display_name = state_display_name(node.state);
+      }
       if(node.action.has_value()) {
          semantic_node.incoming_action = pymimir::hetero_bridge::materialize_action(
             *node.action, view_context
@@ -180,10 +183,26 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
    {
    }
 
+   SemanticImpl(
+      const mimir::formalism::DomainImpl& domain,
+      Config value,
+      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   )
+       : SemanticImpl(domain, schema_context(domain), std::move(value), std::move(assembly))
+   {
+   }
+
    SemanticTransitionDAG
    make_dag(const mimir::search::State& root, const TransitionDAG& dag, const GoalInputs& goals)
    {
-      return materialize_dag(dag, root, goals, problems.adapter_for(root), config.max_goal_level);
+      return materialize_dag(
+         dag,
+         root,
+         goals,
+         problems.adapter_for(root),
+         config.max_goal_level,
+         config.export_node_names
+      );
    }
 
   private:
@@ -197,6 +216,33 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
          encoder(std::make_unique< SemanticFlatHorizonEncoderEngine >(schema, semantic_config)),
          problems(domain, std::move(schema))
    {
+      fill_relation_dict(relation_dict, *encoder, config);
+   }
+
+   SemanticImpl(
+      const mimir::formalism::DomainImpl& domain,
+      std::shared_ptr< const SemanticSchemaContext > schema,
+      Config value,
+      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   )
+       : config(std::move(value)),
+         semantic_config(::mifrost::semantic_config(config)),
+         encoder(nullptr),
+         problems(domain, schema)
+   {
+      if(assembly == nullptr) {
+         encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(schema, semantic_config);
+      } else {
+         semantic_config.relation_name_adapter = assembly->relation_name_adapter();
+         semantic_config.assembly_compact_root_carrier = assembly->compact_root_carrier();
+         SemanticFlatHorizonAssemblyBuilder builder(schema, semantic_config);
+         for(auto& component : assembly->take_components()) {
+            builder.add_component(std::move(component));
+         }
+         encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(
+            std::move(builder).compile()
+         );
+      }
       fill_relation_dict(relation_dict, *encoder, config);
    }
 };
@@ -216,6 +262,17 @@ FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
 {
 }
 
+FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
+   const mimir::formalism::DomainImpl& domain,
+   Config config,
+   std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+)
+    : domain_(domain),
+      config_(std::move(config)),
+      semantic_(std::make_unique< SemanticImpl >(domain, config_, std::move(assembly)))
+{
+}
+
 FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(mimir::formalism::Domain domain)
     : FlatHorizonEncoderEngine(std::move(domain), Config{})
 {
@@ -229,6 +286,18 @@ FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(mimir::formalism::Domain doma
 {
 }
 
+FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
+   mimir::formalism::Domain domain,
+   Config config,
+   std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+)
+    : domain_holder_(std::move(domain)),
+      domain_(*domain_holder_),
+      config_(std::move(config)),
+      semantic_(std::make_unique< SemanticImpl >(domain_, config_, std::move(assembly)))
+{
+}
+
 FlatHorizonEncoderEngine::~FlatHorizonEncoderEngine() = default;
 
 void FlatHorizonEncoderEngine::encode(
@@ -239,7 +308,7 @@ void FlatHorizonEncoderEngine::encode(
 )
 {
    auto semantic_dag = semantic_->make_dag(root, dag, goals);
-   semantic_->encoder->encode(semantic_dag, builder);
+   semantic_->encoder->encode(SemanticFlatHorizonInput(semantic_dag), builder);
 }
 
 BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
@@ -263,7 +332,12 @@ BatchBuilder::BatchEncoding FlatHorizonEncoderEngine::encode_batch(
       const TransitionDAG fallback(root);
       dags.push_back(semantic_->make_dag(root, dag_payload ? *dag_payload : fallback, goals));
    }
-   auto result = semantic_->encoder->encode_batch(dags);
+   std::vector< SemanticFlatHorizonInput > semantic_inputs;
+   semantic_inputs.reserve(dags.size());
+   for(const auto& dag : dags) {
+      semantic_inputs.emplace_back(dag);
+   }
+   auto result = semantic_->encoder->encode_batch(std::span{semantic_inputs});
    finalize_batch_encoding(result);
    return result;
 }

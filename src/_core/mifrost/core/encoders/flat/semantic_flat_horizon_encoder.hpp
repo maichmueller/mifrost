@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -28,6 +29,23 @@ namespace detail {
 struct SemanticFlatHorizonPreparedGraphStorage;
 struct SemanticFlatHorizonPreparedGraphAccess;
 }  // namespace detail
+
+/**
+ * Optional downstream relation-name policy for a compiled Horizon assembly.
+ *
+ * The semantic engine remains responsible for relation identity, layouts, and
+ * emission. A backend adapter may change the exported name, return the input
+ * name to preserve the canonical spelling, or return `std::nullopt` to omit
+ * that canonical relation and all of its emissions. The policy is consulted
+ * while the immutable plan is compiled, never while a graph is emitted.
+ */
+class MIFROST_API SemanticFlatHorizonRelationNameAdapter {
+  public:
+   virtual ~SemanticFlatHorizonRelationNameAdapter() = default;
+   [[nodiscard]] virtual std::optional< std::string > map(std::string_view source_name) const = 0;
+   /** Optional downstream schema contract used to validate mapped arities. */
+   [[nodiscard]] virtual std::optional< int64_t > target_arity(std::string_view target_name) const;
+};
 
 /**
  * Source- and symbol-compatible Horizon name for the shared annotation carrier.
@@ -160,6 +178,10 @@ struct SemanticFlatHorizonEncoderConfig: FlatRelationEncoderConfig {
    bool enable_sibling_relation = false;
    bool enable_cousin_relation = false;
    RootPolicy root_policy = RootPolicy::exclude;
+   /** Internal assembly policy; ordinary encoder configuration keeps the root carrier. */
+   bool assembly_compact_root_carrier = false;
+   /// Set by a downstream assembly extension before compilation.
+   std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter > relation_name_adapter;
 };
 
 BOOST_DESCRIBE_STRUCT(
@@ -175,6 +197,39 @@ BOOST_DESCRIBE_STRUCT(
     enable_cousin_relation,
     root_policy)
 )
+
+/**
+ * Backend-neutral ownership bundle consumed by a planner adapter.
+ *
+ * Components are transferred exactly once into the adapter's compiled
+ * semantic assembly.  The holder is intentionally not itself an encoder: it
+ * carries downstream policy across an adapter boundary while retaining the
+ * canonical input conversion and public batch API of that adapter.
+ */
+class MIFROST_API SemanticFlatHorizonAssemblyExtension {
+  public:
+   SemanticFlatHorizonAssemblyExtension() = default;
+   SemanticFlatHorizonAssemblyExtension(const SemanticFlatHorizonAssemblyExtension&) = delete;
+   SemanticFlatHorizonAssemblyExtension& operator=(const SemanticFlatHorizonAssemblyExtension&) =
+      delete;
+
+   void add_component(std::unique_ptr< FlatEmitterComponent > component);
+   void set_relation_name_adapter(
+      std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter > adapter
+   );
+   void set_compact_root_carrier(bool value) noexcept { compact_root_carrier_ = value; }
+
+   [[nodiscard]] std::vector< std::unique_ptr< FlatEmitterComponent > > take_components();
+   [[nodiscard]] std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter >
+   relation_name_adapter() const;
+   [[nodiscard]] bool compact_root_carrier() const noexcept { return compact_root_carrier_; }
+
+  private:
+   std::vector< std::unique_ptr< FlatEmitterComponent > > components_;
+   std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter > relation_name_adapter_;
+   bool compact_root_carrier_ = false;
+   bool consumed_ = false;
+};
 
 /** Encode an owned semantic transition DAG into packed flat relations. */
 class MIFROST_API SemanticFlatHorizonEncoderEngine {

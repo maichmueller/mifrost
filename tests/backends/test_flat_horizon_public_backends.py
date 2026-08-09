@@ -161,6 +161,12 @@ def test_public_flat_horizon_native_identity_and_coexistence() -> None:
         pytyr_encoder.encode(pymimir_root, dag=pytyr_dag)
     with pytest.raises(ValueError, match="backend must be"):
         mifrost.FlatHorizonEncoder(reader._planning_task, backend="other")
+    with pytest.raises(ValueError, match="assemblies are not supported"):
+        mifrost.FlatHorizonEncoder(
+            reader._planning_task,
+            backend="pytyr",
+            assembly=mifrost.SemanticFlatHorizonAssemblyExtension(),
+        )
 
 
 @pytest.mark.parametrize(

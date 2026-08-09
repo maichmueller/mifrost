@@ -193,6 +193,7 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         domain: DomainInput,
         *,
         backend: FlatHorizonBackendName | str | None = None,
+        assembly: Any = None,
         transition_mode: (
             FlatHorizonEncoderMode | HorizonEncoderMode | str | None
         ) = None,
@@ -261,7 +262,9 @@ class FlatHorizonEncoder(FlatRelationEncoder):
         if goal_derivations is not None:
             config_kwargs["goal_derivations"] = goal_derivations
         config = FlatHorizonEncoderConfig(**config_kwargs)
-        self._runtime = create_flat_horizon_runtime(domain, config, backend=backend)
+        self._runtime = create_flat_horizon_runtime(
+            domain, config, backend=backend, assembly=assembly
+        )
         self._engine = self._runtime.engine
         self._config = self._engine.config
         self.backend = self._runtime.backend_name

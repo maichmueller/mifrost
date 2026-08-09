@@ -223,6 +223,48 @@ def test_flat_horizon_export_node_names_false_skips_target_names(small_blocks):
     assert data.graph_target_names(0) == []
 
 
+def test_flat_horizon_export_node_names_only_changes_metadata(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    goals = list(problem.get_goal_condition().get_literals())
+
+    with_names = FlatHorizonEncoder(domain, ignore_actions=False).encode_pyg(
+        root, dag=dag, goals=goals
+    )
+    without_names = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        export_node_names=False,
+    ).encode_pyg(root, dag=dag, goals=goals)
+
+    assert with_names.schema == without_names.schema
+    for field_name in (
+        "x",
+        "node_sizes",
+        "object_sizes",
+        "object_indices",
+        "target_entity_sizes",
+        "target_entity_indices",
+        "target_entity_group_ids",
+        "target_sizes",
+        "target_positions",
+        "target_indices",
+        "target_candidate_ids",
+        "target_depths",
+        "target_group_ids",
+        "relation_instance_sizes",
+        "relation_counts",
+        "relation_args",
+    ):
+        assert torch.equal(
+            getattr(with_names, field_name), getattr(without_names, field_name)
+        ), field_name
+    assert with_names.graph_target_names(0)
+    assert without_names.graph_target_names(0) == []
+
+
 def test_flat_horizon_native_target_names_materialize_on_access(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

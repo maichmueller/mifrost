@@ -41,9 +41,55 @@ std::shared_ptr< const SemanticSchemaContext > make_schema_context(
 
 }  // namespace
 
+std::optional< int64_t > SemanticFlatHorizonRelationNameAdapter::target_arity(
+   std::string_view
+) const
+{
+   return std::nullopt;
+}
+
 bool SemanticFlatHorizonAnnotations::contains(std::string_view key) const
 {
    return SemanticAnnotations::contains(key);
+}
+
+void SemanticFlatHorizonAssemblyExtension::add_component(
+   std::unique_ptr< FlatEmitterComponent > component
+)
+{
+   if(consumed_) {
+      throw std::logic_error("Semantic Horizon assembly extension was already consumed");
+   }
+   if(not component) {
+      throw std::invalid_argument("Semantic Horizon assembly component must not be null");
+   }
+   components_.push_back(std::move(component));
+}
+
+void SemanticFlatHorizonAssemblyExtension::set_relation_name_adapter(
+   std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter > adapter
+)
+{
+   if(consumed_) {
+      throw std::logic_error("Semantic Horizon assembly extension was already consumed");
+   }
+   relation_name_adapter_ = std::move(adapter);
+}
+
+std::vector< std::unique_ptr< FlatEmitterComponent > >
+SemanticFlatHorizonAssemblyExtension::take_components()
+{
+   if(consumed_) {
+      throw std::logic_error("Semantic Horizon assembly extension was already consumed");
+   }
+   consumed_ = true;
+   return std::move(components_);
+}
+
+std::shared_ptr< const SemanticFlatHorizonRelationNameAdapter >
+SemanticFlatHorizonAssemblyExtension::relation_name_adapter() const
+{
+   return relation_name_adapter_;
 }
 
 SemanticFlatHorizonInput::SemanticFlatHorizonInput(

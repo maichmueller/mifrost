@@ -629,7 +629,7 @@ int FlatGraphContext::relation_id(const RelationKey& key) const
    if(it != relation_aliases.end()) {
       return it->target_relation_id;
    }
-   throw std::invalid_argument("Unknown flat relation key");
+   throw std::invalid_argument("Unknown flat relation key '" + format_relation_name(key) + "'");
 }
 
 bool FlatGraphContext::component_owns_relation(std::string_view component, int relation_id) const
