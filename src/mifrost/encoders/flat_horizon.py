@@ -232,6 +232,10 @@ class FlatHorizonEncoder(FlatRelationEncoder):
 
         When `include_lgan_edges=True`, LGAN anchors follow the target rows.
         There is no `lgan_anchor_sources` switch here.
+
+        `assembly` accepts a native `SemanticFlatAssemblyComponents` carrier.
+        It is consumed exactly once by the Pymimir adapter before compilation;
+        the PyTyr backend does not yet expose this adapter bridge.
         """
         normalized_root_policy = normalize_root_policy(root_policy)
         config_kwargs: dict[str, Any] = {

@@ -243,7 +243,7 @@ void init_horizon_encoder(nb::module_& m)
          nb::init<
             const mimir::formalism::DomainImpl&,
             FlatHorizonEncoderEngine::Config,
-            std::shared_ptr< SemanticFlatHorizonAssemblyExtension > >()
+            std::shared_ptr< SemanticFlatAssemblyComponents > >()
       )
       .def(nb::init< mimir::formalism::Domain >())
       .def(nb::init< mimir::formalism::Domain, FlatHorizonEncoderEngine::Config >())
@@ -251,7 +251,7 @@ void init_horizon_encoder(nb::module_& m)
          nb::init<
             mimir::formalism::Domain,
             FlatHorizonEncoderEngine::Config,
-            std::shared_ptr< SemanticFlatHorizonAssemblyExtension > >()
+            std::shared_ptr< SemanticFlatAssemblyComponents > >()
       )
       .def_prop_ro(
          "config", &FlatHorizonEncoderEngine::get_config, nb::rv_policy::reference_internal

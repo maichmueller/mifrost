@@ -173,18 +173,24 @@ class SemanticAssemblyComponents {
       add(std::make_unique< Concrete >(std::forward< Args >(args)...));
    }
 
-   [[nodiscard]] std::vector< std::shared_ptr< Component > > freeze() &&
+   /** Transfer the still-exclusive component ownership to a concrete builder. */
+   [[nodiscard]] std::vector< std::unique_ptr< Component > > take() &&
    {
       if(frozen_) {
          throw std::logic_error("Semantic assembly components were already frozen");
       }
       frozen_ = true;
+      return std::move(components_);
+   }
+
+   [[nodiscard]] std::vector< std::shared_ptr< Component > > freeze() &&
+   {
+      auto owned_components = std::move(*this).take();
       std::vector< std::shared_ptr< Component > > result;
-      result.reserve(components_.size());
-      for(auto& component : components_) {
+      result.reserve(owned_components.size());
+      for(auto& component : owned_components) {
          result.emplace_back(std::move(component));
       }
-      components_.clear();
       return result;
    }
 

@@ -108,8 +108,9 @@ SemanticFlatRelationInput make_compact_semantic_input(
 
 void init_semantic_flat_encoder(nb::module_& m)
 {
-   nb::class_< SemanticFlatHorizonAssemblyExtension >(m, "SemanticFlatHorizonAssemblyExtension")
-      .def(nb::init<>());
+   nb::class_< SemanticFlatAssemblyComponents >(m, "SemanticFlatAssemblyComponents")
+      .def(nb::init<>())
+      .def("__len__", &SemanticFlatAssemblyComponents::size);
 
    nb::enum_< FlatCompositionCapability >(m, "FlatCompositionCapability")
       .value("state_facts", FlatCompositionCapability::state_facts)

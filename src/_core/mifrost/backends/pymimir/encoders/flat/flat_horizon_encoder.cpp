@@ -186,7 +186,7 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
    SemanticImpl(
       const mimir::formalism::DomainImpl& domain,
       Config value,
-      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+      std::shared_ptr< SemanticFlatAssemblyComponents > assembly
    )
        : SemanticImpl(domain, schema_context(domain), std::move(value), std::move(assembly))
    {
@@ -223,7 +223,7 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
       const mimir::formalism::DomainImpl& domain,
       std::shared_ptr< const SemanticSchemaContext > schema,
       Config value,
-      std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+      std::shared_ptr< SemanticFlatAssemblyComponents > assembly
    )
        : config(std::move(value)),
          semantic_config(::mifrost::semantic_config(config)),
@@ -233,10 +233,8 @@ struct FlatHorizonEncoderEngine::SemanticImpl {
       if(assembly == nullptr) {
          encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(schema, semantic_config);
       } else {
-         semantic_config.relation_name_adapter = assembly->relation_name_adapter();
-         semantic_config.assembly_compact_root_carrier = assembly->compact_root_carrier();
          SemanticFlatHorizonAssemblyBuilder builder(schema, semantic_config);
-         for(auto& component : assembly->take_components()) {
+         for(auto& component : std::move(*assembly).take()) {
             builder.add_component(std::move(component));
          }
          encoder = std::make_unique< SemanticFlatHorizonEncoderEngine >(
@@ -265,7 +263,7 @@ FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
 FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
    const mimir::formalism::DomainImpl& domain,
    Config config,
-   std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   std::shared_ptr< SemanticFlatAssemblyComponents > assembly
 )
     : domain_(domain),
       config_(std::move(config)),
@@ -289,7 +287,7 @@ FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(mimir::formalism::Domain doma
 FlatHorizonEncoderEngine::FlatHorizonEncoderEngine(
    mimir::formalism::Domain domain,
    Config config,
-   std::shared_ptr< SemanticFlatHorizonAssemblyExtension > assembly
+   std::shared_ptr< SemanticFlatAssemblyComponents > assembly
 )
     : domain_holder_(std::move(domain)),
       domain_(*domain_holder_),

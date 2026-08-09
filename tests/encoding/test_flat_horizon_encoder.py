@@ -179,6 +179,26 @@ def test_flat_horizon_predicate_virtual_nodes_follow_state_slot_and_preserve_arg
     )
 
 
+def test_flat_horizon_empty_generic_assembly_preserves_canonical_output(small_blocks):
+    space, domain, problem = small_blocks
+    root = problem.get_initial_state()
+    transitions = _first_distinct_changed_transitions(space, root, count=1)
+    dag = _single_step_dag(root, transitions, candidate_ids=[101])
+    goals = list(problem.get_goal_condition().get_literals())
+
+    canonical = FlatHorizonEncoder(domain, ignore_actions=False).encode_pyg(
+        root, dag=dag, goals=goals
+    )
+    components = mifrost.SemanticFlatAssemblyComponents()
+    assembled = FlatHorizonEncoder(
+        domain,
+        ignore_actions=False,
+        assembly=components,
+    ).encode_pyg(root, dag=dag, goals=goals)
+
+    _assert_flat_batch_equal(assembled, canonical)
+
+
 def test_flat_horizon_explicit_candidate_ids_are_preserved(small_blocks):
     space, domain, problem = small_blocks
     root = problem.get_initial_state()

@@ -99,46 +99,6 @@ struct HorizonExtensionData {
    std::vector< float > node_features;
 };
 
-class ConstantRelationNameAdapter final: public SemanticFlatHorizonRelationNameAdapter {
-  public:
-   [[nodiscard]] std::optional< std::string > map(std::string_view) const override
-   {
-      return "collapsed";
-   }
-};
-
-class WrongArityRelationNameAdapter final: public SemanticFlatHorizonRelationNameAdapter {
-  public:
-   [[nodiscard]] std::optional< std::string > map(std::string_view source_name) const override
-   {
-      return std::string(source_name);
-   }
-
-   [[nodiscard]] std::optional< int64_t > target_arity(std::string_view) const override
-   {
-      return 99;
-   }
-};
-
-class IdentityRelationNameAdapter final: public SemanticFlatHorizonRelationNameAdapter {
-  public:
-   [[nodiscard]] std::optional< std::string > map(std::string_view source_name) const override
-   {
-      return std::string(source_name);
-   }
-};
-
-class FilterReadyRelationNameAdapter final: public SemanticFlatHorizonRelationNameAdapter {
-  public:
-   [[nodiscard]] std::optional< std::string > map(std::string_view source_name) const override
-   {
-      if(source_name == "ready") {
-         return std::nullopt;
-      }
-      return std::string(source_name);
-   }
-};
-
 class HorizonExtensionComponent final: public FlatEmitterComponent {
   public:
    [[nodiscard]] std::string_view name() const noexcept override { return "horizon_sdk_test"; }
@@ -270,80 +230,6 @@ TEST(SemanticFlatHorizonEncoderEngineTest, FullModeDefaultConfigEncodesWithoutTh
    const auto encoding = engine.encode(make_dag());
    EXPECT_GT(encoding.num_graphs, 0);
    EXPECT_EQ(encoding.node_counts.at(std::string(kFlatEntityNodeType)), 5);
-}
-
-TEST(SemanticFlatHorizonEncoderEngineTest, RelationNameAdapterRejectsNonInjectiveOutputs)
-{
-   SemanticFlatHorizonEncoderEngine::Config config;
-   config.relation_name_adapter = std::make_shared< ConstantRelationNameAdapter >();
-   EXPECT_THROW(
-      (SemanticFlatHorizonEncoderEngine(predicates(), actions(), config)), std::invalid_argument
-   );
-}
-
-TEST(SemanticFlatHorizonEncoderEngineTest, RelationNameAdapterRejectsTargetArityMismatch)
-{
-   SemanticFlatHorizonEncoderEngine::Config config;
-   config.relation_name_adapter = std::make_shared< WrongArityRelationNameAdapter >();
-   try {
-      (void) SemanticFlatHorizonEncoderEngine(predicates(), actions(), config);
-      FAIL() << "expected target arity validation failure";
-   } catch(const std::invalid_argument& error) {
-      EXPECT_NE(std::string(error.what()).find("encoded arity"), std::string::npos);
-      EXPECT_NE(std::string(error.what()).find("declared arity"), std::string::npos);
-   }
-}
-
-TEST(SemanticFlatHorizonEncoderEngineTest, RelationNameAdapterCanFilterCanonicalRelation)
-{
-   SemanticFlatHorizonEncoderEngine::Config config;
-   config.root_policy = RootPolicy::include;
-   config.relation_name_adapter = std::make_shared< FilterReadyRelationNameAdapter >();
-   SemanticFlatHorizonEncoderEngine engine(predicates(), actions(), config);
-
-   EXPECT_FALSE(contains(engine.get_relation_names(), "ready"));
-   const auto encoding = engine.encode(make_dag());
-   EXPECT_EQ(
-      std::get< std::vector< int64_t > >(
-         encoding.graph_fields.at(std::string(kRelationCountsField)).values
-      )
-         .size(),
-      engine.get_relation_names().size()
-   );
-}
-
-TEST(SemanticFlatHorizonEncoderEngineTest, IdentityRelationNameAdapterPreservesCanonicalOutput)
-{
-   SemanticFlatHorizonEncoderEngine::Config canonical_config;
-   canonical_config.root_policy = RootPolicy::include;
-   SemanticFlatHorizonEncoderEngine canonical(predicates(), actions(), canonical_config);
-
-   auto adapted_config = canonical_config;
-   adapted_config.relation_name_adapter = std::make_shared< IdentityRelationNameAdapter >();
-   SemanticFlatHorizonEncoderEngine adapted(predicates(), actions(), adapted_config);
-
-   EXPECT_EQ(canonical.get_relation_names(), adapted.get_relation_names());
-   EXPECT_EQ(canonical.get_relation_arities(), adapted.get_relation_arities());
-   const auto parity = compare_flat_batch_encodings(
-      canonical.encode(make_dag()), adapted.encode(make_dag())
-   );
-   EXPECT_TRUE(parity.equal) << parity.mismatch;
-}
-
-TEST(SemanticFlatHorizonEncoderEngineTest, RelationSinkFindsOnlyExactRows)
-{
-   FlatRelationSink sink(2);
-   const std::array< int64_t, 2 > first = {1, 2};
-   const std::array< int64_t, 2 > second = {1, 3};
-   const std::array< int64_t, 2 > absent = {2, 1};
-   sink.emit(0, first);
-   sink.emit(0, second);
-   sink.emit(1, std::span< const int64_t >{});
-
-   EXPECT_TRUE(sink.contains_exact(0, first));
-   EXPECT_TRUE(sink.contains_exact(0, second));
-   EXPECT_FALSE(sink.contains_exact(0, absent));
-   EXPECT_TRUE(sink.contains_exact(1, std::span< const int64_t >{}));
 }
 
 TEST(SemanticFlatHorizonEncoderEngineTest, RootOnlyGraphPreservesEmptyTargetNames)
@@ -647,6 +533,17 @@ TEST(SemanticFlatHorizonEncoderEngineTest, PublicAssemblyExtendsCanonicalOnePass
       const auto parity = compare_flat_batch_encodings(expected, job.get());
       ASSERT_TRUE(parity.equal) << parity.mismatch;
    }
+}
+
+TEST(SemanticFlatHorizonEncoderEngineTest, GenericFlatComponentCarrierTransfersExactlyOnce)
+{
+   SemanticFlatAssemblyComponents components;
+   components.add(std::make_unique< HorizonExtensionComponent >());
+
+   auto owned = std::move(components).take();
+   ASSERT_EQ(owned.size(), 1);
+   EXPECT_EQ(owned.front()->name(), "horizon_sdk_test");
+   EXPECT_THROW((void) std::move(components).take(), std::logic_error);
 }
 
 }  // namespace

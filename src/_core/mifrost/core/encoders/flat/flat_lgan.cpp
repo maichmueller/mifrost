@@ -32,29 +32,6 @@ void FlatRelationSink::emit(int relation_id, std::span< const int64_t > args)
    }
 }
 
-bool FlatRelationSink::contains_exact(int relation_id, std::span< const int64_t > args) const
-{
-   if(relation_id < 0 or static_cast< size_t >(relation_id) >= relation_counts_.size()) {
-      throw std::invalid_argument("FlatRelationSink relation id out of range");
-   }
-   const auto relation_index = static_cast< size_t >(relation_id);
-   if(args.empty()) {
-      return relation_counts_[relation_index] > 0;
-   }
-   const auto& bucket = relation_args_by_relation_[relation_index];
-   if(bucket.size() % args.size() != 0) {
-      throw std::logic_error(
-         "FlatRelationSink relation bucket is not aligned to the queried row arity"
-      );
-   }
-   for(size_t offset = 0; offset < bucket.size(); offset += args.size()) {
-      if(std::equal(args.begin(), args.end(), bucket.begin() + static_cast< ptrdiff_t >(offset))) {
-         return true;
-      }
-   }
-   return false;
-}
-
 const std::vector< int64_t >& FlatRelationSink::relation_counts() const
 {
    return relation_counts_;

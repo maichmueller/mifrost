@@ -180,6 +180,13 @@ runtimes: flat encoders use `FlatEmitterComponent`; heterogeneous and
 homogeneous encoders are not forced through a lowest-common-denominator emitter
 API.
 
+`SemanticFlatAssemblyComponents` is the flat-family transfer carrier for
+planner adapters that obtain the semantic schema themselves. Downstream native
+code can fill this carrier before handing it to an adapter; the adapter consumes
+it exactly once and moves the components into the concrete relation or Horizon
+builder before compilation. The carrier contains no Horizon policy and can be
+reused by other semantic flat adapters as they expose the same bridge.
+
 The canonical flat relation and flat Horizon encoders both expose concrete
 assembly builders. Added components use the ordinary `FlatEmitterComponent`
 lifecycle and receive the corresponding public prepared view through
@@ -290,9 +297,10 @@ The reusable implementation lives in the planner-neutral core:
 The Pymimir-only `FlatRelationEncoderEngine` and `FlatHorizonEncoderEngine`
 retain their historical constructors and streaming contracts while adapting
 native values through the same task-scoped View concepts and canonical
-semantic engines. They are not the extension seam for new encoders. New
-backend-neutral and downstream encoders must use the core composition API and
-a backend View context.
+semantic engines. The Horizon adapter may consume a
+`SemanticFlatAssemblyComponents` carrier as convenience plumbing, but the core
+assembly builders remain the extension seam. New backend-neutral and downstream
+encoders must use the core composition API and a backend View context.
 
 The normal Pymimir Flat, Color, HGraph, successor, batch, and stream paths now
 enter through that direct View boundary. The legacy semantic-record APIs remain

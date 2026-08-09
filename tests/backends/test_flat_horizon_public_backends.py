@@ -165,7 +165,7 @@ def test_public_flat_horizon_native_identity_and_coexistence() -> None:
         mifrost.FlatHorizonEncoder(
             reader._planning_task,
             backend="pytyr",
-            assembly=mifrost.SemanticFlatHorizonAssemblyExtension(),
+            assembly=mifrost.SemanticFlatAssemblyComponents(),
         )
 
 

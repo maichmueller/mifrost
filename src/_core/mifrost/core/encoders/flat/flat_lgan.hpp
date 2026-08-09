@@ -21,9 +21,6 @@ class FlatRelationSink {
 
    void emit(int relation_id, std::span< const int64_t > args);
 
-   /** Return whether this relation already contains exactly this argument row. */
-   [[nodiscard]] bool contains_exact(int relation_id, std::span< const int64_t > args) const;
-
    [[nodiscard]] const std::vector< int64_t >& relation_counts() const;
    [[nodiscard]] const std::vector< int64_t >& relation_args() const;
    [[nodiscard]] int64_t relation_instance_count() const;
