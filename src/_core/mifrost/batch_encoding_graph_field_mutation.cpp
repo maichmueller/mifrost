@@ -1,6 +1,7 @@
 #include "mifrost/batch_encoding_graph_field_mutation.hpp"
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -28,6 +29,93 @@ struct NumericFieldInput {
    size_t rows = 0;
    size_t cols = 0;
 };
+
+//! Bulk-convert a contiguous host buffer of `Source` into the field's `T`.
+template < typename Source, typename T >
+void copy_contiguous_values(const void* data, size_t count, std::vector< T >& out)
+{
+   const auto* typed = static_cast< const Source* >(data);
+   out.resize(count);
+   for(size_t index = 0; index < count; ++index) {
+      out[index] = static_cast< T >(typed[index]);
+   }
+}
+
+//! Fill `out` from any array that exposes DLPack or the buffer protocol.
+//!
+//! Numpy, torch and jax all qualify. Without this, such a value falls through
+//! to the generic iterable walk below, which steps the array in Python and --
+//! for a framework whose elements are themselves array scalars, like torch --
+//! materializes a 0-dim tensor and calls `.item()` on it *per element*. That
+//! made a contiguous int64 tensor an order of magnitude slower to ingest than
+//! the same numbers in a plain Python list, which is the opposite of what a
+//! caller doing the native thing should get.
+//!
+//! Returns false whenever the value is not a host-resident contiguous array of
+//! a supported dtype and rank, in which case the caller keeps its old
+//! behaviour unchanged.
+template < typename T >
+bool try_contiguous_array(nb::handle value, NumericFieldInput< T >& out)
+{
+   nb::ndarray< nb::ro, nb::c_contig > array;
+   if(not nb::try_cast(value, array, /*convert=*/false)) {
+      return false;
+   }
+   // Device memory cannot be read here, and a 0-dim array is the scalar case
+   // the caller already handled before reaching this point.
+   if(array.device_type() != nb::device::cpu::value) {
+      return false;
+   }
+   const size_t rank = array.ndim();
+   if(rank != 1 and rank != 2) {
+      return false;
+   }
+
+   const auto count = static_cast< size_t >(array.size());
+   const auto dtype = array.dtype();
+   const void* data = array.data();
+   switch(dtype.code) {
+      case static_cast< uint8_t >(nb::dlpack::dtype_code::Int):
+         switch(dtype.bits) {
+            case 8: copy_contiguous_values< int8_t >(data, count, out.values); break;
+            case 16: copy_contiguous_values< int16_t >(data, count, out.values); break;
+            case 32: copy_contiguous_values< int32_t >(data, count, out.values); break;
+            case 64: copy_contiguous_values< int64_t >(data, count, out.values); break;
+            default: return false;
+         }
+         break;
+      case static_cast< uint8_t >(nb::dlpack::dtype_code::UInt):
+         switch(dtype.bits) {
+            case 8: copy_contiguous_values< uint8_t >(data, count, out.values); break;
+            case 16: copy_contiguous_values< uint16_t >(data, count, out.values); break;
+            case 32: copy_contiguous_values< uint32_t >(data, count, out.values); break;
+            case 64: copy_contiguous_values< uint64_t >(data, count, out.values); break;
+            default: return false;
+         }
+         break;
+      case static_cast< uint8_t >(nb::dlpack::dtype_code::Float):
+         switch(dtype.bits) {
+            case 32: copy_contiguous_values< float >(data, count, out.values); break;
+            case 64: copy_contiguous_values< double >(data, count, out.values); break;
+            default: return false;
+         }
+         break;
+      case static_cast< uint8_t >(nb::dlpack::dtype_code::Bool):
+         if(dtype.bits != 8) {
+            return false;
+         }
+         copy_contiguous_values< bool >(data, count, out.values);
+         break;
+      default: return false;
+   }
+
+   // Row-major, so the flattened order already matches what walking the rows
+   // and then the columns produces.
+   out.ndim = static_cast< int >(rank);
+   out.rows = rank == 2 ? static_cast< size_t >(array.shape(0)) : count;
+   out.cols = rank == 2 ? static_cast< size_t >(array.shape(1)) : 1;
+   return true;
+}
 
 template < typename T >
 NumericFieldInput< T > coerce_numeric_values(nb::handle value)
@@ -68,6 +156,13 @@ NumericFieldInput< T > coerce_numeric_values(nb::handle value)
       out.ndim = 0;
       out.rows = 1;
       out.cols = 1;
+      return out;
+   }
+
+   // Arrays go through one bulk copy. Everything below walks the value in
+   // Python, which is the right thing for a list or a generator and badly
+   // wrong for a buffer that is already contiguous.
+   if(try_contiguous_array(value, out)) {
       return out;
    }
 
