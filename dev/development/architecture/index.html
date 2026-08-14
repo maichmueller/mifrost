@@ -1202,6 +1202,83 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#header-layering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Header layering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planning-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Planning Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pytyr-and-the-abi-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PyTyr and the ABI boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-and-compatibility-encoder-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct and compatibility encoder paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-borrowed-what-is-owned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is borrowed, what is owned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goal-levels-sparse-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal levels: sparse by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lane-aware-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lane-aware preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1360,6 +1437,83 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#header-layering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Header layering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planning-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Planning Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pytyr-and-the-abi-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PyTyr and the ABI boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-and-compatibility-encoder-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct and compatibility encoder paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-borrowed-what-is-owned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is borrowed, what is owned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goal-levels-sparse-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal levels: sparse by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lane-aware-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lane-aware preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1485,6 +1639,218 @@ schema construction, graph emission, and batch collation stay in
 <code>src/_core/mifrost/</code>. Native code must not depend on the Python facade. Shared
 native behavior belongs in <code>core/</code> or <code>input_handling/</code>, not in multiple binding
 initializers.</p>
+<h3 id="header-layering">Header layering</h3>
+<p>The encoder stack is layered strictly bottom-up, and each layer may only
+depend on the ones above it in this list:</p>
+<div class="highlight"><pre><span></span><code>core/semantic/records.hpp          semantic record and key definitions
+    core/views/concepts.hpp        View concepts
+    core/views/semantic_preparation.hpp   borrowed inputs, compact pools
+        core/encoders/&lt;family&gt;/    family preparation and canonical algorithms
+            backends/&lt;backend&gt;/    backend adapters and exported engines
+</code></pre></div>
+<p><code>core/semantic/records.hpp</code> holds <code>SemanticAtom</code>, <code>SemanticLiteral</code>,
+<code>SemanticGroundAction</code>, <code>SemanticHistoryEntry</code>, <code>SemanticTaskContext</code>, the
+owning <code>SemanticFlatRelationInput</code> compatibility DTO, and their hash/ordering
+helpers. It depends on no encoder, batch, or View header.
+<code>semantic_flat_relation_encoder.hpp</code> includes it and re-exports every name from
+namespace <code>mifrost</code>, so the exported ABI and existing includes are unchanged.</p>
+<p>The View layer must not include an encoder header. It used to include the Flat
+encoder header while the Flat encoder header includes the Flat View bridge,
+which includes the View layer again; that cycle made the headers
+order-sensitive. <code>tests/cpp/view_preparation_scaling_test.cpp</code> includes
+<code>core/views/semantic_preparation.hpp</code> and nothing else from the encoder stack,
+so the cycle cannot silently return.</p>
+<h3 id="planning-views">Planning Views</h3>
+<p>The canonical encoder algorithms use the operation-bearing concepts in
+<code>mifrost/core/views/concepts.hpp</code>. <code>AtomView</code>, <code>LiteralView</code>,
+<code>GroundActionView</code>, and <code>StateView</code> expose only the IDs, ranges, and predicates
+that an algorithm needs; they do not own repository objects and do not use a
+virtual base class. <code>mifrost/core/views/canonical.hpp</code> contains statically
+dispatched traversal and satisfaction primitives shared by backend
+instantiations.</p>
+<p>Each backend has a task-scoped context and lazy Views:</p>
+<ul>
+<li><code>backends/pytyr/views.hpp</code> borrows the PyTyr planning task and its compact
+  repository-index tables.</li>
+<li><code>backends/pymimir/views.hpp</code> borrows a Pymimir problem and builds compact
+  lookup tables for that problem.</li>
+<li><code>core/semantic/views.hpp</code> adapts retained semantic records for neutral
+  algorithms and tests without introducing another owning model.</li>
+</ul>
+<p>View values are cheap, copyable handles. The backend task/problem and the
+context must outlive every View and every lazy range derived from it. Native
+templates are instantiated separately in each adapter, preserving PyTyr and
+Pymimir ABI isolation while sharing the algorithm source.</p>
+<h3 id="pytyr-and-the-abi-boundary">PyTyr and the ABI boundary</h3>
+<p>PyTyr and Pymimir link different nanobind ABI generations, so a Tyr state
+cannot be passed to an engine object owned by the core extension module: the
+two modules do not share a type registry. That constraint is about <em>nanobind</em>,
+not about C++. Both modules link the same neutral library, so the canonical
+engines are ordinary C++ objects that either module can construct and call.</p>
+<p>The PyTyr direct-View encoders (<code>_NativeDirectFlatEncoder</code>,
+<code>_NativeDirectColorEncoder</code>, <code>_NativeDirectHGraphEncoder</code>,
+<code>_NativeDirectSuccessorEncoder</code>) exploit exactly that: the engine is constructed
+and run inside the PyTyr module, where Tyr types are visible, so a state and its
+actions reach the canonical algorithm as granular Views. Only the finished,
+planner-neutral <code>BatchEncoding</code> crosses back, as a capsule. No owning
+<code>SemanticFlatRelationInput</code> is built for a normal encode.</p>
+<p>Every PyTyr family that has a direct encoder now routes its public runtime
+through it: single encode, batch, and stream, for Flat, Color, HGraph and the
+successor family.</p>
+<p>A runtime keeps two engines -- the compatibility one and the direct encoder's
+own instance -- so <code>update_relations</code> has to reach both. Updating only the
+compatibility engine leaves every encode on the arity table the direct encoder
+was constructed with, and the result stays internally consistent, so only a
+comparison against the compatibility engine reveals it.</p>
+<p>Batches and streams use the same boundary. A batch prepares and encodes every
+state in one crossing. A stream cannot do that -- it must hold graphs between
+appends -- so each appended step is prepared immediately into a
+<code>ViewPreparation</code>, which owns compact pools and borrows nothing from the Tyr
+state; the handle travels as a capsule that the flush <em>borrows</em> rather than
+consumes, so the same handles can be flushed repeatedly.</p>
+<p>Three things still cross as owned records, for reasons that are not removable by
+restructuring:</p>
+<ul>
+<li>Goal, subgoal, and history literals arrive from Python as compact tuples.
+  There is no native planning value to borrow from, so they are expanded into
+  <code>SemanticLiteral</code> vectors and then borrowed by semantic Views.</li>
+<li><code>append_into_builder</code> takes a <code>BatchBuilder</code> registered in the core module's
+  nanobind registry, which the PyTyr module cannot accept. This is the one path
+  where the ABI split itself, not the encoding, forces an owned input.</li>
+<li><code>make_input</code> / <code>make_inputs</code> remain the explicit compatibility route for
+  callers that want the semantic records themselves, and the horizon and
+  flat-horizon families still encode from owned inputs -- a horizon DAG is
+  itself an owned semantic snapshot.</li>
+</ul>
+<h3 id="direct-and-compatibility-encoder-paths">Direct and compatibility encoder paths</h3>
+<p>Native backend entry points use a direct path whenever the input is still a
+borrowed planning value:</p>
+<div class="highlight"><pre><span></span><code>backend values
+  -&gt; granular borrowed Views
+  -&gt; canonical statically dispatched family algorithm
+  -&gt; graph-derived intern/index/working structures
+  -&gt; BatchBuilder
+</code></pre></div>
+<p>The Pymimir Flat, Color, HGraph, successor, batch, and stream entry points use
+this path, and so do the PyTyr Flat, Color, HGraph, and successor entry points,
+including their batch and stream forms -- see
+"PyTyr and the ABI boundary" below for how a direct path is possible across two
+nanobind ABI generations. The semantic engines also retain an explicit
+compatibility path for owned <code>SemanticFlatRelationInput</code> records. That path is
+required by capsules, semantic transition DAGs, and callers that intentionally
+snapshot inputs:</p>
+<div class="highlight"><pre><span></span><code>owned semantic records -&gt; semantic compatibility encoder -&gt; BatchEncoding
+</code></pre></div>
+<p>The Color, HGraph, and successor direct overloads traverse granular Views before
+dispatching to the mature graph emitters. View traversal builds only compact
+graph-working records (flattened goal levels, unique action records, filtered
+history, state facts, and fact membership) needed for emission; it does not
+create a complete semantic-record mirror. Compatibility
+<code>SemanticFlatRelationInput</code> values bypass that View preparation and are consumed
+through borrowed references to their existing lanes, so compatibility encoding
+does not copy the complete input into another graph carrier. This keeps
+planner-library types out of the neutral core without duplicating backend
+algorithms.</p>
+<p>Every family has exactly one canonical algorithm, templated on the input and
+instantiated for both the borrowed preparation and the owning compatibility
+DTO. There is no second algorithm per backend, and no runtime storage-mode
+flag reaches per-element code.</p>
+<ul>
+<li>Color, HGraph and the successor encoder template <code>encode_impl</code> on the input
+  type; the lane accessors (<code>semantic_state_facts</code>, <code>semantic_actions</code>,
+  <code>semantic_history</code>, ...) resolve statically.</li>
+<li>Flat declares two concrete borrowed sources, <code>ViewSource</code> and
+  <code>CompatibilitySource</code>, and templates <code>validate_source</code>, <code>make_context</code> and
+  <code>prepare_source</code> over them. Preparation is the only code that knows which
+  kind of input is being encoded; it produces a fully resolved
+  <code>PreparedRelationGraph</code> — borrowed spans and pointers settled once, plus
+  compact graph-derived working state — so the emitters have nothing left to
+  test.</li>
+</ul>
+<p>Direct does not mean that the final graph is emitted without planning state.
+The neutral engine still creates a graph-local preparation object for schema
+ordering, validation, and relation emission. Unlike a compatibility input, that
+object is private to the encode call, is not a public semantic record, and does
+not retain planner-native values.</p>
+<p>The templated adapter boundary is deliberately granular: state, goals,
+subgoal layers, actions, and history are accepted as constrained View ranges,
+then traversed synchronously into the encoder's fixed graph-key preparation
+state. The public <code>SemanticFlatRelationInput</code> remains the owned compatibility
+representation; direct View calls do not expose another owning DTO or callback
+range. New canonical algorithms should continue to use the operation-based View
+concepts directly and should not introduce backend-specific type erasure into
+those concepts.</p>
+<h3 id="what-is-borrowed-what-is-owned">What is borrowed, what is owned</h3>
+<p>These five categories are deliberately distinct. "Preparation" never means a
+full per-lane owning copy of the input.</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Example</th>
+<th>Lifetime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Borrowed input range</td>
+<td><code>NativeGoalLiteralsView</code>, <code>StateView</code>, action <code>TransformRange</code></td>
+<td>Valid only while the backend problem/state, the task context, and the <code>views::Context</code> are alive. Consumed synchronously inside one encode call.</td>
+</tr>
+<tr>
+<td>Compact graph-derived pool</td>
+<td><code>ViewPreparation::atom_pool</code> / <code>action_pool</code> plus their hash indices, goal-level refs, filtered history refs, fact-membership set</td>
+<td>Private to one encode call. Holds each unique graph identity once; lanes keep only indices, so lane order and multiplicity survive deduplication.</td>
+</tr>
+<tr>
+<td>Owning compatibility DTO</td>
+<td><code>SemanticFlatRelationInput</code></td>
+<td>Owned by the caller. Used by capsules, semantic transition DAGs, and callers that intentionally snapshot. Consumed through borrowed references to its existing lanes, not copied into another carrier.</td>
+</tr>
+<tr>
+<td>Capsule / ABI snapshot</td>
+<td>PyTyr <code>_make_input_capsule</code>, <code>_encode_capsule</code></td>
+<td>Required because Pymimir and PyTyr are built against incompatible nanobind ABI generations. A capsule is an explicit ABI transport, never evidence that a path is or is not View-based: <code>_make_input_capsule</code> transports an owning input, while <code>_encode_capsule</code> transports only the finished neutral encoding produced by a direct-View encode.</td>
+</tr>
+<tr>
+<td>Stream lifetime snapshot</td>
+<td><code>HGraphStreamEncoder</code>, flat/horizon stream caches</td>
+<td>Stores the completed native batch encoding, never a lazy View, so the source state may be released after <code>append</code> returns.</td>
+</tr>
+</tbody>
+</table>
+<p>Task contexts and backend planning repositories must remain alive through every
+encode or stream append that consumes a View. Batch adapters materialize each
+input while its source ranges are alive and retain only the resulting native
+batch encoding.</p>
+<p>Two lifetime rules are enforced in the types rather than by convention:</p>
+<ul>
+<li><code>NativeGoalLayersView</code> owns its occupied-level list, so
+  <code>adapter.make_goal_views(goals).subgoal_layers_view()</code> -- where the
+  <code>NativeGoalViews</code> is a temporary -- is safe. The literal spans it carries are
+  still borrowed from the <code>GoalInputs</code>, which must outlive the iteration.</li>
+<li>Interning is a lookup index, never an ordering. <code>atom_pool</code> and <code>action_pool</code>
+  keep first-use insertion order and are the only things iterated;
+  <code>atom_indices</code> / <code>action_indices</code> exist purely for O(1) lookup.</li>
+</ul>
+<h3 id="goal-levels-sparse-by-default">Goal levels: sparse by default</h3>
+<p>Native goal Views represent goal levels sparsely: <code>NativeGoalLayersView</code> visits
+only occupied levels, so a single goal at a very high level costs one entry
+rather than a dense run of empty layers.</p>
+<p><code>SemanticFlatRelationInput::subgoal_layers</code> is positional, so the compatibility
+conversion in <code>SemanticProblemAdapter::make_input</code> has to build a dense vector.
+That conversion takes the <em>consuming encoder's</em> configured <code>max_goal_level</code> from
+its caller, and additionally clamps to <code>kDenseGoalLayerTransportLimit</code>, which is
+a transport-safety bound on the vector -- not an encoder capability limit. Each
+encoder family independently rejects levels it cannot represent, using its own
+configuration, before suffix or schema indexing. No family's limit is baked into
+the backend-neutral adapter.</p>
+<h3 id="lane-aware-preparation">Lane-aware preparation</h3>
+<p>Preparation populates only the lanes the selected path actually reads. The
+successor side of the successor-HGraph algorithm reads the object table and the
+successor state facts and nothing else, so it uses
+<code>canonical::detail::make_state_only_view_preparation</code> rather than building
+default-goal, action, and history records that are immediately discarded.</p>
 <h2 id="adding-an-encoder-family">Adding an Encoder Family</h2>
 <ol>
 <li>Add or reuse a native config and engine with a stable, batch-oriented entry
@@ -1504,9 +1870,9 @@ initializers.</p>
 The remaining architectural risk is concentrated in a few large modules rather
 than spread across the package. Priorities are:</p>
 <ol>
-<li>Complete the visualization-boundary migration for the flat and color
-   families. HGraph and Horizon NetworkX conversion, drawing, and specialized
-   target-tree layout now use a private data-only context boundary while their
+<li>Keep the visualization and encoder boundaries aligned. Flat, Color, HGraph,
+   Horizon HGraph, successor, and transition families now adapt Pymimir and
+   PyTyr through task-scoped Views and canonical semantic engines while their
    public method signatures remain stable.</li>
 <li>Decompose the largest native encoder translation units by stable concepts:
    schema construction, traversal/planning, and graph emission. Keep the engine

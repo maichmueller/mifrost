@@ -1877,7 +1877,7 @@
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="mifrost.encoders.base.EncoderBase">EncoderBase</span>[<a class="autorefs autorefs-internal" title="FlatRelationData (mifrost.encoders.flat_data.FlatRelationData)" href="#mifrost.encoders.flat_data.FlatRelationData">FlatRelationData</a>]</code></p>
+              Bases: <code><span title="mifrost.encoders.base.EncoderBase">EncoderBase</span>[&#39;FlatRelationData&#39;]</code></p>
 
 
 
@@ -2567,7 +2567,7 @@ payloads can add more relations and helper rows on that same table.</p>
 <span class="normal">913</span>
 <span class="normal">914</span>
 <span class="normal">915</span>
-<span class="normal">916</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FlatRelationEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">FlatRelationData</span><span class="p">]):</span>
+<span class="normal">916</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FlatRelationEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="s2">&quot;FlatRelationData&quot;</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one planning state as packed flat relations.</span>
 
 <span class="sd">    The output uses one flat entity table and packed relation tensors instead</span>
@@ -2782,7 +2782,7 @@ payloads can add more relations and helper rows on that same table.</p>
             <span class="n">state_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
             <span class="n">max_goal_level</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">max_goal_level</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode_one</span><span class="p">(</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">state</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
             <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
@@ -5040,7 +5040,14 @@ exist.</p>
 <span class="normal">456</span>
 <span class="normal">457</span>
 <span class="normal">458</span>
-<span class="normal">459</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FlatHorizonEncoder</span><span class="p">(</span><span class="n">FlatRelationEncoder</span><span class="p">):</span>
+<span class="normal">459</span>
+<span class="normal">460</span>
+<span class="normal">461</span>
+<span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FlatHorizonEncoder</span><span class="p">(</span><span class="n">FlatRelationEncoder</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode a root state plus lookahead candidates as packed flat relations.&quot;&quot;&quot;</span>
 
     <span class="n">_runtime</span><span class="p">:</span> <span class="n">Any</span>
@@ -5050,6 +5057,7 @@ exist.</p>
         <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
         <span class="n">backend</span><span class="p">:</span> <span class="n">FlatHorizonBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">assembly</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">transition_mode</span><span class="p">:</span> <span class="p">(</span>
             <span class="n">FlatHorizonEncoderMode</span> <span class="o">|</span> <span class="n">HorizonEncoderMode</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
         <span class="p">)</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5088,6 +5096,10 @@ exist.</p>
 
 <span class="sd">        When `include_lgan_edges=True`, LGAN anchors follow the target rows.</span>
 <span class="sd">        There is no `lgan_anchor_sources` switch here.</span>
+
+<span class="sd">        `assembly` accepts a native `SemanticFlatAssemblyComponents` carrier.</span>
+<span class="sd">        It is consumed exactly once by the Pymimir adapter before compilation;</span>
+<span class="sd">        the PyTyr backend does not yet expose this adapter bridge.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
         <span class="n">config_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -5118,7 +5130,9 @@ exist.</p>
         <span class="k">if</span> <span class="n">goal_derivations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">config_kwargs</span><span class="p">[</span><span class="s2">&quot;goal_derivations&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">goal_derivations</span>
         <span class="n">config</span> <span class="o">=</span> <span class="n">FlatHorizonEncoderConfig</span><span class="p">(</span><span class="o">**</span><span class="n">config_kwargs</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_flat_horizon_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_flat_horizon_runtime</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">assembly</span><span class="o">=</span><span class="n">assembly</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">engine</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">config</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
@@ -5212,7 +5226,7 @@ exist.</p>
             <span class="n">state_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
             <span class="n">max_goal_level</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">max_goal_level</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode_one</span><span class="p">(</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">root</span><span class="p">,</span>
             <span class="n">dag</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -5400,7 +5414,7 @@ exist.</p>
 
 
 <h3 id="mifrost.encoders.flat_horizon.FlatHorizonEncoder.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transition_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="s1">&#39;target:&#39;</span><span class="p">,</span> <span class="n">parent_relation</span><span class="o">=</span><span class="n">DEFAULT_PARENT_RELATION</span><span class="p">,</span> <span class="n">sibling_relation</span><span class="o">=</span><span class="s1">&#39;_sibling_&#39;</span><span class="p">,</span> <span class="n">cousin_relation</span><span class="o">=</span><span class="s1">&#39;_cousin_&#39;</span><span class="p">,</span> <span class="n">enable_parent_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">root_policy</span><span class="o">=</span><span class="s1">&#39;exclude&#39;</span><span class="p">,</span> <span class="n">max_goal_level</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">support_literals</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_static</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_zero_arity_relations</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">use_predicate_virtual_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_tn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_TN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_rr_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span> <span class="n">pack_relation_args_relation_major</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">goal_derivations</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">assembly</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transition_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_symbol_prefix</span><span class="o">=</span><span class="s1">&#39;target:&#39;</span><span class="p">,</span> <span class="n">parent_relation</span><span class="o">=</span><span class="n">DEFAULT_PARENT_RELATION</span><span class="p">,</span> <span class="n">sibling_relation</span><span class="o">=</span><span class="s1">&#39;_sibling_&#39;</span><span class="p">,</span> <span class="n">cousin_relation</span><span class="o">=</span><span class="s1">&#39;_cousin_&#39;</span><span class="p">,</span> <span class="n">enable_parent_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_sibling_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_cousin_relation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">root_policy</span><span class="o">=</span><span class="s1">&#39;exclude&#39;</span><span class="p">,</span> <span class="n">max_goal_level</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">support_literals</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_static</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_zero_arity_relations</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">use_predicate_virtual_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_tn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_TN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span> <span class="n">lgan_rr_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span> <span class="n">pack_relation_args_relation_major</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">goal_derivations</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -5418,6 +5432,9 @@ candidate state rows.</p>
 </ul>
 <p>When <code>include_lgan_edges=True</code>, LGAN anchors follow the target rows.
 There is no <code>lgan_anchor_sources</code> switch here.</p>
+<p><code>assembly</code> accepts a native <code>SemanticFlatAssemblyComponents</code> carrier.
+It is consumed exactly once by the Pymimir adapter before compilation;
+the PyTyr backend does not yet expose this adapter bridge.</p>
 
 
             <details class="mkdocstrings-source">
@@ -5516,11 +5533,19 @@ There is no <code>lgan_anchor_sources</code> switch here.</p>
 <span class="normal">282</span>
 <span class="normal">283</span>
 <span class="normal">284</span>
-<span class="normal">285</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">domain</span><span class="p">:</span> <span class="n">DomainInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">backend</span><span class="p">:</span> <span class="n">FlatHorizonBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">assembly</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">transition_mode</span><span class="p">:</span> <span class="p">(</span>
         <span class="n">FlatHorizonEncoderMode</span> <span class="o">|</span> <span class="n">HorizonEncoderMode</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
     <span class="p">)</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5559,6 +5584,10 @@ There is no <code>lgan_anchor_sources</code> switch here.</p>
 
 <span class="sd">    When `include_lgan_edges=True`, LGAN anchors follow the target rows.</span>
 <span class="sd">    There is no `lgan_anchor_sources` switch here.</span>
+
+<span class="sd">    `assembly` accepts a native `SemanticFlatAssemblyComponents` carrier.</span>
+<span class="sd">    It is consumed exactly once by the Pymimir adapter before compilation;</span>
+<span class="sd">    the PyTyr backend does not yet expose this adapter bridge.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
     <span class="n">config_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -5589,7 +5618,9 @@ There is no <code>lgan_anchor_sources</code> switch here.</p>
     <span class="k">if</span> <span class="n">goal_derivations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">config_kwargs</span><span class="p">[</span><span class="s2">&quot;goal_derivations&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">goal_derivations</span>
     <span class="n">config</span> <span class="o">=</span> <span class="n">FlatHorizonEncoderConfig</span><span class="p">(</span><span class="o">**</span><span class="n">config_kwargs</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_flat_horizon_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_flat_horizon_runtime</span><span class="p">(</span>
+        <span class="n">domain</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">assembly</span><span class="o">=</span><span class="n">assembly</span>
+    <span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">engine</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="o">.</span><span class="n">config</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
@@ -5636,14 +5667,7 @@ payloads are rejected on this lane.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/flat_horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">372</span>
 <span class="normal">373</span>
 <span class="normal">374</span>
 <span class="normal">375</span>
@@ -5666,7 +5690,14 @@ payloads are rejected on this lane.</p>
 <span class="normal">392</span>
 <span class="normal">393</span>
 <span class="normal">394</span>
-<span class="normal">395</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">root</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
     <span class="n">dag</span><span class="p">:</span> <span class="n">TransitionDAG</span> <span class="o">|</span> <span class="n">RXStateDAG</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5719,14 +5750,7 @@ payloads are rejected on this lane.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/flat_horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">427</span>
 <span class="normal">428</span>
 <span class="normal">429</span>
 <span class="normal">430</span>
@@ -5748,7 +5772,14 @@ payloads are rejected on this lane.</p>
 <span class="normal">446</span>
 <span class="normal">447</span>
 <span class="normal">448</span>
-<span class="normal">449</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
+<span class="normal">449</span>
+<span class="normal">450</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">encode_batch</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">roots</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
     <span class="n">dags</span><span class="p">:</span> <span class="n">DagBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5800,9 +5831,9 @@ payloads are rejected on this lane.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/flat_horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FlatHorizonEncoderStream</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">458</span>
+<span class="normal">459</span>
+<span class="normal">460</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FlatHorizonEncoderStream</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return an append-only stream for root/DAG horizon inputs.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">FlatHorizonEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -5827,11 +5858,11 @@ payloads are rejected on this lane.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mifrost/encoders/flat_horizon.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">mutable_stream</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">mutable_stream</span><span class="p">(</span>  <span class="c1"># type: ignore[override]</span>
     <span class="bp">self</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FlatHorizonMutableEncoderStream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a mutable stream with `append`, `update`, and `remove`.&quot;&quot;&quot;</span>

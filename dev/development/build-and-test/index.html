@@ -1152,6 +1152,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Build and install">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dev-package-staging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dev package staging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1234,6 +1251,26 @@ configs, benchmark toggle, and default build targets stay in one place:</p>
 </ul>
 <p>Avoid ad hoc root-level build directories like <code>build_*_probe</code> unless they are
 short-lived ignored experiments.</p>
+<h3 id="dev-package-staging">Dev package staging</h3>
+<p>A dev-mode build stages an importable <code>mifrost</code> package: the native extension
+modules, the shared libraries they load at runtime, and the generated stubs.
+<code>MIFROST_DEV_PACKAGE_ROOT</code> controls where that package is written.</p>
+<ul>
+<li>Plain CMake builds stage into <code>&lt;build-dir&gt;/python</code>, so each configuration
+  keeps its artifacts to itself.</li>
+<li>The scikit-build-core editable install and <code>--mode stubs</code> stage into <code>src/</code>,
+  because an editable install imports from the source tree and packaging reads
+  the generated <code>src/mifrost/*.pyi</code> files afterwards.</li>
+</ul>
+<p>Sharing one staging root between build directories with different compile
+settings is what makes a sanitizer or Debug build replace the shared library
+that another build directory's already linked tests and benchmarks load. The
+symptom is not a build error; it is spurious sanitizer reports, slow
+benchmarks, or an aborted stub generation in the <em>other</em> build tree. Configure
+rejects that overlap and names both build directories. Pass
+<code>-DMIFROST_DEV_PACKAGE_ROOT=&lt;dir&gt;</code> to move a build elsewhere.</p>
+<p>If you do build a sanitizer or Debug tree that stages into <code>src/</code>, rebuild the
+editable install afterwards so the source tree holds Release artifacts again.</p>
 <p>The Python helpers treat those modes as the canonical local build roots:</p>
 <ul>
 <li><code>configure.py</code> prepares a build tree and installs dependencies.</li>

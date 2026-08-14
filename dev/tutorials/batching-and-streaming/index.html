@@ -1424,7 +1424,7 @@
 <p>Use <code>encode_batch</code> when all states are available in memory.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_batch.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>e7d22f2fbe5fe4704e2207416144d3348ce417b4</code></p>
+<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
 <h2 id="program">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1449,7 +1449,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.encode_batch([state, successor]) ==
 python: 3.12.13
-platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 2
 num_nodes: 24
@@ -1492,7 +1492,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 50,
   &quot;num_graphs&quot;: 2,
   &quot;num_nodes&quot;: 24,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1502,7 +1502,7 @@ SNAPSHOT_JSON_END
 <p>Use <code>stream()</code> when samples arrive incrementally and only append semantics are needed.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_stream_append_only.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>e7d22f2fbe5fe4704e2207416144d3348ce417b4</code></p>
+<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
 <h2 id="program_1">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1532,7 +1532,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_1">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.stream().append(...).flush() (2 graphs) ==
 python: 3.12.13
-platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 2
 num_nodes: 24
@@ -1575,7 +1575,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 50,
   &quot;num_graphs&quot;: 2,
   &quot;num_nodes&quot;: 24,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
@@ -1591,7 +1591,7 @@ SNAPSHOT_JSON_END
 <p>Use <code>mutable_stream()</code> when you need stable IDs and update/remove semantics.</p>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_stream_mutable.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>e7d22f2fbe5fe4704e2207416144d3348ce417b4</code></p>
+<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
 <h2 id="program_2">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1624,7 +1624,7 @@ It is intended to show the exact code and typical output for this version.</p>
 <h2 id="output_2">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.mutable_stream() append/update/remove/flush (1 graph) ==
 python: 3.12.13
-platform: Linux-6.17.0-1020-azure-x86_64-with-glibc2.39
+platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
 num_nodes: 12
@@ -1667,7 +1667,7 @@ SNAPSHOT_JSON_BEGIN
   &quot;num_edges&quot;: 24,
   &quot;num_graphs&quot;: 1,
   &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1020-azure-x86_64-with-glibc2.39&quot;,
+  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
   &quot;python&quot;: &quot;3.12.13&quot;,
   &quot;schema_fingerprint&quot;: 2869292577121628696
 }
