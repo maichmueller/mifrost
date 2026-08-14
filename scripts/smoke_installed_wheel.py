@@ -26,8 +26,8 @@ def _smoke_pymimir(domain_path: Path, problem_path: Path) -> None:
 
 def _smoke_pytyr(domain_path: Path, problem_path: Path) -> None:
     from pypddl.formalism import ParserOptions
+    from pyyggdrasil.execution import ExecutionContext
     from pytyr.formalism.planning import Parser
-    from pytyr.planning import ExecutionContext
     from pytyr.planning.lifted import (
         AxiomEvaluatorFactory,
         StateRepositoryFactory,
