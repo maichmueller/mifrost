@@ -236,14 +236,14 @@ planning_task = Parser({str(domain)!r}, options).parse_task({str(problem)!r}, op
 task = Task(planning_task)
 context = ExecutionContext(1)
 evaluator = AxiomEvaluatorFactory().create(task, context)
-repository = StateRepositoryFactory().create(task, evaluator)
-generator = SuccessorGeneratorFactory().create(task, context, repository)
-root = generator.get_initial_node()
-successor = generator.get_labeled_successor_nodes(root)[0]
+repository = StateRepositoryFactory().create(task)
+generator = SuccessorGeneratorFactory().create(task, context)
+root = generator.get_initial_node(repository, evaluator)
+successor = generator.get_labeled_successor_nodes(root, repository, evaluator)[0]
 dag = rx.PyDiGraph()
 root_index = dag.add_node(root.get_state())
 successor_index = dag.add_node({{"state": successor.node.get_state(), "candidate_id": 9}})
-dag.add_edge(root_index, successor_index, successor.label)
+dag.add_edge(root_index, successor_index, generator.ground_action(successor.label))
 encoder = mifrost.FlatHorizonEncoder(planning_task)
 assert encoder.backend == "pytyr"
 assert encoder.encode(root.get_state(), dag=dag).target_candidate_ids.tolist() == [9]

@@ -188,7 +188,7 @@ jobs:
         # native library is linked against the matching PyYggdrasil/PyPDDL
         # runtime; allowing pip to select newer transitive native wheels can
         # produce an undefined C++ ABI symbol before Mifrost is imported.
-        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 pyyggdrasil==0.0.21 pypddl==1.0.23 torch>=2.2,<3 torch-geometric>=2.7 numpy"
+        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.34 pyyggdrasil==0.0.27 pypddl==1.0.27 torch>=2.2,<3 torch-geometric>=2.7 numpy"
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
         CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py

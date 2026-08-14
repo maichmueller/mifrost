@@ -45,7 +45,7 @@ def _assert_public_parity(
 def test_public_hgraph_backends_match_base_configurations(
     config: dict[str, Any],
 ) -> None:
-    _pymimir_reader, problem, reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, reader, pytyr_search = _backend_pair()
     pymimir_encoder = mifrost.HGraphEncoder(problem.get_domain(), **config)
     pytyr_encoder = mifrost.HGraphEncoder(reader._planning_task, **config)
 
@@ -55,15 +55,15 @@ def test_public_hgraph_backends_match_base_configurations(
         pymimir_encoder,
         pytyr_encoder,
         pymimir_encoder.encode(problem.get_initial_state()),
-        pytyr_encoder.encode(successor_generator.get_initial_node().get_state()),
+        pytyr_encoder.encode(pytyr_search.initial_node().get_state()),
     )
 
 
 def test_public_hgraph_backends_match_all_optional_lanes_and_lgan() -> None:
     space, domain, problem = problem_setup("blocks", "small")
-    pymimir_reader, _other_problem, reader, successor_generator = _backend_pair()
+    pymimir_reader, _other_problem, reader, pytyr_search = _backend_pair()
     pymimir_state = problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_state = pytyr_root.get_state()
     pymimir_actions = [
         action
@@ -71,8 +71,8 @@ def test_public_hgraph_backends_match_all_optional_lanes_and_lgan() -> None:
         if action is not None
     ]
     pytyr_actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        pytyr_search.action(successor)
+        for successor in pytyr_search.successors(pytyr_root)
     ]
     pymimir_by_key = {
         pymimir_reader.action_key(action): action for action in pymimir_actions
@@ -123,12 +123,11 @@ def test_public_hgraph_backends_match_all_optional_lanes_and_lgan() -> None:
 
 
 def test_public_hgraph_pytyr_batch_builder_and_streams() -> None:
-    _pymimir_reader, _problem, reader, successor_generator = _backend_pair()
-    root = successor_generator.get_initial_node()
+    _pymimir_reader, _problem, reader, pytyr_search = _backend_pair()
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ][:1]
     goals = list(reader.problem_snapshot().goals)
     encoder = mifrost.HGraphEncoder(
@@ -179,7 +178,7 @@ def test_public_hgraph_pytyr_batch_builder_and_streams() -> None:
 
 
 def test_public_hgraph_pymimir_stream_history_overloads() -> None:
-    _reader, problem, _pytyr_reader, _successor_generator = _backend_pair()
+    _reader, problem, _pytyr_reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     goals = list(problem.get_goal_condition().get_literals())
     history = [(-1, goals), (-3, goals)]
@@ -210,10 +209,10 @@ def test_public_hgraph_pymimir_stream_history_overloads() -> None:
 
 
 def test_public_hgraph_rejects_mixed_inputs_and_wrong_selection() -> None:
-    _reader, problem, pytyr_reader, successor_generator = _backend_pair()
-    pytyr_root = successor_generator.get_initial_node()
+    _reader, problem, pytyr_reader, pytyr_search = _backend_pair()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_state = pytyr_root.get_state()
-    pytyr_action = successor_generator.get_labeled_successor_nodes(pytyr_root)[0].label
+    pytyr_action = pytyr_search.action(pytyr_search.successors(pytyr_root)[0])
     pymimir_state = problem.get_initial_state()
     pymimir_action = list(pymimir_state.generate_applicable_actions())[0]
     encoder = mifrost.HGraphEncoder(pytyr_reader._planning_task, ignore_actions=False)
@@ -247,7 +246,7 @@ def test_public_hgraph_rejects_mixed_inputs_and_wrong_selection() -> None:
 
 
 def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> None:
-    _reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_encoder = mifrost.HGraphEncoder(problem.get_domain())
     pytyr_encoder = mifrost.HGraphEncoder(pytyr_reader._planning_task)
     pymimir_relations = dict(pymimir_encoder.relation_dict)
@@ -260,9 +259,7 @@ def test_public_hgraph_relation_updates_coexistence_and_derived_regression() -> 
     retained = []
     for _ in range(2):
         retained.append(pymimir_encoder.encode(problem.get_initial_state()))
-        retained.append(
-            pytyr_encoder.encode(successor_generator.get_initial_node().get_state())
-        )
+        retained.append(pytyr_encoder.encode(pytyr_search.initial_node().get_state()))
     assert len(retained) == 4
 
     horizon = mifrost.HorizonEncoder(problem.get_domain())
@@ -309,9 +306,9 @@ planning_task = Parser({str(domain)!r}, options).parse_task({str(problem)!r}, op
 task = Task(planning_task)
 context = ExecutionContext(1)
 evaluator = AxiomEvaluatorFactory().create(task, context)
-repository = StateRepositoryFactory().create(task, evaluator)
-successor_generator = SuccessorGeneratorFactory().create(task, context, repository)
-state = successor_generator.get_initial_node().get_state()
+repository = StateRepositoryFactory().create(task)
+generator = SuccessorGeneratorFactory().create(task, context)
+state = generator.get_initial_node(repository, evaluator).get_state()
 encoder = mifrost.HGraphEncoder(planning_task)
 assert encoder.backend == "pytyr"
 assert encoder.encode_batch([state, state]).num_graphs == 2

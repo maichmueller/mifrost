@@ -24,6 +24,8 @@ from mifrost.backends.pytyr import (
     SemanticPlanningTaskAdapter,
 )
 
+from .test_semantic_parity import PyTyrSearch
+
 
 pytyr_adapter = pytest.importorskip(
     "mifrost._pytyr_adapter",
@@ -60,9 +62,11 @@ def _pytyr_pair(domain: str, problem: str) -> tuple[Any, Any]:
     task = Task(planning_task)
     context = ExecutionContext(1)
     evaluator = AxiomEvaluatorFactory().create(task, context)
-    repository = StateRepositoryFactory().create(task, evaluator)
-    successor_generator = SuccessorGeneratorFactory().create(task, context, repository)
-    return PyTyrSnapshotReader(planning_task), successor_generator
+    repository = StateRepositoryFactory().create(task)
+    generator = SuccessorGeneratorFactory().create(task, context)
+    return PyTyrSnapshotReader(planning_task), PyTyrSearch(
+        generator, repository, evaluator
+    )
 
 
 def _assert_payload_equal(actual: Any, expected: Any) -> None:
@@ -118,12 +122,11 @@ def _input_payload(value: Any) -> tuple[Any, ...]:
 def test_native_pytyr_conversion_matches_python_semantic_contract(
     domain: str, problem: str
 ) -> None:
-    reader, successor_generator = _pytyr_pair(domain, problem)
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair(domain, problem)
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
 
     native = SemanticFlatRelationEncoder(reader._planning_task, _config())
@@ -153,13 +156,13 @@ def test_native_pytyr_matches_native_pymimir_by_semantic_names() -> None:
     from .test_flat_semantic_adapter import _assert_semantically_equal
     from .test_semantic_parity import _backend_pair
 
-    _, pymimir_problem, reader, successor_generator = _backend_pair()
+    _, pymimir_problem, reader, pytyr_search = _backend_pair()
     pymimir_root = pymimir_problem.get_initial_state()
     pymimir_actions = list(pymimir_root.generate_applicable_actions())
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        pytyr_search.action(successor)
+        for successor in pytyr_search.successors(pytyr_root)
     ]
 
     pymimir_engine = mifrost.FlatRelationEncoderEngine(
@@ -185,8 +188,8 @@ def test_native_pytyr_matches_native_pymimir_by_semantic_names() -> None:
 
 
 def test_native_pytyr_optional_literal_lanes_match_semantic_contract() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    state = pytyr_search.initial_node().get_state()
     goals = reader.problem_snapshot().goals
     config = _config()
     config.max_goal_level = 1
@@ -215,8 +218,8 @@ def test_native_pytyr_optional_literal_lanes_match_semantic_contract() -> None:
 
 
 def test_native_pytyr_raw_literal_lanes_match_semantic_contract() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    state = pytyr_search.initial_node().get_state()
     goal = reader._planning_task.get_task().get_goal()
     raw_goals = [
         *goal.get_static_facts(),
@@ -250,8 +253,8 @@ def test_native_pytyr_raw_literal_lanes_match_semantic_contract() -> None:
 
 
 def test_native_pytyr_explicit_empty_goals_override_task_goals() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    state = pytyr_search.initial_node().get_state()
     native = SemanticFlatRelationEncoder(reader._planning_task, _config())
 
     assert not native.make_input(state).goals
@@ -261,8 +264,8 @@ def test_native_pytyr_explicit_empty_goals_override_task_goals() -> None:
 
 
 def test_native_pytyr_context_survives_adapter_and_omits_node_names() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    state = pytyr_search.initial_node().get_state()
     config = _config()
     config.export_node_names = False
     adapter = SemanticPlanningTaskAdapter(reader._planning_task)
@@ -287,8 +290,8 @@ def test_native_pytyr_adapter_converts_successor_states_lazily() -> None:
     convert via a cache-miss-computes-and-memoizes path, not raise "outside
     the adapter task context" (see semantic_flat_encoder.cpp cached_atom).
     """
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     adapter = SemanticPlanningTaskAdapter(reader._planning_task)
     config = _config()
     engine = adapter.make_flat_engine(config)
@@ -303,13 +306,13 @@ def test_native_pytyr_adapter_converts_successor_states_lazily() -> None:
     for _ in range(3):
         next_frontier = []
         for node in frontier:
-            for labeled in successor_generator.get_labeled_successor_nodes(node):
+            for labeled in pytyr_search.successors(node):
                 state = labeled.node.get_state()
                 # Previously raised ValueError("... outside the adapter task
                 # context") for fluent atoms first grounded by this
                 # successor, since the adapter's cache was immutable after
                 # construction.
-                input_value = adapter.make_input(state, [labeled.label])
+                input_value = adapter.make_input(state, [pytyr_search.action(labeled)])
                 assert engine.encode(input_value).num_graphs == 1
                 visited_states += 1
                 next_frontier.append(labeled.node)
@@ -333,14 +336,14 @@ def test_native_pytyr_adapter_atom_cache_survives_concurrent_python_calls() -> N
     gil_scoped_release here without adding synchronization would show up as
     a crash, a wrong/torn SemanticAtom, or a mismatched encoding below.
     """
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     adapter = SemanticPlanningTaskAdapter(reader._planning_task)
     engine = adapter.make_flat_engine(_config())
 
     successors = [
-        (labeled.label, labeled.node.get_state())
-        for labeled in successor_generator.get_labeled_successor_nodes(root)
+        (pytyr_search.action(labeled), labeled.node.get_state())
+        for labeled in pytyr_search.successors(root)
     ]
     assert successors
 
@@ -360,9 +363,9 @@ def test_native_backends_remain_independent_when_interleaved() -> None:
     from .test_flat_semantic_adapter import _assert_semantically_equal
     from .test_semantic_parity import _backend_pair
 
-    _, pymimir_problem, reader, successor_generator = _backend_pair()
+    _, pymimir_problem, reader, pytyr_search = _backend_pair()
     pymimir_root = pymimir_problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node().get_state()
+    pytyr_root = pytyr_search.initial_node().get_state()
 
     pymimir_engine = mifrost.FlatRelationEncoderEngine(
         pymimir_problem.get_domain()._advanced_domain, _config()
@@ -462,8 +465,8 @@ def _family_config(family: str) -> Any:
 def test_direct_view_encode_matches_owned_input(
     family: str, direct_factory: str, engine_factory: str, domain: str, problem: str
 ) -> None:
-    reader, successor_generator = _pytyr_pair(domain, problem)
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair(domain, problem)
+    state = pytyr_search.initial_node().get_state()
     adapter = SemanticPlanningTaskAdapter(reader._planning_task)
     config = _family_config(family)
 
@@ -480,12 +483,11 @@ def test_direct_view_encode_matches_owned_input(
 def test_direct_view_flat_optional_lanes_match_owned_input(
     domain: str, problem: str
 ) -> None:
-    reader, successor_generator = _pytyr_pair(domain, problem)
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair(domain, problem)
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
     config = mifrost.FlatRelationEncoderConfig(
         max_goal_level=2,
@@ -516,8 +518,8 @@ def test_direct_view_flat_optional_lanes_match_owned_input(
 
 def test_direct_view_encoder_keeps_its_adapter_alive() -> None:
     """The encoder borrows the adapter's View context, so it must own a reference."""
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    state = successor_generator.get_initial_node().get_state()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    state = pytyr_search.initial_node().get_state()
 
     def make() -> Any:
         adapter = SemanticPlanningTaskAdapter(reader._planning_task)
@@ -532,13 +534,13 @@ def test_direct_view_encoder_keeps_its_adapter_alive() -> None:
 
 def _two_states(domain: str, problem: str) -> tuple[Any, list[Any], list[Any]]:
     """A root and one successor, plus the root's applicable actions."""
-    reader, successor_generator = _pytyr_pair(domain, problem)
-    root = successor_generator.get_initial_node()
-    labeled = list(successor_generator.get_labeled_successor_nodes(root))
+    reader, pytyr_search = _pytyr_pair(domain, problem)
+    root = pytyr_search.initial_node()
+    labeled = list(pytyr_search.successors(root))
     states = [root.get_state()]
     if labeled:
         states.append(labeled[0].node.get_state())
-    return reader, states, [entry.label for entry in labeled]
+    return reader, states, [pytyr_search.action(entry) for entry in labeled]
 
 
 @pytest.mark.parametrize(

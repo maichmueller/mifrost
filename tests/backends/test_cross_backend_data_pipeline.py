@@ -59,13 +59,13 @@ def _assert_mixed_batch_roundtrip(
 def test_state_encoder_outputs_batch_and_serialize_across_backends(
     encoder_type: type[Any],
 ) -> None:
-    _pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_encoder = encoder_type(problem.get_domain())
     pytyr_encoder = encoder_type(pytyr_reader._planning_task)
 
     _assert_mixed_batch_roundtrip(
         pymimir_encoder.encode(problem.get_initial_state()),
-        pytyr_encoder.encode(successor_generator.get_initial_node().get_state()),
+        pytyr_encoder.encode(pytyr_search.initial_node().get_state()),
     )
 
 
@@ -129,12 +129,12 @@ def test_horizon_outputs_batch_and_serialize_across_backends(
 
 
 def test_mixed_backend_hgraph_runs_one_learning_and_checkpoint_step() -> None:
-    _pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_encoder = mifrost.HGraphEncoder(problem.get_domain())
     pytyr_encoder = mifrost.HGraphEncoder(pytyr_reader._planning_task)
     mixed = _assert_mixed_batch_roundtrip(
         pymimir_encoder.encode(problem.get_initial_state()),
-        pytyr_encoder.encode(successor_generator.get_initial_node().get_state()),
+        pytyr_encoder.encode(pytyr_search.initial_node().get_state()),
     )
     data = mixed.as_pyg(as_batch=True)
     object_x = data["object"].x.float()

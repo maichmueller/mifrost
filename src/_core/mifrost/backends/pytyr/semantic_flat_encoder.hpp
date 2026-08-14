@@ -36,11 +36,11 @@ class MIFROST_API SemanticPlanningTaskAdapter {
    ~SemanticPlanningTaskAdapter();
 
    [[nodiscard]] SemanticFlatRelationInput make_input(
-      const tyr::planning::StateView< tyr::planning::LiftedTag >& state,
+      const tyr::planning::StateView< tyr::LiftedTag >& state,
       const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}
    ) const;
    [[nodiscard]] SemanticFlatRelationInput make_input(
-      const tyr::planning::StateView< tyr::planning::GroundTag >& state,
+      const tyr::planning::StateView< tyr::GroundTag >& state,
       const std::vector< tyr::formalism::planning::GroundActionView >& actions = {}
    ) const;
    [[nodiscard]] SemanticLiteral make_raw_literal(
@@ -54,12 +54,10 @@ class MIFROST_API SemanticPlanningTaskAdapter {
    /** The domain-level schema, shared by every task of this domain. */
    [[nodiscard]] std::shared_ptr< const SemanticSchemaContext > get_schema_context() const;
    [[nodiscard]] const views::Context& get_view_context() const noexcept;
-   [[nodiscard]] views::
-      StateView< tyr::planning::StateView< tyr::planning::LiftedTag >, tyr::planning::LiftedTag >
-      make_view(const tyr::planning::StateView< tyr::planning::LiftedTag >& state) const;
-   [[nodiscard]] views::
-      StateView< tyr::planning::StateView< tyr::planning::GroundTag >, tyr::planning::GroundTag >
-      make_view(const tyr::planning::StateView< tyr::planning::GroundTag >& state) const;
+   [[nodiscard]] views::StateView< tyr::planning::StateView< tyr::LiftedTag >, tyr::LiftedTag >
+   make_view(const tyr::planning::StateView< tyr::LiftedTag >& state) const;
+   [[nodiscard]] views::StateView< tyr::planning::StateView< tyr::GroundTag >, tyr::GroundTag >
+   make_view(const tyr::planning::StateView< tyr::GroundTag >& state) const;
 
    /**
     * Borrow a range of Tyr ground actions as granular action Views.

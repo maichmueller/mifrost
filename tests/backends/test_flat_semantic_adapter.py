@@ -82,15 +82,14 @@ def _config():
 
 
 def test_semantic_adapters_match_native_pymimir_flat_encoding() -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = _backend_pair()
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = _backend_pair()
     assert isinstance(pymimir_reader, PymimirSnapshotReader)
     assert isinstance(pytyr_reader, PyTyrSnapshotReader)
     pymimir_root = pymimir_problem.get_initial_state()
     pymimir_actions = list(pymimir_root.generate_applicable_actions())
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_actions = [
-        labeled.label
-        for labeled in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        pytyr_search.action(labeled) for labeled in pytyr_search.successors(pytyr_root)
     ]
 
     native_engine = mifrost.FlatRelationEncoderEngine(
@@ -121,11 +120,11 @@ def test_semantic_adapters_match_native_pymimir_flat_encoding() -> None:
 
 
 def test_two_backend_semantic_engines_remain_independent_when_interleaved() -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = _backend_pair()
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_adapter = FlatSemanticAdapter(pymimir_reader, _config())
     pytyr_adapter = FlatSemanticAdapter(pytyr_reader, _config())
     pymimir_root = pymimir_problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node().get_state()
+    pytyr_root = pytyr_search.initial_node().get_state()
 
     expected = pymimir_adapter.encode(pymimir_root)
     for _ in range(3):

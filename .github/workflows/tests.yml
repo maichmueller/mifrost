@@ -91,7 +91,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/base-build.txt -r requirements/test.txt -r requirements.txt pymimir==0.13.63
           if [ "${{ matrix.backends }}" = "both" ]; then
-            python -m pip install pytyr==0.0.30
+            python -m pip install pytyr==0.0.34
           fi
 
       - name: Build and install

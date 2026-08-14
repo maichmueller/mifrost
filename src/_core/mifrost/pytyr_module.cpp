@@ -604,8 +604,8 @@ NB_MODULE(_pytyr_adapter, m)
    using Adapter = SemanticPlanningTaskAdapter;
    using PlanningTask = tyr::formalism::planning::PlanningTask;
    using GroundAction = tyr::formalism::planning::GroundActionView;
-   using LiftedState = tyr::planning::StateView< tyr::planning::LiftedTag >;
-   using GroundState = tyr::planning::StateView< tyr::planning::GroundTag >;
+   using LiftedState = tyr::planning::StateView< tyr::LiftedTag >;
+   using GroundState = tyr::planning::StateView< tyr::GroundTag >;
 
    const auto owned_capsule = [](auto value, const char* name) {
       auto* capsule = capsule_bridge::make_owned(std::move(value), name);

@@ -268,9 +268,16 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
     endforeach ()
     if (NOT TARGET tyr::core)
         add_library(tyr::core SHARED IMPORTED GLOBAL)
+        # The definitions below mirror INTERFACE_COMPILE_DEFINITIONS in PyTyr's
+        # own lib/cmake/tyr/tyrcoreTargets.cmake, which we do not consume because
+        # its package expects a full Tyr install tree. They select storage
+        # layouts inside Tyr's headers, so a stale copy either fails the #error
+        # guard in formalism/declarations.hpp or, worse, compiles this adapter
+        # against a layout the shipped libtyr_core does not use. Re-check them
+        # against that file whenever the pytyr pin moves.
         set_target_properties(tyr::core PROPERTIES
             IMPORTED_LOCATION "${_mifrost_tyr_library}"
-            INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_STATE_STORAGE_TREE"
+            INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_ENABLE_SEMI_NAIVE;TYR_STATE_STORAGE_TREE;TYR_RELATION_STORAGE_WORD"
             INTERFACE_INCLUDE_DIRECTORIES "${MIFROST_PYTYR_NATIVE_PREFIX}/include;${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include;${MIFROST_PYPDDL_NATIVE_PREFIX}/include"
         )
     endif ()

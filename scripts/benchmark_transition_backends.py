@@ -80,16 +80,18 @@ def _pytyr_transitions(
     task = Task(planning_task)
     context = ExecutionContext(1)
     evaluator = AxiomEvaluatorFactory().create(task, context)
-    repository = StateRepositoryFactory().create(task, evaluator)
-    generator = SuccessorGeneratorFactory().create(task, context, repository)
-    root = generator.get_initial_node()
+    repository = StateRepositoryFactory().create(task)
+    generator = SuccessorGeneratorFactory().create(task, context)
+    root = generator.get_initial_node(repository, evaluator)
     nodes = [root]
     seen = {str(root.get_state())}
     queue = deque(nodes)
     transitions: list[tuple[Any, Any]] = []
     while queue and len(nodes) < max_states:
         current = queue.popleft()
-        for labeled in generator.get_labeled_successor_nodes(current):
+        for labeled in generator.get_labeled_successor_nodes(
+            current, repository, evaluator
+        ):
             successor = labeled.node
             transitions.append((current.get_state(), successor.get_state()))
             key = str(successor.get_state())

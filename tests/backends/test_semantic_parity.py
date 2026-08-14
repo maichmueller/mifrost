@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
+from typing import Any
 
 import pymimir
 import pytest
@@ -44,29 +46,60 @@ def _pymimir_problem(domain_path: Path, problem_path: Path):
     return pymimir.Problem(domain, problem_path, mode="lifted")
 
 
+@dataclass(frozen=True)
+class PyTyrSearch:
+    """The three handles it takes to walk a PyTyr state space.
+
+    A successor generator used to own its state repository and axiom evaluator,
+    so expanding a node needed nothing else. They are independent handles now
+    and every expansion takes all three, which would otherwise thread two extra
+    arguments through every call site here. Holding them together keeps an
+    expansion reading as one operation.
+    """
+
+    generator: Any
+    repository: Any
+    evaluator: Any
+
+    def initial_node(self) -> Any:
+        return self.generator.get_initial_node(self.repository, self.evaluator)
+
+    def successors(self, node: Any) -> list[Any]:
+        return self.generator.get_labeled_successor_nodes(
+            node, self.repository, self.evaluator
+        )
+
+    def action(self, labeled: Any) -> Any:
+        """Resolve a labeled successor's edge to the ground action it applied.
+
+        A ``LabeledNode`` carries an ``ActionBinding``, which names the schema
+        and its arguments but is not itself a ground action. Only the generator
+        can resolve one, and the encoders want the ground action.
+        """
+        return self.generator.ground_action(labeled.label)
+
+
 def _pytyr_problem(domain_path: Path, problem_path: Path):
     options = ParserOptions()
     parser = Parser(str(domain_path), options)
     planning_task = parser.parse_task(str(problem_path), options)
     task = Task(planning_task)
     context = ExecutionContext(1)
-    axiom_evaluator = AxiomEvaluatorFactory().create(task, context)
-    state_repository = StateRepositoryFactory().create(task, axiom_evaluator)
-    successor_generator = SuccessorGeneratorFactory().create(
-        task, context, state_repository
-    )
-    return planning_task, successor_generator
+    evaluator = AxiomEvaluatorFactory().create(task, context)
+    repository = StateRepositoryFactory().create(task)
+    generator = SuccessorGeneratorFactory().create(task, context)
+    return planning_task, PyTyrSearch(generator, repository, evaluator)
 
 
 def _backend_pair(domain: str = "blocks", problem: str = "small"):
     domain_path, problem_path = _pddl_paths(domain, problem)
     pymimir_problem = _pymimir_problem(domain_path, problem_path)
-    planning_task, successor_generator = _pytyr_problem(domain_path, problem_path)
+    planning_task, pytyr_search = _pytyr_problem(domain_path, problem_path)
     return (
         PymimirSnapshotReader(pymimir_problem),
         pymimir_problem,
         PyTyrSnapshotReader(planning_task),
-        successor_generator,
+        pytyr_search,
     )
 
 
@@ -114,12 +147,12 @@ def _edge_case_pair(tmp_path: Path):
         encoding="utf-8",
     )
     pymimir_problem = _pymimir_problem(domain_path, problem_path)
-    planning_task, successor_generator = _pytyr_problem(domain_path, problem_path)
+    planning_task, pytyr_search = _pytyr_problem(domain_path, problem_path)
     return (
         PymimirSnapshotReader(pymimir_problem),
         pymimir_problem,
         PyTyrSnapshotReader(planning_task),
-        successor_generator,
+        pytyr_search,
     )
 
 
@@ -147,7 +180,7 @@ def test_domain_and_problem_snapshots_have_semantic_parity(backend_pair) -> None
 def test_domain_problem_and_root_state_parity_across_fixtures(
     domain: str, problem: str
 ) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = _backend_pair(
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = _backend_pair(
         domain, problem
     )
 
@@ -155,14 +188,14 @@ def test_domain_problem_and_root_state_parity_across_fixtures(
     assert pymimir_reader.problem_snapshot() == pytyr_reader.problem_snapshot()
     assert pymimir_reader.state_snapshot(
         pymimir_problem.get_initial_state()
-    ) == pytyr_reader.state_snapshot(successor_generator.get_initial_node().get_state())
+    ) == pytyr_reader.state_snapshot(pytyr_search.initial_node().get_state())
 
 
 def test_root_state_and_zero_arity_fact_have_semantic_parity(backend_pair) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = backend_pair
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = backend_pair
 
     pymimir_state = pymimir_problem.get_initial_state()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    pytyr_state = pytyr_search.initial_node().get_state()
     pymimir_snapshot = pymimir_reader.state_snapshot(pymimir_state)
     pytyr_snapshot = pytyr_reader.state_snapshot(pytyr_state)
 
@@ -178,8 +211,8 @@ def test_root_state_and_zero_arity_fact_have_semantic_parity(backend_pair) -> No
 def test_typed_equality_negative_goal_and_derived_fact_parity(
     tmp_path: Path,
 ) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = (
-        _edge_case_pair(tmp_path)
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = _edge_case_pair(
+        tmp_path
     )
 
     assert pymimir_reader.domain_snapshot() == pytyr_reader.domain_snapshot()
@@ -188,7 +221,7 @@ def test_typed_equality_negative_goal_and_derived_fact_parity(
 
     pymimir_state = pymimir_reader.state_snapshot(pymimir_problem.get_initial_state())
     assert pymimir_state == pytyr_reader.state_snapshot(
-        successor_generator.get_initial_node().get_state()
+        pytyr_search.initial_node().get_state()
     )
 
     assert any(
@@ -239,9 +272,9 @@ def test_pyTyr_no_value_fdr_fact_is_omitted(backend_pair) -> None:
 def test_matching_successor_actions_and_states_have_semantic_parity(
     backend_pair,
 ) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = backend_pair
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = backend_pair
     pymimir_root = pymimir_problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
 
     pymimir_successors = {
         pymimir_reader.action_key(action): pymimir_reader.state_snapshot(
@@ -250,17 +283,17 @@ def test_matching_successor_actions_and_states_have_semantic_parity(
         for action in pymimir_root.generate_applicable_actions()
     }
     pytyr_successors = {
-        pytyr_reader.action_key(labeled.label): pytyr_reader.state_snapshot(
-            labeled.node.get_state()
+        pytyr_reader.action_key(pytyr_search.action(labeled)): (
+            pytyr_reader.state_snapshot(labeled.node.get_state())
         )
-        for labeled in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        for labeled in pytyr_search.successors(pytyr_root)
     }
 
     assert pymimir_successors == pytyr_successors
 
 
 def test_independent_readers_can_alternate_in_one_process(backend_pair) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = backend_pair
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = backend_pair
 
     expected_domain = pymimir_reader.domain_snapshot()
     expected_state = pymimir_reader.state_snapshot(pymimir_problem.get_initial_state())
@@ -268,9 +301,7 @@ def test_independent_readers_can_alternate_in_one_process(backend_pair) -> None:
         assert pytyr_reader.domain_snapshot() == expected_domain
         assert pymimir_reader.domain_snapshot() == expected_domain
         assert (
-            pytyr_reader.state_snapshot(
-                successor_generator.get_initial_node().get_state()
-            )
+            pytyr_reader.state_snapshot(pytyr_search.initial_node().get_state())
             == expected_state
         )
         assert (
@@ -280,9 +311,9 @@ def test_independent_readers_can_alternate_in_one_process(backend_pair) -> None:
 
 
 def test_readers_reject_objects_from_the_other_backend(backend_pair) -> None:
-    pymimir_reader, pymimir_problem, pytyr_reader, successor_generator = backend_pair
+    pymimir_reader, pymimir_problem, pytyr_reader, pytyr_search = backend_pair
     pymimir_state = pymimir_problem.get_initial_state()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    pytyr_state = pytyr_search.initial_node().get_state()
 
     with pytest.raises(TypeError, match="pymimir.State"):
         pymimir_reader.state_snapshot(pytyr_state)

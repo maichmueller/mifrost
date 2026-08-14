@@ -22,19 +22,20 @@ rx = pytest.importorskip("rustworkx")
 
 
 def _aligned_horizon_transitions(count: int = 2):
-    pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_root = problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pymimir_successors = {
         pymimir_reader.action_key(action): (action, action.apply(pymimir_root))
         for action in pymimir_root.generate_applicable_actions()
     }
+    pytyr_transitions = [
+        (pytyr_search.action(labeled), labeled.node.get_state())
+        for labeled in pytyr_search.successors(pytyr_root)
+    ]
     pytyr_successors = {
-        pytyr_reader.action_key(labeled.label): (
-            labeled.label,
-            labeled.node.get_state(),
-        )
-        for labeled in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        pytyr_reader.action_key(action): (action, state)
+        for action, state in pytyr_transitions
     }
     shared = sorted(set(pymimir_successors).intersection(pytyr_successors), key=str)
     if len(shared) < count:
@@ -352,14 +353,14 @@ planning_task = Parser({str(domain)!r}, options).parse_task({str(problem)!r}, op
 task = Task(planning_task)
 context = ExecutionContext(1)
 evaluator = AxiomEvaluatorFactory().create(task, context)
-repository = StateRepositoryFactory().create(task, evaluator)
-generator = SuccessorGeneratorFactory().create(task, context, repository)
-root = generator.get_initial_node()
-successor = generator.get_labeled_successor_nodes(root)[0]
+repository = StateRepositoryFactory().create(task)
+generator = SuccessorGeneratorFactory().create(task, context)
+root = generator.get_initial_node(repository, evaluator)
+successor = generator.get_labeled_successor_nodes(root, repository, evaluator)[0]
 dag = rx.PyDiGraph()
 root_index = dag.add_node(root.get_state())
 successor_index = dag.add_node({{"state": successor.node.get_state(), "candidate_id": 9}})
-dag.add_edge(root_index, successor_index, successor.label)
+dag.add_edge(root_index, successor_index, generator.ground_action(successor.label))
 encoder = mifrost.HorizonEncoder(planning_task)
 assert encoder.backend == "pytyr"
 assert encoder.encode(root.get_state(), dag=dag).target_candidate_ids.tolist() == [9]

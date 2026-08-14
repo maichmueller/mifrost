@@ -88,14 +88,14 @@ def _assert_ilg_parity(actual: Any, expected: Any) -> None:
 def test_public_ilg_backends_match_state_configurations(
     config: dict[str, Any],
 ) -> None:
-    _pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_encoder = mifrost.ILGEncoder(problem.get_domain(), **config)
     pytyr_encoder = mifrost.ILGEncoder(pytyr_reader._planning_task, **config)
 
     assert pymimir_encoder.backend == "pymimir"
     assert pytyr_encoder.backend == "pytyr"
     _assert_ilg_parity(
-        pytyr_encoder.encode(successor_generator.get_initial_node().get_state()),
+        pytyr_encoder.encode(pytyr_search.initial_node().get_state()),
         pymimir_encoder.encode(problem.get_initial_state()),
     )
 
@@ -136,11 +136,11 @@ def test_public_ilg_backends_match_goals_actions_subgoals_and_lgan() -> None:
 
 
 def test_public_ilg_pytyr_batch_stream_and_cross_backend_batching() -> None:
-    _pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_state = problem.get_initial_state()
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_state = pytyr_root.get_state()
-    pytyr_action = successor_generator.get_labeled_successor_nodes(pytyr_root)[0].label
+    pytyr_action = pytyr_search.action(pytyr_search.successors(pytyr_root)[0])
     pytyr_goals = list(pytyr_reader.problem_snapshot().goals)
     pymimir_encoder = mifrost.ILGEncoder(problem.get_domain())
     pytyr_encoder = mifrost.ILGEncoder(pytyr_reader._planning_task)
@@ -169,9 +169,9 @@ def test_public_ilg_pytyr_batch_stream_and_cross_backend_batching() -> None:
 
 
 def test_public_ilg_selection_and_coexistence_errors() -> None:
-    _pymimir_reader, problem, pytyr_reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, pytyr_reader, pytyr_search = _backend_pair()
     pymimir_state = problem.get_initial_state()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    pytyr_state = pytyr_search.initial_node().get_state()
     pymimir_encoder = mifrost.ILGEncoder(problem.get_domain(), backend="pymimir")
     pytyr_encoder = mifrost.ILGEncoder(pytyr_reader._planning_task, backend="pytyr")
 
@@ -225,9 +225,9 @@ planning_task = Parser({str(domain)!r}, options).parse_task({str(problem)!r}, op
 task = Task(planning_task)
 context = ExecutionContext(1)
 evaluator = AxiomEvaluatorFactory().create(task, context)
-repository = StateRepositoryFactory().create(task, evaluator)
-generator = SuccessorGeneratorFactory().create(task, context, repository)
-state = generator.get_initial_node().get_state()
+repository = StateRepositoryFactory().create(task)
+generator = SuccessorGeneratorFactory().create(task, context)
+state = generator.get_initial_node(repository, evaluator).get_state()
 encoder = mifrost.ILGEncoder(planning_task)
 assert encoder.backend == "pytyr"
 assert encoder.encode(state).num_graphs == 1

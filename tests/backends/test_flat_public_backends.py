@@ -30,12 +30,11 @@ def _assert_encoding_equal(actual: Any, expected: Any) -> None:
 
 
 def test_public_flat_infers_pytyr_and_matches_native_adapter() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
     config = _config()
     encoder = mifrost.FlatRelationEncoder(
@@ -56,12 +55,11 @@ def test_public_flat_infers_pytyr_and_matches_native_adapter() -> None:
 
 
 def test_public_flat_pytyr_batch_supports_shared_and_separate_lanes() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
     goals = list(reader.problem_snapshot().goals)
     encoder = mifrost.FlatRelationEncoder(
@@ -104,12 +102,11 @@ def test_public_flat_pytyr_batch_supports_shared_and_separate_lanes() -> None:
 
 
 def test_public_flat_pytyr_streams_match_direct_batch() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
     encoder = mifrost.FlatRelationEncoder(
         reader._planning_task, target_sources={"action"}
@@ -142,12 +139,11 @@ def test_public_flat_pytyr_streams_match_direct_batch() -> None:
 
 
 def test_public_flat_pytyr_supports_caller_owned_batch_builder() -> None:
-    reader, successor_generator = _pytyr_pair("blocks", "small")
-    root = successor_generator.get_initial_node()
+    reader, pytyr_search = _pytyr_pair("blocks", "small")
+    root = pytyr_search.initial_node()
     state = root.get_state()
     actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(root)
+        pytyr_search.action(successor) for successor in pytyr_search.successors(root)
     ]
     encoder = mifrost.FlatRelationEncoder(
         reader._planning_task,
@@ -168,8 +164,8 @@ def test_public_flat_pytyr_supports_caller_owned_batch_builder() -> None:
 def test_public_flat_rejects_mixed_backend_states() -> None:
     from .test_semantic_parity import _backend_pair
 
-    _, pymimir_problem, reader, successor_generator = _backend_pair()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    _, pymimir_problem, reader, pytyr_search = _backend_pair()
+    pytyr_state = pytyr_search.initial_node().get_state()
     pymimir_state = pymimir_problem.get_initial_state()
     encoder = mifrost.FlatRelationEncoder(reader._planning_task)
 
@@ -183,14 +179,14 @@ def test_public_flat_backends_coexist_without_global_selection() -> None:
     from .test_flat_semantic_adapter import _assert_semantically_equal
     from .test_semantic_parity import _backend_pair
 
-    _, pymimir_problem, reader, successor_generator = _backend_pair()
+    _, pymimir_problem, reader, pytyr_search = _backend_pair()
     pymimir_state = pymimir_problem.get_initial_state()
     pymimir_actions = list(pymimir_state.generate_applicable_actions())
-    pytyr_root = successor_generator.get_initial_node()
+    pytyr_root = pytyr_search.initial_node()
     pytyr_state = pytyr_root.get_state()
     pytyr_actions = [
-        successor.label
-        for successor in successor_generator.get_labeled_successor_nodes(pytyr_root)
+        pytyr_search.action(successor)
+        for successor in pytyr_search.successors(pytyr_root)
     ]
     pymimir_encoder = mifrost.FlatRelationEncoder(
         pymimir_problem.get_domain(), target_sources={"goal", "action"}

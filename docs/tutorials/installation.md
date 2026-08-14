@@ -4,7 +4,7 @@
 
 - Python `>=3.12`
 - A working C++ toolchain
-- At least one planner for encoder use: `pymimir>=0.13.60` or `pytyr>=0.0.30`
+- At least one planner for encoder use: `pymimir>=0.13.60` or `pytyr==0.0.34`
 - Conan 2 (for source builds via `configure.py`)
 - Optional for PyG conversion: `torch` and `torch-geometric`
 

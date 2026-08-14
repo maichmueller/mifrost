@@ -42,10 +42,11 @@ def _smoke_pytyr(domain_path: Path, problem_path: Path) -> None:
     task = Task(planning_task)
     context = ExecutionContext(1)
     evaluator = AxiomEvaluatorFactory().create(task, context)
-    repository = StateRepositoryFactory().create(task, evaluator)
-    generator = SuccessorGeneratorFactory().create(task, context, repository)
+    repository = StateRepositoryFactory().create(task)
+    generator = SuccessorGeneratorFactory().create(task, context)
     encoder = mifrost.FlatRelationEncoder(planning_task, backend="pytyr")
-    _assert_encoding(encoder.encode(generator.get_initial_node().get_state()), "PyTyr")
+    root = generator.get_initial_node(repository, evaluator)
+    _assert_encoding(encoder.encode(root.get_state()), "PyTyr")
 
 
 def main() -> None:

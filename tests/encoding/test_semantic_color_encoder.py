@@ -52,7 +52,7 @@ def _edge_color_partition(data: Any) -> set[frozenset[tuple[str, str]]]:
 def test_semantic_color_matches_native_pymimir_structure(
     edge_features: bool, predicate_nodes: bool
 ) -> None:
-    pymimir_reader, problem, _pytyr_reader, _successor_generator = _backend_pair()
+    pymimir_reader, problem, _pytyr_reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     adapter = FlatSemanticAdapter(pymimir_reader)
 
@@ -87,7 +87,7 @@ def test_semantic_color_matches_native_pymimir_structure(
 
 
 def test_semantic_color_batches_and_composes_with_owned_builder() -> None:
-    pymimir_reader, problem, _pytyr_reader, _successor_generator = _backend_pair()
+    pymimir_reader, problem, _pytyr_reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     adapter = FlatSemanticAdapter(pymimir_reader)
     input_value = adapter.make_input(state)
@@ -108,7 +108,7 @@ def test_semantic_color_batches_and_composes_with_owned_builder() -> None:
 
 
 def test_semantic_color_rejects_unsupported_lanes() -> None:
-    pymimir_reader, problem, _pytyr_reader, _successor_generator = _backend_pair()
+    pymimir_reader, problem, _pytyr_reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     adapter = FlatSemanticAdapter(pymimir_reader)
     engine = mifrost._neutral_core.SemanticColorEncoderEngine(adapter.engine.predicates)

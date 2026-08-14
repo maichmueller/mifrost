@@ -38,9 +38,9 @@ def _assert_color_semantically_equal(
 def test_public_color_backends_match_all_configurations(
     edge_features: bool, predicate_nodes: bool
 ) -> None:
-    _pymimir_reader, problem, reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, reader, pytyr_search = _backend_pair()
     pymimir_state = problem.get_initial_state()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    pytyr_state = pytyr_search.initial_node().get_state()
     kwargs = {
         "edge_features": edge_features,
         "enable_global_predicate_nodes": predicate_nodes,
@@ -58,8 +58,8 @@ def test_public_color_backends_match_all_configurations(
 
 
 def test_public_color_pytyr_batch_and_stream_lanes() -> None:
-    _pymimir_reader, _problem, reader, successor_generator = _backend_pair()
-    state = successor_generator.get_initial_node().get_state()
+    _pymimir_reader, _problem, reader, pytyr_search = _backend_pair()
+    state = pytyr_search.initial_node().get_state()
     goals = list(reader.problem_snapshot().goals)
     encoder = mifrost.ColorEncoder(reader._planning_task)
 
@@ -85,9 +85,9 @@ def test_public_color_pytyr_batch_and_stream_lanes() -> None:
 
 
 def test_public_color_backends_coexist_without_global_selection() -> None:
-    _pymimir_reader, problem, reader, successor_generator = _backend_pair()
+    _pymimir_reader, problem, reader, pytyr_search = _backend_pair()
     pymimir_state = problem.get_initial_state()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    pytyr_state = pytyr_search.initial_node().get_state()
     pymimir_encoder = mifrost.ColorEncoder(problem.get_domain())
     pytyr_encoder = mifrost.ColorEncoder(reader._planning_task)
 
@@ -107,7 +107,7 @@ def test_public_pymimir_color_default_batch_uses_narrow_wrapper_fast_path(
 ) -> None:
     import mifrost.backends.pymimir_color as pymimir_color
 
-    _pymimir_reader, problem, _reader, _successor_generator = _backend_pair()
+    _pymimir_reader, problem, _reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     advanced_state = state._advanced_state
     encoder = mifrost.ColorEncoder(problem.get_domain())
@@ -150,7 +150,7 @@ def test_public_pymimir_color_default_batch_uses_narrow_wrapper_fast_path(
 def test_public_pymimir_color_stream_default_bypasses_optional_payload_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _pymimir_reader, problem, _reader, _successor_generator = _backend_pair()
+    _pymimir_reader, problem, _reader, _pytyr_search = _backend_pair()
     state = problem.get_initial_state()
     encoder = mifrost.ColorEncoder(problem.get_domain())
     runtime: Any = encoder._runtime
@@ -187,8 +187,8 @@ def test_public_pymimir_color_stream_default_bypasses_optional_payload_work(
 
 
 def test_public_color_rejects_mixed_or_explicit_wrong_backend() -> None:
-    _pymimir_reader, problem, reader, successor_generator = _backend_pair()
-    pytyr_state = successor_generator.get_initial_node().get_state()
+    _pymimir_reader, problem, reader, pytyr_search = _backend_pair()
+    pytyr_state = pytyr_search.initial_node().get_state()
     pymimir_state = problem.get_initial_state()
     encoder = mifrost.ColorEncoder(reader._planning_task)
 
@@ -205,10 +205,10 @@ def test_public_color_rejects_mixed_or_explicit_wrong_backend() -> None:
 
 
 def test_public_color_pytyr_preserves_action_errors() -> None:
-    _pymimir_reader, _problem, reader, successor_generator = _backend_pair()
-    root = successor_generator.get_initial_node()
+    _pymimir_reader, _problem, reader, pytyr_search = _backend_pair()
+    root = pytyr_search.initial_node()
     state = root.get_state()
-    action = successor_generator.get_labeled_successor_nodes(root)[0].label
+    action = pytyr_search.action(pytyr_search.successors(root)[0])
     encoder = mifrost.ColorEncoder(reader._planning_task)
 
     with pytest.raises(ValueError, match="does not support action encoding"):

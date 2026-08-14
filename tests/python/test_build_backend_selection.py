@@ -59,8 +59,8 @@ def test_unknown_backend_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         ("core", ["wheel"]),
         ("pymimir", ["wheel", "pymimir>=0.13.60"]),
-        ("pytyr", ["wheel", "pytyr>=0.0.30"]),
-        ("both", ["wheel", "pymimir>=0.13.60", "pytyr>=0.0.30"]),
+        ("pytyr", ["wheel", "pytyr==0.0.34"]),
+        ("both", ["wheel", "pymimir>=0.13.60", "pytyr==0.0.34"]),
     ],
 )
 def test_build_requirements_follow_backend_selection(
@@ -96,10 +96,10 @@ def test_project_metadata_keeps_planners_optional() -> None:
     extras = project["project"]["optional-dependencies"]
     torch_requirements = {"torch>=2.2,<3", "torch-geometric>=2.7", "numpy"}
     assert set(extras["pymimir"]) == {"pymimir>=0.13.60"} | torch_requirements
-    assert set(extras["pytyr"]) == {"pytyr>=0.0.30"} | torch_requirements
+    assert set(extras["pytyr"]) == {"pytyr==0.0.34"} | torch_requirements
     assert (
         set(extras["backends"])
-        == {"pymimir>=0.13.60", "pytyr>=0.0.30"} | torch_requirements
+        == {"pymimir>=0.13.60", "pytyr==0.0.34"} | torch_requirements
     )
 
 
@@ -124,8 +124,8 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert all("requirements/constraints-ci.txt" in line for line in before_build_lines)
     assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
     assert (
-        'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.30 '
-        "pyyggdrasil==0.0.21 pypddl==1.0.23 "
+        'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.34 '
+        "pyyggdrasil==0.0.27 pypddl==1.0.27 "
         'torch>=2.2,<3 torch-geometric>=2.7 numpy"' in workflow
     )
     assert workflow.count("flavor:") == 2

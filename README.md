@@ -44,7 +44,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 - Python `>= 3.12`
 - A working C++ toolchain
 - At least one optional planner for encoder use: `pymimir>=0.13.60` or
-  `pytyr>=0.0.30`
+  `pytyr==0.0.34`
 - For Python-side graph assembly: `torch` and `torch-geometric`
 - For source builds: Conan (or `CONAN_COMMAND`/`CONAN_CMD` pointing to it)
 

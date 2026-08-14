@@ -31,14 +31,14 @@ pymimir = [
     "numpy",
 ]
 pytyr = [
-    "pytyr>=0.0.30",
+    "pytyr==0.0.34",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
 ]
 backends = [
     "pymimir>=0.13.60",
-    "pytyr>=0.0.30",
+    "pytyr==0.0.34",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
@@ -50,7 +50,7 @@ torch = [
 ]
 test = [
     "pymimir>=0.13.60",
-    "pytyr>=0.0.30",
+    "pytyr==0.0.34",
     "pytest>=8.0,<9",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
@@ -58,7 +58,7 @@ test = [
 ]
 perf = [
     "pymimir>=0.13.60",
-    "pytyr>=0.0.30",
+    "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",
 ]
@@ -71,7 +71,7 @@ dev = [
     "mypy>=1.14,<2",
     "PyYAML>=6.0,<7",
     "pymimir>=0.13.60",
-    "pytyr>=0.0.30",
+    "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",
 ]

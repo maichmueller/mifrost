@@ -38,9 +38,9 @@ def _pytyr_input():
     task = Task(planning_task)
     context = ExecutionContext(1)
     evaluator = AxiomEvaluatorFactory().create(task, context)
-    repository = StateRepositoryFactory().create(task, evaluator)
-    generator = SuccessorGeneratorFactory().create(task, context, repository)
-    return planning_task, generator.get_initial_node().get_state()
+    repository = StateRepositoryFactory().create(task)
+    generator = SuccessorGeneratorFactory().create(task, context)
+    return planning_task, generator.get_initial_node(repository, evaluator).get_state()
 
 
 def main() -> None:

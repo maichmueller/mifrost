@@ -73,7 +73,7 @@ if (mifrost_WITH_PYTYR_ADAPTER)
             add_library(tyr::core SHARED IMPORTED)
             set_target_properties(tyr::core PROPERTIES
                 IMPORTED_LOCATION "${_mifrost_pytyr_library}"
-                INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_STATE_STORAGE_TREE"
+                INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_ENABLE_SEMI_NAIVE;TYR_STATE_STORAGE_TREE;TYR_RELATION_STORAGE_WORD"
                 INTERFACE_INCLUDE_DIRECTORIES "${_mifrost_pytyr_native_prefix}/include;${_mifrost_pyyggdrasil_prefix}/include;${_mifrost_pypddl_native_prefix}/include")
         endif ()
     else ()

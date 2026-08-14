@@ -459,7 +459,7 @@ SemanticPlanningTaskAdapter& SemanticPlanningTaskAdapter::operator=(
 SemanticPlanningTaskAdapter::~SemanticPlanningTaskAdapter() = default;
 
 SemanticFlatRelationInput SemanticPlanningTaskAdapter::make_input(
-   const tyr::planning::StateView< tyr::planning::LiftedTag >& state,
+   const tyr::planning::StateView< tyr::LiftedTag >& state,
    const std::vector< tyr::formalism::planning::GroundActionView >& actions
 ) const
 {
@@ -477,7 +477,7 @@ SemanticLiteral SemanticPlanningTaskAdapter::make_raw_literal(
 }
 
 SemanticFlatRelationInput SemanticPlanningTaskAdapter::make_input(
-   const tyr::planning::StateView< tyr::planning::GroundTag >& state,
+   const tyr::planning::StateView< tyr::GroundTag >& state,
    const std::vector< tyr::formalism::planning::GroundActionView >& actions
 ) const
 {
@@ -501,17 +501,17 @@ const views::Context& SemanticPlanningTaskAdapter::get_view_context() const noex
    return impl_->view_context;
 }
 
-views::StateView< tyr::planning::StateView< tyr::planning::LiftedTag >, tyr::planning::LiftedTag >
+views::StateView< tyr::planning::StateView< tyr::LiftedTag >, tyr::LiftedTag >
 SemanticPlanningTaskAdapter::make_view(
-   const tyr::planning::StateView< tyr::planning::LiftedTag >& state
+   const tyr::planning::StateView< tyr::LiftedTag >& state
 ) const
 {
    return {state, impl_->view_context};
 }
 
-views::StateView< tyr::planning::StateView< tyr::planning::GroundTag >, tyr::planning::GroundTag >
+views::StateView< tyr::planning::StateView< tyr::GroundTag >, tyr::GroundTag >
 SemanticPlanningTaskAdapter::make_view(
-   const tyr::planning::StateView< tyr::planning::GroundTag >& state
+   const tyr::planning::StateView< tyr::GroundTag >& state
 ) const
 {
    return {state, impl_->view_context};
