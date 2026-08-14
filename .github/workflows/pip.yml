@@ -74,9 +74,11 @@ jobs:
     - name: Install build/runtime dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r requirements/base-build.txt -r requirements.txt pymimir==0.13.63
+        python -m pip install -c requirements/constraints-ci.txt -r requirements/base-build.txt -r requirements.txt pymimir==0.13.63
         if [ "${{ matrix.backends }}" = "both" ]; then
-          python -m pip install pytyr==0.0.34
+          # See tests.yml: pytyr's transitive deps must not float past the
+          # versions its extension was built against.
+          python -m pip install -c requirements/constraints-ci.txt pytyr==0.0.34
         fi
 
     - name: Build and install

@@ -89,9 +89,13 @@ jobs:
       - name: Install test dependency
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements/base-build.txt -r requirements/test.txt -r requirements.txt pymimir==0.13.63
+          python -m pip install -c requirements/constraints-ci.txt -r requirements/base-build.txt -r requirements/test.txt -r requirements.txt pymimir==0.13.63
           if [ "${{ matrix.backends }}" = "both" ]; then
-            python -m pip install pytyr==0.0.34
+            # PyTyr's compiled extension is ABI-bound to the exact pypddl and
+            # pyyggdrasil it was built against, and it constrains them only by
+            # lower bound. Without the constraints file pip floats them to the
+            # newest release and the pair segfaults on first parse.
+            python -m pip install -c requirements/constraints-ci.txt pytyr==0.0.34
           fi
 
       - name: Build and install
