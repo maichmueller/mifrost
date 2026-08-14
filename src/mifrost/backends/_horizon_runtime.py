@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+
+if TYPE_CHECKING:
+    from pytyr.formalism.planning import PlanningTask
 
 
 HorizonBackendName = Literal["pymimir", "pytyr"]
@@ -76,7 +79,7 @@ def create_horizon_runtime(
     if selected == "pytyr":
         from .pytyr_horizon import PyTyrHorizonRuntime
 
-        return PyTyrHorizonRuntime(domain_or_task, config)
+        return PyTyrHorizonRuntime(cast("PlanningTask", domain_or_task), config)
 
     from .pymimir_horizon import PymimirHorizonRuntime
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Literal, cast
 
+from pytyr.formalism.planning import PlanningTask
+
 from .pytyr import SemanticPlanningTaskAdapter
 from .pytyr_flat import _is_state, _lane_values, _sequence, _subgoal_values
 from ..encoders._flat_validation import validate_subgoal_layers_state_payload
@@ -63,7 +65,7 @@ class PyTyrColorRuntime:
 
     backend_name: Literal["pytyr"] = "pytyr"
 
-    def __init__(self, planning_task: object, config: Any) -> None:
+    def __init__(self, planning_task: PlanningTask, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_color_engine(config)
         self._direct = self._adapter.make_direct_color_encoder(config)

@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
-from pytyr.formalism.planning import GroundAction
+from pytyr.formalism.planning import GroundAction, PlanningTask
 
 from ._relation_updates import relation_arities
 from .pytyr import SemanticPlanningTaskAdapter
@@ -79,7 +79,7 @@ class PyTyrHGraphRuntime:
 
     backend_name: Literal["pytyr"] = "pytyr"
 
-    def __init__(self, planning_task: object, config: Any) -> None:
+    def __init__(self, planning_task: PlanningTask, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_hgraph_engine(config)
         self._direct = self._adapter.make_direct_hgraph_encoder(config)

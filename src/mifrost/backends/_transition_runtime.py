@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+
+if TYPE_CHECKING:
+    from pytyr.formalism.planning import PlanningTask
 
 
 TransitionBackendName = Literal["pymimir", "pytyr"]
@@ -75,7 +78,7 @@ def create_transition_runtime(
     if selected == "pytyr":
         from .pytyr_transition import PyTyrTransitionRuntime
 
-        return PyTyrTransitionRuntime(domain_or_task, config)
+        return PyTyrTransitionRuntime(cast("PlanningTask", domain_or_task), config)
 
     from .pymimir_transition import PymimirTransitionRuntime
 

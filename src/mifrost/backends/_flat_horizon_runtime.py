@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+
+if TYPE_CHECKING:
+    from pytyr.formalism.planning import PlanningTask
 
 
 FlatHorizonBackendName = Literal["pymimir", "pytyr"]
@@ -74,7 +77,7 @@ def create_flat_horizon_runtime(
             )
         from .pytyr_flat_horizon import PyTyrFlatHorizonRuntime
 
-        return PyTyrFlatHorizonRuntime(domain_or_task, config)
+        return PyTyrFlatHorizonRuntime(cast("PlanningTask", domain_or_task), config)
     from .pymimir_flat_horizon import PymimirFlatHorizonRuntime
 
     return PymimirFlatHorizonRuntime(domain_or_task, config, assembly=assembly)

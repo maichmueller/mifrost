@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
-from pytyr.formalism.planning import GroundAction
+from pytyr.formalism.planning import GroundAction, PlanningTask
 
 from ._relation_updates import relation_arities
 from .pytyr import SemanticPlanningTaskAdapter
@@ -102,7 +102,7 @@ class PyTyrHorizonRuntime:
 
     backend_name: Literal["pytyr"] = "pytyr"
 
-    def __init__(self, planning_task: object, config: Any) -> None:
+    def __init__(self, planning_task: PlanningTask, config: Any) -> None:
         self._adapter = SemanticPlanningTaskAdapter(planning_task)
         self.engine = self._adapter.make_horizon_hgraph_engine(config)
         self._relation_dict = MappingProxyType(dict(self.engine.relation_arities))

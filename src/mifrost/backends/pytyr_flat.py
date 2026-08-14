@@ -6,6 +6,8 @@ from collections.abc import Iterable, Sequence
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
+from pytyr.formalism.planning import PlanningTask
+
 from .pytyr import SemanticFlatRelationEncoder
 from ..encoders._flat_validation import validate_subgoal_layers_state_payload
 
@@ -158,7 +160,7 @@ class PyTyrFlatRuntime:
 
     backend_name: Literal["pytyr"] = "pytyr"
 
-    def __init__(self, planning_task: object, config: Any) -> None:
+    def __init__(self, planning_task: PlanningTask, config: Any) -> None:
         self._adapter = SemanticFlatRelationEncoder(planning_task, config)
         self.engine = self._adapter.engine
         self._direct = self._adapter.direct
