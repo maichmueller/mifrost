@@ -223,6 +223,7 @@ jobs:
         python - <<'PY'
         import glob
         import pathlib
+        import re
         import zipfile
         import email
 
@@ -303,8 +304,11 @@ jobs:
                     raise SystemExit(f"{wheel_path.name}: missing dist-info METADATA")
                 metadata = email.message_from_bytes(zf.read(metadata_name))
                 requires = metadata.get_all("Requires-Dist", [])
+                # Take the PEP 508 distribution name and nothing else. Splitting
+                # on ">" alone silently kept the whole string for any other
+                # operator, so an exact pin read as a different package.
                 optional_backends = {
-                    req.split(";", 1)[0].strip().split(" ", 1)[0].split(">", 1)[0].lower()
+                    re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", req.strip()).group(0).lower()
                     for req in requires
                     if "extra ==" in req
                 }
