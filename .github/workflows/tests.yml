@@ -15,9 +15,9 @@ jobs:
     name: Quality (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -66,9 +66,9 @@ jobs:
             allow_failure: false
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -78,7 +78,7 @@ jobs:
 
       - name: Restore Conan cache
         id: conan_cache_restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.CONAN_HOME }}
           key: conan-${{ runner.os }}-${{ runner.arch }}-${{ runner.os == 'macOS' && env.MIFROST_MACOSX_DEPLOYMENT_TARGET || 'none' }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
@@ -132,7 +132,7 @@ jobs:
           steps.build_cpp_tests.outcome == 'success' &&
           matrix.python-version == '3.12' &&
           steps.conan_cache_restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.CONAN_HOME }}
           key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}

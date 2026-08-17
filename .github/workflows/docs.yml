@@ -21,12 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Restore Conan cache
         id: conan_cache_restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.CONAN_HOME }}
           key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conandata.yml', 'conan_export.py') }}
@@ -52,13 +52,13 @@ jobs:
 
       - name: Save Conan cache
         if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_wheel.outcome == 'success'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.CONAN_HOME }}
           key: ${{ steps.conan_cache_restore.outputs.cache-primary-key }}
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mifrost-wheel
           path: wheelhouse/*.whl
@@ -69,17 +69,17 @@ jobs:
     needs: [build_wheel]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: mifrost-wheel
           path: wheelhouse
@@ -102,7 +102,7 @@ jobs:
         run: python docs/_scripts/generate_snippet_includes.py
 
       - name: Upload snippet includes
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mifrost-snippet-includes
           path: docs/_includes
@@ -113,17 +113,17 @@ jobs:
     needs: [snippet_tests]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Download snippet includes
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: mifrost-snippet-includes
           path: .
