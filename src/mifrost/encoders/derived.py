@@ -810,18 +810,31 @@ class TransformerBiasEncoder(_DerivedEncoderBase):
         self.include_reverse_edges = include_reverse_edges
         self.export_node_names = export_node_names
 
+    def stream(self) -> TransformerBiasEncoderStream:
+        """Create a streaming encoder sharing this engine."""
+        return TransformerBiasEncoderStream(self)
+
+
+@dataclass
+class TransformerBiasEncoderStream(_DerivedEncoderStream):
+    """Streaming wrapper for ``TransformerBiasEncoder``."""
+
+    _encoder: "TransformerBiasEncoder"
+
 
 __all__ = [
     "AtomLineGraphEncoder",
     "AtomLineGraphEncoderStream",
     "EDGE_KIND_NAMES",
     "HypergraphIncidenceEncoder",
+    "HypergraphIncidenceEncoderStream",
     "ObjectGraphEncoder",
     "ObjectGraphEncoderStream",
     "ROLE_NAMES",
     "StarGraphEncoder",
     "StarGraphEncoderStream",
     "TransformerBiasEncoder",
+    "TransformerBiasEncoderStream",
     "TupleTensorEncoder",
     "TupleTensorEncoderStream",
 ]
