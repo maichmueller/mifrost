@@ -13,6 +13,11 @@
 | Learn transition effects/deltas only | `TransitionEffectsHGraphEncoder` | Focuses on change signals instead of full duplicated structure |
 | Learn transition effects/deltas only in the flat lane | `FlatTransitionEffectsEncoder` | Emits only changed successor structure on the compact flat carrier |
 | Build compact homogeneous baselines | `ColorEncoder` | Lower-dimensional homogeneous encoding for simple baselines |
+| Feed stock PyG message-passing layers without hetero machinery | `StarGraphEncoder` | Reified star graph with integer-id channels; see [Consume with vanilla GNNs](consume-with-vanilla-gnns.md) |
+| Feed stock PyG layers with a minimal objects-only graph | `ObjectGraphEncoder` | Argument-pair edge projections (`clique` / `chain` / `star_first`); see [Consume with vanilla GNNs](consume-with-vanilla-gnns.md) |
+| Add atom co-occurrence edges to a vanilla-GNN state graph | `AtomLineGraphEncoder` | Star universe plus bounded fact-fact `line_share` edges |
+| Train native hypergraph layers (e.g. PyG `HypergraphConv`) | `HypergraphIncidenceEncoder` | Emits `hyperedge_index` / `hyperedge_attr_ids` incidence fields |
+| Bias transformer attention with planning structure | `TransformerBiasEncoder` | Sparse shortest-path fields `spd_src` / `spd_dst` / `spd_dist` over object pairs |
 | Use ILG topology/features from Python | `ILGEncoder` | Pure-Python implementation with ILG atom/action/object construction |
 
 ## Minimal Runnable Examples

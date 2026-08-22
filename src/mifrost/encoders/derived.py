@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 import torch
-from torch_geometric.data import Data
+from torch_geometric.data import Batch, Data
 
 from .. import _neutral_core
 from ..backends._derived_runtime import (
@@ -42,6 +42,28 @@ from .types import HomoEncoding, StateInput
 
 if TYPE_CHECKING:
     from .derived_graph_data import DerivedGraphData
+
+
+def _reclassify(data: Any) -> Any:
+    """Return ``data`` as a :class:`DerivedGraphData` with the same payload.
+
+    The native conversion yields plain ``Data``/``Batch`` objects; the
+    contract batching rules live on the ``DerivedGraphData`` subclass, so
+    materializers reclassify before rewriting fields.
+    """
+    from .derived_graph_data import DerivedGraphData
+
+    if isinstance(data, DerivedGraphData):
+        return data
+    converted = (
+        Batch(_base_cls=DerivedGraphData)
+        if isinstance(data, Batch)
+        else DerivedGraphData()
+    )
+    for key, value in data.to_dict().items():
+        converted[key] = value
+    return converted
+
 
 ROLE_NAMES: tuple[str, ...] = (
     "object",
@@ -248,22 +270,36 @@ class _DerivedEncoderBase(EncoderBase[Data]):
     def _stack_membership(self, data: DerivedGraphData) -> DerivedGraphData:
         """Restack raw hyperedge incidence fields into PyG hyperedge form.
 
-        When the native encoding carries the ``hyperedge_node_indices`` /
-        ``hyperedge_ids`` root attributes, they are popped and combined into
-        the stacked [2, M] ``hyperedge_index`` layout (node row, hyperedge
-        row); ``hyperedge_role_ids`` becomes ``hyperedge_attr_ids``.
+        The native fields store ``hyperedge_sizes`` (members per hyperedge,
+        possibly zero), ``hyperedge_node_indices`` (flattened member object
+        nodes), ``hyperedge_ids`` (per-graph aranges, already offset across
+        batches by the builder), and ``hyperedge_role_ids`` (one role per
+        hyperedge). Ids are expanded along sizes into the stacked [2, M]
+        ``hyperedge_index`` layout (node row, hyperedge row); roles become
+        ``hyperedge_attr_ids``. Values stay global in batch mode so the
+        result is a well-formed PyG batch whose :class:`DerivedGraphData`
+        increment rules reproduce it under ``from_data_list``.
         """
         nodes = getattr(data, "hyperedge_node_indices", None)
         ids = getattr(data, "hyperedge_ids", None)
-        if nodes is None or ids is None:
+        sizes = getattr(data, "hyperedge_sizes", None)
+        if nodes is None or ids is None or sizes is None:
             return data
-        roles = getattr(data, "hyperedge_role_ids", None)
+        data = _reclassify(data)
         del data.hyperedge_node_indices
         del data.hyperedge_ids
+        nodes = nodes.long()
+        ids = ids.long()
+        sizes = sizes.long()
+        owner = torch.repeat_interleave(ids, sizes.clamp_min(0))
+        roles = getattr(data, "hyperedge_role_ids", None)
         if roles is not None:
             del data.hyperedge_role_ids
             data.hyperedge_attr_ids = roles.long()
-        data.hyperedge_index = torch.stack([nodes.long(), ids.long()], 0)
+        for key in ("hyperedge_sizes", "hyperedge_sizes_ptr", "hyperedge_counts"):
+            if hasattr(data, key):
+                delattr(data, key)
+        data.hyperedge_index = torch.stack([nodes, owner], 0)
         return data
 
 
@@ -563,6 +599,180 @@ class HypergraphIncidenceEncoder(_DerivedEncoderBase):
         )
         return self._stack_membership(data)
 
+    def encode_batch_pyg(
+        self,
+        states: StateBatchInput,
+        *,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
+        include_metadata: bool = True,
+        **kwargs: Any,
+    ) -> DerivedGraphData:
+        """Encode states into a PyG batch with stacked hyperedge membership."""
+        data = super().encode_batch_pyg(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
+        return self._stack_membership(data)
+
+    def stream(self) -> HypergraphIncidenceEncoderStream:
+        """Create a streaming encoder sharing this engine."""
+        return HypergraphIncidenceEncoderStream(self)
+
+
+@dataclass
+class HypergraphIncidenceEncoderStream(_DerivedEncoderStream):
+    """Streaming wrapper for ``HypergraphIncidenceEncoder``."""
+
+    _encoder: "HypergraphIncidenceEncoder"
+
+    def flush_pyg(
+        self, *, as_batch: bool = True, include_metadata: bool = True
+    ) -> DerivedGraphData:
+        """Flush accumulated states and stack hyperedge membership."""
+        data = super().flush_pyg(as_batch=as_batch, include_metadata=include_metadata)
+        return self._encoder._stack_membership(data)
+
+
+class TupleTensorEncoder(_DerivedEncoderBase):
+    """
+    Star view over objects and atoms with reified tuple channels.
+
+    Builds the star view (objects and atoms) and additionally exposes every
+    encoded literal instance as a variable-arity tuple: ``tuple_args`` holds
+    the argument node ids, ``tuple_ptr`` is the per-graph CSR over tuples,
+    and ``tuple_rel_ids`` / ``tuple_role_ids`` index the shared predicate and
+    role vocabularies. All values are stored per-graph-local, matching the
+    :class:`~mifrost.encoders.derived_graph_data.DerivedGraphData` batching
+    contract.
+
+    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.
+    Domains are rejected because object tables are problem-scoped.
+    """
+
+    def __init__(
+        self,
+        problem: Any,
+        *,
+        backend: DerivedBackendName | str | None = None,
+        export_node_names: bool = True,
+    ) -> None:
+        """Create a tuple-channel derived-graph encoder for one problem."""
+        config = _neutral_core.SemanticDerivedGraphEncoderConfig(
+            node_universe="objects_and_atoms",
+            atom_expansion="star",
+            include_tuple_tensors=True,
+            export_node_names=export_node_names,
+        )
+        super().__init__(problem, config, backend=backend)
+        self.export_node_names = export_node_names
+
+    def encode_pyg(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        include_metadata: bool = True,
+        **kwargs: Any,
+    ) -> DerivedGraphData:
+        """Encode one state into PyG data with contract tuple channels."""
+        data = super().encode_pyg(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
+        return self._materialize_tuples(data)
+
+    def encode_batch_pyg(
+        self,
+        states: StateBatchInput,
+        *,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        batch_attrs: Mapping[str, Any] | None = None,
+        collate_spec: CollateSpecParam = None,
+        include_metadata: bool = True,
+        **kwargs: Any,
+    ) -> DerivedGraphData:
+        """Encode states into a PyG batch with contract tuple channels."""
+        data = super().encode_batch_pyg(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            batch_attrs=batch_attrs,
+            collate_spec=collate_spec,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
+        return self._materialize_tuples(data)
+
+    def _materialize_tuples(self, data: DerivedGraphData) -> DerivedGraphData:
+        """Pop raw native tuple fields and install the contract channels.
+
+        Builder increments already made batch values global (node-offset for
+        ``tuple_args``, cumulative tuple counts for the id channels), so they
+        are kept verbatim; ``tuple_ptr`` becomes one global CSR over all slot
+        sizes. Re-batching single graphs via ``Batch.from_data_list``
+        reproduces the global id channels exactly; ``tuple_ptr`` may carry
+        duplicated boundary entries where graph fragments meet (per-graph
+        CSRs concatenate, a global CSR does not) — slice with
+        :meth:`DerivedGraphData.padded_tuple_matrix` to stay shape-stable.
+        """
+        slot_sizes = getattr(data, "tuple_slot_sizes", None)
+        if slot_sizes is None:
+            return data
+        data = _reclassify(data)
+        sizes = slot_sizes.long().view(-1)
+        data.tuple_args = getattr(data, "tuple_args").long()
+        data.tuple_rel_ids = getattr(data, "tuple_rel_ids").long()
+        data.tuple_role_ids = getattr(data, "tuple_role_ids").long()
+        data.tuple_ptr = torch.cat(
+            (
+                torch.zeros(1, dtype=torch.long),
+                torch.cumsum(sizes, 0),
+            )
+        )
+        for attr in ("tuple_slot_sizes", "tuple_slot_sizes_ptr", "tuple_counts"):
+            try:
+                delattr(data, attr)
+            except (AttributeError, KeyError):
+                pass
+        return data
+
+    def stream(self) -> TupleTensorEncoderStream:
+        """Create a streaming encoder sharing this encoder's engine."""
+        return TupleTensorEncoderStream(self)
+
+
+@dataclass
+class TupleTensorEncoderStream(_DerivedEncoderStream):
+    """Streaming wrapper for ``TupleTensorEncoder``."""
+
+    _encoder: "TupleTensorEncoder"
+
+    def flush_pyg(
+        self, *, as_batch: bool = True, include_metadata: bool = True
+    ) -> DerivedGraphData:
+        """Flush accumulated states and materialize contract tuple channels."""
+        data = super().flush_pyg(as_batch=as_batch, include_metadata=include_metadata)
+        return self._encoder._materialize_tuples(data)
+
 
 class TransformerBiasEncoder(_DerivedEncoderBase):
     """
@@ -612,4 +822,6 @@ __all__ = [
     "StarGraphEncoder",
     "StarGraphEncoderStream",
     "TransformerBiasEncoder",
+    "TupleTensorEncoder",
+    "TupleTensorEncoderStream",
 ]

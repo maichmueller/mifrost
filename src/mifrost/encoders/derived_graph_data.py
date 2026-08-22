@@ -89,7 +89,7 @@ class DerivedGraphData(Data):
             )
         if key == "hyperedge_attr_ids":
             return self._num_hyperedges()
-        if key in {"tuple_ptr", "tuple_rel_ids"}:
+        if key in {"tuple_ptr", "tuple_rel_ids", "tuple_role_ids"}:
             return self._num_tuples()
         return super().__inc__(key, value, *args, **kwargs)
 
