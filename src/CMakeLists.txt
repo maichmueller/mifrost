@@ -522,6 +522,7 @@ add_library(
         "_core/mifrost/core/encoders/flat/semantic_flat_relation_view_bridge.cpp"
         "_core/mifrost/core/encoders/flat/semantic_flat_horizon_encoder.cpp"
         "_core/mifrost/core/encoders/homo/semantic_color_encoder.cpp"
+        "_core/mifrost/core/encoders/homo/semantic_derived_graph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.cpp"
         "_core/mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.cpp"
@@ -613,6 +614,7 @@ if (MIFROST_BUILD_PYTHON)
         "_core/mifrost/init_batch_encoding.cpp"
         "_core/mifrost/init_semantic_flat_encoder.cpp"
         "_core/mifrost/init_semantic_color_encoder.cpp"
+        "_core/mifrost/init_semantic_derived_graph_encoder.cpp"
         "_core/mifrost/init_semantic_hgraph_encoder.cpp"
         "_core/mifrost/init_semantic_transition_dag.cpp"
     )

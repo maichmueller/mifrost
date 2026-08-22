@@ -894,6 +894,78 @@ template <
    );
 }
 
+template < views::StateView State, views::GroundActionRange Actions >
+[[nodiscard]] ViewPreparation make_derived_view_preparation(
+   const std::shared_ptr< const SemanticProblemContext >& context,
+   const State& state,
+   Actions&& actions
+)
+{
+   return make_view_preparation(context, state, std::forward< Actions >(actions));
+}
+
+template < views::StateView State, views::LiteralRange Goals, views::GroundActionRange Actions >
+[[nodiscard]] ViewPreparation make_derived_view_preparation(
+   const std::shared_ptr< const SemanticProblemContext >& context,
+   const State& state,
+   Goals&& goals,
+   Actions&& actions
+)
+{
+   return make_view_preparation(
+      context, state, std::forward< Goals >(goals), std::forward< Actions >(actions)
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange Layers,
+   views::GroundActionRange Actions >
+[[nodiscard]] ViewPreparation make_derived_view_preparation(
+   const std::shared_ptr< const SemanticProblemContext >& context,
+   const State& state,
+   Goals&& goals,
+   Layers&& layers,
+   Actions&& actions
+)
+{
+   return make_view_preparation(
+      context,
+      state,
+      std::forward< Goals >(goals),
+      std::forward< Layers >(layers),
+      std::forward< Actions >(actions)
+   );
+}
+
+template <
+   views::StateView State,
+   views::LiteralRange Goals,
+   views::LiteralLayerRange Layers,
+   views::GroundActionRange Actions,
+   views::HistoryRange History >
+[[nodiscard]] ViewPreparation make_derived_view_preparation(
+   const std::shared_ptr< const SemanticProblemContext >& context,
+   const State& state,
+   Goals&& goals,
+   Layers&& layers,
+   Actions&& actions,
+   History&& history,
+   std::optional< int64_t > history_max_steps = std::nullopt
+)
+{
+   return make_view_preparation(
+      context,
+      state,
+      std::forward< Goals >(goals),
+      std::forward< Layers >(layers),
+      std::forward< Actions >(actions),
+      std::forward< History >(history),
+      history_max_steps
+   );
+}
+
 inline const std::vector< std::string >& semantic_objects(const ViewPreparation& input)
 {
    if(not input.problem_context) {

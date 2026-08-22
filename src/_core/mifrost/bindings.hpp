@@ -14,6 +14,7 @@ void init_hgraph_encoder(nanobind::module_& m);
 void init_flat_encoder(nanobind::module_& m);
 void init_semantic_flat_encoder(nanobind::module_& m);
 void init_semantic_color_encoder(nanobind::module_& m);
+void init_semantic_derived_graph_encoder(nanobind::module_& m);
 void init_semantic_hgraph_encoder(nanobind::module_& m);
 void init_semantic_transition_dag(nanobind::module_& m);
 void init_successor_encoders(nanobind::module_& m);
