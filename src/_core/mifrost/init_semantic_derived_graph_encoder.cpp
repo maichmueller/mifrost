@@ -79,6 +79,14 @@ void apply_derived_config_kwargs(
          config.include_line_graph = nb::cast< bool >(value_handle);
       } else if(key_view == "line_graph_max_degree") {
          config.line_graph_max_degree = nb::cast< int64_t >(value_handle);
+      } else if(key_view == "include_hyperedge_incidence") {
+         config.include_hyperedge_incidence = nb::cast< bool >(value_handle);
+      } else if(key_view == "include_tuple_tensors") {
+         config.include_tuple_tensors = nb::cast< bool >(value_handle);
+      } else if(key_view == "include_spd") {
+         config.include_spd = nb::cast< bool >(value_handle);
+      } else if(key_view == "spd_max_hops") {
+         config.spd_max_hops = nb::cast< int64_t >(value_handle);
       } else {
          throw std::invalid_argument(
             "Unknown SemanticDerivedGraphEncoderConfig kwarg '" + std::string(key_view) + "'"
@@ -105,7 +113,14 @@ void init_semantic_derived_graph_encoder(nb::module_& m)
       .def_rw("include_reverse_edges", &SemanticDerivedGraphEncoderConfig::include_reverse_edges)
       .def_rw("export_node_names", &SemanticDerivedGraphEncoderConfig::export_node_names)
       .def_rw("include_line_graph", &SemanticDerivedGraphEncoderConfig::include_line_graph)
-      .def_rw("line_graph_max_degree", &SemanticDerivedGraphEncoderConfig::line_graph_max_degree);
+      .def_rw("line_graph_max_degree", &SemanticDerivedGraphEncoderConfig::line_graph_max_degree)
+      .def_rw(
+         "include_hyperedge_incidence",
+         &SemanticDerivedGraphEncoderConfig::include_hyperedge_incidence
+      )
+      .def_rw("include_tuple_tensors", &SemanticDerivedGraphEncoderConfig::include_tuple_tensors)
+      .def_rw("include_spd", &SemanticDerivedGraphEncoderConfig::include_spd)
+      .def_rw("spd_max_hops", &SemanticDerivedGraphEncoderConfig::spd_max_hops);
 
    nb::class_< SemanticDerivedGraphEncoderEngine >(m, "SemanticDerivedGraphEncoderEngine")
       .def(

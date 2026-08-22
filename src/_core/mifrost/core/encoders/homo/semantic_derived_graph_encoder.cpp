@@ -40,6 +40,22 @@ constexpr int64_t kKindLineShare = 11;
 constexpr int kXDim = 6;
 constexpr int kEdgeDim = 3;
 
+constexpr std::string_view kHyperedgeSizesField = "hyperedge_sizes";
+constexpr std::string_view kHyperedgeNodeIndicesField = "hyperedge_node_indices";
+constexpr std::string_view kHyperedgeIdsField = "hyperedge_ids";
+constexpr std::string_view kHyperedgeRoleIdsField = "hyperedge_role_ids";
+constexpr std::string_view kHyperedgeCountsField = "hyperedge_counts";
+constexpr std::string_view kTupleArgsField = "tuple_args";
+constexpr std::string_view kTupleSlotSizesField = "tuple_slot_sizes";
+constexpr std::string_view kTupleRelIdsField = "tuple_rel_ids";
+constexpr std::string_view kTupleRoleIdsField = "tuple_role_ids";
+constexpr std::string_view kTupleCountsField = "tuple_counts";
+constexpr std::string_view kSpdSrcField = "spd_src";
+constexpr std::string_view kSpdDstField = "spd_dst";
+constexpr std::string_view kSpdDistField = "spd_dist";
+
+constexpr int64_t kSpdMaxObjects = 4096;
+
 const std::shared_ptr< const SemanticSchemaContext >& require_schema_context(
    const std::shared_ptr< const SemanticSchemaContext >& schema
 )
@@ -62,6 +78,9 @@ void validate_config(const SemanticDerivedGraphEncoderConfig& config)
       throw std::invalid_argument(
          "Derived-graph line-graph edges require the objects-and-atoms node universe"
       );
+   }
+   if(config.spd_max_hops < 1) {
+      throw std::invalid_argument("Derived-graph spd_max_hops must be >= 1");
    }
 }
 
@@ -91,6 +110,12 @@ struct NodeKeyHash {
    }
 };
 
+struct DerivedInstance {
+   int64_t role = kRoleFact;
+   int64_t predicate = -1;
+   SemanticArguments arguments;
+};
+
 struct Buffers {
    hash_map< NodeKey, int64_t, NodeKeyHash > node_indices;
    /// Row-major [N, 6]: role, predicate_id+1, sign, goal_level, history_dt, category.
@@ -102,6 +127,8 @@ struct Buffers {
    std::vector< std::string > node_names;
    /// Per-object incident (fact-node, position) pairs for line-graph derivation.
    std::vector< std::vector< std::pair< int64_t, int64_t > > > object_incidents;
+   /// Encoded literal/action instances in deterministic emission order.
+   std::vector< DerivedInstance > instances;
 
    [[nodiscard]] int64_t node_count() const
    {
@@ -197,6 +224,261 @@ struct Emitter {
    }
 };
 
+GraphFieldInc node_offset_inc()
+{
+   static const std::string node_type = "node";
+   return GraphFieldInc{
+      .kind = GraphFieldInc::Kind::NODE_OFFSET,
+      .node_type = node_type,
+   };
+}
+
+GraphFieldInc hyperedge_offset_inc()
+{
+   return GraphFieldInc{
+      .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+      .field_key = std::string(kHyperedgeCountsField),
+   };
+}
+
+GraphFieldInc tuple_offset_inc()
+{
+   return GraphFieldInc{
+      .kind = GraphFieldInc::Kind::FIELD_OFFSET,
+      .field_key = std::string(kTupleCountsField),
+   };
+}
+
+void register_instance_fields(
+   BatchBuilder& builder,
+   const SemanticDerivedGraphEncoderConfig& config
+)
+{
+   if(config.include_hyperedge_incidence) {
+      builder.register_field(
+         std::string(kHyperedgeCountsField),
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+      );
+      builder.register_field(
+         std::string(kHyperedgeSizesField),
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::RAGGED_CAT, .dim = 1}
+      );
+      builder.register_field(
+         std::string(kHyperedgeNodeIndicesField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = node_offset_inc(),
+         }
+      );
+      builder.register_field(
+         std::string(kHyperedgeIdsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = hyperedge_offset_inc(),
+         }
+      );
+      builder.register_field(
+         std::string(kHyperedgeRoleIdsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = hyperedge_offset_inc(),
+         }
+      );
+   }
+   if(config.include_tuple_tensors) {
+      builder.register_field(
+         std::string(kTupleCountsField),
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+      );
+      builder.register_field(
+         std::string(kTupleSlotSizesField),
+         GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::RAGGED_CAT, .dim = 1}
+      );
+      builder.register_field(
+         std::string(kTupleArgsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = node_offset_inc(),
+         }
+      );
+      builder.register_field(
+         std::string(kTupleRelIdsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = tuple_offset_inc(),
+         }
+      );
+      builder.register_field(
+         std::string(kTupleRoleIdsField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::CAT,
+            .dim = 1,
+            .inc = tuple_offset_inc(),
+         }
+      );
+   }
+}
+
+void set_instance_fields(
+   BatchBuilder& builder,
+   const SemanticDerivedGraphEncoderConfig& config,
+   const std::vector< DerivedInstance >& instances
+)
+{
+   const auto instance_count = static_cast< int64_t >(instances.size());
+   if(config.include_hyperedge_incidence) {
+      std::vector< int64_t > sizes;
+      std::vector< int64_t > members;
+      std::vector< int64_t > ids;
+      std::vector< int64_t > roles;
+      sizes.reserve(instances.size());
+      ids.reserve(instances.size());
+      roles.reserve(instances.size());
+      int64_t next_id = 0;
+      for(const auto& instance : instances) {
+         sizes.push_back(static_cast< int64_t >(instance.arguments.size()));
+         members.insert(members.end(), instance.arguments.begin(), instance.arguments.end());
+         ids.push_back(next_id++);
+         roles.push_back(instance.role);
+      }
+      builder.set_field(std::string{kHyperedgeSizesField}, sizes);
+      builder.set_field(std::string{kHyperedgeNodeIndicesField}, members);
+      builder.set_field(std::string{kHyperedgeIdsField}, ids);
+      builder.set_field(std::string{kHyperedgeRoleIdsField}, roles);
+      builder.set_field(
+         std::string{kHyperedgeCountsField}, std::span< const int64_t >{&instance_count, 1}
+      );
+   }
+   if(config.include_tuple_tensors) {
+      std::vector< int64_t > args;
+      std::vector< int64_t > slot_sizes;
+      std::vector< int64_t > rel_ids;
+      std::vector< int64_t > role_ids;
+      slot_sizes.reserve(instances.size());
+      rel_ids.reserve(instances.size());
+      role_ids.reserve(instances.size());
+      for(const auto& instance : instances) {
+         args.insert(args.end(), instance.arguments.begin(), instance.arguments.end());
+         slot_sizes.push_back(static_cast< int64_t >(instance.arguments.size()));
+         rel_ids.push_back(instance.predicate);
+         role_ids.push_back(instance.role);
+      }
+      builder.set_field(std::string{kTupleSlotSizesField}, slot_sizes);
+      builder.set_field(std::string{kTupleArgsField}, args);
+      builder.set_field(std::string{kTupleRelIdsField}, rel_ids);
+      builder.set_field(std::string{kTupleRoleIdsField}, role_ids);
+      builder.set_field(
+         std::string{kTupleCountsField}, std::span< const int64_t >{&instance_count, 1}
+      );
+   }
+}
+
+void emit_spd_fields(
+   BatchBuilder& builder,
+   const SemanticDerivedGraphEncoderConfig& config,
+   int64_t object_count,
+   const std::vector< DerivedInstance >& instances
+)
+{
+   if(object_count > kSpdMaxObjects) {
+      throw std::invalid_argument("spd requires at most 4096 objects");
+   }
+
+   std::vector< std::vector< int64_t > > incident_instances;
+   incident_instances.resize(static_cast< size_t >(object_count));
+   for(size_t index = 0; index < instances.size(); ++index) {
+      for(const auto argument : instances[index].arguments) {
+         incident_instances.at(static_cast< size_t >(argument))
+            .push_back(static_cast< int64_t >(index));
+      }
+   }
+
+   const auto instance_count = static_cast< int64_t >(instances.size());
+   std::vector< int64_t > visited_epoch(static_cast< size_t >(instance_count), -1);
+   std::vector< int64_t > distance(static_cast< size_t >(object_count), -1);
+   std::vector< int64_t > queue;
+   queue.reserve(static_cast< size_t >(object_count));
+
+   std::vector< int64_t > src_ids;
+   std::vector< int64_t > dst_ids;
+   std::vector< int64_t > distances;
+   for(int64_t src = 0; src < object_count; ++src) {
+      if(incident_instances.at(static_cast< size_t >(src)).empty()) {
+         continue;
+      }
+      std::fill(distance.begin(), distance.end(), -1);
+      queue.clear();
+      distance.at(static_cast< size_t >(src)) = 0;
+      queue.push_back(src);
+      for(size_t head = 0; head < queue.size(); ++head) {
+         const auto current = queue[head];
+         const auto next_distance = distance.at(static_cast< size_t >(current)) + 2;
+         if(next_distance > config.spd_max_hops) {
+            continue;
+         }
+         for(const auto instance : incident_instances.at(static_cast< size_t >(current))) {
+            if(visited_epoch.at(static_cast< size_t >(instance)) == src) {
+               continue;
+            }
+            visited_epoch.at(static_cast< size_t >(instance)) = src;
+            for(const auto neighbor : instances.at(static_cast< size_t >(instance)).arguments) {
+               if(distance.at(static_cast< size_t >(neighbor)) >= 0) {
+                  continue;
+               }
+               distance.at(static_cast< size_t >(neighbor)) = next_distance;
+               queue.push_back(neighbor);
+            }
+         }
+      }
+      for(int64_t dst = src + 1; dst < object_count; ++dst) {
+         const auto pair_distance = distance.at(static_cast< size_t >(dst));
+         if(pair_distance < 0) {
+            continue;
+         }
+         src_ids.push_back(src);
+         dst_ids.push_back(dst);
+         distances.push_back(pair_distance);
+      }
+   }
+
+   builder.register_field(
+      std::string{kSpdSrcField},
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
+         .inc = node_offset_inc(),
+      }
+   );
+   builder.register_field(
+      std::string{kSpdDstField},
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
+         .inc = node_offset_inc(),
+      }
+   );
+   builder.register_field(
+      std::string{kSpdDistField},
+      GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::CAT, .dim = 1}
+   );
+   builder.set_field(std::string{kSpdSrcField}, src_ids);
+   builder.set_field(std::string{kSpdDstField}, dst_ids);
+   builder.set_field(std::string{kSpdDistField}, distances);
+}
+
 template < typename Input >
 void encode_impl(
    const Input& input,
@@ -216,6 +498,8 @@ void encode_impl(
    Emitter emitter{predicates, action_specs, objects, config};
    auto& buffers = emitter.buffers;
    buffers.object_incidents.resize(objects.size());
+   const bool collect_instances = config.include_hyperedge_incidence || config.include_tuple_tensors
+                                  || config.include_spd;
 
    for(size_t index = 0; index < objects.size(); ++index) {
       const NodeKey key{
@@ -329,6 +613,9 @@ void encode_impl(
                                     int64_t dt,
                                     int64_t category
                                  ) -> int64_t {
+      if(collect_instances) {
+         buffers.instances.push_back(DerivedInstance{role, atom.predicate, atom.arguments});
+      }
       std::optional< std::string > name;
       if(config.export_node_names) {
          auto suffix = std::string_view();
@@ -438,6 +725,11 @@ void encode_impl(
             if(config.export_node_names) {
                name = emitter.format_action_name(action);
             }
+            if(collect_instances) {
+               buffers.instances.push_back(
+                  DerivedInstance{kRoleAction, action.action, action.arguments}
+               );
+            }
             const auto index = emitter.ensure_node(key, 0, std::move(name));
             for(int64_t position = 0; position < static_cast< int64_t >(action.arguments.size());
                 ++position) {
@@ -483,6 +775,23 @@ void encode_impl(
       builder.add_edge_features(
          node_type, "edge", node_type, "edge_attr", std::span{buffers.edge_attr_flat}, kEdgeDim
       );
+   }
+
+   if(collect_instances) {
+      if(config.include_hyperedge_incidence) {
+         builder.set_graph_attr(
+            "hyperedge_note",
+            std::string(
+               "members are object nodes; pair rows via zip(hyperedge_node_indices, "
+               "hyperedge_ids)"
+            )
+         );
+      }
+      register_instance_fields(builder, config);
+      set_instance_fields(builder, config, buffers.instances);
+   }
+   if(config.include_spd) {
+      emit_spd_fields(builder, config, static_cast< int64_t >(objects.size()), buffers.instances);
    }
 
    builder.set_graph_attr(

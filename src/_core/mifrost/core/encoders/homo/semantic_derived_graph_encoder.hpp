@@ -41,6 +41,10 @@ struct SemanticDerivedGraphEncoderConfig {
    bool export_node_names = true;
    bool include_line_graph = false;
    int64_t line_graph_max_degree = 32;
+   bool include_hyperedge_incidence = false;
+   bool include_tuple_tensors = false;
+   bool include_spd = false;
+   int64_t spd_max_hops = 4;
 };
 
 class MIFROST_API SemanticDerivedGraphEncoderEngine {

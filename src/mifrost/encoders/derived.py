@@ -15,8 +15,9 @@ concrete problem instance.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
+import torch
 from torch_geometric.data import Data
 
 from .. import _neutral_core
@@ -38,6 +39,9 @@ from .base import (
     SubgoalLayersBatchParam,
 )
 from .types import HomoEncoding, StateInput
+
+if TYPE_CHECKING:
+    from .derived_graph_data import DerivedGraphData
 
 ROLE_NAMES: tuple[str, ...] = (
     "object",
@@ -241,6 +245,27 @@ class _DerivedEncoderBase(EncoderBase[Data]):
             **kwargs,
         )
 
+    def _stack_membership(self, data: DerivedGraphData) -> DerivedGraphData:
+        """Restack raw hyperedge incidence fields into PyG hyperedge form.
+
+        When the native encoding carries the ``hyperedge_node_indices`` /
+        ``hyperedge_ids`` root attributes, they are popped and combined into
+        the stacked [2, M] ``hyperedge_index`` layout (node row, hyperedge
+        row); ``hyperedge_role_ids`` becomes ``hyperedge_attr_ids``.
+        """
+        nodes = getattr(data, "hyperedge_node_indices", None)
+        ids = getattr(data, "hyperedge_ids", None)
+        if nodes is None or ids is None:
+            return data
+        roles = getattr(data, "hyperedge_role_ids", None)
+        del data.hyperedge_node_indices
+        del data.hyperedge_ids
+        if roles is not None:
+            del data.hyperedge_role_ids
+            data.hyperedge_attr_ids = roles.long()
+        data.hyperedge_index = torch.stack([nodes.long(), ids.long()], 0)
+        return data
+
 
 class StarGraphEncoder(_DerivedEncoderBase):
     """
@@ -431,13 +456,160 @@ class AtomLineGraphEncoderStream(_DerivedEncoderStream):
     _encoder: "AtomLineGraphEncoder"
 
 
+class HypergraphIncidenceEncoder(_DerivedEncoderBase):
+    """
+    Hyperedge incidence view over objects and atoms.
+
+    Every encoded literal instance (static facts, state facts, goal and
+    subgoal literals, history literals, grounded actions) becomes one
+    hyperedge over its argument object nodes. ``encode_pyg`` restacks the
+    native incidence fields into ``hyperedge_index`` /
+    ``hyperedge_attr_ids`` so stock PyG hypergraph layers consume the output.
+
+    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.
+    Domains are rejected because object tables are problem-scoped.
+    """
+
+    def __init__(
+        self,
+        problem: Any,
+        *,
+        backend: DerivedBackendName | str | None = None,
+        include_reverse_edges: bool = True,
+        export_node_names: bool = True,
+    ) -> None:
+        """Create a hyperedge-incidence derived-graph encoder for one problem."""
+        config = _neutral_core.SemanticDerivedGraphEncoderConfig(
+            node_universe="objects_and_atoms",
+            atom_expansion="star",
+            include_hyperedge_incidence=True,
+            include_reverse_edges=include_reverse_edges,
+            export_node_names=export_node_names,
+        )
+        super().__init__(problem, config, backend=backend)
+        self.include_reverse_edges = include_reverse_edges
+        self.export_node_names = export_node_names
+
+    def _accepted_kwargs(self) -> set[str]:
+        return super()._accepted_kwargs() | {"hyperedge"}
+
+    def _check_hyperedge(self, hyperedge: bool | None) -> None:
+        if hyperedge is not None and not hyperedge:
+            raise ValueError(
+                "hyperedge is fixed at construction "
+                "(hyperedge incidence is always enabled)"
+            )
+
+    def _encode(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
+        hyperedge: bool | None = None,
+    ) -> HomoEncoding:
+        self._check_hyperedge(hyperedge)
+        return super()._encode(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+
+    def _encode_batch(
+        self,
+        states: StateBatchInput,
+        *,
+        goals: GoalBatchParam = None,
+        actions: ActionBatchParam = None,
+        subgoal_layers: SubgoalLayersBatchParam = None,
+        history_subgoals: HistorySubgoalsBatchParam = None,
+        history_max_steps: int | None = None,
+        hyperedge: bool | None = None,
+    ) -> HomoEncoding:
+        self._check_hyperedge(hyperedge)
+        return super()._encode_batch(
+            states,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        )
+
+    def encode_pyg(
+        self,
+        state: StateInput,
+        *,
+        goals: GoalBatchInput = None,
+        actions: ActionBatchInput = None,
+        subgoal_layers: SubgoalLayersInput = None,
+        include_metadata: bool = True,
+        **kwargs: Any,
+    ) -> DerivedGraphData:
+        """Encode one state into PyG data with stacked hyperedge membership."""
+        data = super().encode_pyg(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            include_metadata=include_metadata,
+            **kwargs,
+        )
+        return self._stack_membership(data)
+
+
+class TransformerBiasEncoder(_DerivedEncoderBase):
+    """
+    Objects-only clique projection with shortest-path distance biases.
+
+    Only object nodes are materialized (clique atom expansion); every pair of
+    objects connected through shared fact instances within ``spd_max_hops``
+    bipartite hops is reported via ``spd_src`` / ``spd_dst`` / ``spd_dist``
+    for transformer attention-bias consumption.
+
+    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.
+    Domains are rejected because object tables are problem-scoped.
+    """
+
+    def __init__(
+        self,
+        problem: Any,
+        *,
+        spd_max_hops: int = 4,
+        backend: DerivedBackendName | str | None = None,
+        include_reverse_edges: bool = True,
+        export_node_names: bool = True,
+    ) -> None:
+        """Create an spd-annotated objects-only derived-graph encoder."""
+        config = _neutral_core.SemanticDerivedGraphEncoderConfig(
+            node_universe="objects_only",
+            atom_expansion="clique",
+            include_spd=True,
+            spd_max_hops=spd_max_hops,
+            include_reverse_edges=include_reverse_edges,
+            export_node_names=export_node_names,
+        )
+        super().__init__(problem, config, backend=backend)
+        self.spd_max_hops = spd_max_hops
+        self.include_reverse_edges = include_reverse_edges
+        self.export_node_names = export_node_names
+
+
 __all__ = [
     "AtomLineGraphEncoder",
     "AtomLineGraphEncoderStream",
     "EDGE_KIND_NAMES",
+    "HypergraphIncidenceEncoder",
     "ObjectGraphEncoder",
     "ObjectGraphEncoderStream",
     "ROLE_NAMES",
     "StarGraphEncoder",
     "StarGraphEncoderStream",
+    "TransformerBiasEncoder",
 ]
