@@ -452,6 +452,17 @@ class SemanticPlanningTaskAdapter:
             self._compact_literal,
         )
 
+    def make_direct_derived_encoder(self, config: Any) -> DirectEncoder:
+        """Direct-View derived-graph encoder that runs inside the PyTyr module."""
+        from mifrost import _neutral_core
+
+        return DirectEncoder(
+            self._native_module._NativeDirectDerivedEncoder(
+                self._native, _neutral_core._semantic_derived_config_capsule(config)
+            ),
+            self._compact_literal,
+        )
+
     def make_direct_hgraph_encoder(self, config: Any) -> DirectEncoder:
         """Direct-View HGraph encoder that runs inside the PyTyr module."""
         from mifrost import _neutral_core
@@ -482,6 +493,14 @@ class SemanticPlanningTaskAdapter:
         config_capsule = _neutral_core._semantic_color_config_capsule(config)
         engine_capsule = self._native._make_color_engine_capsule(config_capsule)
         return _neutral_core._consume_semantic_color_engine_capsule(engine_capsule)
+
+    def make_derived_engine(self, config: Any) -> Any:
+        """Build a neutral derived-graph engine from the cached task schema."""
+        from mifrost import _neutral_core
+
+        config_capsule = _neutral_core._semantic_derived_config_capsule(config)
+        engine_capsule = self._native._make_derived_engine_capsule(config_capsule)
+        return _neutral_core._consume_semantic_derived_engine_capsule(engine_capsule)
 
     def make_hgraph_engine(self, config: Any) -> Any:
         """Build a neutral HGraph engine from this task adapter's cached schema."""

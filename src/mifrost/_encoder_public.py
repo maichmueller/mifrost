@@ -97,6 +97,22 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
         LazyEncoderExport("HorizonEncoderStream", ".horizon", "HorizonEncoderStream"),
         LazyEncoderExport("ColorEncoder", ".color", "ColorEncoder"),
         LazyEncoderExport("ColorEncoderStream", ".color", "ColorEncoderStream"),
+        LazyEncoderExport("StarGraphEncoder", ".derived", "StarGraphEncoder"),
+        LazyEncoderExport(
+            "StarGraphEncoderStream", ".derived", "StarGraphEncoderStream"
+        ),
+        LazyEncoderExport("ObjectGraphEncoder", ".derived", "ObjectGraphEncoder"),
+        LazyEncoderExport(
+            "ObjectGraphEncoderStream",
+            ".derived",
+            "ObjectGraphEncoderStream",
+        ),
+        LazyEncoderExport("AtomLineGraphEncoder", ".derived", "AtomLineGraphEncoder"),
+        LazyEncoderExport(
+            "AtomLineGraphEncoderStream",
+            ".derived",
+            "AtomLineGraphEncoderStream",
+        ),
         LazyEncoderExport("FlatRelationEncoder", ".flat", "FlatRelationEncoder"),
         LazyEncoderExport(
             "FlatRelationEncoderStream",
@@ -221,6 +237,12 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
         "HGraphMutableEncoderStream",
         "ColorEncoder",
         "ColorEncoderStream",
+        "StarGraphEncoder",
+        "StarGraphEncoderStream",
+        "ObjectGraphEncoder",
+        "ObjectGraphEncoderStream",
+        "AtomLineGraphEncoder",
+        "AtomLineGraphEncoderStream",
         "FlatRelationEncoder",
         "FlatRelationEncoderStream",
         "FlatRelationMutableEncoderStream",

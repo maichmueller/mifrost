@@ -26,6 +26,7 @@
 #include "mifrost/core/encoders/hetero/semantic_horizon_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/hetero/semantic_successor_hgraph_encoder.hpp"
 #include "mifrost/core/encoders/homo/semantic_color_encoder.hpp"
+#include "mifrost/core/encoders/homo/semantic_derived_graph_encoder.hpp"
 #include "mifrost/core/semantic/views.hpp"
 
 namespace nb = nanobind;
@@ -748,6 +749,22 @@ NB_MODULE(_pytyr_adapter, m)
          "config_capsule"_a
       )
       .def(
+         "_make_derived_engine_capsule",
+         [owned_capsule](const Adapter& self, nb::handle config_capsule) {
+            const auto* config = capsule_bridge::get< SemanticDerivedGraphEncoderConfig >(
+               config_capsule.ptr(), capsule_bridge::derived_config_name
+            );
+            if(config == nullptr) {
+               throw nb::python_error();
+            }
+            return owned_capsule(
+               SemanticDerivedGraphEncoderEngine(self.get_schema_context(), *config),
+               capsule_bridge::derived_engine_name
+            );
+         },
+         "config_capsule"_a
+      )
+      .def(
          "_make_hgraph_engine_capsule",
          [owned_capsule](const Adapter& self, nb::handle config_capsule) {
             const auto* config = capsule_bridge::get< SemanticHGraphEncoderConfig >(
@@ -1011,6 +1028,9 @@ NB_MODULE(_pytyr_adapter, m)
    );
    bind_direct_encoder.template operator()< SemanticColorEncoderEngine >(
       "_NativeDirectColorEncoder", capsule_bridge::color_config_name
+   );
+   bind_direct_encoder.template operator()< SemanticDerivedGraphEncoderEngine >(
+      "_NativeDirectDerivedEncoder", capsule_bridge::derived_config_name
    );
    bind_direct_encoder.template operator()< SemanticHGraphEncoderEngine >(
       "_NativeDirectHGraphEncoder", capsule_bridge::hgraph_config_name

@@ -1,0 +1,257 @@
+"""PyTyr runtime for the public derived-graph encoder family."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import Any, Literal, cast
+
+from pytyr.formalism.planning import PlanningTask
+
+from ..encoders._flat_validation import validate_subgoal_layers_state_payload
+from .pytyr_flat import (
+    _history_values,
+    _is_state,
+    _lane_values,
+    _sequence,
+    _subgoal_values,
+)
+from .pytyr import SemanticPlanningTaskAdapter
+
+
+_ACTION_ERROR = "SemanticDerivedGraphEncoderEngine does not support action encoding"
+_BATCH_ACTION_ERROR = (
+    "Derived-graph batch encoding does not support explicit action payloads"
+)
+_HISTORY_ERROR = (
+    "SemanticDerivedGraphEncoderEngine does not support history_subgoals payloads"
+)
+_BATCH_HISTORY_ERROR = (
+    "Derived-graph batch encoding does not support history_subgoals payloads"
+)
+
+_NODE_UNIVERSE_OPTIONS = ("objects_and_atoms", "objects_only")
+_ATOM_EXPANSION_OPTIONS = ("star", "clique", "chain", "star_first")
+
+
+def _config_option(value: object, options: tuple[str, ...], field: str) -> str:
+    """Map a string, enum-like, or integer config value to its native name."""
+    if isinstance(value, str) and value in options:
+        return value
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and name in options:
+        return name
+    try:
+        return options[int(cast("int", value))]
+    except (TypeError, ValueError, IndexError) as error:
+        raise ValueError(f"Unknown {field} {value!r}") from error
+
+
+def _native_config(config: Any) -> Any:
+    """Return the neutral native config for any supported config shape."""
+    from mifrost import _neutral_core
+
+    if isinstance(config, _neutral_core.SemanticDerivedGraphEncoderConfig):
+        return config
+    values = {
+        field: getattr(config, field)
+        for field in (
+            "node_universe",
+            "atom_expansion",
+            "include_reverse_edges",
+            "export_node_names",
+            "include_line_graph",
+            "line_graph_max_degree",
+        )
+        if hasattr(config, field)
+    }
+    if "node_universe" in values:
+        values["node_universe"] = _config_option(
+            values["node_universe"], _NODE_UNIVERSE_OPTIONS, "node_universe"
+        )
+    if "atom_expansion" in values:
+        values["atom_expansion"] = _config_option(
+            values["atom_expansion"], _ATOM_EXPANSION_OPTIONS, "atom_expansion"
+        )
+    return _neutral_core.SemanticDerivedGraphEncoderConfig(**values)
+
+
+class _PyTyrDerivedStream:
+    def __init__(self, runtime: "PyTyrDerivedRuntime") -> None:
+        self._runtime = runtime
+        self._reuse_removed = False
+        self.reset()
+
+    def append(self, state: object, **kwargs: Any) -> int:
+        item = self._runtime._prepared(state, **kwargs)
+        if self._reuse_removed and self._removed:
+            stream_id = min(self._removed)
+            self._removed.remove(stream_id)
+            self._items[stream_id] = item
+            return stream_id
+        stream_id = self._next_id
+        self._next_id += 1
+        self._items[stream_id] = item
+        return stream_id
+
+    def update(self, stream_id: int, state: object, **kwargs: Any) -> None:
+        if stream_id not in self._items:
+            raise KeyError(stream_id)
+        self._items[stream_id] = self._runtime._prepared(state, **kwargs)
+
+    def remove(self, stream_id: int) -> None:
+        if stream_id not in self._items:
+            raise KeyError(stream_id)
+        del self._items[stream_id]
+        self._removed.add(stream_id)
+
+    def set_reuse_removed(self, value: bool) -> None:
+        self._reuse_removed = bool(value)
+
+    def flush(self) -> Any:
+        # Each appended step was prepared immediately, so the stream holds no
+        # borrowed Tyr state between calls.
+        values = [self._items[key] for key in sorted(self._items)]
+        return self._runtime._direct.encode_prepared(values)
+
+    def reset(self) -> None:
+        self._items: dict[int, Any] = {}
+        self._removed: set[int] = set()
+        self._next_id = 0
+
+
+class PyTyrDerivedRuntime:
+    """Adapt PyTyr task/state views to derived-graph encoder inputs."""
+
+    backend_name: Literal["pytyr"] = "pytyr"
+
+    def __init__(self, planning_task: PlanningTask, config: Any) -> None:
+        """Build the neutral engine and direct encoder for one planning task."""
+        self._adapter = SemanticPlanningTaskAdapter(planning_task)
+        native_config = _native_config(config)
+        self.engine = self._adapter.make_derived_engine(native_config)
+        self._direct = self._adapter.make_direct_derived_encoder(native_config)
+
+    def _checked_lanes(
+        self,
+        state: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+        history_subgoals: object = None,
+    ) -> tuple[Any, list[Any]]:
+        if not _is_state(state):
+            raise TypeError(
+                "a PyTyr derived-graph encoder expects a lifted or ground "
+                f"PyTyr state, got {type(state)!r}"
+            )
+        action_values = [] if actions is None else list(cast(Iterable[Any], actions))
+        if action_values:
+            raise ValueError(_ACTION_ERROR)
+        history_values = (
+            []
+            if history_subgoals is None
+            else list(cast(Iterable[Any], history_subgoals))
+        )
+        if history_values:
+            raise ValueError(_HISTORY_ERROR)
+        layers = (
+            []
+            if subgoal_layers is None
+            else list(cast(Iterable[Iterable[Any]], subgoal_layers))
+        )
+        validate_subgoal_layers_state_payload(layers, state_index=0, max_goal_level=3)
+        return goals, layers
+
+    def _prepared(self, state: object, **kwargs: Any) -> Any:
+        goals, layers = self._checked_lanes(state, **kwargs)
+        return self._direct.prepare(
+            state,
+            goals=cast(Iterable[object] | None, goals),
+            subgoal_layers=layers,
+        )
+
+    def encode(
+        self,
+        state: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+        history_subgoals: object = None,
+        history_max_steps: int | None = None,
+    ) -> Any:
+        """Encode one state into a derived graph."""
+        goals, layers = self._checked_lanes(
+            state,
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+        )
+        # Direct-View encode inside the PyTyr module; no owning semantic input.
+        return self._direct.encode(
+            state,
+            goals=cast(Iterable[object] | None, goals),
+            subgoal_layers=layers,
+            history_max_steps=history_max_steps,
+        )
+
+    def encode_batch(
+        self,
+        states: object,
+        *,
+        goals: object = None,
+        actions: object = None,
+        subgoal_layers: object = None,
+        history_subgoals: object = None,
+        history_max_steps: int | None = None,
+    ) -> Any:
+        """Encode a batch of states into one derived-graph batch encoding."""
+        state_values = (
+            [states] if _is_state(states) else _sequence(states, field="states")
+        )
+        if not all(_is_state(state) for state in state_values):
+            raise TypeError("a PyTyr derived-graph batch can contain only PyTyr states")
+        count = len(state_values)
+
+        action_values = _lane_values(
+            actions, state_count=count, field="actions", leaf=lambda _value: True
+        )
+        if any(values for values in action_values):
+            raise ValueError(_BATCH_ACTION_ERROR)
+        history_values = _history_values(history_subgoals, state_count=count)
+        if any(values for values in history_values):
+            raise ValueError(_BATCH_HISTORY_ERROR)
+
+        def is_literal(value: object) -> bool:
+            try:
+                self._adapter._literal_key(value)
+            except (TypeError, ValueError):
+                return False
+            return True
+
+        goal_values = _lane_values(
+            goals, state_count=count, field="goals", leaf=is_literal
+        )
+        subgoal_values = _subgoal_values(subgoal_layers, state_count=count)
+        for index, value in enumerate(subgoal_values):
+            validate_subgoal_layers_state_payload(
+                value, state_index=index, max_goal_level=3
+            )
+        # Direct-View batch: prepared and encoded in one native crossing.
+        return self._direct.encode_batch(
+            state_values,
+            goals=goal_values,
+            subgoal_layers=[
+                () if values is None else values for values in subgoal_values
+            ],
+            history_max_steps=history_max_steps,
+        )
+
+    def make_stream(self) -> Any:
+        """Create a pure-Python streaming encoder over this runtime."""
+        return _PyTyrDerivedStream(self)
+
+
+__all__ = ["PyTyrDerivedRuntime"]
