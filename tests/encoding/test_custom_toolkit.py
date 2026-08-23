@@ -263,6 +263,48 @@ def test_action_structure_parity_across_backends(blocks_pair) -> None:
                 assert argument == "?a0" or not argument.startswith("?")
 
 
+def _domain_names() -> list[str]:
+    base = ROOT / "data" / "pddl"
+    return sorted(path.name for path in base.iterdir() if path.is_dir())
+
+
+def _smallest_problem(domain: str) -> Path:
+    """The tiniest problem file of a domain (deterministic parse cost)."""
+
+    directory = ROOT / "data" / "pddl" / domain
+    problems = sorted(
+        (path for path in directory.glob("*.pddl") if path.name != "domain.pddl"),
+        key=lambda path: (path.stat().st_size, path.name),
+    )
+    assert problems, f"no problem files under {directory}"
+    return problems[0]
+
+
+@pytest.mark.parametrize("domain", _domain_names())
+def test_action_structure_parity_all_domains(domain: str) -> None:
+    if pymimir is None:  # pragma: no cover - optional backend dependencies
+        pytest.skip("pymimir/pytyr planning stack not available")
+    problem_path = _smallest_problem(domain)
+    domain_path = ROOT / "data" / "pddl" / domain / "domain.pddl"
+    try:
+        pymimir_problem = _pymimir_problem(domain_path, problem_path)
+    except Exception as exc:  # noqa: BLE001 - any parser failure must skip
+        pytest.skip(
+            f"pymimir cannot parse data/pddl/{domain}/{problem_path.name}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    try:
+        planning_task, _search = _pytyr_task(domain_path, problem_path)
+    except Exception as exc:  # noqa: BLE001 - any parser failure must skip
+        pytest.skip(
+            f"pytyr cannot parse data/pddl/{domain}/{problem_path.name}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    pm_structures = StateView(pymimir_problem).action_structures()
+    pt_structures = StateView(planning_task).action_structures()
+    assert pm_structures == pt_structures
+
+
 def test_harness_assert_backend_parity_and_summary(blocks_pair) -> None:
     from mifrost.encoders.custom import assert_backend_parity, channel_summary
 
@@ -285,6 +327,47 @@ def test_harness_assert_backend_parity_and_summary(blocks_pair) -> None:
         encoder = ObjectFeatureEncoder(smedium_problem)
         summary = channel_summary(encoder.encode_pyg(smedium_state))
     assert summary["edges"] > 0 and "edge_kinds" in summary
+
+
+def test_harness_assert_backend_parity_requires_distinct_backends(
+    blocks_pair,
+) -> None:
+    from mifrost.encoders.custom import assert_backend_parity
+    from mifrost.encoders.object_feature import ObjectFeatureEncoder
+
+    pymimir_problem, pymimir_state, _, _ = blocks_pair
+    with pytest.raises(ValueError, match="two distinct backends"):
+        assert_backend_parity(
+            ObjectFeatureEncoder,
+            [
+                (pymimir_problem, [pymimir_state]),
+                (pymimir_problem, [pymimir_state]),
+            ],
+        )
+
+
+def test_graph_writer_finish_guard_and_reset(blocks_pair) -> None:
+    pymimir_problem, _state, _, _ = blocks_pair
+    view = StateView(pymimir_problem)
+    writer = GraphWriter(view)
+    writer.add_node(("object", "a"), role="object", name="a")
+
+    encoding = writer.finish()
+    assert dict(encoding.schema_flags)["custom_encoder"] is True
+
+    with pytest.raises(RuntimeError, match="finished"):
+        writer.add_node(("object", "b"), role="object", name="b")
+    with pytest.raises(RuntimeError, match="finished"):
+        writer.add_edge(0, 0, "arg_fwd")
+    with pytest.raises(RuntimeError, match="finished"):
+        writer.add_both(0, 0, "arg_fwd", "arg_bwd")
+    with pytest.raises(RuntimeError, match="finished"):
+        writer.finish()
+
+    writer.reset()
+    revived_id = writer.add_node(("object", "c"), role="object", name="c")
+    assert revived_id == 0
+    assert writer.finish().num_nodes == 1
 
 
 def test_harness_conformance_smoke(blocks_pair) -> None:

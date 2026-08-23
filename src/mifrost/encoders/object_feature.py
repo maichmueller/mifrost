@@ -57,6 +57,12 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
 
     The input must be a *problem* (a ``pymimir.Problem`` or a pytyr
     ``PlanningTask``); states are passed to `encode` / `encode_batch`.
+
+    ``last_nullary_count`` reports how many nullary facts the most recent
+    `encode_state` call skipped ("last encode wins"): it is per-state
+    scratch, not an aggregate — reading it after a batch or stream flush
+    yields the count of whichever state was encoded last, so capture it
+    right after encoding the state you care about.
     """
 
     def __init__(

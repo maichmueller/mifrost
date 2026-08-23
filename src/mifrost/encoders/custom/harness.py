@@ -25,6 +25,10 @@ def assert_backend_parity(
     builds the encoder from a source. Encodings are compared via their
     canonical ``dumps()`` serialization, so any tensor or metadata
     difference fails the assertion.
+
+    Raises :class:`ValueError` when fewer than two *distinct* backend names
+    occur among the cases — comparing an encoder against itself is a
+    no-op, not parity.
     """
 
     dumps_per_backend: dict[str, list[bytes]] = {}
@@ -32,6 +36,11 @@ def assert_backend_parity(
         encoder = make_encoder(source)
         backend = getattr(encoder, "backend", "unknown")
         dumps_per_backend[backend] = [encoder.encode(state).dumps() for state in states]
+    if len(dumps_per_backend) < 2:
+        raise ValueError(
+            "assert_backend_parity needs at least two distinct backends "
+            f"among the cases, got {sorted(dumps_per_backend)!r}"
+        )
     reference = None
     for backend, dumps in sorted(dumps_per_backend.items()):
         if reference is None:

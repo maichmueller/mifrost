@@ -90,6 +90,13 @@ class ActionStructure:
     ...) so pymimir and pytyr views of the same PDDL action produce
     identical records; literal arguments referencing a parameter use its
     canonical name, constant arguments keep their object names.
+
+    Domains with ``:disjunctive-preconditions`` are flattened by both
+    backends into duplicate-named schemas — one per disjunct, each with its
+    single-disjunct precondition. Ordering of the returned tuple is
+    canonicalized over the full record (name, arity, preconditions,
+    effects), not just the name, so both backends agree even when their
+    native expansion orders differ.
     """
 
     name: str
@@ -131,6 +138,27 @@ def _sorted_effects(effects: Iterable[Effect]) -> tuple[Effect, ...]:
                 tuple(literal.atom.display for literal in effect.literals),
             ),
         )
+    )
+
+
+def _structure_sort_key(structure: ActionStructure) -> tuple[Any, ...]:
+    """Canonical total order over full action-structure records.
+
+    Sorting by name alone is not a total order once disjunctive
+    preconditions expand into duplicate-named schemas; the precondition and
+    effect displays break those ties identically on both backends.
+    """
+    return (
+        structure.name,
+        structure.arity,
+        tuple(literal.atom.display for literal in structure.precondition),
+        tuple(
+            (
+                tuple(literal.atom.display for literal in effect.condition),
+                tuple(literal.atom.display for literal in effect.literals),
+            )
+            for effect in structure.effects
+        ),
     )
 
 
@@ -178,7 +206,7 @@ def _pymimir_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
                 effects,
             )
         )
-    return tuple(sorted(structures, key=lambda structure: structure.name))
+    return tuple(sorted(structures, key=_structure_sort_key))
 
 
 def _pytyr_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
@@ -207,17 +235,26 @@ def _pytyr_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
                 literals.extend(lift_pytyr_literal(literal) for literal in getter())
             return _sorted_literals(literals)
 
-        precondition = lift_conjunctive(action.get_condition())
-        effects = _sorted_effects(
-            Effect(
-                lift_conjunctive(conditional.get_condition()),
-                _sorted_literals(
+        def structure_effects(action: Any) -> tuple[Effect, ...]:
+            effects: list[Effect] = []
+            for conditional in action.get_effects():
+                condition = lift_conjunctive(conditional.get_condition())
+                literals = _sorted_literals(
                     lift_pytyr_literal(literal)
                     for literal in conditional.get_effect().get_literals()
-                ),
-            )
-            for conditional in action.get_effects()
-        )
+                )
+                # pytyr materializes an empty ``(and)`` effect as a
+                # fully-empty ConjunctiveEffect; pymimir emits no effect at
+                # all for those, so drop them to keep the views identical.
+                # Conditional effects with a real condition but empty body
+                # are kept on both sides.
+                if not condition and not literals:
+                    continue
+                effects.append(Effect(condition, literals))
+            return _sorted_effects(effects)
+
+        precondition = lift_conjunctive(action.get_condition())
+        effects = structure_effects(action)
         structures.append(
             ActionStructure(
                 str(action.get_name()),
@@ -227,7 +264,7 @@ def _pytyr_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
                 effects,
             )
         )
-    return tuple(sorted(structures, key=lambda structure: structure.name))
+    return tuple(sorted(structures, key=_structure_sort_key))
 
 
 class StateView:
@@ -315,7 +352,10 @@ class StateView:
         Both supported backends expose the full structure; parameters are
         canonically renamed positionally (see :class:`ActionStructure`).
         Collections are sorted canonically so the two backends agree
-        byte-for-byte on the same PDDL files.
+        byte-for-byte on the same PDDL files — including domains with
+        ``:disjunctive-preconditions``, where both backends flatten each
+        disjunct into a duplicate-named schema and ordering is
+        canonicalized over full records rather than names alone.
         """
 
         if self._action_structures is None:

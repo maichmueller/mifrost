@@ -37,6 +37,13 @@ def _config_option(value: object, options: tuple[str, ...], field: str) -> str:
         raise ValueError(f"Unknown {field} {value!r}") from error
 
 
+def _lane_is_empty(value: object) -> bool:
+    """Treat ``None`` and any empty list/tuple batch lane as unset."""
+    if value is None:
+        return True
+    return isinstance(value, (list, tuple)) and len(value) == 0
+
+
 def _native_config(config: Any) -> Any:
     """Return the neutral native config for any supported config shape."""
     if isinstance(config, SemanticDerivedGraphEncoderConfig):
@@ -50,6 +57,10 @@ def _native_config(config: Any) -> Any:
             "export_node_names",
             "include_line_graph",
             "line_graph_max_degree",
+            "include_hyperedge_incidence",
+            "include_tuple_tensors",
+            "include_spd",
+            "spd_max_hops",
         )
         if hasattr(config, field)
     }
@@ -257,7 +268,12 @@ class PymimirDerivedRuntime:
         history_subgoals: object = None,
         history_max_steps: int | None = None,
     ) -> Any:
-        """Encode a batch of states into one derived-graph batch encoding."""
+        """Encode a batch of states into one derived-graph batch encoding.
+
+        States whose four lanes are all unset (the default) reuse the
+        memoized default-lane input per state, so re-encoding an already
+        seen state skips input preparation entirely.
+        """
         state_values = _state_values(states)
         count = len(state_values)
         goal_values = _sequence_lane(
@@ -282,10 +298,11 @@ class PymimirDerivedRuntime:
         inputs = []
         for index, state in enumerate(state_values):
             if (
-                goal_values[index] is None
-                and not action_values[index]
-                and layer_values[index] == ()
-                and history_values[index] == ()
+                _lane_is_empty(goal_values[index])
+                and _lane_is_empty(action_values[index])
+                and _lane_is_empty(layer_values[index])
+                and _lane_is_empty(history_values[index])
+                and history_max_steps is None
             ):
                 inputs.append(self._cached_input(state))
             else:

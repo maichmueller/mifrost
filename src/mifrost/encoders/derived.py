@@ -734,7 +734,14 @@ class TupleTensorEncoder(_DerivedEncoderBase):
     encoded literal instance as a variable-arity tuple: ``tuple_args`` holds
     the argument node ids, ``tuple_ptr`` is the per-graph CSR over tuples,
     and ``tuple_rel_ids`` / ``tuple_role_ids`` index the shared predicate and
-    role vocabularies. All values are stored per-graph-local, matching the
+    role vocabularies. One vocabulary caveat, mirroring the ``x_ids``
+    column-1 caveat: for tuples whose ``tuple_role_ids`` entry is ``action``,
+    ``tuple_rel_ids`` carries the **action-schema id** (against the action
+    vocabulary), not a predicate-vocabulary id — predicate-role tuples carry
+    predicate ids as usual. Size embeddings by
+    ``max(len(vocab_predicates), number of action schemas) + 1`` or filter
+    by ``tuple_role_ids`` before embedding. All values are stored
+    per-graph-local, matching the
     :class:`~mifrost.encoders.derived_graph_data.DerivedGraphData` batching
     contract.
 

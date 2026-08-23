@@ -44,7 +44,9 @@ FACADE_CASES: tuple[tuple[str, str, dict[str, Any]], ...] = (
 
 OPTIONAL_FACADES = frozenset({"hyper", "bias"})
 
-_SKIP_EXCEPTIONS = (ModuleNotFoundError, ImportError, TypeError, ValueError)
+# hyper/bias are first-class facades; only a missing optional dependency
+# may skip them. Genuine encode bugs (TypeError/ValueError/...) must fail.
+_SKIP_EXCEPTIONS = (ModuleNotFoundError, ImportError)
 
 STANDARD_LAYERS = (
     "GCNConv",

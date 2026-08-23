@@ -13,9 +13,10 @@ from .tables import EdgeSink, NodeTable, Vocabulary
 class GraphWriter:
     """One-graph writer that owns a BatchBuilder, NodeTable and EdgeSink.
 
-    A fresh writer is created per encoded graph; `finish` emits the graph and
-    releases all accumulated content, after which the writer must not be
-    reused.
+    A fresh writer is created per encoded graph; `finish` emits the graph
+    and spends the writer: any further ``add_*`` or `finish` call raises
+    :class:`RuntimeError` until :meth:`reset` clears the finished flag and
+    the accumulated content.
     """
 
     def __init__(
@@ -36,6 +37,7 @@ class GraphWriter:
         self.view = view
         self.graph_kind = graph_kind
         self.export_node_names = export_node_names
+        self._finished = False
         if builder is None:
             self._builder = BatchBuilder()
             self._builder.set_graph_kind(graph_kind)
@@ -44,6 +46,15 @@ class GraphWriter:
         self.nodes = NodeTable()
         self.edges = EdgeSink()
         self._vocabularies: dict[str, Vocabulary] = {}
+
+    def _require_open(self) -> None:
+        """Raise when the writer has already been finished."""
+
+        if self._finished:
+            raise RuntimeError(
+                "this GraphWriter was finished and is spent; call reset() "
+                "or create a fresh writer"
+            )
 
     def add_node(
         self,
@@ -55,6 +66,7 @@ class GraphWriter:
     ) -> int:
         """Intern one node in the writer's `NodeTable` and return its id."""
 
+        self._require_open()
         return self.nodes.id_for(key, role=role, channels=channels, name=name)
 
     def add_edge(
@@ -67,6 +79,7 @@ class GraphWriter:
     ) -> None:
         """Append one directed edge to the writer's `EdgeSink`."""
 
+        self._require_open()
         self.edges.add(src, dst, kind, pos_a, pos_b)
 
     def add_both(
@@ -80,6 +93,7 @@ class GraphWriter:
     ) -> None:
         """Append an edge pair (forward plus reverse) to the edge sink."""
 
+        self._require_open()
         self.edges.add_both(src, dst, kind_fwd, kind_bwd, pos_a, pos_b)
 
     def vocabulary(self, name: str) -> Vocabulary:
@@ -118,22 +132,40 @@ class GraphWriter:
         self._builder.set_field(key, values)
 
     def finish(self) -> BatchEncoding:
-        """Emit the accumulated graph and release all retained content.
+        """Emit the accumulated graph and spend the writer.
 
         Nodes are exported under type ``node`` with feature attr ``x_ids``
         and optional node names; edges under ``("node", "edge", "node")``
         with feature attr ``edge_attr`` of fixed width 3. Object names and
-        the ``custom_encoder`` schema flag are always attached.
+        the ``custom_encoder`` schema flag are always attached. Calling
+        `finish` (or any ``add_*`` method) again raises
+        :class:`RuntimeError`; :meth:`reset` returns the writer to a fresh,
+        empty state.
         """
 
+        self._require_open()
         self._write_into(self._builder)
         encoding = self._builder.build()
+        self._finished = True
+        self.nodes = NodeTable()
+        self.edges = EdgeSink()
+        self._vocabularies = {}
+        return encoding
+
+    def reset(self) -> None:
+        """Discard the finished flag and all accumulated content.
+
+        The writer becomes a fresh, empty graph again; the underlying
+        builder is replaced, so a writer bound to a shared batch builder
+        must not be reset mid-batch.
+        """
+
         self._builder = BatchBuilder()
         self._builder.set_graph_kind(self.graph_kind)
         self.nodes = NodeTable()
         self.edges = EdgeSink()
         self._vocabularies = {}
-        return encoding
+        self._finished = False
 
     def _write_into(self, builder: Any) -> None:
         """Write the accumulated graph content into ``builder``.

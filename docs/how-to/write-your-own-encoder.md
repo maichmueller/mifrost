@@ -170,8 +170,12 @@ built-in encoders:
 - **Native outputs + PyG fast path.** `encode` / `encode_batch` return native
   `BatchEncoding` objects (schema flag `custom_encoder=True` marks them);
   `encode_pyg` / `encode_batch_pyg` convert through the standard machinery.
-- **Batch collation.** `encode_batch` merges per-state encodings via
-  `mifrost.batch_encodings`; no custom collation code needed.
+- **Batch building.** `encode_batch` does not build one encoding per state
+  and collate afterwards: it writes every state's graph into a single
+  shared builder — each state gets its own writer, separated by
+  `next_graph()` — and calls `build()` once at the end. (`CustomStream.flush`
+  still encodes per recipe and collates via `mifrost.batch_encodings`, so
+  streamed and directly batched outputs agree.)
 - **Streams.** `stream()` returns a `CustomStream` storing `(state, kwargs)`
   recipes; `append` / `update` / `remove` / `set_reuse_removed` / `flush`
   work like the built-in stream facades.

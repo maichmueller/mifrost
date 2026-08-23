@@ -73,8 +73,26 @@ def _require(module: str, install_hint: str) -> Any:
         ) from exc
 
 
+def _reject_batch(data: Any) -> None:
+    """Refuse PyG ``Batch`` carriers: the adapters convert one graph."""
+
+    try:
+        from torch_geometric.data import Batch
+    except ImportError:
+        return
+    if isinstance(data, Batch):
+        raise TypeError(
+            "cross-stack adapters convert one encoded graph; call "
+            ".to_data_list() or index the batch first"
+        )
+
+
 def to_dgl(data: Any) -> tuple[Any, dict[str, Any]]:
     """Convert one derived-graph PyG carrier into ``(dgl graph, metadata)``.
+
+    Raises :class:`TypeError` when ``data`` is a
+    :class:`torch_geometric.data.Batch`: the adapters convert one encoded
+    graph at a time.
 
     The returned graph is an int64 CPU ``dgl.graph((src, dst))`` over
     ``num_nodes`` nodes (isolated objects survive) with:
@@ -92,10 +110,13 @@ def to_dgl(data: Any) -> tuple[Any, dict[str, Any]]:
 
     - ``hyperedge_index``: the raw ``[2, M]`` membership tensor
       (node row, hyperedge row),
-    - ``hyperedge_bipartite``: a second int64 DGL graph of ``N + M`` nodes
-      in which each member node points at its hyperedge anchor, whose id
-      is the hyperedge index offset by ``N``.
+    - ``hyperedge_bipartite``: a second int64 DGL graph of ``N + H`` nodes
+      (``H`` = ``max(hyperedge_index[1]) + 1``, derived from the
+      membership tensor's hyperedge row — not from attribute lengths) in
+      which each member node points at its hyperedge anchor, whose id is
+      the hyperedge index offset by ``N``.
     """
+    _reject_batch(data)
     dgl = _require("dgl", "pip install dgl")
     import torch
 
@@ -114,12 +135,23 @@ def to_dgl(data: Any) -> tuple[Any, dict[str, Any]]:
 
     metadata = _collect_metadata(data)
     hyperedge_index = getattr(data, "hyperedge_index", None)
-    if hyperedge_index is not None:
-        members = hyperedge_index[0].long()
-        anchors = hyperedge_index[1].long() + num_nodes
+    if torch.is_tensor(hyperedge_index) and hyperedge_index.numel() > 0:
+        members = hyperedge_index[0].long().cpu()
+        anchor_rows = hyperedge_index[1].long().cpu()
+        num_hyperedges = int(anchor_rows.max().item()) + 1
         metadata["hyperedge_bipartite"] = dgl.graph(
-            (members, anchors),
-            num_nodes=num_nodes + int(hyperedge_index[1].max().item()) + 1,
+            (members, anchor_rows + num_nodes),
+            num_nodes=num_nodes + num_hyperedges,
+            idtype=torch.int64,
+            device=torch.device("cpu"),
+        )
+    elif hyperedge_index is not None:
+        # Empty membership: no hyperedges to anchor, but keep the entry so
+        # consumers can rely on the key whenever the input carries the attr.
+        empty = torch.empty(0, dtype=torch.int64)
+        metadata["hyperedge_bipartite"] = dgl.graph(
+            (empty, empty),
+            num_nodes=num_nodes,
             idtype=torch.int64,
             device=torch.device("cpu"),
         )
@@ -128,6 +160,10 @@ def to_dgl(data: Any) -> tuple[Any, dict[str, Any]]:
 
 def to_jraph(data: Any) -> tuple[Any, dict[str, Any]]:
     """Convert one derived-graph PyG carrier into ``(GraphsTuple, metadata)``.
+
+    Raises :class:`TypeError` when ``data`` is a
+    :class:`torch_geometric.data.Batch`: the adapters convert one encoded
+    graph at a time.
 
     The returned single-graph ``jraph.GraphsTuple`` stores:
 
@@ -142,6 +178,7 @@ def to_jraph(data: Any) -> tuple[Any, dict[str, Any]]:
     ``jax.jit`` can swap ``globals`` out first: string-valued vocabularies
     are valid pytree leaves outside tracing but not valid JAX input types.
     """
+    _reject_batch(data)
     jraph = _require("jraph", "pip install jraph jax")
     import jax.numpy as jnp
 
