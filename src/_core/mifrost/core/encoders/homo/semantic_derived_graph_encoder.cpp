@@ -99,8 +99,28 @@ struct NodeKey {
    auto operator<=>(const NodeKey&) const = default;
 };
 
+/// Allocation-free lookup view of a `NodeKey` (arguments are not copied).
+struct NodeKeyView {
+   int64_t role;
+   int64_t predicate;
+   std::span< const int64_t > arguments;
+   bool positive;
+   int64_t level;
+   int64_t dt;
+
+   [[nodiscard]] bool operator==(const NodeKey& key) const noexcept
+   {
+      return role == key.role and predicate == key.predicate
+             and std::ranges::equal(arguments, key.arguments) and positive == key.positive
+             and level == key.level and dt == key.dt;
+   }
+};
+
 struct NodeKeyHash {
-   size_t operator()(const NodeKey& key) const noexcept
+   using is_transparent = void;
+
+   template < typename Key >
+   size_t operator()(const Key& key) const noexcept
    {
       size_t value = static_cast< size_t >(key.role);
       mix_semantic_hash(value, key.predicate);
@@ -114,6 +134,25 @@ struct NodeKeyHash {
    }
 };
 
+struct NodeKeyEqual {
+   using is_transparent = void;
+
+   [[nodiscard]] bool operator()(const NodeKey& left, const NodeKey& right) const noexcept
+   {
+      return left == right;
+   }
+
+   [[nodiscard]] bool operator()(const NodeKeyView& view, const NodeKey& key) const noexcept
+   {
+      return view == key;
+   }
+
+   [[nodiscard]] bool operator()(const NodeKey& key, const NodeKeyView& view) const noexcept
+   {
+      return view == key;
+   }
+};
+
 struct DerivedInstance {
    int64_t role = kRoleFact;
    int64_t predicate = -1;
@@ -121,7 +160,7 @@ struct DerivedInstance {
 };
 
 struct Buffers {
-   hash_map< NodeKey, int64_t, NodeKeyHash > node_indices;
+   hash_map< NodeKey, int64_t, NodeKeyHash, NodeKeyEqual > node_indices;
    /// Row-major [N, 6]: role, predicate_id+1, sign, goal_level, history_dt, category.
    std::vector< float > x_flat;
    std::vector< int64_t > edge_src;
@@ -167,16 +206,37 @@ struct Emitter {
       buffers.x_flat[slot + 5] = static_cast< float >(category);
    }
 
-   [[nodiscard]] int64_t
-   ensure_node(const NodeKey& key, int64_t category, std::optional< std::string > name)
+   /// Lookup-first interning: ``make_key``/``format_name`` run only on a miss,
+   /// so repeated facts neither copy their arguments nor format their names.
+   template < typename MakeKey, typename FormatName >
+   [[nodiscard]] int64_t intern_node(
+      const NodeKeyView& view,
+      MakeKey&& make_key,
+      FormatName&& format_name,
+      int64_t category
+   )
    {
-      const auto [it, inserted] = buffers.node_indices.try_emplace(key, buffers.node_count());
+      auto& nodes = buffers.node_indices;
+      const auto found = nodes.find(view);
+      if(found != nodes.end()) {
+         return found->second;
+      }
+      const auto next_index = static_cast< int64_t >(nodes.size());
+      const auto [it, inserted] = nodes.try_emplace(
+         std::forward< MakeKey >(make_key)(), next_index
+      );
       if(inserted) {
          write_features(
-            it->second, key.role, key.predicate, key.positive, key.level, key.dt, category
+            it->second,
+            it->first.role,
+            it->first.predicate,
+            it->first.positive,
+            it->first.level,
+            it->first.dt,
+            category
          );
          if(config.export_node_names) {
-            buffers.node_names.emplace_back(name.value_or(std::string()));
+            buffers.node_names.emplace_back(format_name());
          }
       }
       return it->second;
@@ -191,42 +251,107 @@ struct Emitter {
       buffers.edge_attr_flat.push_back(static_cast< float >(pos_b));
    }
 
+   /// Byte-identical single-pass form of the historical fmt::join rendering.
    [[nodiscard]] std::string
    format_atom_name(const SemanticAtom& atom, bool positive, std::string_view suffix) const
    {
-      std::vector< std::string > arguments;
-      arguments.reserve(atom.arguments.size());
-      for(const auto argument : atom.arguments) {
-         arguments.push_back(objects.at(static_cast< size_t >(argument)));
+      const auto& predicate_name = predicates.at(static_cast< size_t >(atom.predicate)).name;
+      std::string out;
+      out.reserve(predicate_name.size() + atom.arguments.size() * 8 + suffix.size() + 8);
+      if(not positive) {
+         out.append("(not ");
       }
-      const std::string body = arguments.empty()
-                                  ? fmt::format(
-                                       "({})",
-                                       predicates.at(static_cast< size_t >(atom.predicate)).name
-                                    )
-                                  : fmt::format(
-                                       "({} {})",
-                                       predicates.at(static_cast< size_t >(atom.predicate)).name,
-                                       fmt::join(arguments, " ")
-                                    );
-      return positive ? fmt::format("{}{}", body, suffix) : fmt::format("(not {}){}", body, suffix);
+      out.push_back('(');
+      out.append(predicate_name);
+      for(const auto argument : atom.arguments) {
+         out.push_back(' ');
+         out.append(objects.at(static_cast< size_t >(argument)));
+      }
+      out.push_back(')');
+      if(not positive) {
+         out.push_back(')');
+      }
+      out.append(suffix);
+      return out;
    }
 
    [[nodiscard]] std::string format_action_name(const SemanticGroundAction& action) const
    {
-      std::vector< std::string > arguments;
-      arguments.reserve(action.arguments.size());
-      for(const auto argument : action.arguments) {
-         arguments.push_back(objects.at(static_cast< size_t >(argument)));
+      std::string out = "@(";
+      if(action.action >= 0 && static_cast< size_t >(action.action) < action_specs.size()) {
+         out.append(action_specs.at(static_cast< size_t >(action.action)).name);
+      } else {
+         out.append("action");
+         out.append(std::to_string(action.action));
       }
-      const auto action_name = action.action >= 0
-                                     && static_cast< size_t >(action.action) < action_specs.size()
-                                  ? action_specs.at(static_cast< size_t >(action.action)).name
-                                  : fmt::format("action{}", action.action);
-      return arguments.empty() ? fmt::format("@({})", action_name)
-                               : fmt::format("@({} {})", action_name, fmt::join(arguments, " "));
+      for(const auto argument : action.arguments) {
+         out.push_back(' ');
+         out.append(objects.at(static_cast< size_t >(argument)));
+      }
+      out.push_back(')');
+      return out;
    }
 };
+
+/// Constant graph-attribute vocabularies, built once instead of once per graph.
+const std::vector< std::string >& role_vocabulary()
+{
+   static const std::vector< std::string > vocabulary = {
+      "object", "fact", "goal", "subgoal", "history", "action"
+   };
+   return vocabulary;
+}
+
+const std::vector< std::string >& edge_kind_vocabulary()
+{
+   static const std::vector< std::string > vocabulary = {
+      "arg_fwd",
+      "arg_bwd",
+      "clique_fwd",
+      "clique_bwd",
+      "chain_fwd",
+      "chain_bwd",
+      "star_first_fwd",
+      "star_first_bwd",
+      "nullary_self",
+      "action_fwd",
+      "action_bwd",
+      "line_share"
+   };
+   return vocabulary;
+}
+
+const std::vector< std::string >& category_vocabulary()
+{
+   static const std::vector< std::string > vocabulary = {"static", "fluent", "derived"};
+   return vocabulary;
+}
+
+const std::vector< std::string >& channel_names()
+{
+   static const std::vector< std::string > names = {
+      "role", "predicate_id_plus_one", "sign", "goal_level", "history_dt", "category"
+   };
+   return names;
+}
+
+const std::vector< std::string >& edge_channel_names()
+{
+   static const std::vector< std::string > names = {"kind", "pos_a", "pos_b"};
+   return names;
+}
+
+std::vector< std::string > predicate_vocabulary(
+   const std::vector< SemanticPredicateSpec >& predicates
+)
+{
+   std::vector< std::string > vocabulary;
+   vocabulary.reserve(predicates.size());
+   for(const auto& predicate : predicates) {
+      vocabulary.push_back(predicate.name);
+   }
+   return vocabulary;
+}
 
 GraphFieldInc node_offset_inc()
 {
@@ -501,9 +626,38 @@ void encode_impl(
    const auto& objects = semantic_objects(input);
    Emitter emitter{predicates, action_specs, objects, config};
    auto& buffers = emitter.buffers;
-   buffers.object_incidents.resize(objects.size());
+   if(config.include_line_graph) {
+      buffers.object_incidents.resize(objects.size());
+   }
    const bool collect_instances = config.include_hyperedge_incidence || config.include_tuple_tensors
                                   || config.include_spd;
+
+   // Size the accumulation buffers from the lanes that report their length up
+   // front; goals/history/actions still grow past these lower bounds.
+   const auto& reserved_static_facts = semantic_static_facts(input);
+   const auto& state_fact_span = semantic_state_facts(input);
+   const size_t fact_estimate = objects.size() + reserved_static_facts.size()
+                                + std::ranges::size(state_fact_span);
+   int64_t argument_slots = 0;
+   for(const auto& atom : reserved_static_facts) {
+      argument_slots += static_cast< int64_t >(atom.arguments.size());
+   }
+   for(const auto& atom : state_fact_span) {
+      argument_slots += static_cast< int64_t >(atom.arguments.size());
+   }
+   const auto edge_estimate = static_cast< size_t >(std::max< int64_t >(
+      argument_slots * (config.include_reverse_edges ? 2 : 1) + fact_estimate / 4 + 16, 16
+   ));
+   buffers.x_flat.reserve(fact_estimate * kXDim * 2);
+   if(config.export_node_names) {
+      buffers.node_names.reserve(fact_estimate * 2);
+   }
+   buffers.edge_src.reserve(edge_estimate);
+   buffers.edge_dst.reserve(edge_estimate);
+   buffers.edge_attr_flat.reserve(edge_estimate * kEdgeDim);
+   if(collect_instances) {
+      buffers.instances.reserve(fact_estimate);
+   }
 
    for(size_t index = 0; index < objects.size(); ++index) {
       const NodeKey key{
@@ -613,21 +767,12 @@ void encode_impl(
       if(collect_instances) {
          buffers.instances.push_back(DerivedInstance{role, atom.predicate, atom.arguments});
       }
-      std::optional< std::string > name;
-      if(config.export_node_names) {
-         auto suffix = std::string_view();
-         if(role == kRoleGoal or role == kRoleSubgoal) {
-            const auto bounded = std::min< size_t >(
-               static_cast< size_t >(level), kGoalSuffixes.size() - 1
-            );
-            suffix = kGoalSuffixes.at(bounded);
-         }
-         name = emitter.format_atom_name(atom, positive, suffix);
-         if(role == kRoleHistory) {
-            name = fmt::format("{}[dt{}]", *name, dt);
-         }
+      const auto reified = config.node_universe == DerivedNodeUniverse::objects_and_atoms;
+      if(not reified) {
+         emit_object_projection(atom);
+         return -1;
       }
-      const NodeKey key{
+      const NodeKeyView view{
          .role = role,
          .predicate = atom.predicate,
          .arguments = atom.arguments,
@@ -635,12 +780,36 @@ void encode_impl(
          .level = level,
          .dt = dt,
       };
-      const auto reified = config.node_universe == DerivedNodeUniverse::objects_and_atoms;
-      if(not reified) {
-         emit_object_projection(atom);
-         return -1;
-      }
-      const auto index = emitter.ensure_node(key, category, std::move(name));
+      const auto index = emitter.intern_node(
+         view,
+         [&]() {
+            return NodeKey{
+               .role = role,
+               .predicate = atom.predicate,
+               .arguments = SemanticArguments(atom.arguments),
+               .positive = positive,
+               .level = level,
+               .dt = dt,
+            };
+         },
+         [&]() {
+            auto suffix = std::string_view();
+            if(role == kRoleGoal or role == kRoleSubgoal) {
+               const auto bounded = std::min< size_t >(
+                  static_cast< size_t >(level), kGoalSuffixes.size() - 1
+               );
+               suffix = kGoalSuffixes.at(bounded);
+            }
+            std::string name = emitter.format_atom_name(atom, positive, suffix);
+            if(role == kRoleHistory) {
+               name += "[dt";
+               name += std::to_string(dt);
+               name += "]";
+            }
+            return name;
+         },
+         category
+      );
       if(atom.arguments.empty()) {
          emitter.add_edge(index, index, kKindNullarySelf, 0, 0);
          return index;
@@ -664,7 +833,7 @@ void encode_impl(
       );
       ensure_fact_node(kRoleFact, atom, true, 0, 0, category);
    }
-   for(const auto& atom : semantic_state_facts(input)) {
+   for(const auto& atom : state_fact_span) {
       const auto category = static_cast< int64_t >(
          predicates.at(static_cast< size_t >(atom.predicate)).category
       );
@@ -704,11 +873,16 @@ void encode_impl(
             target.second.push_back(literal);
          }
       }
-      std::ranges::stable_sort(
-         entries, {}, &std::pair< int64_t, std::vector< SemanticLiteral > >::first
-      );
+      // ViewPreparation inputs (they expose `history_data`) are already
+      // stable-sorted by dt during construction; re-sorting is a no-op there.
+      if constexpr(not requires { input.history_data; }) {
+         std::ranges::stable_sort(
+            entries, {}, &std::pair< int64_t, std::vector< SemanticLiteral > >::first
+         );
+      }
       return entries;
    }();
+   ;
    for(const auto& [dt, literals] : history_entries) {
       for(const auto& literal : literals) {
          const auto category = static_cast< int64_t >(
@@ -721,21 +895,31 @@ void encode_impl(
    if constexpr(requires { semantic_actions(input); }) {
       if(not std::ranges::empty(semantic_actions(input))) {
          for(const auto& action : semantic_actions(input)) {
-            const NodeKey key{
+            const NodeKeyView view{
                .role = kRoleAction,
                .predicate = action.action,
                .arguments = action.arguments,
+               .positive = true,
+               .level = 0,
+               .dt = 0,
             };
-            std::optional< std::string > name;
-            if(config.export_node_names) {
-               name = emitter.format_action_name(action);
-            }
             if(collect_instances) {
                buffers.instances.push_back(
                   DerivedInstance{kRoleAction, action.action, action.arguments}
                );
             }
-            const auto index = emitter.ensure_node(key, 0, std::move(name));
+            const auto index = emitter.intern_node(
+               view,
+               [&]() {
+                  return NodeKey{
+                     .role = kRoleAction,
+                     .predicate = action.action,
+                     .arguments = SemanticArguments(action.arguments),
+                  };
+               },
+               [&]() { return emitter.format_action_name(action); },
+               0
+            );
             for(int64_t position = 0; position < static_cast< int64_t >(action.arguments.size());
                 ++position) {
                const auto object_index = action.arguments[static_cast< size_t >(position)];
@@ -799,45 +983,12 @@ void encode_impl(
       emit_spd_fields(builder, config, static_cast< int64_t >(objects.size()), buffers.instances);
    }
 
-   builder.set_graph_attr(
-      "vocab_roles",
-      std::vector< std::string >{"object", "fact", "goal", "subgoal", "history", "action"}
-   );
-   std::vector< std::string > predicate_vocab;
-   predicate_vocab.reserve(predicates.size());
-   for(const auto& predicate : predicates) {
-      predicate_vocab.push_back(predicate.name);
-   }
-   builder.set_graph_attr("vocab_predicates", predicate_vocab);
-   builder.set_graph_attr(
-      "vocab_edge_kinds",
-      std::vector< std::string >{
-         "arg_fwd",
-         "arg_bwd",
-         "clique_fwd",
-         "clique_bwd",
-         "chain_fwd",
-         "chain_bwd",
-         "star_first_fwd",
-         "star_first_bwd",
-         "nullary_self",
-         "action_fwd",
-         "action_bwd",
-         "line_share",
-      }
-   );
-   builder.set_graph_attr(
-      "vocab_categories", std::vector< std::string >{"static", "fluent", "derived"}
-   );
-   builder.set_graph_attr(
-      "channel_names",
-      std::vector< std::string >{
-         "role", "predicate_id_plus_one", "sign", "goal_level", "history_dt", "category"
-      }
-   );
-   builder.set_graph_attr(
-      "edge_channel_names", std::vector< std::string >{"kind", "pos_a", "pos_b"}
-   );
+   builder.set_graph_attr("vocab_roles", role_vocabulary());
+   builder.set_graph_attr("vocab_predicates", predicate_vocabulary(predicates));
+   builder.set_graph_attr("vocab_edge_kinds", edge_kind_vocabulary());
+   builder.set_graph_attr("vocab_categories", category_vocabulary());
+   builder.set_graph_attr("channel_names", channel_names());
+   builder.set_graph_attr("edge_channel_names", edge_channel_names());
 }
 
 }  // namespace
