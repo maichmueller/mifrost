@@ -20,7 +20,11 @@ not a bare `Domain`, because object tables are problem-scoped.
 | Transformer attention biases | `TransformerBiasEncoder` | Objects-only clique projection plus sparse shortest-path fields `spd_src` / `spd_dst` / `spd_dist` (tune with `spd_max_hops`) |
 
 `TupleTensorEncoder` additionally exposes a padded-free CSR tuple view
-(`tuple_args` / `tuple_ptr` / `tuple_rel_ids`) — see its class docstring.
+(`tuple_args` / `tuple_ptr` / `tuple_rel_ids` / `tuple_role_ids`) — see its
+class docstring.
+
+`TransformerBiasEncoder` spd distances are even bipartite hop counts: two
+objects sharing one fact sit at distance 2, and `spd_max_hops` must be >= 2.
 
 ## Channel Contract
 
@@ -36,7 +40,7 @@ Node channels, in column order:
 | --- | --- | --- |
 | 0 | `role` | index into `vocab_roles` = `["object", "fact", "goal", "subgoal", "history", "action"]` |
 | 1 | `predicate_id_plus_one` | predicate id + 1; `0` means "none" |
-| 2 | `sign` | small signed int |
+| 2 | `sign` | `0` = positive literal, `1` = negated literal |
 | 3 | `goal_level` | small int goal/subgoal layer |
 | 4 | `history_dt` | small int history age |
 | 5 | `category` | index into `vocab_categories` = `["static", "fluent", "derived"]` |
@@ -56,6 +60,22 @@ metadata attributes: `vocab_roles`, `vocab_predicates`, `vocab_edge_kinds`,
 `include_metadata=False` to emit tensors only. The vocabularies stay aligned
 across states of one problem, so per-channel embedding sizes can be sized once
 from `max + 2` headroom.
+
+One caveat on column 1: for nodes whose role is `action`, it carries the
+**action-schema id + 1** against the action vocabulary — not a predicate id.
+Sizing that channel's embedding from `vocab_predicates` alone can overflow on
+domains with many action schemas; size it by
+`max(len(vocab_predicates), len(action schemas)) + 1` or filter action-role
+rows out before embedding.
+
+**Directed by design.** Derived graphs carry explicit reverse edges labeled
+`arg_bwd`, `clique_bwd`, and so on rather than relying on conversion-time
+mirroring: the schema flag `include_reverse_edges` disables mirroring for this
+family, so converting single graphs and re-batching them by hand agrees
+exactly with `encode_batch_pyg`. (Other families, such as `ColorEncoder`,
+intentionally keep undirected mirroring.) Because the graph is directed, feed
+it to directed-capable layers or rely on the explicit reverse edges for
+symmetric message passing.
 
 ## Embedding Recipe
 
@@ -109,8 +129,11 @@ graph_out = global_mean_pool(out, batch.batch)
 ```
 
 Shared vocabulary metadata is normalized back to single lists after batching.
-Strategy extras (`hyperedge_index`, `spd_*`, tuple views) carry increment
-rules so offsets stay correct across concatenated graphs.
+If you re-batch singles manually (`Batch.from_data_list([...])`), PyG keeps
+per-graph copies of those list attributes;
+`normalize_derived_graph_batch_metadata(batch)` collapses them back to one
+shared list. Strategy extras (`hyperedge_index`, `spd_*`, tuple views) carry
+increment rules so offsets stay correct across concatenated graphs.
 
 ## Streaming
 
@@ -137,3 +160,29 @@ page's contract: every facade is fed through forward+backward passes of ten
 stock PyG layers (plus `HypergraphConv` on the hypergraph output), including
 the embedding path and pooled batch training. A runnable walkthrough lives in
 `examples/encoders/derived_graph_example.py`.
+
+## Visualizing Derived Encodings
+
+Every facade ships `to_networkx(data)`, `draw(data, ...)`, and
+`summarize(data)` helpers that decode the integer channels back into names:
+
+- Nodes are shaped and colored by role: blue circles are objects, orange
+  circles facts, green/red diamonds goals/subgoals, squares history/action
+  anchors, pink pentagons the auxiliary hyperedge anchors.
+- Edges are styled per kind: solid gray argument edges (reverse directions
+  are hidden by default since the forward edge already carries the position
+  label), colored projections for clique/chain/star-first views, dashed cyan
+  `line_share` shortcuts, dotted pink memberships.
+- `include_hyperedges`, `include_reverse_edges`, `include_line_shares`, and
+  `include_self_loops` on `to_networkx` control exactly which structural
+  pieces are materialized into the NetworkX graph; `edge_labels=True` on
+  `draw` annotates each arrow with its kind and positions.
+
+```python
+data = encoder.encode_pyg(state)
+encoder.draw(data)                  # matplotlib axes with legend
+print(encoder.summarize(data))      # "roles: ... ; kinds: ..."
+```
+
+`examples/encoders/derived_graph_example.py` renders all five graph-shaped
+strategies side by side into `derived_graph_example.png`.

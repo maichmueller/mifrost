@@ -88,6 +88,7 @@ nav:
       - explanation/schema-and-tensors.md
       - explanation/streaming-model.md
       - explanation/encoder-coverage.md
+      - explanation/derived-encoding-strategies.md
   - Development:
       - development/build-and-test.md
       - development/architecture.md
