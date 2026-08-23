@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <functional>
 #include <optional>
 #include <ranges>
@@ -79,8 +80,11 @@ void validate_config(const SemanticDerivedGraphEncoderConfig& config)
          "Derived-graph line-graph edges require the objects-and-atoms node universe"
       );
    }
-   if(config.spd_max_hops < 1) {
-      throw std::invalid_argument("Derived-graph spd_max_hops must be >= 1");
+   if(config.spd_max_hops < 2) {
+      throw std::invalid_argument(
+         "Derived-graph spd_max_hops must be >= 2: bipartite object distances advance "
+         "in steps of two, so odd hop counts yield no pairs"
+      );
    }
 }
 
@@ -524,7 +528,7 @@ void encode_impl(
       }
    };
 
-   const auto emit_object_projection = [&](const SemanticAtom& atom, bool record_incidents) {
+   const auto emit_object_projection = [&](const SemanticAtom& atom) {
       const auto arity = static_cast< int64_t >(atom.arguments.size());
       switch(config.atom_expansion) {
          case DerivedAtomExpansion::star: {
@@ -596,13 +600,6 @@ void encode_impl(
             break;
          }
       }
-      if(record_incidents and config.include_line_graph) {
-         for(int64_t position = 0; position < arity; ++position) {
-            buffers.object_incidents
-               .at(static_cast< size_t >(atom.arguments[static_cast< size_t >(position)]))
-               .emplace_back(-1, position);
-         }
-      }
    };
 
    const auto ensure_fact_node = [&](
@@ -640,7 +637,7 @@ void encode_impl(
       };
       const auto reified = config.node_universe == DerivedNodeUniverse::objects_and_atoms;
       if(not reified) {
-         emit_object_projection(atom, true);
+         emit_object_projection(atom);
          return -1;
       }
       const auto index = emitter.ensure_node(key, category, std::move(name));
@@ -692,9 +689,17 @@ void encode_impl(
 
    auto history_entries = [&]() {
       std::vector< std::pair< int64_t, std::vector< SemanticLiteral > > > entries;
+      std::optional< int64_t > history_max_steps;
+      if constexpr(requires { input.history_max_steps; }) {
+         history_max_steps = input.history_max_steps;
+      }
       for(const auto& entry : semantic_history(input)) {
+         const auto dt = static_cast< int64_t >(entry.dt);
+         if(history_max_steps and std::abs(dt) > *history_max_steps) {
+            continue;
+         }
          auto& target = entries.emplace_back();
-         target.first = static_cast< int64_t >(entry.dt);
+         target.first = dt;
          for(const auto& literal : entry.literals) {
             target.second.push_back(literal);
          }
