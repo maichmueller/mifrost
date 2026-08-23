@@ -114,5 +114,11 @@ def test_manifest_exports() -> None:
         "ObjectGraphEncoderStream",
         "AtomLineGraphEncoder",
         "AtomLineGraphEncoderStream",
+        "HypergraphIncidenceEncoder",
+        "HypergraphIncidenceEncoderStream",
+        "TransformerBiasEncoder",
+        "TransformerBiasEncoderStream",
+        "TupleTensorEncoder",
+        "TupleTensorEncoderStream",
     ):
         assert hasattr(mifrost, name)

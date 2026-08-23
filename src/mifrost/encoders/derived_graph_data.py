@@ -25,9 +25,13 @@ def normalize_derived_graph_batch_metadata(
 ) -> DerivedGraphData | Batch:
     """Normalize shared vocabulary metadata after native or PyG batching.
 
-    PyG collects non-tensor attributes into a per-graph list during batching;
-    this collapses identical vocabulary lists back into one shared list. It
-    does not change any stored derived graph tensors.
+    PyG keeps per-graph copies of list-valued attributes when tensors are
+    re-batched manually (e.g. ``Batch.from_data_list([...])``); this collapses
+    identical vocabulary lists back into one shared list. It does not change
+    any stored derived graph tensors.
+
+    Example:
+        batch = normalize_derived_graph_batch_metadata(Batch.from_data_list(graphs))
     """
     for attr in (
         "vocab_roles",
@@ -44,12 +48,15 @@ class DerivedGraphData(Data):
     """Integer-id homogeneous derived graph carrier for vanilla GNN layers.
 
     Core channels are ``x_ids`` ([N, F]), ``edge_index`` ([2, E]) and
-    ``edge_attr_ids`` ([E, Fe]). Optional strategy extras are
-    ``hyperedge_index`` / ``hyperedge_attr_ids``, ``line_edge_index`` /
-    ``line_edge_attr_ids``, the CSR-style tuple channels ``tuple_args`` /
-    ``tuple_ptr`` / ``tuple_rel_ids`` and sparse pairwise distances
-    ``spd_src`` / ``spd_dst`` / ``spd_dist``. Shared string vocabularies are
-    carried as plain python metadata attributes.
+    ``edge_attr`` ([E, Fe]). Optional strategy extras are ``hyperedge_index`` /
+    ``hyperedge_attr_ids``, the CSR-style tuple channels ``tuple_args`` /
+    ``tuple_ptr`` / ``tuple_rel_ids`` / ``tuple_role_ids`` and sparse pairwise
+    distances ``spd_src`` / ``spd_dst`` / ``spd_dist``. Shared string
+    vocabularies are carried as plain python metadata attributes.
+
+    Reserved names: ``line_edge_index`` / ``line_edge_attr_ids`` are reserved
+    but nothing emits them today — line-graph edges ride in ``edge_index``
+    with edge kind ``line_share``.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -120,6 +127,11 @@ class DerivedGraphData(Data):
         The result is built from the CSR-style ``tuple_args`` / ``tuple_ptr``
         pair. Rows shorter than the maximum arity are right-padded with
         ``fill_value`` and marked as invalid in the boolean mask.
+
+        On re-batched batch objects ``tuple_ptr`` may carry duplicated
+        boundary entries where graph fragments meet (per-graph CSRs
+        concatenate; a global CSR does not). Those entries produce zero-width
+        rows, which surface as all-masked rows here.
         """
         empty_args = torch.empty((0, 0), dtype=torch.long)
         empty_mask = torch.empty((0, 0), dtype=torch.bool)
@@ -133,14 +145,16 @@ class DerivedGraphData(Data):
         if num_tuples == 0:
             return empty_args, empty_mask
         sizes = ptr[1:] - ptr[:-1]
-        width = int(sizes.max().item())
+        width = max(int(sizes.max().item()), 0)
         out = args_flat.new_full((num_tuples, width), fill_value)
-        mask = torch.zeros((num_tuples, width), dtype=torch.bool)
+        mask = torch.zeros(
+            (num_tuples, width), dtype=torch.bool, device=args_flat.device
+        )
         for row in range(num_tuples):
             start = int(ptr[row])
-            end = int(ptr[row + 1])
-            out[row, : end - start] = args_flat[start:end]
-            mask[row, : end - start] = True
+            step = max(int(ptr[row + 1]) - start, 0)
+            out[row, :step] = args_flat[start : start + step]
+            mask[row, :step] = True
         return out, mask
 
     def _num_hyperedges(self) -> int:

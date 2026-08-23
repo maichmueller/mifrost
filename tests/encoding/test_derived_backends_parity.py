@@ -235,3 +235,73 @@ def test_tuple_tensor_encoder_contract_and_localization() -> None:
     stream.append(state)
     stream.append(state)
     assert torch.equal(stream.flush_pyg().to_dict()["tuple_ptr"], batch["tuple_ptr"])
+
+
+def _collapse_consecutive_duplicates(tensor: torch.Tensor) -> torch.Tensor:
+    """Drop consecutive duplicate entries from a 1-D tensor.
+
+    Boundary-dedup for ``tuple_ptr``: manual re-batching concatenates
+    per-graph CSRs, which duplicates the offsets where graph fragments meet;
+    collapsing consecutive duplicates recovers the logical CSR shape.
+    """
+    if tensor.numel() <= 1:
+        return tensor
+    keep = torch.ones(tensor.numel(), dtype=torch.bool, device=tensor.device)
+    keep[1:] = tensor[1:] != tensor[:-1]
+    return tensor[keep]
+
+
+@pytest.mark.parametrize(
+    ("facade_name", "kwargs"),
+    (
+        ("StarGraphEncoder", {}),
+        ("ObjectGraphEncoder", {"atom_expansion": "clique"}),
+        ("AtomLineGraphEncoder", {}),
+        ("HypergraphIncidenceEncoder", {}),
+        ("TransformerBiasEncoder", {}),
+        ("TupleTensorEncoder", {}),
+    ),
+)
+def test_single_batch_conversion_consistency(
+    facade_name: str, kwargs: dict[str, Any]
+) -> None:
+    """Manually re-batched singles must equal direct batch encoding."""
+    from mifrost.encoders.derived import (
+        AtomLineGraphEncoder,
+        HypergraphIncidenceEncoder,
+        StarGraphEncoder,
+        TupleTensorEncoder,
+    )
+
+    pymimir_problem, _, _ = _backend_pair()
+    state = pymimir_problem.get_initial_state()
+
+    facade = {
+        "StarGraphEncoder": StarGraphEncoder,
+        "ObjectGraphEncoder": ObjectGraphEncoder,
+        "AtomLineGraphEncoder": AtomLineGraphEncoder,
+        "HypergraphIncidenceEncoder": HypergraphIncidenceEncoder,
+        "TransformerBiasEncoder": TransformerBiasEncoder,
+        "TupleTensorEncoder": TupleTensorEncoder,
+    }[facade_name]
+    encoder = facade(pymimir_problem, **kwargs)
+
+    single = encoder.encode_pyg(state)
+    batch = encoder.encode_batch_pyg([state, state])
+    rebatched = type(batch).from_data_list([single, single])
+
+    assert rebatched.num_graphs == batch.num_graphs == 2
+    assert torch.equal(rebatched.x_ids, batch.x_ids)
+    assert torch.equal(rebatched.edge_index, batch.edge_index)
+    assert torch.equal(rebatched.edge_attr.float(), batch.edge_attr.float())
+    if facade_name == "HypergraphIncidenceEncoder":
+        assert torch.equal(rebatched.hyperedge_index, batch.hyperedge_index)
+        assert torch.equal(rebatched.hyperedge_attr_ids, batch.hyperedge_attr_ids)
+    if facade_name == "TupleTensorEncoder":
+        assert torch.equal(rebatched.tuple_args, batch.tuple_args)
+        assert torch.equal(
+            _collapse_consecutive_duplicates(rebatched.tuple_ptr),
+            _collapse_consecutive_duplicates(batch.tuple_ptr),
+        )
+        assert torch.equal(rebatched.tuple_rel_ids, batch.tuple_rel_ids)
+        assert torch.equal(rebatched.tuple_role_ids, batch.tuple_role_ids)

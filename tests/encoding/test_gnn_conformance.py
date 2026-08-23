@@ -39,9 +39,12 @@ FACADE_CASES: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("line", "AtomLineGraphEncoder", {}),
     ("hyper", "HypergraphIncidenceEncoder", {}),
     ("bias", "TransformerBiasEncoder", {}),
+    ("tuple", "TupleTensorEncoder", {}),
 )
 
 OPTIONAL_FACADES = frozenset({"hyper", "bias"})
+
+_SKIP_EXCEPTIONS = (ModuleNotFoundError, ImportError, TypeError, ValueError)
 
 STANDARD_LAYERS = (
     "GCNConv",
@@ -120,7 +123,7 @@ def encoded(make_facade, initial_state) -> Callable[[str], Data]:
             if name in OPTIONAL_FACADES:
                 try:
                     cache[name] = facade.encode_pyg(initial_state)
-                except Exception as exc:
+                except _SKIP_EXCEPTIONS as exc:
                     pytest.skip(f"{name} encoder output unavailable mid-flight: {exc}")
             else:
                 cache[name] = facade.encode_pyg(initial_state)
@@ -130,10 +133,12 @@ def encoded(make_facade, initial_state) -> Callable[[str], Data]:
 
 
 def _check_backward(params, out: torch.Tensor) -> None:
+    parameters = list(params)
     assert torch.isfinite(out).all(), "layer produced non-finite outputs"
     out.square().mean().backward()
-    grads = [p.grad for p in params if p.grad is not None]
-    assert grads, "backward produced no gradients"
+    grads = [p.grad for p in parameters if p.grad is not None]
+    if parameters and not grads:
+        raise AssertionError("model has parameters but backward delivered no gradients")
     for grad in grads:
         assert torch.isfinite(grad).all(), "layer produced non-finite gradients"
 
