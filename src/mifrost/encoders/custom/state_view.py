@@ -21,6 +21,10 @@ from ...backends.semantic import AtomKey, GroundActionKey, LiteralKey
 
 _CATEGORIES = frozenset({"static", "fluent", "derived"})
 
+#: Bounded memo size for `StateView.state_facts`; states are immutable value
+#: objects, so caching their fact tuples cannot change any output.
+_STATE_FACTS_CACHE_LIMIT = 4096
+
 
 @dataclass(frozen=True)
 class Atom:
@@ -266,6 +270,8 @@ class StateView:
             _literal_from_key(key) for key in problem.goals
         )
         self._action_structures: tuple[ActionStructure, ...] | None = None
+        self._state_facts_cache: dict[Any, tuple[Atom, ...]] = {}
+        self._state_facts_cacheable: bool | None = None
 
     @property
     def objects(self) -> list[str]:
@@ -332,8 +338,31 @@ class StateView:
         return self._problem_name
 
     def state_facts(self, state: Any) -> tuple[Atom, ...]:
-        """True fluent atoms followed by true derived atoms, stable order."""
+        """True fluent atoms followed by true derived atoms, stable order.
 
+        Results are memoized per state object: backend states are immutable
+        value objects whose fact tuples are pure functions of their content,
+        so repeated encodes of the same state reuse the first conversion.
+        Unhashable states simply skip the memo.
+        """
+
+        if self._state_facts_cacheable is not False:
+            try:
+                cached = self._state_facts_cache.get(state)
+            except TypeError:
+                self._state_facts_cacheable = False
+            else:
+                if cached is not None:
+                    return cached
+                facts = self._compute_state_facts(state)
+                cache = self._state_facts_cache
+                if len(cache) >= _STATE_FACTS_CACHE_LIMIT:
+                    cache.clear()
+                cache[state] = facts
+                return facts
+        return self._compute_state_facts(state)
+
+    def _compute_state_facts(self, state: Any) -> tuple[Atom, ...]:
         snapshot = self._reader.state_snapshot(state)
         return tuple(
             _atom_from_key(key)

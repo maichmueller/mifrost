@@ -28,8 +28,11 @@ class Vocabulary:
         known names keep resolving to their existing ids.
         """
 
-        name = str(name)
-        found = self._ids.get(name)
+        try:
+            found = self._ids.get(name)
+        except TypeError:
+            name = str(name)
+            found = self._ids.get(name)
         if found is not None:
             return found
         if self._frozen:
@@ -162,7 +165,8 @@ class EdgeSink:
 
         self._sources.append(int(src))
         self._targets.append(int(dst))
-        kind_id = self._kind_vocabulary.id_for(kind)
+        known = self._kind_vocabulary._ids.get(kind)
+        kind_id = known if known is not None else self._kind_vocabulary.id_for(kind)
         self._kinds.append((kind_id, int(pos_a), int(pos_b)))
 
     def add_both(
@@ -196,11 +200,11 @@ class EdgeSink:
 
         count = len(self._sources)
         edge_index = np.zeros((2, count), dtype=np.int64)
+        if count == 0:
+            return edge_index, np.zeros((0, 3), dtype=np.float32)
         edge_index[0] = self._sources
         edge_index[1] = self._targets
-        edge_attr = np.zeros((count, 3), dtype=np.float32)
-        for row, entry in enumerate(self._kinds):
-            edge_attr[row] = entry
+        edge_attr = np.array(self._kinds, dtype=np.float32).reshape(count, 3)
         return edge_index, edge_attr
 
 

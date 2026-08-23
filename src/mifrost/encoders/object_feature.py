@@ -35,6 +35,7 @@ distinct ``*_fwd`` / ``*_bwd`` kind names and the schema flag
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -85,6 +86,24 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
         self.include_participation_counts = include_participation_counts
         self.include_goal_flags = include_goal_flags
         self.last_nullary_count = 0
+        # Schema-derived invariants of this problem, hoisted out of encode_state.
+        self._predicate_names: tuple[str, ...] | None = None
+        self._unary_names: tuple[str, ...] = ()
+        self._non_unary_names: tuple[str, ...] = ()
+
+    def _hoist_schema(self) -> None:
+        """Cache predicate partitions once; ids follow view.predicates order."""
+
+        if self._predicate_names is not None:
+            return
+        view = self.view
+        self._predicate_names = tuple(info.name for info in view.predicates)
+        self._unary_names = tuple(
+            info.name for info in view.predicates if info.arity == 1
+        )
+        self._non_unary_names = tuple(
+            info.name for info in view.predicates if info.arity != 1
+        )
 
     def stream(self) -> ObjectFeatureEncoderStream:
         """Create a pure-Python streaming variant of this encoder."""
@@ -126,102 +145,109 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
                 f"history_max_steps={history_max_steps!r}"
             )
 
+        self._hoist_schema()
         view = out.view
+        include_unary = self.include_unary_features
+        include_counts = self.include_participation_counts
+        include_goals = self.include_goal_flags
+
+        # Seed the writer's vocabulary in view.predicates order exactly as the
+        # per-state id_for loop did, so every channel id stays identical.
         predicates = out.vocabulary("predicates")
-        for info in view.predicates:
-            predicates.id_for(info.name)
+        for name in self._predicate_names:
+            predicates.id_for(name)
+        id_of_predicate = predicates._ids
 
         facts: tuple[Atom, ...] = (*view.static_facts, *view.state_facts(state))
         literals = view.goal_literals(state) if goals is None else tuple(goals)
 
-        unary = [info for info in view.predicates if info.arity == 1]
-        non_unary = [info for info in view.predicates if info.arity != 1]
-        holds = {
-            (atom.predicate, atom.args[0]) for atom in facts if len(atom.args) == 1
-        }
-        counts: dict[tuple[str, str], int] = {}
+        unary_holds: dict[str, set[str]] = {}
+        counts: Counter[tuple[str, str]] = Counter()
         nullary_count = 0
         for atom in facts:
-            arity = len(atom.args)
+            args = atom.args
+            arity = len(args)
             if arity == 0:
                 nullary_count += 1
                 continue
-            if arity == 1:
-                continue
-            for arg in atom.args:
-                key = (atom.predicate, arg)
-                counts[key] = counts.get(key, 0) + 1
+            if arity == 1 and include_unary:
+                bucket = unary_holds.get(atom.predicate)
+                if bucket is None:
+                    unary_holds[atom.predicate] = {args[0]}
+                else:
+                    bucket.add(args[0])
+            elif arity > 1:
+                if not include_counts:
+                    continue
+                predicate = atom.predicate
+                for arg in args:
+                    counts[(predicate, arg)] += 1
         self.last_nullary_count = nullary_count
 
         goal_objects = {arg for literal in literals for arg in literal.atom.args}
 
-        channels: dict[str, list[int]] = {}
-        for name in view.objects:
+        objects = view.objects
+        empty_set: frozenset[str] = frozenset()
+        unary_ids = (
+            [id_of_predicate[name] + 1 for name in self._unary_names]
+            if include_unary
+            else ()
+        )
+        channels: list[list[int]] = []
+        add_channel_row = channels.append
+        for name in objects:
             row = [0]
-            if self.include_unary_features:
+            if include_unary:
+                for base_id, unary_name in zip(unary_ids, self._unary_names):
+                    row.append(
+                        base_id if name in unary_holds.get(unary_name, empty_set) else 0
+                    )
+            if include_counts:
                 row.extend(
-                    predicates.id_for(info.name) + 1
-                    if (info.name, name) in holds
-                    else 0
-                    for info in unary
+                    counts.get((info, name), 0) for info in self._non_unary_names
                 )
-            if self.include_participation_counts:
-                row.extend(counts.get((info.name, name), 0) for info in non_unary)
-            if self.include_goal_flags:
+            if include_goals:
                 row.append(1 if name in goal_objects else 0)
-            channels[name] = row
+            add_channel_row(row)
 
         object_ids = {
             name: out.add_node(
                 (_ROLE_OBJECT, name),
                 role=_ROLE_OBJECT,
-                channels=channels[name],
+                channels=row,
                 name=name,
             )
-            for name in view.objects
+            for name, row in zip(objects, channels)
         }
 
+        expansion = self.expansion
+        add_both = out.add_both
+        clique_kinds = ("clique_fwd", "clique_bwd")
+        chain_kinds = ("chain_fwd", "chain_bwd")
+        star_kinds = ("star_first_fwd", "star_first_bwd")
         for atom in facts:
             args = atom.args
             if len(args) < 2:
                 continue
             ids = [object_ids[arg] for arg in args]
-            if self.expansion == "clique":
-                for i in range(len(ids)):
-                    for j in range(i + 1, len(ids)):
-                        out.add_both(
-                            ids[i],
-                            ids[j],
-                            "clique_fwd",
-                            "clique_bwd",
-                            pos_a=i,
-                            pos_b=j,
-                        )
-            elif self.expansion == "chain":
+            if expansion == "clique":
+                kinds = clique_kinds
+                count = len(ids)
+                for i in range(count):
+                    src = ids[i]
+                    for j in range(i + 1, count):
+                        add_both(src, ids[j], *kinds, pos_a=i, pos_b=j)
+            elif expansion == "chain":
+                kinds = chain_kinds
                 for i in range(len(ids) - 1):
-                    out.add_both(
-                        ids[i],
-                        ids[i + 1],
-                        "chain_fwd",
-                        "chain_bwd",
-                        pos_a=i,
-                        pos_b=i + 1,
-                    )
+                    add_both(ids[i], ids[i + 1], *kinds, pos_a=i, pos_b=i + 1)
             else:
+                kinds = star_kinds
+                first = ids[0]
                 for j in range(1, len(ids)):
-                    out.add_both(
-                        ids[0],
-                        ids[j],
-                        "star_first_fwd",
-                        "star_first_bwd",
-                        pos_a=0,
-                        pos_b=j,
-                    )
+                    add_both(first, ids[j], *kinds, pos_a=0, pos_b=j)
 
-        for kind_name in out.edges.kinds.names():
-            out.vocabulary("edge_kinds").id_for(kind_name)
         out.set_vocab_attr("predicates")
-        out.set_vocab_attr("edge_kinds")
         out.set_flag("include_reverse_edges", True)
 
 
