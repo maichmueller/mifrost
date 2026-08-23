@@ -90,6 +90,15 @@ def blocks_pair():
     )
 
 
+def _load_smedium_pair(pymimir_problem: Any) -> tuple[Any, Any]:
+    """Return a pymimir (problem, state) pair whose initial state has binary facts."""
+
+    del pymimir_problem
+    domain_path, problem_path = _pddl_paths("blocks", "smedium")
+    problem = _pymimir_problem(domain_path, problem_path)
+    return problem, problem.get_initial_state()
+
+
 class EchoEncoder(CustomGraphEncoder):
     """Toy encoder: object nodes, fact nodes with arg edges, goal nodes."""
 
@@ -226,6 +235,69 @@ def test_state_view_parity_across_backends(blocks_pair) -> None:
     assert pm_view.state_facts(pymimir_state) == pt_view.state_facts(pytyr_state)
     assert pm_view.goal_literals(pymimir_state) == pt_view.goal_literals(pytyr_state)
     assert pm_view.problem_name == pt_view.problem_name
+
+
+def test_action_structure_parity_across_backends(blocks_pair) -> None:
+    pymimir_problem, _, planning_task, _ = blocks_pair
+    pm_view = StateView(pymimir_problem)
+    pt_view = StateView(planning_task)
+
+    assert pm_view.has_action_structures and pt_view.has_action_structures
+    pm_structures = pm_view.action_structures()
+    pt_structures = pt_view.action_structures()
+    assert pm_structures == pt_structures
+    assert pm_view.action_structures() is pm_structures
+
+    pick_up = next(s for s in pm_structures if s.name == "pick-up")
+    assert pick_up.parameters == ("?a0",)
+    precondition_displays = sorted(
+        literal.atom.display for literal in pick_up.precondition
+    )
+    assert "(clear ?a0)" in precondition_displays
+    assert "(handempty)" in precondition_displays
+    assert all(literal.positive for literal in pick_up.precondition)
+    assert pick_up.effects
+    for effect in pick_up.effects:
+        for literal in effect.literals:
+            for argument in literal.atom.args:
+                assert argument == "?a0" or not argument.startswith("?")
+
+
+def test_harness_assert_backend_parity_and_summary(blocks_pair) -> None:
+    from mifrost.encoders.custom import assert_backend_parity, channel_summary
+
+    pymimir_problem, pymimir_state, planning_task, pytyr_state = blocks_pair
+    from mifrost.encoders.object_feature import ObjectFeatureEncoder
+
+    assert_backend_parity(
+        ObjectFeatureEncoder,
+        [
+            (pymimir_problem, [pymimir_state, pymimir_state]),
+            (planning_task, [pytyr_state, pytyr_state]),
+        ],
+    )
+
+    encoder = ObjectFeatureEncoder(pymimir_problem)
+    summary = channel_summary(encoder.encode_pyg(pymimir_state))
+    assert summary["nodes"] == len(encoder.view.objects)
+    if summary["edges"] == 0:
+        smedium_problem, smedium_state = _load_smedium_pair(pymimir_problem)
+        encoder = ObjectFeatureEncoder(smedium_problem)
+        summary = channel_summary(encoder.encode_pyg(smedium_state))
+    assert summary["edges"] > 0 and "edge_kinds" in summary
+
+
+def test_harness_conformance_smoke(blocks_pair) -> None:
+    pytest.importorskip("torch_geometric")
+    from mifrost.encoders.custom import conformance_smoke
+    from mifrost.encoders.object_feature import ObjectFeatureEncoder
+
+    pymimir_problem, pymimir_state, _, _ = blocks_pair
+    encoder = ObjectFeatureEncoder(pymimir_problem, include_goal_flags=True)
+    data = encoder.encode_pyg(pymimir_state)
+    result = conformance_smoke(data)
+    assert "skipped" not in result
+    assert set(result) == {"gcn", "gatv2"}
 
 
 def test_state_view_explicit_backend_validation(blocks_pair) -> None:

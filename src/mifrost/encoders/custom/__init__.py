@@ -11,20 +11,34 @@ and the bundled showcase encoder for worked examples.
 """
 
 from .base import CustomGraphEncoder, CustomStream
-from .state_view import ActionInfo, Atom, Literal, PredicateInfo, StateView
+from .harness import assert_backend_parity, channel_summary, conformance_smoke
+from .state_view import (
+    ActionInfo,
+    ActionStructure,
+    Atom,
+    Effect,
+    Literal,
+    PredicateInfo,
+    StateView,
+)
 from .tables import EdgeSink, NodeTable, Vocabulary
 from .writer import GraphWriter
 
 __all__ = [
     "ActionInfo",
+    "ActionStructure",
     "Atom",
     "CustomGraphEncoder",
     "CustomStream",
     "EdgeSink",
+    "Effect",
     "GraphWriter",
     "Literal",
     "NodeTable",
     "PredicateInfo",
     "StateView",
     "Vocabulary",
+    "assert_backend_parity",
+    "channel_summary",
+    "conformance_smoke",
 ]

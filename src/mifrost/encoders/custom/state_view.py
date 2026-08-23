@@ -70,6 +70,31 @@ class ActionInfo:
     arity: int
 
 
+@dataclass(frozen=True)
+class Effect:
+    """One conditional effect: guard literals plus the literals it applies."""
+
+    condition: tuple[Literal, ...]
+    literals: tuple[Literal, ...]
+
+
+@dataclass(frozen=True)
+class ActionStructure:
+    """One lifted action schema with canonicalized precondition and effects.
+
+    Parameters are renamed to positional canonical names (``?a0``, ``?a1``,
+    ...) so pymimir and pytyr views of the same PDDL action produce
+    identical records; literal arguments referencing a parameter use its
+    canonical name, constant arguments keep their object names.
+    """
+
+    name: str
+    arity: int
+    parameters: tuple[str, ...]
+    precondition: tuple[Literal, ...]
+    effects: tuple[Effect, ...]
+
+
 def _atom_from_key(key: AtomKey) -> Atom:
     return Atom(key.predicate.name, key.objects)
 
@@ -80,6 +105,125 @@ def _literal_from_key(key: LiteralKey) -> Literal:
 
 def _action_atom_from_key(key: GroundActionKey) -> Atom:
     return Atom(key.action.name, key.objects)
+
+
+def _canonical_literal(
+    predicate: str, terms: Iterable[str], positive: bool, rename: dict[str, str]
+) -> Literal:
+    args = tuple(rename.get(term, term) for term in terms)
+    return Literal(Atom(predicate, args), positive)
+
+
+def _sorted_literals(literals: Iterable[Literal]) -> tuple[Literal, ...]:
+    return tuple(sorted(literals, key=lambda literal: literal.atom.display))
+
+
+def _sorted_effects(effects: Iterable[Effect]) -> tuple[Effect, ...]:
+    return tuple(
+        sorted(
+            effects,
+            key=lambda effect: (
+                tuple(literal.atom.display for literal in effect.condition),
+                tuple(literal.atom.display for literal in effect.literals),
+            ),
+        )
+    )
+
+
+def _pymimir_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
+    domain = reader._problem.get_domain()
+    structures: list[ActionStructure] = []
+    for action in domain.get_actions():
+        parameters = tuple(
+            parameter.get_name() for parameter in action.get_parameters()
+        )
+        rename = {name: f"?a{index}" for index, name in enumerate(parameters)}
+
+        def lift_pymimir_literal(literal: Any) -> Literal:
+            atom = literal.get_atom()
+            return _canonical_literal(
+                atom.get_predicate().get_name(),
+                (term.get_name() for term in atom.get_terms()),
+                bool(literal.get_polarity()),
+                rename,
+            )
+
+        precondition = _sorted_literals(
+            lift_pymimir_literal(literal)
+            for literal in action.get_precondition().get_literals()
+        )
+        effects = _sorted_effects(
+            Effect(
+                _sorted_literals(
+                    lift_pymimir_literal(literal)
+                    for literal in conditional.get_condition().get_literals()
+                ),
+                _sorted_literals(
+                    lift_pymimir_literal(literal)
+                    for literal in conditional.get_effect().get_literals()
+                ),
+            )
+            for conditional in action.get_conditional_effect()
+        )
+        structures.append(
+            ActionStructure(
+                action.get_name(),
+                int(action.get_arity()),
+                tuple(f"?a{index}" for index in range(len(parameters))),
+                precondition,
+                effects,
+            )
+        )
+    return tuple(sorted(structures, key=lambda structure: structure.name))
+
+
+def _pytyr_action_structures(reader: Any) -> tuple[ActionStructure, ...]:
+    domain = reader._planning_task.get_task().get_domain()
+    structures: list[ActionStructure] = []
+    for action in domain.get_actions():
+        count = len(list(action.get_variables()))
+        rename = {f"V{index}": f"?a{index}" for index in range(count)}
+
+        def lift_pytyr_literal(literal: Any) -> Literal:
+            atom = literal.get_atom()
+            return _canonical_literal(
+                atom.get_predicate().get_name(),
+                (str(term) for term in atom.get_terms()),
+                bool(literal.get_polarity()),
+                rename,
+            )
+
+        def lift_conjunctive(condition: Any) -> tuple[Literal, ...]:
+            literals: list[Literal] = []
+            for getter in (
+                condition.get_static_literals,
+                condition.get_fluent_literals,
+                condition.get_derived_literals,
+            ):
+                literals.extend(lift_pytyr_literal(literal) for literal in getter())
+            return _sorted_literals(literals)
+
+        precondition = lift_conjunctive(action.get_condition())
+        effects = _sorted_effects(
+            Effect(
+                lift_conjunctive(conditional.get_condition()),
+                _sorted_literals(
+                    lift_pytyr_literal(literal)
+                    for literal in conditional.get_effect().get_literals()
+                ),
+            )
+            for conditional in action.get_effects()
+        )
+        structures.append(
+            ActionStructure(
+                str(action.get_name()),
+                int(action.get_original_arity()),
+                tuple(f"?a{index}" for index in range(count)),
+                precondition,
+                effects,
+            )
+        )
+    return tuple(sorted(structures, key=lambda structure: structure.name))
 
 
 class StateView:
@@ -121,6 +265,7 @@ class StateView:
         self._goal_literals: tuple[Literal, ...] = tuple(
             _literal_from_key(key) for key in problem.goals
         )
+        self._action_structures: tuple[ActionStructure, ...] | None = None
 
     @property
     def objects(self) -> list[str]:
@@ -151,6 +296,28 @@ class StateView:
         """Lifted action schemas sorted by name, then arity."""
 
         return list(self._action_schemas)
+
+    @property
+    def has_action_structures(self) -> bool:
+        """Whether this backend exposes lifted precondition/effect data."""
+
+        return True
+
+    def action_structures(self) -> tuple[ActionStructure, ...]:
+        """Lifted action schemas with canonicalized preconditions/effects.
+
+        Both supported backends expose the full structure; parameters are
+        canonically renamed positionally (see :class:`ActionStructure`).
+        Collections are sorted canonically so the two backends agree
+        byte-for-byte on the same PDDL files.
+        """
+
+        if self._action_structures is None:
+            if self.backend == "pytyr":
+                self._action_structures = _pytyr_action_structures(self._reader)
+            else:
+                self._action_structures = _pymimir_action_structures(self._reader)
+        return self._action_structures
 
     @property
     def static_facts(self) -> tuple[Atom, ...]:
@@ -242,7 +409,9 @@ class StateView:
 
 __all__ = [
     "ActionInfo",
+    "ActionStructure",
     "Atom",
+    "Effect",
     "Literal",
     "PredicateInfo",
     "StateView",

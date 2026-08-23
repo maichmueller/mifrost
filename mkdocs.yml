@@ -79,6 +79,7 @@ nav:
       - how-to/dynamic-graph-fields.md
       - how-to/consume-with-vanilla-gnns.md
       - how-to/write-your-own-encoder.md
+      - how-to/cross-stack-adapters.md
       - how-to/adapters.md
       - how-to/performance.md
   - Reference:

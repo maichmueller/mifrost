@@ -242,6 +242,27 @@ class _DerivedEncoderBase(EncoderBase[Data]):
 
         return summarize_derived(data)
 
+    def to_dgl(self, data: Any) -> Any:
+        """Convert one encoded graph into a ``(dgl graph, metadata)`` pair.
+
+        Thin delegation to :func:`mifrost.encoders.cross_stack.to_dgl`;
+        DGL is imported lazily and an install hint is raised when missing.
+        """
+        from .cross_stack import to_dgl as _convert_to_dgl
+
+        return _convert_to_dgl(data)
+
+    def to_jraph(self, data: Any) -> Any:
+        """Convert one encoded graph into a ``(GraphsTuple, metadata)`` pair.
+
+        Thin delegation to :func:`mifrost.encoders.cross_stack.to_jraph`;
+        Jraph/JAX are imported lazily and install hints are raised when
+        missing.
+        """
+        from .cross_stack import to_jraph as _convert_to_jraph
+
+        return _convert_to_jraph(data)
+
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}
 
