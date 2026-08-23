@@ -180,6 +180,68 @@ class _DerivedEncoderBase(EncoderBase[Data]):
         """Expose the backend-neutral resolved derived-graph config."""
         return self._config
 
+    def to_networkx(
+        self,
+        data: Any,
+        *,
+        include_hyperedges: bool = True,
+        include_reverse_edges: bool = True,
+        include_line_shares: bool = False,
+        include_self_loops: bool = False,
+    ) -> Any:
+        """Convert one encoded graph into a labeled NetworkX multigraph.
+
+        Decodes the integer-id channels into node ``role``/``predicate``/
+        ``sign``/``goal_level`` attributes and per-edge kind names with
+        argument positions. Hyperedge memberships become auxiliary pentagon
+        nodes wired by dotted membership edges when present.
+        """
+        from ._derived_visualization import derived_to_networkx
+
+        return derived_to_networkx(
+            data,
+            include_hyperedges=include_hyperedges,
+            include_reverse_edges=include_reverse_edges,
+            include_line_shares=include_line_shares,
+            include_self_loops=include_self_loops,
+        )
+
+    def draw(
+        self,
+        data: Any,
+        *,
+        with_labels: bool = True,
+        edge_labels: bool = False,
+        hide_reverse_edges: bool = True,
+        ax: Any | None = None,
+        node_size: int | None = None,
+        font_size: int = 7,
+        legend: bool = True,
+    ) -> Any:
+        """Render one encoded graph with role shapes and kind styling."""
+        from ._derived_visualization import draw_derived
+
+        graph = self.to_networkx(
+            data,
+            include_line_shares=True,
+        )
+        return draw_derived(
+            graph,
+            ax=ax,
+            with_labels=with_labels,
+            edge_labels=edge_labels,
+            hide_reverse_edges=hide_reverse_edges,
+            node_size=node_size,
+            font_size=font_size,
+            legend=legend,
+        )
+
+    def summarize(self, data: Any) -> str:
+        """Return a short role/edge-kind histogram for one encoded graph."""
+        from ._derived_visualization import summarize_derived
+
+        return summarize_derived(data)
+
     def _accepted_kwargs(self) -> set[str]:
         return {"history_subgoals", "history_max_steps"}
 

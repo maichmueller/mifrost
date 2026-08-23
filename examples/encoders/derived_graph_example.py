@@ -64,6 +64,7 @@ def main():
         from torch_geometric.nn import GCNConv
     except ImportError as exc:
         print(f"torch_geometric unavailable, skipping GNN smoke test: {exc}")
+        _render(problem, state, star)
         return
 
     torch.manual_seed(0)
@@ -87,6 +88,53 @@ def main():
         f"embedded={tuple(feats.shape)} out={tuple(out.shape)} "
         f"object-pooled={tuple(pooled.shape)}"
     )
+    _render(problem, state, star)
+
+
+def _render(problem, state, star) -> None:
+    """Render one figure per facade when matplotlib is available."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        print(f"matplotlib unavailable, skipping rendering: {exc}")
+        return
+
+    from mifrost.encoders.derived import AtomLineGraphEncoder, TupleTensorEncoder
+
+    facades = [
+        ("star", StarGraphEncoder(problem), star),
+        (
+            "object_clique",
+            ObjectGraphEncoder(problem, atom_expansion="clique"),
+            ObjectGraphEncoder(problem, atom_expansion="clique").encode_pyg(state),
+        ),
+        (
+            "line",
+            AtomLineGraphEncoder(problem),
+            AtomLineGraphEncoder(problem).encode_pyg(state),
+        ),
+        (
+            "hyperedge",
+            HypergraphIncidenceEncoder(problem),
+            HypergraphIncidenceEncoder(problem).encode_pyg(state),
+        ),
+        (
+            "tuples",
+            TupleTensorEncoder(problem),
+            TupleTensorEncoder(problem).encode_pyg(state),
+        ),
+    ]
+    figure, axes = plt.subplots(1, len(facades), figsize=(6 * len(facades), 5.5))
+    for (name, encoder, data), ax in zip(facades, axes, strict=True):
+        encoder.draw(data, ax=ax, font_size=7)
+        ax.set_title(name)
+    figure.tight_layout()
+    figure.savefig("derived_graph_example.png", dpi=110)
+    plt.close(figure)
+    print("rendered derived_graph_example.png")
 
 
 if __name__ == "__main__":
