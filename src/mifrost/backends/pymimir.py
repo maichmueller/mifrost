@@ -51,12 +51,16 @@ class PymimirSnapshotReader:
 
     backend_name = "pymimir"
 
+    _SNAPSHOT_CACHE_LIMIT = 4096
+
     def __init__(self, problem: pymimir.Problem) -> None:
         if not isinstance(problem, pymimir.Problem):
             raise TypeError(
                 f"PymimirSnapshotReader expects pymimir.Problem, got {type(problem)!r}"
             )
         self._problem = problem
+        self._state_snapshot_cache: dict[Any, StateSnapshot] = {}
+        self._state_snapshot_cacheable: bool | None = None
 
     def domain_snapshot(self) -> DomainSnapshot:
         domain = self._problem.get_domain()
@@ -94,6 +98,29 @@ class PymimirSnapshotReader:
             raise TypeError(
                 f"pymimir state snapshot expects pymimir.State, got {type(state)!r}"
             )
+        return self._state_snapshot_memoized(state)
+
+    def _state_snapshot_memoized(self, state: pymimir.State) -> StateSnapshot:
+        # Planning states are immutable value objects, so the snapshot is a
+        # pure function of content; memoize per reader (bounded, and
+        # transparently disabled for unhashable states).
+        if self._state_snapshot_cacheable is not False:
+            try:
+                cached = self._state_snapshot_cache.get(state)
+            except TypeError:
+                self._state_snapshot_cacheable = False
+            else:
+                if cached is not None:
+                    return cached
+                snapshot = self._compute_state_snapshot(state)
+                cache = self._state_snapshot_cache
+                if len(cache) >= self._SNAPSHOT_CACHE_LIMIT:
+                    cache.clear()
+                cache[state] = snapshot
+                return snapshot
+        return self._compute_state_snapshot(state)
+
+    def _compute_state_snapshot(self, state: pymimir.State) -> StateSnapshot:
         groups: dict[PredicateCategory, list[AtomKey]] = {
             category: [] for category in PredicateCategory
         }

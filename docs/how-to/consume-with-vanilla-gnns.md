@@ -120,7 +120,13 @@ build attention-bias terms over the clique-projected object nodes.
 
 Use `encode_batch_pyg([...])`; collation is handled natively and returns a
 standard PyG `Batch` with `batch` / `ptr` vectors, so `global_mean_pool` and
-friends work unchanged:
+friends work unchanged. Batch is the fast lane for encoding N states in one
+call: one native batch assembly replaces N Python-level encodes, and
+`scripts/benchmark_derived_encoders.py` prints a batch-vs-singles audit
+(`--problems large --batch-sizes 32,256`). Typical advantage is 1.1-1.8x;
+on the largest graphs with edge-heavy views (atom line graph at n=256) the
+per-entry cost is on par with singles (~2 us/entry) while still saving the
+N-1 call round-trips — repeated states are prepared once and reused.
 
 ```python
 batch = encoder.encode_batch_pyg([state_a, state_b])

@@ -100,11 +100,12 @@ class CustomGraphEncoder(EncoderBase[Any]):
     def _accepted_kwargs(self) -> set[str]:
         return set(_STANDARD_LANES | set(self.accepted_kwargs))
 
-    def _new_writer(self) -> GraphWriter:
+    def _new_writer(self, builder: Any | None = None) -> GraphWriter:
         return GraphWriter(
             self.view,
             graph_kind=self.graph_kind,
             export_node_names=self.export_node_names,
+            builder=builder,
         )
 
     def _neutralize_lanes(
@@ -180,8 +181,6 @@ class CustomGraphEncoder(EncoderBase[Any]):
         subgoal_layers: Any = None,
         **kwargs: Any,
     ) -> Any:
-        from ... import batch_encodings
-
         history_subgoals = kwargs.pop("history_subgoals", None)
         history_max_steps = kwargs.pop("history_max_steps", None)
         state_values = self._state_values(states)
@@ -199,20 +198,32 @@ class CustomGraphEncoder(EncoderBase[Any]):
             field="history_subgoals",
             leaf=_is_history_entry,
         )
-        encodings = []
+        # Batch fast lane: one shared builder, one graph per state separated
+        # by next_graph(), one build at the end — no per-graph encodings and
+        # no collation pass.
+        from ... import _core
+
+        shared = _core.BatchBuilder()
+        shared.set_graph_kind(self.graph_kind)
         for index, state in enumerate(state_values):
-            encodings.append(
-                self._encode(
-                    state,
-                    goals=goal_lanes[index],
-                    actions=action_lanes[index],
-                    subgoal_layers=layer_lanes[index],
-                    history_subgoals=history_lanes[index],
-                    history_max_steps=history_max_steps,
-                    **kwargs,
-                )
+            lanes = self._neutralize_lanes(
+                state,
+                goals=goal_lanes[index],
+                actions=action_lanes[index],
+                subgoal_layers=layer_lanes[index],
+                history_subgoals=history_lanes[index],
             )
-        return batch_encodings(encodings)
+            writer = self._new_writer(builder=shared)
+            self.encode_state(
+                writer,
+                state,
+                **lanes,
+                history_max_steps=history_max_steps,
+                **kwargs,
+            )
+            writer._write_into(shared)
+            shared.next_graph()
+        return shared.build()
 
     def _state_values(self, states: Any) -> list[Any]:
         """Normalize one state or a state iterable into a list."""

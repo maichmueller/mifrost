@@ -318,6 +318,44 @@ def main(argv: list[str]) -> int:
             + f"{row.min_ms:10.3f}"
         )
 
+    # Batch fast-lane audit: encode_batch must beat N singles per entry.
+    print()
+    print("batch fast-lane audit (min ms, batch vs N singles, same states):")
+    for problem in problems:
+        domain_obj = pymimir.Domain(ROOT / "data" / "pddl" / "blocks" / "domain.pddl")
+        problem_obj = pymimir.Problem(
+            domain_obj,
+            ROOT / "data" / "pddl" / "blocks" / f"{problem}.pddl",
+            mode="grounded",
+        )
+        root = problem_obj.get_initial_state()
+        pool = _collect_state_pool(
+            root, max_states=args.max_states, max_branch=args.max_branch
+        )
+        for facade_name, facade_cls, kwargs in NATIVE_FACADES:
+            encoder = facade_cls(problem_obj, **kwargs)
+            for batch_size in batch_sizes:
+                if batch_size < 2:
+                    continue
+                states = _pick_cycle(pool, batch_size)
+                batched = _benchmark(
+                    lambda: encoder.encode_batch(states),
+                    warmup=args.warmup,
+                    repeats=args.repeats,
+                )
+                singles = _benchmark(
+                    lambda: [encoder.encode(s) for s in states],
+                    warmup=args.warmup,
+                    repeats=args.repeats,
+                )
+                advantage = min(singles) / max(min(batched), 1e-9)
+                flag = "OK " if advantage >= 1.0 else "SLOW"
+                print(
+                    f"  [{flag}] {problem.ljust(9)}{facade_name.ljust(30)}"
+                    f"n={batch_size:<5} batch {min(batched):8.2f}ms"
+                    f"  singles {min(singles):8.2f}ms  advantage {advantage:5.2f}x"
+                )
+
     if args.output_json is not None:
         payload = {
             "generated_at": datetime.now(timezone.utc).isoformat(),

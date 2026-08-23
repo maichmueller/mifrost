@@ -162,6 +162,32 @@ class PymimirDerivedRuntime:
         self.engine = SemanticDerivedGraphEncoderEngine(
             self._adapter.engine.predicates, _native_config(config)
         )
+        self._input_cache: dict[Any, Any] = {}
+        self._input_cacheable: bool | None = None
+
+    def _cached_input(self, state: object) -> Any:
+        """Memoize the default-lane flat input per immutable state object.
+
+        Planning states are immutable value objects, so the prepared input
+        is a pure function of content; bounded cache (cleared at 4096
+        entries), transparently disabled for unhashable states.
+        """
+
+        if self._input_cacheable is not False:
+            try:
+                cached = self._input_cache.get(state)
+            except TypeError:
+                self._input_cacheable = False
+            else:
+                if cached is not None:
+                    return cached
+                prepared = self._adapter.make_input(state)
+                cache = self._input_cache
+                if len(cache) >= 4096:
+                    cache.clear()
+                cache[state] = prepared
+                return prepared
+        return self._adapter.make_input(state)
 
     def _input(
         self,
@@ -253,17 +279,26 @@ class PymimirDerivedRuntime:
             field="history_subgoals",
             leaf=_history_entry,
         )
-        inputs = [
-            self._input(
-                state,
-                goals=goal_values[index],
-                actions=action_values[index],
-                subgoal_layers=layer_values[index],
-                history_subgoals=history_values[index],
-                history_max_steps=history_max_steps,
-            )
-            for index, state in enumerate(state_values)
-        ]
+        inputs = []
+        for index, state in enumerate(state_values):
+            if (
+                goal_values[index] is None
+                and not action_values[index]
+                and layer_values[index] == ()
+                and history_values[index] == ()
+            ):
+                inputs.append(self._cached_input(state))
+            else:
+                inputs.append(
+                    self._input(
+                        state,
+                        goals=goal_values[index],
+                        actions=action_values[index],
+                        subgoal_layers=layer_values[index],
+                        history_subgoals=history_values[index],
+                        history_max_steps=history_max_steps,
+                    )
+                )
         return self.engine.encode_batch(inputs)
 
     def make_stream(self) -> "_PymimirDerivedStream":

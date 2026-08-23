@@ -487,22 +487,40 @@ void BatchBuilder::set_schema_flag(const std::string& key, bool value)
 
 void BatchBuilder::set_graph_attr(const std::string& key, std::vector< int64_t > values)
 {
-   graph_attrs[key] = std::move(values);
+   auto& slot = graph_attrs[key];
+   if(auto* existing = std::get_if< std::vector< int64_t > >(&slot);
+      existing && *existing == values) {
+      return;
+   }
+   slot = std::move(values);
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, std::vector< std::string > values)
 {
-   graph_attrs[key] = std::move(values);
+   auto& slot = graph_attrs[key];
+   if(auto* existing = std::get_if< std::vector< std::string > >(&slot);
+      existing && *existing == values) {
+      return;
+   }
+   slot = std::move(values);
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, int64_t value)
 {
-   graph_attrs[key] = value;
+   auto& slot = graph_attrs[key];
+   if(auto* existing = std::get_if< int64_t >(&slot); existing && *existing == value) {
+      return;
+   }
+   slot = value;
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
 {
-   graph_attrs[key] = std::move(value);
+   auto& slot = graph_attrs[key];
+   if(auto* existing = std::get_if< std::string >(&slot); existing && *existing == value) {
+      return;
+   }
+   slot = std::move(value);
 }
 
 void BatchBuilder::add_lazy_target_names(std::span< const std::string > names)

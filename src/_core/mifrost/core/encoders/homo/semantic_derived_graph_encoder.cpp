@@ -221,7 +221,10 @@ struct Emitter {
       if(found != nodes.end()) {
          return found->second;
       }
-      const auto next_index = static_cast< int64_t >(nodes.size());
+      // Object keys collapse to one map entry (role/predicate only), so the
+      // map size lags the feature-row count; index by row count, never by
+      // map size.
+      const auto next_index = buffers.node_count();
       const auto [it, inserted] = nodes.try_emplace(
          std::forward< MakeKey >(make_key)(), next_index
       );

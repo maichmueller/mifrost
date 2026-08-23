@@ -24,14 +24,23 @@ class GraphWriter:
         *,
         graph_kind: str = "homo",
         export_node_names: bool = True,
+        builder: Any | None = None,
     ) -> None:
-        """Start one empty graph against ``view``'s problem schema."""
+        """Start one empty graph against ``view``'s problem schema.
+
+        Pass ``builder`` to emit into a shared ``BatchBuilder`` (the batch
+        fast lane); the writer then never sets the graph kind or builds —
+        the owning batch loop calls ``next_graph``/``build`` itself.
+        """
 
         self.view = view
         self.graph_kind = graph_kind
         self.export_node_names = export_node_names
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind(graph_kind)
+        if builder is None:
+            self._builder = BatchBuilder()
+            self._builder.set_graph_kind(graph_kind)
+        else:
+            self._builder = builder
         self.nodes = NodeTable()
         self.edges = EdgeSink()
         self._vocabularies: dict[str, Vocabulary] = {}
@@ -117,7 +126,23 @@ class GraphWriter:
         the ``custom_encoder`` schema flag are always attached.
         """
 
-        builder = self._builder
+        self._write_into(self._builder)
+        encoding = self._builder.build()
+        self._builder = BatchBuilder()
+        self._builder.set_graph_kind(self.graph_kind)
+        self.nodes = NodeTable()
+        self.edges = EdgeSink()
+        self._vocabularies = {}
+        return encoding
+
+    def _write_into(self, builder: Any) -> None:
+        """Write the accumulated graph content into ``builder``.
+
+        Shared by :meth:`finish` and the batch fast lane, which writes
+        every graph into one shared ``BatchBuilder`` separated by
+        ``next_graph`` instead of collating per-graph encodings.
+        """
+
         nodes = self.nodes
         count = nodes.count
         if count > 0:
@@ -134,13 +159,6 @@ class GraphWriter:
         builder.set_object_names(self.view.objects)
         builder.set_schema_flag("custom_encoder", True)
         builder.set_graph_attr("vocab_edge_kinds", self.edges.kinds.names())
-        encoding = builder.build()
-        self._builder = BatchBuilder()
-        self._builder.set_graph_kind(self.graph_kind)
-        self.nodes = NodeTable()
-        self.edges = EdgeSink()
-        self._vocabularies = {}
-        return encoding
 
 
 __all__ = ["GraphWriter"]
