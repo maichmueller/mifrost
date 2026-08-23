@@ -139,6 +139,12 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
             ".derived",
             "TransformerBiasEncoderStream",
         ),
+        LazyEncoderExport("LiftedTaskEncoder", ".lifted", "LiftedTaskEncoder"),
+        LazyEncoderExport(
+            "LiftedTaskEncoderStream",
+            ".lifted",
+            "LiftedTaskEncoderStream",
+        ),
         LazyEncoderExport("FlatRelationEncoder", ".flat", "FlatRelationEncoder"),
         LazyEncoderExport(
             "FlatRelationEncoderStream",
@@ -287,6 +293,8 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
         "HypergraphIncidenceEncoderStream",
         "TransformerBiasEncoder",
         "TransformerBiasEncoderStream",
+        "LiftedTaskEncoder",
+        "LiftedTaskEncoderStream",
         "FlatRelationEncoder",
         "FlatRelationEncoderStream",
         "FlatRelationMutableEncoderStream",

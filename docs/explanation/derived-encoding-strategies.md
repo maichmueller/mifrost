@@ -151,21 +151,27 @@ convolution is the wrong shape of computation.
 
 ## Roadmap: Beyond State Graphs, Task-Structure Encodings
 
-Everything on this page encodes *states* of one problem. The research
-literature also benchmarks GNNs on task-level graphs: the IPC graph dataset
-(Ferber et al. 2019, [github.com/IBM/IPC-graph-data](https://github.com/IBM/IPC-graph-data))
+Everything above encodes *states* of one problem. The research literature also
+benchmarks GNNs on task-level graphs: the IPC graph dataset (Ferber et al.
+2019, [github.com/IBM/IPC-graph-data](https://github.com/IBM/IPC-graph-data))
 publishes Problem Description Graphs (PDGs, grounded) and Abstract Structure
 Graphs (ASGs, lifted and acyclic) for every competition instance, originally
-to learn planner selection from graph embeddings. PlanBench
-(Valmeekam et al.) covers many IPC domains too, but targets LLM evaluation
-and ships no GNN encodings. Operator/variable bipartite graphs, causal
-links, and domain-transition graphs are natural members of this family, and
-the custom toolkit described in
+to learn planner selection from graph embeddings.
+
+The first member of this family now ships: **`LiftedTaskEncoder`**
+(`mifrost.encoders.lifted`, built on the custom toolkit) encodes the
+ASG-style *lifted task structure* — one node per object, predicate schema,
+action schema, and action parameter, wired by lifted precondition, effect,
+and goal edges with conditional-effect group indices — as a state-independent
+homogeneous graph suited to planner-selection-style readouts (global mean
+pooling over the graph). See the module docstring for the full channel and
+edge-kind tables; tests live in
+`tests/encoding/test_lifted_task_encoder.py`. Still future work for this
+family: PDG-style *grounded* transition graphs (operator/variable bipartite
+graphs over ground atoms), causal links, and domain-transition graphs; the
+custom toolkit described in
 [How to Write Your Own Encoder](../how-to/write-your-own-encoder.md) lowers
-the barrier for prototyping them in pure Python today. One gap remains:
-a PDG-style encoder needs domain-level action schemas with preconditions and
-effects, which `StateView` does not yet expose — flagged as future work for
-both the toolkit and a first-class family here.
+the barrier for prototyping them in pure Python today.
 
 ## Reading the Outputs
 
