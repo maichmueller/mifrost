@@ -18,6 +18,7 @@
 | `TransformerBiasEncoder` | Transformer attention-bias inputs from planning structure | Objects-only clique projection plus sparse shortest-path fields `spd_src` / `spd_dst` / `spd_dist` | PyG `Data` + spd fields | `tests/encoding/test_gnn_conformance.py`, `tests/encoding/test_derived_facades.py`, `tests/encoding/test_derived_backends_parity.py` |
 | `TupleTensorEncoder` | Padded-free tuple views for sequence-style consumers | CSR tuple view (`tuple_args` / `tuple_ptr` / `tuple_rel_ids` / `tuple_role_ids`) on the derived-graph carrier | PyG `Data` + tuple fields (see class docstring) | `tests/encoding/test_gnn_conformance.py`, `tests/encoding/test_derived_backends_parity.py` |
 | `ILGEncoder` | Python ILG feature construction | ILG atom/object/action topology and statuses | `BatchEncoding` (hetero) | `examples/encoders/ilg_hetero_encoder_example.py`, `tests/encoding/test_custom_python_encoder_example.py` |
+| custom toolkit (`mifrost.encoders.custom`) | Python-only new encoding schemes | User-defined graphs built with `GraphWriter` over planner-neutral `StateView` inputs | User-defined homo/hetero via `GraphWriter` | `docs/how-to/write-your-own-encoder.md` |
 
 ## Backend Support
 

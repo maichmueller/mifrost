@@ -149,6 +149,24 @@ of walking edges.
 Pick this when your architecture consumes sets of tuples natively and graph
 convolution is the wrong shape of computation.
 
+## Roadmap: Beyond State Graphs, Task-Structure Encodings
+
+Everything on this page encodes *states* of one problem. The research
+literature also benchmarks GNNs on task-level graphs: the IPC graph dataset
+(Ferber et al. 2019, [github.com/IBM/IPC-graph-data](https://github.com/IBM/IPC-graph-data))
+publishes Problem Description Graphs (PDGs, grounded) and Abstract Structure
+Graphs (ASGs, lifted and acyclic) for every competition instance, originally
+to learn planner selection from graph embeddings. PlanBench
+(Valmeekam et al.) covers many IPC domains too, but targets LLM evaluation
+and ships no GNN encodings. Operator/variable bipartite graphs, causal
+links, and domain-transition graphs are natural members of this family, and
+the custom toolkit described in
+[How to Write Your Own Encoder](../how-to/write-your-own-encoder.md) lowers
+the barrier for prototyping them in pure Python today. One gap remains:
+a PDG-style encoder needs domain-level action schemas with preconditions and
+effects, which `StateView` does not yet expose — flagged as future work for
+both the toolkit and a first-class family here.
+
 ## Reading the Outputs
 
 All six strategies write the same integer-id channels: node features live in

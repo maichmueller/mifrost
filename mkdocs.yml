@@ -78,6 +78,7 @@ nav:
       - how-to/encode-semantic-flat-inputs.md
       - how-to/dynamic-graph-fields.md
       - how-to/consume-with-vanilla-gnns.md
+      - how-to/write-your-own-encoder.md
       - how-to/adapters.md
       - how-to/performance.md
   - Reference:
