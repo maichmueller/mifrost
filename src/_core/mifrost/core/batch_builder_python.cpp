@@ -628,6 +628,7 @@ void register_batch_builder(nb::module_& m)
          )
          .def("add_nodes", &BatchBuilder::add_nodes)
          .def("add_edge", &BatchBuilder::add_edge)
+         .def("ensure_edge_type", &BatchBuilder::ensure_edge_type)
          .def("set_node_names", &BatchBuilder::set_node_names)
          .def("set_object_names", &BatchBuilder::set_object_names)
          .def("build", &BatchBuilder::build)
@@ -642,6 +643,42 @@ void register_batch_builder(nb::module_& m)
          .def("next_graph", &BatchBuilder::next_graph)
          .def("set_graph_kind", &BatchBuilder::set_graph_kind, "kind"_a)
          .def("set_schema_flag", &BatchBuilder::set_schema_flag, "key"_a, "value"_a)
+         .def(
+            "set_graph_attr",
+            [](BatchBuilder& builder, const std::string& key, nb::handle value) {
+               if(nb::isinstance< nb::str >(value)) {
+                  builder.set_graph_attr(key, std::string(nb::str(value).c_str()));
+                  return;
+               }
+               if(nb::isinstance< nb::bool_ >(value)) {
+                  builder.set_graph_attr(key, static_cast< int64_t >(nb::cast< bool >(value)));
+                  return;
+               }
+               if(nb::isinstance< nb::int_ >(value)) {
+                  builder.set_graph_attr(key, nb::cast< int64_t >(value));
+                  return;
+               }
+               {
+                  std::vector< std::string > strings;
+                  if(nb::try_cast< std::vector< std::string > >(value, strings)) {
+                     builder.set_graph_attr(key, std::move(strings));
+                     return;
+                  }
+               }
+               {
+                  std::vector< int64_t > integers;
+                  if(nb::try_cast< std::vector< int64_t > >(value, integers)) {
+                     builder.set_graph_attr(key, std::move(integers));
+                     return;
+                  }
+               }
+               throw std::invalid_argument(
+                  "BatchBuilder.set_graph_attr expects str, int, bool, list[str], or list[int]"
+               );
+            },
+            "key"_a,
+            "value"_a
+         )
          .def(
             "schema_flags_view",
             [](nb::handle self) {
