@@ -223,6 +223,18 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
             "ExampleConstantStreamEncoder",
             top_level=False,
         ),
+        LazyEncoderExport(
+            "ObjectFeatureEncoder",
+            ".object_feature",
+            "ObjectFeatureEncoder",
+            top_level=False,
+        ),
+        LazyEncoderExport(
+            "ObjectFeatureEncoderStream",
+            ".object_feature",
+            "ObjectFeatureEncoderStream",
+            top_level=False,
+        ),
     ),
     direct_exports=(
         DirectEncoderExport("EncoderBase", top_level=True),
