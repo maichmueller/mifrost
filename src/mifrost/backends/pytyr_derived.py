@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, Literal, cast
+from collections.abc import Iterable, Sequence
+from typing import Any, Literal, TypeGuard, cast
 
 from pytyr.formalism.planning import PlanningTask
 
-from ..encoders._flat_validation import validate_subgoal_layers_state_payload
 from .pytyr_flat import (
     _history_values,
+    _is_action,
     _is_state,
     _lane_values,
     _sequence,
@@ -18,19 +18,9 @@ from .pytyr_flat import (
 from .pytyr import SemanticPlanningTaskAdapter
 
 
-_ACTION_ERROR = "SemanticDerivedGraphEncoderEngine does not support action encoding"
-_BATCH_ACTION_ERROR = (
-    "Derived-graph batch encoding does not support explicit action payloads"
-)
-_HISTORY_ERROR = (
-    "SemanticDerivedGraphEncoderEngine does not support history_subgoals payloads"
-)
-_BATCH_HISTORY_ERROR = (
-    "Derived-graph batch encoding does not support history_subgoals payloads"
-)
-
 _NODE_UNIVERSE_OPTIONS = ("objects_and_atoms", "objects_only")
 _ATOM_EXPANSION_OPTIONS = ("star", "clique", "chain", "star_first")
+_STR_BYTES = (str, bytes, bytearray)
 
 
 def _config_option(value: object, options: tuple[str, ...], field: str) -> str:
@@ -61,6 +51,10 @@ def _native_config(config: Any) -> Any:
             "export_node_names",
             "include_line_graph",
             "line_graph_max_degree",
+            "include_hyperedge_incidence",
+            "include_tuple_tensors",
+            "include_spd",
+            "spd_max_hops",
         )
         if hasattr(config, field)
     }
@@ -73,6 +67,27 @@ def _native_config(config: Any) -> Any:
             values["atom_expansion"], _ATOM_EXPANSION_OPTIONS, "atom_expansion"
         )
     return _neutral_core.SemanticDerivedGraphEncoderConfig(**values)
+
+
+def _is_sequence_like(value: object) -> TypeGuard[Sequence[Any]]:
+    return isinstance(value, Sequence) and not isinstance(value, _STR_BYTES)
+
+
+def _check_layer_shapes(layers: object, *, state_index: int) -> None:
+    """Validate subgoal layer nesting; the layer count itself is uncapped."""
+    if layers is None:
+        return
+    if not _is_sequence_like(layers):
+        raise TypeError(
+            f"subgoal_layers entry at state index {state_index} must be an "
+            "iterable of goal-literal layers or None"
+        )
+    for layer_index, layer in enumerate(layers):
+        if not _is_sequence_like(layer):
+            raise TypeError(
+                f"subgoal_layers entry at state index {state_index} layer at "
+                f"position {layer_index} must be an iterable of goal literals"
+            )
 
 
 class _PyTyrDerivedStream:
@@ -131,44 +146,50 @@ class PyTyrDerivedRuntime:
         self.engine = self._adapter.make_derived_engine(native_config)
         self._direct = self._adapter.make_direct_derived_encoder(native_config)
 
-    def _checked_lanes(
-        self,
-        state: object,
-        *,
-        goals: object = None,
-        actions: object = None,
-        subgoal_layers: object = None,
-        history_subgoals: object = None,
-    ) -> tuple[Any, list[Any]]:
+    def _check_state(self, state: object) -> None:
         if not _is_state(state):
             raise TypeError(
                 "a PyTyr derived-graph encoder expects a lifted or ground "
                 f"PyTyr state, got {type(state)!r}"
             )
-        action_values = [] if actions is None else list(cast(Iterable[Any], actions))
-        if action_values:
-            raise ValueError(_ACTION_ERROR)
-        history_values = (
-            []
-            if history_subgoals is None
-            else list(cast(Iterable[Any], history_subgoals))
+
+    def _lanes(
+        self,
+        goals: object,
+        actions: object,
+        subgoal_layers: object,
+        history_subgoals: object,
+    ) -> tuple[Any, Any, Any, Any]:
+        """Normalize the four optional lanes of one state encoding."""
+        _check_layer_shapes(subgoal_layers, state_index=0)
+        return (
+            cast("Iterable[object] | None", goals),
+            cast("Iterable[object]", () if actions is None else actions),
+            cast(
+                "Iterable[Iterable[object]]",
+                () if subgoal_layers is None else subgoal_layers,
+            ),
+            cast(
+                "Iterable[tuple[int, Iterable[object]]]",
+                () if history_subgoals is None else history_subgoals,
+            ),
         )
-        if history_values:
-            raise ValueError(_HISTORY_ERROR)
-        layers = (
-            []
-            if subgoal_layers is None
-            else list(cast(Iterable[Iterable[Any]], subgoal_layers))
-        )
-        validate_subgoal_layers_state_payload(layers, state_index=0, max_goal_level=3)
-        return goals, layers
 
     def _prepared(self, state: object, **kwargs: Any) -> Any:
-        goals, layers = self._checked_lanes(state, **kwargs)
+        self._check_state(state)
+        goals, actions, layers, history = self._lanes(
+            kwargs.get("goals"),
+            kwargs.get("actions"),
+            kwargs.get("subgoal_layers"),
+            kwargs.get("history_subgoals"),
+        )
         return self._direct.prepare(
             state,
-            goals=cast(Iterable[object] | None, goals),
+            actions,
+            goals=goals,
             subgoal_layers=layers,
+            history=history,
+            history_max_steps=kwargs.get("history_max_steps"),
         )
 
     def encode(
@@ -182,18 +203,17 @@ class PyTyrDerivedRuntime:
         history_max_steps: int | None = None,
     ) -> Any:
         """Encode one state into a derived graph."""
-        goals, layers = self._checked_lanes(
-            state,
-            goals=goals,
-            actions=actions,
-            subgoal_layers=subgoal_layers,
-            history_subgoals=history_subgoals,
+        self._check_state(state)
+        compact_goals, actions, layers, history = self._lanes(
+            goals, actions, subgoal_layers, history_subgoals
         )
         # Direct-View encode inside the PyTyr module; no owning semantic input.
         return self._direct.encode(
             state,
-            goals=cast(Iterable[object] | None, goals),
+            actions,
+            goals=compact_goals,
             subgoal_layers=layers,
+            history=history,
             history_max_steps=history_max_steps,
         )
 
@@ -215,15 +235,6 @@ class PyTyrDerivedRuntime:
             raise TypeError("a PyTyr derived-graph batch can contain only PyTyr states")
         count = len(state_values)
 
-        action_values = _lane_values(
-            actions, state_count=count, field="actions", leaf=lambda _value: True
-        )
-        if any(values for values in action_values):
-            raise ValueError(_BATCH_ACTION_ERROR)
-        history_values = _history_values(history_subgoals, state_count=count)
-        if any(values for values in history_values):
-            raise ValueError(_BATCH_HISTORY_ERROR)
-
         def is_literal(value: object) -> bool:
             try:
                 self._adapter._literal_key(value)
@@ -231,21 +242,25 @@ class PyTyrDerivedRuntime:
                 return False
             return True
 
+        action_values = _lane_values(
+            actions, state_count=count, field="actions", leaf=_is_action
+        )
+        history_values = _history_values(history_subgoals, state_count=count)
         goal_values = _lane_values(
             goals, state_count=count, field="goals", leaf=is_literal
         )
         subgoal_values = _subgoal_values(subgoal_layers, state_count=count)
         for index, value in enumerate(subgoal_values):
-            validate_subgoal_layers_state_payload(
-                value, state_index=index, max_goal_level=3
-            )
+            _check_layer_shapes(value, state_index=index)
         # Direct-View batch: prepared and encoded in one native crossing.
         return self._direct.encode_batch(
             state_values,
+            [() if values is None else values for values in action_values],
             goals=goal_values,
             subgoal_layers=[
                 () if values is None else values for values in subgoal_values
             ],
+            history=[() if values is None else values for values in history_values],
             history_max_steps=history_max_steps,
         )
 
