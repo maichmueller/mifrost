@@ -203,7 +203,7 @@ nb::object batch_to_batch_homo_data(nb::object& pyg_batch)
    return out;
 }
 
-nb::object batch_to_single_homo_data(nb::object& pyg_batch)
+nb::object batch_to_single_homo_data(nb::object& pyg_batch, bool undirect_edge_index)
 {
    nb::object out = py::torch_geometric_data_ctor()();
 
@@ -245,7 +245,9 @@ nb::object batch_to_single_homo_data(nb::object& pyg_batch)
       }
    }
 
-   make_homo_edge_index_undirected_in_place(out);
+   if(undirect_edge_index) {
+      make_homo_edge_index_undirected_in_place(out);
+   }
    copy_global_attrs_for_single(out, pyg_batch);
    return out;
 }
@@ -417,6 +419,11 @@ batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool
       encoding.graph_kind == "flat"
       || (encoding.schema.flags.contains("flat_relations") && encoding.schema.flags.at("flat_relations"));
    const bool is_homo_like = encoding.graph_kind == "homo" || is_flat;
+   // Families that materialize their own directed reverse edges (schema flag
+   // "include_reverse_edges") must not be undirected-mirrored: mirroring
+   // would duplicate every edge and mislabel the copies' channel rows.
+   const bool homo_undirected = is_homo_like
+                                && ! encoding.schema.flags.contains("include_reverse_edges");
    BatchBuilder builder;
    builder.set_graph_kind(encoding.graph_kind);
    builder.load_from_batch_encoding(encoding);
@@ -428,7 +435,7 @@ batch_encoding_as_pyg(BatchBuilder::BatchEncoding& encoding, std::optional< bool
 
    if(not want_batch) {
       if(is_homo_like) {
-         nb::object out = batch_to_single_homo_data(pyg_batch);
+         nb::object out = batch_to_single_homo_data(pyg_batch, homo_undirected);
          if(is_flat) {
             return py::mifrost_flat_relation_data_from_pyg_fn()(
                out, nb::arg("schema_fingerprint") = schema_fingerprint(encoding)

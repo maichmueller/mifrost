@@ -291,6 +291,9 @@ def _encoding_dict_to_pyg_homo(
 
     node_types = schema.get("node_types", [])
     node_type = node_types[0] if node_types else "node"
+    schema_flags = schema.get("flags", {}) or {}
+    if schema_flags.get("include_reverse_edges"):
+        undirected = False
 
     for entry in schema.get("node_tensors", []):
         key = entry["key"]
