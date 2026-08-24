@@ -574,6 +574,12 @@ void register_batch_builder(nb::module_& m)
                   throw std::invalid_argument("add_node_features expects a 1D/2D array");
                }
                const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+               if(feature_dim <= 0) {
+                  throw std::invalid_argument(
+                     "add_node_features feature dimension must be positive, got "
+                     + std::to_string(feature_dim)
+                  );
+               }
                const auto count = static_cast< size_t >(data.size());
                builder.add_node_features(
                   node_type, attr_name, std::span< const float >(data.data(), count), feature_dim
@@ -615,6 +621,12 @@ void register_batch_builder(nb::module_& m)
                   throw std::invalid_argument("add_edge_features expects a 1D/2D array");
                }
                const int feature_dim = data.ndim() == 2 ? static_cast< int >(data.shape(1)) : 1;
+               if(feature_dim <= 0) {
+                  throw std::invalid_argument(
+                     "add_edge_features feature dimension must be positive, got "
+                     + std::to_string(feature_dim)
+                  );
+               }
                const auto count = static_cast< size_t >(data.size());
                builder.add_edge_features(
                   src_type,

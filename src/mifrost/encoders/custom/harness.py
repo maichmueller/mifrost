@@ -58,21 +58,21 @@ def channel_summary(data: Any) -> dict[str, Any]:
 
     summary: dict[str, Any] = {}
     x_ids = getattr(data, "x_ids", None)
-    if torch.is_tensor(x_ids):
+    if isinstance(x_ids, torch.Tensor):
         summary["nodes"] = int(x_ids.size(0))
         summary["channels"] = int(x_ids.size(1))
         summary["roles"] = sorted({int(value) for value in x_ids[:, 0].tolist()})
     edge_index = getattr(data, "edge_index", None)
-    if torch.is_tensor(edge_index):
+    if isinstance(edge_index, torch.Tensor):
         summary["edges"] = int(edge_index.size(1))
     edge_attr = getattr(data, "edge_attr", None)
-    if torch.is_tensor(edge_attr) and edge_attr.numel() > 0:
+    if isinstance(edge_attr, torch.Tensor) and edge_attr.numel() > 0:
         summary["edge_kinds"] = sorted(
             {int(value) for value in edge_attr[:, 0].tolist()}
         )
     for extra in ("hyperedge_index", "tuple_args", "spd_src"):
         tensor = getattr(data, extra, None)
-        if torch.is_tensor(tensor):
+        if isinstance(tensor, torch.Tensor):
             summary[extra] = (
                 int(tensor.shape[-1]) if tensor.dim() else int(tensor.numel())
             )

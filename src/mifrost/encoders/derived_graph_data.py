@@ -76,7 +76,7 @@ class DerivedGraphData(Data):
             if stored is not None:
                 return int(stored)
         x_ids = getattr(self, "x_ids", None)
-        if torch.is_tensor(x_ids) and x_ids.dim() > 0:
+        if isinstance(x_ids, torch.Tensor) and x_ids.dim() > 0:
             return int(x_ids.size(0))
         inferred = super().num_nodes
         return int(inferred) if inferred is not None else 0
@@ -92,7 +92,7 @@ class DerivedGraphData(Data):
             return torch.tensor(
                 ((self.num_nodes,), (self._num_hyperedges(),)),
                 dtype=torch.long,
-                device=value.device if torch.is_tensor(value) else None,
+                device=value.device if isinstance(value, torch.Tensor) else None,
             )
         if key == "hyperedge_attr_ids":
             return self._num_hyperedges()
@@ -107,10 +107,12 @@ class DerivedGraphData(Data):
         spd_src = getattr(self, "spd_src", None)
         edges = (
             int(edge_index.size(-1))
-            if torch.is_tensor(edge_index) and edge_index.dim() >= 1
+            if isinstance(edge_index, torch.Tensor) and edge_index.dim() >= 1
             else 0
         )
-        spd_pairs = int(spd_src.view(-1).numel()) if torch.is_tensor(spd_src) else 0
+        spd_pairs = (
+            int(spd_src.view(-1).numel()) if isinstance(spd_src, torch.Tensor) else 0
+        )
         return {
             "nodes": self.num_nodes,
             "edges": edges,
@@ -137,7 +139,9 @@ class DerivedGraphData(Data):
         empty_mask = torch.empty((0, 0), dtype=torch.bool)
         tuple_args = getattr(self, "tuple_args", None)
         tuple_ptr = getattr(self, "tuple_ptr", None)
-        if not torch.is_tensor(tuple_args) or not torch.is_tensor(tuple_ptr):
+        if not isinstance(tuple_args, torch.Tensor) or not isinstance(
+            tuple_ptr, torch.Tensor
+        ):
             return empty_args, empty_mask
         args_flat = tuple_args.long().view(-1)
         ptr = tuple_ptr.long().view(-1)
@@ -160,7 +164,7 @@ class DerivedGraphData(Data):
     def _num_hyperedges(self) -> int:
         stored = getattr(self, "num_hyperedges", None)
         if stored is not None:
-            if torch.is_tensor(stored):
+            if isinstance(stored, torch.Tensor):
                 flat = stored.view(-1).tolist()
                 if len(flat) > 1:
                     return int(sum(int(entry) for entry in flat))
@@ -169,11 +173,14 @@ class DerivedGraphData(Data):
                 return int(sum(int(entry) for entry in stored))
             return int(stored)
         hyperedge_attr_ids = getattr(self, "hyperedge_attr_ids", None)
-        if torch.is_tensor(hyperedge_attr_ids) and hyperedge_attr_ids.dim() > 0:
+        if (
+            isinstance(hyperedge_attr_ids, torch.Tensor)
+            and hyperedge_attr_ids.dim() > 0
+        ):
             return int(hyperedge_attr_ids.size(0))
         hyperedge_index = getattr(self, "hyperedge_index", None)
         if (
-            torch.is_tensor(hyperedge_index)
+            isinstance(hyperedge_index, torch.Tensor)
             and hyperedge_index.dim() == 2
             and hyperedge_index.size(1) > 0
         ):
@@ -182,10 +189,10 @@ class DerivedGraphData(Data):
 
     def _num_tuples(self) -> int:
         tuple_rel_ids = getattr(self, "tuple_rel_ids", None)
-        if torch.is_tensor(tuple_rel_ids) and tuple_rel_ids.dim() > 0:
+        if isinstance(tuple_rel_ids, torch.Tensor) and tuple_rel_ids.dim() > 0:
             return int(tuple_rel_ids.size(0))
         tuple_ptr = getattr(self, "tuple_ptr", None)
-        if torch.is_tensor(tuple_ptr):
+        if isinstance(tuple_ptr, torch.Tensor):
             return max(tuple_ptr.numel() - 1, 0)
         return 0
 

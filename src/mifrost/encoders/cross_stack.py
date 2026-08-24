@@ -135,7 +135,7 @@ def to_dgl(data: Any) -> tuple[Any, dict[str, Any]]:
 
     metadata = _collect_metadata(data)
     hyperedge_index = getattr(data, "hyperedge_index", None)
-    if torch.is_tensor(hyperedge_index) and hyperedge_index.numel() > 0:
+    if isinstance(hyperedge_index, torch.Tensor) and hyperedge_index.numel() > 0:
         members = hyperedge_index[0].long().cpu()
         anchor_rows = hyperedge_index[1].long().cpu()
         num_hyperedges = int(anchor_rows.max().item()) + 1

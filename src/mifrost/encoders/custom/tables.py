@@ -135,9 +135,15 @@ class NodeTable:
         return [self._names[row] for row in range(len(self._roles))]
 
     def to_float_array(self) -> np.ndarray:
-        """Row-major float32 array of shape ``[count, channel_dim]``."""
+        """Row-major float32 array of shape ``[count, channel_dim]``.
 
-        rows = np.zeros((self.count, self.channel_dim), dtype=np.float32)
+        Nodes added without channels still produce one zero column, so the
+        feature dimension never collapses to zero (native builders divide
+        by the feature dimension).
+        """
+
+        width = self.channel_dim if self.channel_dim > 0 else 1
+        rows = np.zeros((self.count, width), dtype=np.float32)
         for row, channels in enumerate(self._channels):
             if channels:
                 rows[row, : len(channels)] = channels

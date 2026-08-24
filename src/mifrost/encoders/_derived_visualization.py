@@ -116,7 +116,11 @@ def derived_to_networkx(
             "sign": 0,
             "goal_level": 0,
         }
-        if torch.is_tensor(x_ids) and x_ids.dim() == 2 and index < x_ids.size(0):
+        if (
+            isinstance(x_ids, torch.Tensor)
+            and x_ids.dim() == 2
+            and index < x_ids.size(0)
+        ):
             row = x_ids[index].long().tolist()
             attrs = {
                 "role": ROLE_NAMES[int(row[0])]
@@ -135,9 +139,11 @@ def derived_to_networkx(
 
     edge_index = getattr(data, "edge_index", None)
     edge_attr = getattr(data, "edge_attr", None)
-    if torch.is_tensor(edge_index) and edge_index.numel() > 0:
-        kinds = edge_attr[:, 0].long() if torch.is_tensor(edge_attr) else None
-        positions = edge_attr[:, 1:].long() if torch.is_tensor(edge_attr) else None
+    if isinstance(edge_index, torch.Tensor) and edge_index.numel() > 0:
+        kinds = edge_attr[:, 0].long() if isinstance(edge_attr, torch.Tensor) else None
+        positions = (
+            edge_attr[:, 1:].long() if isinstance(edge_attr, torch.Tensor) else None
+        )
         for column in range(edge_index.size(1)):
             kind_id = int(kinds[column].item()) if kinds is not None else 0
             kind = (
@@ -166,7 +172,11 @@ def derived_to_networkx(
             )
 
     membership = getattr(data, "hyperedge_index", None)
-    if include_hyperedges and torch.is_tensor(membership) and membership.numel() > 0:
+    if (
+        include_hyperedges
+        and isinstance(membership, torch.Tensor)
+        and membership.numel() > 0
+    ):
         hyperedge_attrs = getattr(data, "hyperedge_attr_ids", None)
         pairs = membership.long().tolist()
         seen: set[int] = set()
@@ -176,7 +186,7 @@ def derived_to_networkx(
                 seen.add(hyperedge)
                 role = ""
                 if (
-                    torch.is_tensor(hyperedge_attrs)
+                    isinstance(hyperedge_attrs, torch.Tensor)
                     and hyperedge < hyperedge_attrs.numel()
                 ):
                     role_id = int(hyperedge_attrs[hyperedge].item())
@@ -382,7 +392,7 @@ def summarize_derived(data: Any) -> str:
     """Return a short human-readable channel histogram for one graph."""
     lines: list[str] = []
     x_ids = getattr(data, "x_ids", None)
-    if torch.is_tensor(x_ids):
+    if isinstance(x_ids, torch.Tensor):
         counts: dict[str, int] = {}
         for value in x_ids[:, 0].long().tolist():
             role = ROLE_NAMES[value] if value < len(ROLE_NAMES) else str(value)
@@ -392,7 +402,7 @@ def summarize_derived(data: Any) -> str:
             + ", ".join(f"{role}={count}" for role, count in sorted(counts.items()))
         )
     edge_attr = getattr(data, "edge_attr", None)
-    if torch.is_tensor(edge_attr):
+    if isinstance(edge_attr, torch.Tensor):
         kinds: dict[str, int] = {}
         for value in edge_attr[:, 0].long().tolist():
             kind = (
