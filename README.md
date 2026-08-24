@@ -36,6 +36,16 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
   - `FlatRelationEncoder`, `FlatHorizonEncoder`, and both flat transition lanes
   - `ColorEncoder`
   - `ILGEncoder`
+  - Derived-graph family (homogeneous graphs for vanilla GNN pipelines):
+    - `StarGraphEncoder`: reified star view where every atom becomes a fact node connected to its argument objects
+    - `ObjectGraphEncoder`: objects-only projection with configurable atom expansion (`clique` / `chain` / `star_first`)
+    - `AtomLineGraphEncoder`: star view plus line-share edges connecting co-occurring arguments of high-degree atoms
+    - `HypergraphIncidenceEncoder`: every encoded literal instance becomes one hyperedge over its argument objects
+    - `TupleTensorEncoder`: star view plus variable-arity tuple channels (`tuple_args` / `tuple_ptr`) for tuple-level readouts
+    - `TransformerBiasEncoder`: objects-only clique projection with shortest-path-distance biases for transformer attention
+  - `LiftedTaskEncoder`: lifted planning-task graph (predicate/action schemas, parameters, preconditions/effects, goal); state-independent unless `include_state_facts=True`
+  - `ObjectFeatureEncoder`: compact objects-only graph that turns unary predicates into feature channels instead of dropping them
+  - Custom pure-Python toolkit (`mifrost.encoders.custom`): define your own encoders with `StateView` + `GraphWriter`; batching, streaming, and a verification harness included
 - Returns native `BatchEncoding` objects, with explicit helpers for:
   - PyG conversion (`encode_pyg`, `encode_batch_pyg`, `as_pyg`)
 
@@ -209,11 +219,12 @@ stream = encoder.stream()
 stream.append(state1)
 stream.append(state2)
 
-batch_encoding = stream.flush()  # BatchEncoding
-batch = batch_encoding.as_pyg(as_batch=True)    # HeteroDataBatch
+batch = stream.flush_pyg(as_batch=True)  # HeteroDataBatch
 
-# convenience
-batch2 = stream.flush_pyg(as_batch=True)
+# equivalent native form of the same flush; each flush resets the
+# stream, so append states again before flushing a second time:
+#   batch_encoding = stream.flush()               # BatchEncoding
+#   batch = batch_encoding.as_pyg(as_batch=True)  # HeteroDataBatch
 
 # mutable stream (supports update/remove)
 mutable = encoder.mutable_stream()

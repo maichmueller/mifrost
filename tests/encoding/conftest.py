@@ -53,6 +53,20 @@ def large_blocks():
     pytest.skip("No large blocks instance available in data/pddl/blocks")
 
 
+def select_state(space, problem, which_state: str):
+    if which_state == "initial":
+        return problem.get_initial_state()
+    if which_state == "goal":
+        if hasattr(space, "goal_states_iter"):
+            return next(iter(space.goal_states_iter()))
+        if hasattr(space, "sample_state_n_steps_from_goal"):
+            return space.sample_state_n_steps_from_goal(0)
+        raise AttributeError("StateSpaceSampler does not expose goal state access")
+    raise ValueError(
+        "Unknown state wanted. Choose 'initial' or 'goal' state. Given: " + which_state
+    )
+
+
 def encoded_state(
     domain: str,
     problem: str,
@@ -61,21 +75,7 @@ def encoded_state(
     **kwargs,
 ):
     space, domain, problem = problem_setup(domain, problem)
-
-    if which_state == "initial":
-        state = problem.get_initial_state()
-    elif which_state == "goal":
-        if hasattr(space, "goal_states_iter"):
-            state = next(iter(space.goal_states_iter()))
-        elif hasattr(space, "sample_state_n_steps_from_goal"):
-            state = space.sample_state_n_steps_from_goal(0)
-        else:
-            raise AttributeError("StateSpaceSampler does not expose goal state access")
-    else:
-        raise ValueError(
-            "Unknown state wanted. Choose 'initial' or 'goal' state. Given: "
-            + which_state
-        )
+    state = select_state(space, problem, which_state)
     encoder = encoder_class(
         domain,
         **kwargs,
@@ -107,21 +107,7 @@ def color_encoded_state(request):
         domain_param, prob_param, which_state_param = request.param
         kwargs = {}
     space, domain, problem = problem_setup(domain_param, prob_param)
-
-    if which_state_param == "initial":
-        state = problem.get_initial_state()
-    elif which_state_param == "goal":
-        if hasattr(space, "goal_states_iter"):
-            state = next(iter(space.goal_states_iter()))
-        elif hasattr(space, "sample_state_n_steps_from_goal"):
-            state = space.sample_state_n_steps_from_goal(0)
-        else:
-            raise AttributeError("StateSpaceSampler does not expose goal state access")
-    else:
-        raise ValueError(
-            "Unknown state wanted. Choose 'initial' or 'goal' state. Given: "
-            + which_state_param
-        )
+    state = select_state(space, problem, which_state_param)
 
     encoder = ColorEncoder(domain, **kwargs)
     return encoder.encode_pyg(state), encoder, state

@@ -4,6 +4,14 @@ Subclasses of `CustomGraphEncoder` implement exactly one method,
 `encode_state`, receiving already-neutralized lanes (tuples of `Literal` /
 `Atom` records). Batching, streaming, kwargs validation and PyG conversion
 come from the shared encoder machinery.
+
+Lane semantics are EXACT about ``None`` versus empty: ``None`` (or an unset
+lane) means "use the encoder/problem default" — for goals that is the
+problem's own goal literals — while an explicitly passed EMPTY lane
+(``goals=[]`` / per-state ``goals=[[], []]``) means "explicitly no goals".
+Lane splitting never collapses one into the other, so a batch with empty
+goal lanes encodes no-goal graphs instead of silently fabricating problem
+goals. Backends outside this package must honor the same distinction.
 """
 
 from __future__ import annotations
@@ -13,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..base import EncoderBase, StreamEncoderBase
+from ...backends._derived_runtime import _looks_like_pytyr_task
 from .state_view import Atom, Literal, StateView
 from .writer import GraphWriter
 
@@ -69,7 +78,24 @@ class CustomGraphEncoder(EncoderBase[Any]):
     ) -> None:
         """Build one `StateView` over a pymimir problem or pytyr task."""
 
-        self.view = StateView(source, backend=backend)
+        try:
+            self.view = StateView(source, backend=backend)
+        except TypeError as exc:
+            # Duck-type the classic mistake of passing a pymimir Domain
+            # where a Problem is required (mirrors the derived-family
+            # guidance message) and re-raise with actionable context.
+            looks_like_domain = (
+                hasattr(source, "get_domain")
+                and not hasattr(source, "get_initial_state")
+                and not _looks_like_pytyr_task(source)
+            )
+            if looks_like_domain:
+                raise TypeError(
+                    "Custom encoders need a Problem, not a Domain: object "
+                    "tables, static facts, and goal literals are "
+                    f"problem-scoped (got {type(source).__name__})"
+                ) from exc
+            raise
         self.backend = self.view.backend
         self.graph_kind = graph_kind
         self.export_node_names = export_node_names
@@ -117,7 +143,12 @@ class CustomGraphEncoder(EncoderBase[Any]):
         subgoal_layers: Any,
         history_subgoals: Any,
     ) -> dict[str, Any]:
-        """Convert native lane leaves into neutral records via the view."""
+        """Convert native lane leaves into neutral records via the view.
+
+        ``None`` lanes stay ``None`` (problem defaults); an explicitly
+        empty lane neutralizes to an empty tuple — never to ``None`` — so
+        "no goals" survives into `encode_state`.
+        """
 
         view = self.view
         return {
@@ -253,7 +284,15 @@ class CustomGraphEncoder(EncoderBase[Any]):
         field: str,
         leaf: Any,
     ) -> list[Any | None]:
-        """Split a batch lane into per-state values (shared/separate/implicit)."""
+        """Split a batch lane into per-state values (shared/separate/implicit).
+
+        ``None`` (or the ``none`` batch mode) yields ``[None] * count`` —
+        every state falls back to its default. An explicitly passed EMPTY
+        lane is NOT ``None``: it broadcasts as "explicitly no goals/actions
+        for every state" and must never be swapped for the problem default,
+        otherwise batch encoding would fabricate goal nodes that single
+        encoding of the same states would not have.
+        """
 
         kind, payload = _batch_param(value)
         if kind == "none" or payload is None:
@@ -274,7 +313,8 @@ class CustomGraphEncoder(EncoderBase[Any]):
             if len(values) != count:
                 raise ValueError(f"{field} length must match states length")
             return values
-        return [values] * count
+        # Broadcast, but never alias one mutable list across states.
+        return [list(values) for _ in range(count)]
 
     def _split_layers(self, value: object, *, count: int) -> list[Any | None]:
         """Split a subgoal-layers lane where leaves are literal layers."""
@@ -303,7 +343,8 @@ class CustomGraphEncoder(EncoderBase[Any]):
             if len(values) != count:
                 raise ValueError("subgoal_layers length must match states length")
             return values
-        return [values] * count
+        # Broadcast, but never alias one mutable list across states.
+        return [list(values) for _ in range(count)]
 
 
 @dataclass

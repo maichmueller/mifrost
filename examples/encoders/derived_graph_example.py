@@ -11,6 +11,7 @@ small embedding + GCNConv forward pass on the star output.
 from __future__ import annotations
 
 import collections
+from pathlib import Path
 
 from mifrost.encoders.derived import (
     HypergraphIncidenceEncoder,
@@ -132,9 +133,12 @@ def _render(problem, state, star) -> None:
         encoder.draw(data, ax=ax, font_size=7)
         ax.set_title(name)
     figure.tight_layout()
-    figure.savefig("derived_graph_example.png", dpi=110)
+    plots_dir = Path(__file__).resolve().parent / "_plots"
+    plots_dir.mkdir(exist_ok=True)
+    out_path = plots_dir / "derived_graph_example.png"
+    figure.savefig(out_path, dpi=110)
     plt.close(figure)
-    print("rendered derived_graph_example.png")
+    print(f"rendered {out_path}")
 
 
 if __name__ == "__main__":

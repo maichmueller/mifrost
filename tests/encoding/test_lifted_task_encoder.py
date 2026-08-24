@@ -332,11 +332,14 @@ def test_state_facts_flag_controls_fact_edges_and_state_dependence(
     data = _pyg(factual, state)
     view = factual.view
     facts = (*view.static_facts, *view.state_facts(state))
-    expected = sum(len(atom.args) for atom in facts)
+    # Every argument contributes an edge; nullary facts contribute one
+    # predicate self-loop each.
+    expected = sum(len(atom.args) if atom.args else 1 for atom in facts)
     assert _kind_counts(data)["fact"] == expected
 
     fact_edges = [edge for edge in _edge_tuples(data) if edge[2] == "fact"]
     assert ("ontable", "a", "fact", 0, 0) in fact_edges
+    assert ("handempty", "handempty", "fact", 0, 0) in fact_edges
     assert factual.encode(state).dumps() != factual.encode(successor).dumps()
 
 
@@ -510,3 +513,160 @@ def test_conformance_smoke_on_encode_pyg(blocks_pair) -> None:
     result = conformance_smoke(encoder.encode_pyg(state))
     assert "skipped" not in result
     assert set(result) == {"gcn", "gatv2"}
+
+
+# --------------------------------------------------------------------------- #
+# adversarial-review hardening
+
+CONSTANTS_DOMAIN = (
+    """
+(define (domain const-lifted)
+    (:requirements :typing)
+    (:types
+        rover - object
+        loc - object
+    )
+    (:constants
+        home - loc
+    )
+    (:predicates
+        (at ?r - rover ?l - loc)
+    )
+    (:action move
+        :parameters (?r - rover ?from ?to - loc)
+        :precondition (at ?r ?from)
+        :effect (and (not (at ?r ?from)) (at ?r ?to))
+    )
+)
+""".strip()
+    + "\n"
+)
+
+CONSTANTS_PROBLEM = (
+    """
+(define (problem const-lifted-p)
+    (:domain const-lifted)
+    (:objects r1 - rover)
+    (:init (at r1 home))
+    (:goal (at r1 home))
+)
+""".strip()
+    + "\n"
+)
+
+NULLARY_DOMAIN = (
+    """
+(define (domain nullary-goal)
+    (:requirements :strips :derived-predicates)
+    (:predicates (step) (done))
+    (:derived (done) (step))
+    (:action act
+        :parameters ()
+        :precondition (step)
+        :effect (and (not (step)))
+    )
+)
+""".strip()
+    + "\n"
+)
+
+NULLARY_PROBLEM = (
+    """
+(define (problem nullary-goal-p)
+    (:domain nullary-goal)
+    (:init (step))
+    (:goal (done))
+)
+""".strip()
+    + "\n"
+)
+
+
+def _scratch_problem(tmp_path: Path, domain_text: str, problem_text: str):
+    if pymimir is None:  # pragma: no cover - optional backend dependencies
+        pytest.skip("pymimir/pytyr planning stack not available")
+    domain_path = tmp_path / "domain.pddl"
+    problem_path = tmp_path / "problem.pddl"
+    domain_path.write_text(domain_text, encoding="utf-8")
+    problem_path.write_text(problem_text, encoding="utf-8")
+    return _pymimir_problem(domain_path, problem_path)
+
+
+def test_domain_constants_in_goal_become_object_nodes(tmp_path) -> None:
+    """Goal literals referencing (:constants ...) names must not crash."""
+
+    problem = _scratch_problem(tmp_path, CONSTANTS_DOMAIN, CONSTANTS_PROBLEM)
+    encoder = LiftedTaskEncoder(problem)
+    state = problem.get_initial_state()
+    assert "home" not in encoder.view.objects  # precondition of this test
+
+    data = _pyg(encoder, state)
+    names = list(data.node_names)
+    assert "home" in names  # constant appended as an object-role node
+    home_row = names.index("home")
+    assert int(data.x_ids[home_row][0]) == 0  # role object
+    # Domain constants come after all problem objects.
+    assert names.index("r1") < home_row
+
+    edges = _edge_tuples(data)
+    assert ("at", "r1", "goal_pos", 0, 0) in edges
+    assert ("at", "home", "goal_pos", 1, 0) in edges
+
+
+def test_domain_constants_in_facts_become_object_nodes(tmp_path) -> None:
+    problem = _scratch_problem(tmp_path, CONSTANTS_DOMAIN, CONSTANTS_PROBLEM)
+    encoder = LiftedTaskEncoder(problem, include_state_facts=True)
+    data = _pyg(encoder, problem.get_initial_state())
+    edges = _edge_tuples(data)
+    assert ("at", "r1", "fact", 0, 0) in edges
+    assert ("at", "home", "fact", 1, 0) in edges
+
+
+def test_nullary_goal_literal_emits_predicate_self_loop(tmp_path) -> None:
+    """Arity-0 goals anchor as self-loops instead of vanishing."""
+
+    problem = _scratch_problem(tmp_path, NULLARY_DOMAIN, NULLARY_PROBLEM)
+    encoder = LiftedTaskEncoder(problem)
+    edges = _edge_tuples(_pyg(encoder, problem.get_initial_state()))
+    assert ("done", "done", "goal_pos", 0, 0) in edges
+
+
+def test_nullary_fact_emits_predicate_self_loop(tmp_path) -> None:
+    problem = _scratch_problem(tmp_path, NULLARY_DOMAIN, NULLARY_PROBLEM)
+    encoder = LiftedTaskEncoder(problem, include_state_facts=True)
+    edges = _edge_tuples(_pyg(encoder, problem.get_initial_state()))
+    # Both nullary facts hold initially ((done) is derived from (step)).
+    assert ("done", "done", "fact", 0, 0) in edges
+    assert ("step", "step", "fact", 0, 0) in edges
+
+
+def test_explicit_goals_lane_is_rejected_even_when_empty(blocks_pair) -> None:
+    """Goals come from the problem: ANY explicit goals lane violates that."""
+
+    problem, state, _, _ = blocks_pair
+    encoder = LiftedTaskEncoder(problem)
+    with pytest.raises(ValueError, match="LiftedTaskEncoder.*goals"):
+        encoder.encode(state, goals=[])
+    with pytest.raises(ValueError, match="LiftedTaskEncoder.*goals"):
+        encoder.encode_batch([state], goals=[[]])
+
+
+def test_history_max_steps_is_rejected(blocks_pair) -> None:
+    problem, state, _, _ = blocks_pair
+    encoder = LiftedTaskEncoder(problem)
+    with pytest.raises(ValueError, match="LiftedTaskEncoder.*history_max_steps"):
+        encoder.encode(state, history_max_steps=3)
+
+
+def test_constructing_from_pymimir_domain_names_the_fix(blocks_pair) -> None:
+    del blocks_pair
+    if pymimir is None:  # pragma: no cover - optional backend dependencies
+        pytest.skip("pymimir/pytyr planning stack not available")
+    domain_path, _ = _pddl_paths("blocks", "small")
+    domain = pymimir.Domain(domain_path)
+    with pytest.raises(TypeError, match="Problem"):
+        LiftedTaskEncoder(domain)
+    with pytest.raises(TypeError, match="Problem"):
+        from mifrost.encoders.object_feature import ObjectFeatureEncoder
+
+        ObjectFeatureEncoder(domain)

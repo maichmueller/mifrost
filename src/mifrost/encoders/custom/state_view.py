@@ -280,6 +280,7 @@ class StateView:
         selected = _normalize_backend(backend)
         if selected is None:
             selected = "pytyr" if _looks_like_pytyr_task(source) else "pymimir"
+        self._reader: Any
         if selected == "pytyr":
             from ...backends.pytyr import PyTyrSnapshotReader
 

@@ -37,6 +37,8 @@ def _import_or_skip(module_name: str, install_hint: str):
     """
     try:
         return pytest.importorskip(module_name)
+    except pytest.skip.Exception:
+        raise
     except Exception as exc:
         pytest.skip(
             f"{module_name} is present but not importable here "
@@ -173,6 +175,7 @@ class TestToJraph:
         )
 
     def test_senders_receivers_and_channels_match(self, blocks_small) -> None:
+        _import_or_skip("jraph", "pip install jraph jax")
         import numpy as np
 
         problem, state = blocks_small
@@ -191,6 +194,8 @@ class TestToJraph:
         )
 
     def test_globals_and_metadata_carry_vocabs_and_extras(self, blocks_small) -> None:
+        _import_or_skip("jraph", "pip install jraph jax")
+
         problem, state = blocks_small
         data = HypergraphIncidenceEncoder(problem).encode_pyg(state)
         graphs_tuple, metadata = to_jraph(data)

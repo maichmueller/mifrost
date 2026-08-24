@@ -60,6 +60,12 @@ survives; only ``param_of`` and the ``*_arg`` edges disappear with the
 parameter nodes. Constant (non-parameter) literal arguments contribute no arg
 edge — their literal keeps its main edge.
 
+Domain constants: PDDL ``(:constants ...)`` names are domain-scoped and
+excluded from the problem's object table, yet goal literals and facts may
+reference them. The node universe therefore appends every constant
+discovered in goal literals and facts after the problem objects, sorted by
+name, as ordinary ``object`` nodes — goal/fact edges can then reference them.
+
 Downstream consumption:
 - node channels give role, schema identity, arity/parameter counts and
   predicate categories directly;
@@ -128,6 +134,32 @@ class LiftedTaskEncoder(CustomGraphEncoder):
 
         return LiftedTaskEncoderStream(self)
 
+    def _node_universe(self, view: Any, state: Any) -> list[str]:
+        """Problem objects followed by domain constants, extras sorted.
+
+        ``StateView.objects`` covers problem objects only; PDDL domain
+        constants are invisible there yet appear as arguments of goal
+        literals and facts. Scan exactly the literals this encoder will
+        wire (goal literals when `include_goal`, static plus state facts
+        when `include_state_facts`) and append their unknown names — the
+        domain constants — after the objects, sorted.
+        """
+
+        objects = view.objects
+        known = set(objects)
+        constants: set[str] = set()
+        if self.include_goal:
+            for literal in view.goal_literals(state):
+                constants.update(
+                    argument for argument in literal.atom.args if argument not in known
+                )
+        if self.include_state_facts:
+            for atom in (*view.static_facts, *view.state_facts(state)):
+                constants.update(
+                    argument for argument in atom.args if argument not in known
+                )
+        return [*objects, *sorted(constants)]
+
     def encode_state(
         self,
         out: GraphWriter,
@@ -144,10 +176,10 @@ class LiftedTaskEncoder(CustomGraphEncoder):
 
         del kwargs
         encoder_name = type(self).__name__
-        if goals:
+        if goals is not None:
             raise ValueError(
                 f"{encoder_name} derives goals from the problem itself via "
-                "StateView.goal_literals; got a non-empty goals lane"
+                "StateView.goal_literals; got an explicit goals lane"
             )
         if actions:
             raise ValueError(
@@ -164,6 +196,11 @@ class LiftedTaskEncoder(CustomGraphEncoder):
                 f"{encoder_name} encodes lifted task structure only; got "
                 "non-empty history_subgoals lane"
             )
+        if history_max_steps is not None:
+            raise ValueError(
+                f"{encoder_name} encodes lifted task structure only; got "
+                f"history_max_steps={history_max_steps!r}"
+            )
 
         view = out.view
         predicates = out.vocabulary("predicates")
@@ -173,6 +210,18 @@ class LiftedTaskEncoder(CustomGraphEncoder):
         for info in view.action_schemas:
             action_vocab.id_for(info.name)
 
+        # Pre-seed every edge kind this encoder may emit under its flags, so
+        # vocab_edge_kinds is problem-scoped and state-independent: batches
+        # of graphs from one domain share identical graph attributes.
+        edge_kinds = ["pre", "eff_add", "eff_del"]
+        if self.include_parameters:
+            edge_kinds += ["param_of", "pre_arg", "eff_add_arg", "eff_del_arg"]
+        if self.include_goal:
+            edge_kinds += ["goal_pos", "goal_neg"]
+        if self.include_state_facts:
+            edge_kinds.append("fact")
+        out.edges.ensure_kinds(edge_kinds)
+
         object_ids = {
             name: out.add_node(
                 ("object", name),
@@ -180,7 +229,7 @@ class LiftedTaskEncoder(CustomGraphEncoder):
                 channels=(0, 0, 0, 0, 0),
                 name=name,
             )
-            for name in view.objects
+            for name in self._node_universe(view, state)
         }
 
         predicate_ids: dict[str, int] = {}
@@ -277,12 +326,21 @@ class LiftedTaskEncoder(CustomGraphEncoder):
             for literal in view.goal_literals(state):
                 kind = "goal_pos" if literal.positive else "goal_neg"
                 predicate_id = predicate_ids[literal.atom.predicate]
+                if not literal.atom.args:
+                    # Arity-0 goal: no argument edges exist, so anchor the
+                    # literal as a self-loop on the predicate node.
+                    add_edge(predicate_id, predicate_id, kind)
+                    continue
                 for position, argument in enumerate(literal.atom.args):
                     add_edge(predicate_id, object_ids[argument], kind, pos_a=position)
 
         if self.include_state_facts:
             for atom in (*view.static_facts, *view.state_facts(state)):
                 predicate_id = predicate_ids[atom.predicate]
+                if not atom.args:
+                    # Arity-0 fact: self-loop on the predicate node.
+                    add_edge(predicate_id, predicate_id, "fact")
+                    continue
                 for position, argument in enumerate(atom.args):
                     add_edge(predicate_id, object_ids[argument], "fact", pos_a=position)
 

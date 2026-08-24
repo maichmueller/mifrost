@@ -160,7 +160,9 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
         # Seed the writer's vocabulary in view.predicates order exactly as the
         # per-state id_for loop did, so every channel id stays identical.
         predicates = out.vocabulary("predicates")
-        for name in self._predicate_names:
+        predicate_names = self._predicate_names
+        assert predicate_names is not None  # guaranteed by _hoist_schema above
+        for name in predicate_names:
             predicates.id_for(name)
         id_of_predicate = predicates._ids
 
@@ -227,6 +229,10 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
         }
 
         expansion = self.expansion
+        # Pre-seed both expansion kinds so vocab_edge_kinds is identical for
+        # every state of one problem — even states without any arity>=2
+        # fact — keeping batched graph attributes collision-free.
+        out.edges.ensure_kinds((f"{expansion}_fwd", f"{expansion}_bwd"))
         add_both = out.add_both
         clique_kinds = ("clique_fwd", "clique_bwd")
         chain_kinds = ("chain_fwd", "chain_bwd")

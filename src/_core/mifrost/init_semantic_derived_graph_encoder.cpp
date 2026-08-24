@@ -99,6 +99,15 @@ void apply_derived_config_kwargs(
 
 void init_semantic_derived_graph_encoder(nb::module_& m)
 {
+   nb::enum_< DerivedNodeUniverse >(m, "DerivedNodeUniverse", nb::is_arithmetic())
+      .value("objects_and_atoms", DerivedNodeUniverse::objects_and_atoms)
+      .value("objects_only", DerivedNodeUniverse::objects_only);
+   nb::enum_< DerivedAtomExpansion >(m, "DerivedAtomExpansion", nb::is_arithmetic())
+      .value("star", DerivedAtomExpansion::star)
+      .value("clique", DerivedAtomExpansion::clique)
+      .value("chain", DerivedAtomExpansion::chain)
+      .value("star_first", DerivedAtomExpansion::star_first);
+
    nb::class_< SemanticDerivedGraphEncoderConfig >(m, "SemanticDerivedGraphEncoderConfig")
       .def(nb::init<>())
       .def(

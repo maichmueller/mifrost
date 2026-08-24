@@ -17,6 +17,13 @@ class GraphWriter:
     and spends the writer: any further ``add_*`` or `finish` call raises
     :class:`RuntimeError` until :meth:`reset` clears the finished flag and
     the accumulated content.
+
+    A writer created with an explicit ``builder`` writes into that SHARED
+    batch builder (the batch fast lane); it must never call `finish` —
+    ``build()`` would reset the shared builder mid-batch and silently drop
+    every graph encoded so far. Shared-mode writers therefore raise
+    :class:`RuntimeError` from `finish`; the owning batch loop calls
+    ``next_graph``/``build`` itself.
     """
 
     def __init__(
@@ -38,6 +45,8 @@ class GraphWriter:
         self.graph_kind = graph_kind
         self.export_node_names = export_node_names
         self._finished = False
+        self._shared_builder = builder is not None
+        self._builder: Any
         if builder is None:
             self._builder = BatchBuilder()
             self._builder.set_graph_kind(graph_kind)
@@ -54,6 +63,16 @@ class GraphWriter:
             raise RuntimeError(
                 "this GraphWriter was finished and is spent; call reset() "
                 "or create a fresh writer"
+            )
+
+    def _require_edge_endpoint(self, value: int, label: str) -> None:
+        """Raise IndexError unless ``value`` names an interned node row."""
+
+        count = self.nodes.count
+        if not 0 <= value < count:
+            raise IndexError(
+                f"edge {label}={value} out of range for {count} interned "
+                "node(s); intern the node via add_node() before wiring edges"
             )
 
     def add_node(
@@ -80,6 +99,8 @@ class GraphWriter:
         """Append one directed edge to the writer's `EdgeSink`."""
 
         self._require_open()
+        self._require_edge_endpoint(src, "src")
+        self._require_edge_endpoint(dst, "dst")
         self.edges.add(src, dst, kind, pos_a, pos_b)
 
     def add_both(
@@ -94,6 +115,8 @@ class GraphWriter:
         """Append an edge pair (forward plus reverse) to the edge sink."""
 
         self._require_open()
+        self._require_edge_endpoint(src, "src")
+        self._require_edge_endpoint(dst, "dst")
         self.edges.add_both(src, dst, kind_fwd, kind_bwd, pos_a, pos_b)
 
     def vocabulary(self, name: str) -> Vocabulary:
@@ -141,9 +164,20 @@ class GraphWriter:
         `finish` (or any ``add_*`` method) again raises
         :class:`RuntimeError`; :meth:`reset` returns the writer to a fresh,
         empty state.
+
+        Writers bound to a shared batch builder (``builder=`` at
+        construction, i.e. the batch fast lane) must NOT call `finish`:
+        building the shared builder mid-batch would silently drop every
+        graph encoded so far, so `finish` raises :class:`RuntimeError`
+        there — the batch loop emits the graph.
         """
 
         self._require_open()
+        if self._shared_builder:
+            raise RuntimeError(
+                "this GraphWriter writes into a shared batch builder; do "
+                "not call finish() — the batch loop emits the graph"
+            )
         self._write_into(self._builder)
         encoding = self._builder.build()
         self._finished = True
@@ -156,8 +190,9 @@ class GraphWriter:
         """Discard the finished flag and all accumulated content.
 
         The writer becomes a fresh, empty graph again; the underlying
-        builder is replaced, so a writer bound to a shared batch builder
-        must not be reset mid-batch.
+        builder is replaced with a private one (the shared-builder binding
+        is dropped), so a writer bound to a shared batch builder must not
+        be reset mid-batch.
         """
 
         self._builder = BatchBuilder()
@@ -166,6 +201,7 @@ class GraphWriter:
         self.edges = EdgeSink()
         self._vocabularies = {}
         self._finished = False
+        self._shared_builder = False
 
     def _write_into(self, builder: Any) -> None:
         """Write the accumulated graph content into ``builder``.

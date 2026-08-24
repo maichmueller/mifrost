@@ -19,6 +19,13 @@ _RUNTIME_MISSING = (
     ImportError,
 )
 
+_KNOWN_OPTIONAL_BACKEND_MODULES = (
+    "pymimir",
+    "pytyr",
+    "_pymimir_adapter",
+    "_pytyr_adapter",
+)
+
 
 def _blocks_state():
     _domain, problem, state, _domain_path, _problem_path = load_problem(
@@ -28,7 +35,9 @@ def _blocks_state():
 
 
 def _skip_if_runtime_unavailable(exc: Exception) -> None:
-    if isinstance(exc, _RUNTIME_MISSING):
+    if isinstance(exc, _RUNTIME_MISSING) and any(
+        module in str(exc) for module in _KNOWN_OPTIONAL_BACKEND_MODULES
+    ):
         pytest.skip("pymimir derived runtime not yet available")
     raise exc
 

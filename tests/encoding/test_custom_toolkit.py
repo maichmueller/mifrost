@@ -100,7 +100,13 @@ def _load_smedium_pair(pymimir_problem: Any) -> tuple[Any, Any]:
 
 
 class EchoEncoder(CustomGraphEncoder):
-    """Toy encoder: object nodes, fact nodes with arg edges, goal nodes."""
+    """Toy encoder: object nodes, fact nodes with arg edges, goal nodes.
+
+    Vocabularies are seeded from the schema up front — predicates from
+    ``view.predicates``, edge kinds from the maximum predicate arity plus
+    the goal kind — so every state of one problem exports identical
+    ``vocab_*`` graph attributes (batch attributes must not collide).
+    """
 
     def encode_state(
         self,
@@ -116,10 +122,18 @@ class EchoEncoder(CustomGraphEncoder):
     ) -> None:
         view = out.view
         predicates = out.vocabulary("predicates")
+        max_arity = 0
+        for info in view.predicates:
+            predicates.id_for(info.name)
+            max_arity = max(max_arity, info.arity)
+        edge_kinds: list[str] = []
+        for pos in range(max_arity):
+            edge_kinds.extend((f"arg{pos}", f"arg{pos}_rev"))
+        edge_kinds.extend(("goal_arg", "goal_arg_rev"))
+        out.edges.ensure_kinds(edge_kinds)
         for obj in view.objects:
             out.add_node(("object", obj), role="object", channels=(1,), name=obj)
         for atom in view.state_facts(state):
-            predicates.id_for(atom.predicate)
             fact_id = out.add_node(
                 ("fact", atom.display), role="fact", channels=(2,), name=atom.display
             )
@@ -128,7 +142,6 @@ class EchoEncoder(CustomGraphEncoder):
                 out.add_both(obj_id, fact_id, f"arg{pos}", f"arg{pos}_rev", pos, pos)
         literals = view.goal_literals(state) if goals is None else goals
         for literal in literals:
-            predicates.id_for(literal.atom.predicate)
             goal_id = out.add_node(
                 ("goal", literal.atom.display, literal.positive),
                 role="goal",
@@ -457,9 +470,11 @@ def test_echo_encoder_single_graph(blocks_pair) -> None:
     assert encoding.num_edges == expected_edges
     assert dict(encoding.schema_flags)["custom_encoder"] is True
     attrs = encoding.graph_attrs
-    used_predicates = {atom.predicate for atom in facts}
-    used_predicates |= {literal.atom.predicate for literal in goals}
-    assert sorted(attrs["vocab_predicates"]) == sorted(used_predicates)
+    # EchoEncoder seeds the full schema vocabulary up front, so the export
+    # covers every domain predicate regardless of what the state uses.
+    assert sorted(attrs["vocab_predicates"]) == sorted(
+        info.name for info in view.predicates
+    )
     pyg = encoding.as_pyg()
     assert tuple(pyg.x_ids.shape) == (expected_nodes, 1)
     # The homo PyG converter symmetrizes directed edges unless the
@@ -535,3 +550,117 @@ def test_custom_stream_lifecycle_matches_direct_encoding(blocks_pair) -> None:
 
     with pytest.raises(KeyError):
         stream.remove(42)
+
+
+# --------------------------------------------------------------------------- #
+# adversarial-review hardening
+
+
+def test_shared_builder_writer_finish_is_rejected(blocks_pair) -> None:
+    """finish() on a shared-batch writer must fail loudly, not reset the batch."""
+
+    from mifrost._core import BatchBuilder
+
+    problem, state, _, _ = blocks_pair
+    view = StateView(problem)
+
+    builder = BatchBuilder()
+    builder.set_graph_kind("homo")
+    writer = GraphWriter(view, builder=builder)
+    writer.add_node(("object", "a"), role="object", name="a")
+    writer._write_into(builder)  # what the batch fast lane does
+    with pytest.raises(RuntimeError, match="shared batch builder"):
+        writer.finish()
+    # The shared builder must still hold the graph for the batch loop.
+    encoding = builder.build()
+    assert encoding.num_nodes >= 1
+
+    # A malicious encode_state calling finish() inside the fast lane now
+    # raises through encode_batch instead of silently dropping graphs.
+    class FinishInsideEncoder(CustomGraphEncoder):
+        def encode_state(self, out, state, **kwargs):  # noqa: ANN001, ARG002
+            out.add_node(("object", "x"), role="object", name="x")
+            out.finish()
+
+    sabotage = FinishInsideEncoder(problem)
+    with pytest.raises(RuntimeError, match="shared batch builder"):
+        sabotage.encode_batch([state])
+
+
+def test_empty_goals_lane_batch_matches_single_no_goal_encoding(blocks_pair) -> None:
+    """``goals=[]`` means explicitly no goals, single AND batched."""
+
+    problem, state, _, _ = blocks_pair
+    encoder = EchoEncoder(problem)
+
+    default_nodes = encoder.encode(state).num_nodes
+    no_goal_single = encoder.encode(state, goals=[])
+    assert no_goal_single.num_nodes < default_nodes  # problem goals dropped
+
+    batched = encoder.encode_batch([state, state], goals=[[], []])
+    assert batched.num_graphs == 2
+    assert batched.num_nodes == 2 * no_goal_single.num_nodes
+
+    # The per-state split of an explicit empty lane also stays empty.
+    per_state = encoder.encode_batch([state, state], goals=[[], ()])
+    assert per_state.dumps() == batched.dumps()
+
+
+def test_writer_edge_endpoints_are_bounds_checked(blocks_pair) -> None:
+    problem, _state, _, _ = blocks_pair
+    view = StateView(problem)
+    writer = GraphWriter(view)
+    writer.add_node(("object", "a"), role="object", name="a")
+
+    with pytest.raises(IndexError, match=r"src=5.*1 interned"):
+        writer.add_edge(5, 0, "arg_fwd")
+    with pytest.raises(IndexError, match=r"dst=-1"):
+        writer.add_both(0, -1, "arg_fwd", "arg_bwd")
+    # In-range edges keep working.
+    writer.add_both(0, 0, "loop", "loop_rev")
+
+
+class VaryingAttrEncoder(CustomGraphEncoder):
+    """Encoder whose graph attr ``state_tag`` depends on the encoded state."""
+
+    def encode_state(
+        self,
+        out: GraphWriter,
+        state: Any,
+        **kwargs: Any,
+    ) -> None:
+        del kwargs
+        tag = len(out.view.state_facts(state))
+        out.add_node(("object", "only"), role="object", channels=(tag,))
+        out.set_attr("state_tag", str(tag))
+
+
+def test_varying_vocab_attr_in_batch_raises_fast_lane(blocks_pair) -> None:
+    problem, initial, _, _ = blocks_pair
+    successor = next(iter(initial.generate_applicable_actions())).apply(initial)
+    encoder = VaryingAttrEncoder(problem)
+    assert (
+        encoder.encode(initial).graph_attrs["state_tag"]
+        != (encoder.encode(successor).graph_attrs["state_tag"])
+    )
+    with pytest.raises(ValueError, match="state_tag.*different value"):
+        encoder.encode_batch([initial, successor])
+    # Same-attr batches remain fine.
+    assert encoder.encode_batch([initial, initial]).num_graphs == 2
+
+
+def test_varying_vocab_attr_in_batch_raises_stream_flush(blocks_pair) -> None:
+    problem, initial, _, _ = blocks_pair
+    successor = next(iter(initial.generate_applicable_actions())).apply(initial)
+    encoder = VaryingAttrEncoder(problem)
+
+    stream = CustomStream(encoder)
+    stream.append(initial)
+    stream.append(successor)
+    with pytest.raises(ValueError, match="state_tag.*different value"):
+        stream.flush()
+
+    agreeing = CustomStream(encoder)
+    agreeing.append(initial)
+    agreeing.append(initial)
+    assert agreeing.flush().num_graphs == 2

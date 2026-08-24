@@ -485,42 +485,66 @@ void BatchBuilder::set_schema_flag(const std::string& key, bool value)
    schema_flags[key] = value;
 }
 
+// GraphAttrValue's first alternative is int64_t, so a default-constructed
+// slot already "holds" an int64. Presence must therefore be decided by a map
+// lookup, never by inspecting operator[]-created slots: identical values
+// dedupe as no-ops, while a key re-set with a different value (other type or
+// unequal content) is a batch-level collision and must throw.
+
 void BatchBuilder::set_graph_attr(const std::string& key, std::vector< int64_t > values)
 {
-   auto& slot = graph_attrs[key];
-   if(auto* existing = std::get_if< std::vector< int64_t > >(&slot);
-      existing && *existing == values) {
+   const auto it = graph_attrs.find(key);
+   if(it == graph_attrs.end()) {
+      graph_attrs.emplace(key, std::move(values));
       return;
    }
-   slot = std::move(values);
+   const auto* existing = std::get_if< std::vector< int64_t > >(&it->second);
+   if(existing != nullptr && *existing == values) {
+      return;
+   }
+   throw std::invalid_argument("Graph attr '" + key + "' already set with a different value");
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, std::vector< std::string > values)
 {
-   auto& slot = graph_attrs[key];
-   if(auto* existing = std::get_if< std::vector< std::string > >(&slot);
-      existing && *existing == values) {
+   const auto it = graph_attrs.find(key);
+   if(it == graph_attrs.end()) {
+      graph_attrs.emplace(key, std::move(values));
       return;
    }
-   slot = std::move(values);
+   const auto* existing = std::get_if< std::vector< std::string > >(&it->second);
+   if(existing != nullptr && *existing == values) {
+      return;
+   }
+   throw std::invalid_argument("Graph attr '" + key + "' already set with a different value");
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, int64_t value)
 {
-   auto& slot = graph_attrs[key];
-   if(auto* existing = std::get_if< int64_t >(&slot); existing && *existing == value) {
+   const auto it = graph_attrs.find(key);
+   if(it == graph_attrs.end()) {
+      graph_attrs.emplace(key, value);
       return;
    }
-   slot = value;
+   const auto* existing = std::get_if< int64_t >(&it->second);
+   if(existing != nullptr && *existing == value) {
+      return;
+   }
+   throw std::invalid_argument("Graph attr '" + key + "' already set with a different value");
 }
 
 void BatchBuilder::set_graph_attr(const std::string& key, std::string value)
 {
-   auto& slot = graph_attrs[key];
-   if(auto* existing = std::get_if< std::string >(&slot); existing && *existing == value) {
+   const auto it = graph_attrs.find(key);
+   if(it == graph_attrs.end()) {
+      graph_attrs.emplace(key, std::move(value));
       return;
    }
-   slot = std::move(value);
+   const auto* existing = std::get_if< std::string >(&it->second);
+   if(existing != nullptr && *existing == value) {
+      return;
+   }
+   throw std::invalid_argument("Graph attr '" + key + "' already set with a different value");
 }
 
 void BatchBuilder::add_lazy_target_names(std::span< const std::string > names)
@@ -873,6 +897,19 @@ void BatchBuilder::next_graph()
 
       count = 0;
    }
+   // Node types absent from this graph still advance one boundary: a type
+   // first seen in a later graph must not have its leading boundaries
+   // collapsed, or per-graph batch assignment attributes its nodes to the
+   // wrong graph.
+   for(auto& [ntype, p] : ptrs) {
+      if(current_node_counts.contains(ntype)) {
+         continue;
+      }
+      if(p.empty()) {
+         p.emplace_back(0);
+      }
+      p.emplace_back(p.back());
+   }
    // Batch indices tracking could go here if we want homogeneous batch vector
    current_graph_idx++;
 }
@@ -947,14 +984,32 @@ BatchBuilder::BatchEncoding BatchBuilder::build()
       }
    }
 
-   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
    int64_t graph_count = 0;
    for(const auto& [node_type, ptr] : ptrs) {
       if(ptr.size() < 2) {
          continue;
       }
-      ptr_vectors[node_type] = ptr;
       graph_count = std::max< int64_t >(graph_count, ptr.size() - 1);
+   }
+   // Left-pad types that first appeared in later graphs IN PLACE so every
+   // ptr spans the full batch: leading boundaries repeat the type's initial
+   // (per-type) offset. The encoding moves `ptrs` out below, so padding the
+   // live map is what reaches downstream batch assignment.
+   for(auto& [node_type, ptr] : ptrs) {
+      if(ptr.size() < 2) {
+         continue;
+      }
+      const auto missing = static_cast< size_t >(graph_count + 1) - ptr.size();
+      if(missing > 0) {
+         ptr.insert(ptr.begin(), static_cast< long >(missing), ptr.front());
+      }
+   }
+   absl::btree_map< std::string, std::vector< int64_t > > ptr_vectors;
+   for(const auto& [node_type, ptr] : ptrs) {
+      if(ptr.size() < 2) {
+         continue;
+      }
+      ptr_vectors[node_type] = ptr;
    }
    if(ptr_vectors.empty()) {
       for(const auto& [node_type, count] : node_counts) {

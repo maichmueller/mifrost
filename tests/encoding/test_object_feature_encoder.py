@@ -537,3 +537,50 @@ def test_ternary_fact_expansion_counts(tmp_path, expansion, expected_edges) -> N
             ("a", "c", 0, 2),
             ("c", "a", 2, 0),
         }
+
+
+# --------------------------------------------------------------------------- #
+# adversarial-review hardening
+
+
+def test_draw_unary_only_state_renders_nodes(blocks, initial) -> None:
+    """Edge-less graphs must not be blanked by reverse-edge filtering."""
+
+    pytest.importorskip("matplotlib")
+    from mifrost.encoders._derived_visualization import (
+        derived_to_networkx,
+        draw_derived,
+    )
+
+    encoder = ObjectFeatureEncoder(blocks)
+    data = encoder.encode_pyg(initial)
+    # Precondition of this test: the blocks/small root has unary facts only.
+    assert data.num_edges == 0
+    graph = derived_to_networkx(data)
+    assert graph.number_of_nodes() == len(encoder.view.objects)
+
+    ax = draw_derived(graph)
+    drawn = sum(len(collection.get_offsets()) for collection in ax.collections)
+    assert drawn == graph.number_of_nodes()
+    labels = [text.get_text() for text in ax.texts]
+    assert set(encoder.view.objects) <= set(labels)
+
+
+def test_batch_of_edgeless_and_edged_states_shares_edge_kind_vocab(
+    blocks, initial, stacked
+) -> None:
+    """vocab_edge_kinds is state-independent, so batches cannot collide."""
+
+    encoder = ObjectFeatureEncoder(blocks)
+    initial_encoding = encoder.encode(initial)
+    stacked_encoding = encoder.encode(stacked)
+    assert dict(initial_encoding.graph_attrs)["vocab_edge_kinds"] == [
+        "clique_fwd",
+        "clique_bwd",
+    ]
+    assert (
+        initial_encoding.graph_attrs["vocab_edge_kinds"]
+        == stacked_encoding.graph_attrs["vocab_edge_kinds"]
+    )
+    batched = encoder.encode_batch([initial, stacked])
+    assert batched.graph_attrs["vocab_edge_kinds"] == ["clique_fwd", "clique_bwd"]

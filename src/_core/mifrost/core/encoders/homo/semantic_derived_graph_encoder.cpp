@@ -46,6 +46,9 @@ constexpr std::string_view kHyperedgeNodeIndicesField = "hyperedge_node_indices"
 constexpr std::string_view kHyperedgeIdsField = "hyperedge_ids";
 constexpr std::string_view kHyperedgeRoleIdsField = "hyperedge_role_ids";
 constexpr std::string_view kHyperedgeCountsField = "hyperedge_counts";
+// Instance channels follow multi-set semantics: the same atom occurring as a
+// state fact and as a goal literal emits two instances (and two argument-edge
+// sets), so per-instance counts exceed distinct-atom counts by design.
 constexpr std::string_view kTupleArgsField = "tuple_args";
 constexpr std::string_view kTupleSlotSizesField = "tuple_slot_sizes";
 constexpr std::string_view kTupleRelIdsField = "tuple_rel_ids";
@@ -627,6 +630,25 @@ void encode_impl(
    builder.set_graph_attr("atom_expansion", static_cast< int64_t >(config.atom_expansion));
 
    const auto& objects = semantic_objects(input);
+   const auto validate_atom_arguments = [&](const SemanticAtom& atom) {
+      for(const auto argument : atom.arguments) {
+         if(argument < 0 || argument >= static_cast< int64_t >(objects.size())) {
+            throw std::invalid_argument(
+               "semantic derived-graph input references object index " + std::to_string(argument)
+               + " outside the problem's " + std::to_string(objects.size()) + " objects"
+            );
+         }
+      }
+   };
+   for(const auto& atom : semantic_static_facts(input)) {
+      validate_atom_arguments(atom);
+   }
+   for(const auto& atom : semantic_state_facts(input)) {
+      validate_atom_arguments(atom);
+   }
+   for(const auto& goal : semantic_goal_levels(input)) {
+      validate_atom_arguments(goal.literal.atom);
+   }
    Emitter emitter{predicates, action_specs, objects, config};
    auto& buffers = emitter.buffers;
    if(config.include_line_graph) {
@@ -974,8 +996,10 @@ void encode_impl(
          builder.set_graph_attr(
             "hyperedge_note",
             std::string(
-               "members are object nodes; pair rows via zip(hyperedge_node_indices, "
-               "hyperedge_ids)"
+               "members are object nodes; hyperedge_sizes counts members per "
+               "hyperedge (possibly zero) - expand ids via "
+               "repeat_interleave(hyperedge_ids, hyperedge_sizes) to pair with "
+               "hyperedge_node_indices"
             )
          );
       }

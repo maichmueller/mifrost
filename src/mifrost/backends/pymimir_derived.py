@@ -298,7 +298,10 @@ class PymimirDerivedRuntime:
         inputs = []
         for index, state in enumerate(state_values):
             if (
-                _lane_is_empty(goal_values[index])
+                # Only None means "problem's default goals"; an explicit []
+                # is a deliberate no-goal encoding and must not hit the
+                # default-lane memo.
+                goal_values[index] is None
                 and _lane_is_empty(action_values[index])
                 and _lane_is_empty(layer_values[index])
                 and _lane_is_empty(history_values[index])

@@ -8,9 +8,11 @@ stable display names and decoded role/kind attributes, and
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 import torch
+
+_LineStyle = Literal["-", "--", "-.", ":"]
 
 ROLE_NAMES: tuple[str, ...] = (
     "object",
@@ -51,7 +53,7 @@ ROLE_COLORS: dict[str, str] = {
     "hyperedge": "#DA8BC3",
 }
 
-KIND_STYLES: dict[str, tuple[str, float, float, str]] = {
+KIND_STYLES: dict[str, tuple[str, float, float, _LineStyle]] = {
     "arg_fwd": ("#666666", 1.0, 0.9, "-"),
     "arg_bwd": ("#BBBBBB", 0.5, 0.35, ":"),
     "clique_fwd": ("#1F77B4", 1.4, 0.9, "-"),
@@ -234,13 +236,15 @@ def draw_derived(
 
     render_graph = graph
     if hide_reverse_edges:
-        render_graph = graph.edge_subgraph(
-            [
-                (u, v, k)
-                for u, v, k, attrs in graph.edges(keys=True, data=True)
-                if attrs.get("kind") not in REVERSE_KINDS
-            ]
-        ).copy()
+        kept_edges = [
+            (u, v, k)
+            for u, v, k, attrs in graph.edges(keys=True, data=True)
+            if attrs.get("kind") not in REVERSE_KINDS
+        ]
+        # Filtering an edge-less graph through edge_subgraph would drop every
+        # node and render a blank axis; keep the full graph instead.
+        if kept_edges:
+            render_graph = graph.edge_subgraph(kept_edges).copy()
 
     positions = layout or nx.spring_layout(render_graph, seed=0, k=1.4)
 

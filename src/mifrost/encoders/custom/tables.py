@@ -7,7 +7,7 @@ dense row indices; all arrays are numpy float32/int64 ready for ingestion.
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 from typing import Any
 
 import numpy as np
@@ -182,6 +182,18 @@ class EdgeSink:
 
         self.add(src, dst, kind_fwd, pos_a, pos_b)
         self.add(dst, src, kind_bwd, pos_b, pos_a)
+
+    def ensure_kinds(self, names: Iterable[str]) -> None:
+        """Intern every name in the kind vocabulary without adding edges.
+
+        Encoders that want a state-independent ``vocab_edge_kinds`` (so
+        batched graphs of one problem share identical graph attributes)
+        pre-seed every kind they may emit, even those a given state never
+        uses.
+        """
+
+        for name in names:
+            self._kind_vocabulary.id_for(name)
 
     @property
     def kinds(self) -> Vocabulary:
