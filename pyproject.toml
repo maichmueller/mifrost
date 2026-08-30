@@ -5,6 +5,10 @@ requires = [
     "cmake>=3.24,<5",
     "conan>=2.4,<3",
     "ninja>=1.11,<2",
+    # Mifrost joins pymimir's nanobind type registry. Keep this in the
+    # isolated build environment so CMake resolves the same newer nanobind
+    # generation that pymimir uses instead of the removed Conan package.
+    "nanobind==2.15.0",
     "PyYAML>=6.0,<7",
 ]
 build-backend = "build_backend"
@@ -25,7 +29,7 @@ license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 pymimir = [
-    "pymimir>=0.13.60",
+    "pymimir>=0.14.3",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
@@ -37,7 +41,7 @@ pytyr = [
     "numpy",
 ]
 backends = [
-    "pymimir>=0.13.60",
+    "pymimir>=0.14.3",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
@@ -49,7 +53,7 @@ torch = [
     "numpy",
 ]
 test = [
-    "pymimir>=0.13.60",
+    "pymimir>=0.14.3",
     "pytyr==0.0.34",
     "pytest>=8.0,<9",
     "torch>=2.2,<3",
@@ -57,7 +61,7 @@ test = [
     "numpy",
 ]
 perf = [
-    "pymimir>=0.13.60",
+    "pymimir>=0.14.3",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",
@@ -70,7 +74,7 @@ dev = [
     "ruff>=0.14.14,<0.15",
     "mypy>=1.14,<2",
     "PyYAML>=6.0,<7",
-    "pymimir>=0.13.60",
+    "pymimir>=0.14.3",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",
@@ -92,6 +96,7 @@ wheel.packages = ["src/mifrost"]
 # file, but packaging still needs it, so include it in the sdist; the wheel
 # build path then carries the generated stub into the final wheel artifact.
 sdist.include = [
+    "scripts/install_pymimir_release.py",
     "scripts/resolve_native_prefixes.py",
     "src/mifrost/_core.pyi",
     "src/mifrost/_neutral_core.pyi",

@@ -53,7 +53,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 
 - Python `>= 3.12`
 - A working C++ toolchain
-- At least one optional planner for encoder use: `pymimir>=0.13.60` or
+- At least one optional planner for encoder use: `pymimir>=0.14.3` or
   `pytyr==0.0.34`
 - For Python-side graph assembly: `torch` and `torch-geometric`
 - For source builds: Conan (or `CONAN_COMMAND`/`CONAN_CMD` pointing to it)
@@ -90,8 +90,15 @@ pip install "mifrost[backends]"
 ```bash
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
-pip install ".[pymimir]"
+python scripts/install_pymimir_release.py
+pip install --no-build-isolation ".[pymimir]"
 ```
+
+The Pymimir adapter shares nanobind's runtime type registry with Pymimir, so
+source builds require an ABI-matched Pymimir release. The helper above installs
+the platform-specific wheel from the maintained `maichmueller/mimir` release
+(currently `0.14.3`) before building Mifrost. Set
+`MIFROST_PYMIMIR_RELEASE_VERSION` when selecting a newer compatible release.
 
 Source builds contain both adapter modules by default. Set
 `MIFROST_BUILD_BACKENDS=core`, `pymimir`, `pytyr`, or `both` to build an

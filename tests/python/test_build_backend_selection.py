@@ -58,9 +58,9 @@ def test_unknown_backend_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     ("selection", "expected"),
     [
         ("core", ["wheel"]),
-        ("pymimir", ["wheel", "pymimir>=0.13.60"]),
+        ("pymimir", ["wheel", "pymimir>=0.14.3"]),
         ("pytyr", ["wheel", "pytyr==0.0.34"]),
-        ("both", ["wheel", "pymimir>=0.13.60", "pytyr==0.0.34"]),
+        ("both", ["wheel", "pymimir>=0.14.3", "pytyr==0.0.34"]),
     ],
 )
 def test_build_requirements_follow_backend_selection(
@@ -95,11 +95,11 @@ def test_project_metadata_keeps_planners_optional() -> None:
     assert not any("pytyr" in requirement for requirement in build_requirements)
     extras = project["project"]["optional-dependencies"]
     torch_requirements = {"torch>=2.2,<3", "torch-geometric>=2.7", "numpy"}
-    assert set(extras["pymimir"]) == {"pymimir>=0.13.60"} | torch_requirements
+    assert set(extras["pymimir"]) == {"pymimir>=0.14.3"} | torch_requirements
     assert set(extras["pytyr"]) == {"pytyr==0.0.34"} | torch_requirements
     assert (
         set(extras["backends"])
-        == {"pymimir>=0.13.60", "pytyr==0.0.34"} | torch_requirements
+        == {"pymimir>=0.14.3", "pytyr==0.0.34"} | torch_requirements
     )
 
 
@@ -107,10 +107,11 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     base_requirements = Path("requirements/base-build.txt").read_text()
     assert "pymimir" not in base_requirements.lower()
     assert "pytyr" not in base_requirements.lower()
+    assert "nanobind==2.15.0" in base_requirements
 
     default_requirements = Path("requirements/build.txt").read_text()
     assert "-r base-build.txt" in default_requirements
-    assert "pymimir==" in default_requirements
+    assert "install_pymimir_release.py" in default_requirements
     assert "pytyr==" in default_requirements
 
     workflow = Path(".github/workflows/wheels.yml").read_text()
@@ -122,11 +123,16 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     assert len(before_build_lines) == 2
     assert all("requirements/build.txt" in line for line in before_build_lines)
     assert all("requirements/constraints-ci.txt" in line for line in before_build_lines)
+    assert all("install_pymimir_release.py" in line for line in before_build_lines)
     assert 'CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"' in workflow
     assert (
-        'CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.34 '
+        'CIBW_TEST_REQUIRES: "pytyr==0.0.34 '
         "pyyggdrasil==0.0.27 pypddl==1.0.27 "
         'torch>=2.2,<3 torch-geometric>=2.7 numpy"' in workflow
+    )
+    assert (
+        "CIBW_TEST_COMMAND: python {project}/scripts/install_pymimir_release.py"
+        in workflow
     )
     assert workflow.count("flavor:") == 2
     assert "MIFROST_BUILD_BACKENDS: both" in workflow

@@ -46,6 +46,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -c requirements/constraints-ci.txt -r requirements/build.txt -r requirements.txt
+          python scripts/install_pymimir_release.py
 
       - name: Build wheel
         id: build_wheel
@@ -97,7 +98,8 @@ jobs:
           # generate_snippet_includes.py) and touches the optional
           # torch-backed encoders; requirements.txt no longer pulls in
           # either since planner backends became optional extras.
-          python -m pip install -c requirements/constraints-ci.txt pymimir torch torch-geometric numpy
+          python scripts/install_pymimir_release.py
+          python -m pip install -c requirements/constraints-ci.txt torch torch-geometric numpy
 
       - name: Sanity import
         run: python -c "import mifrost, pymimir; print('ok')"

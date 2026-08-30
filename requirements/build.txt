@@ -1,3 +1,3 @@
 -r base-build.txt
-pymimir==0.13.63
+# Install the ABI-matched owner release with scripts/install_pymimir_release.py.
 pytyr==0.0.34

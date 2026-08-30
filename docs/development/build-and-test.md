@@ -10,13 +10,15 @@ native C++ changes are reflected in Python runtime checks.
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+python scripts/install_pymimir_release.py
+python -m pip install --no-build-isolation -e ".[dev]"
 ```
 
 If your environment does not provide extras, install the minimal tools directly:
 
 ```bash
-MIFROST_BUILD_BACKENDS=pymimir python -m pip install -e .[pymimir]
+python scripts/install_pymimir_release.py
+MIFROST_BUILD_BACKENDS=pymimir python -m pip install --no-build-isolation -e ".[pymimir]"
 python -m pip install pytest mkdocs mkdocs-material
 ```
 

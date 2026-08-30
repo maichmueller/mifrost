@@ -139,7 +139,7 @@ if (MIFROST_BUILD_PYTHON)
                     "${_nanobind_error}\n"
                     "Install it into that interpreter:\n"
                     "  ${Python_EXECUTABLE} -m pip install "
-                    "'nanobind>=${MIFROST_NANOBIND_MIN_VERSION},<3'\n"
+                    "'nanobind==2.15.0'\n"
                     "or point NANOBIND_CMAKE_DIR at a nanobind CMake package "
                     "directory.")
             endif ()
@@ -408,8 +408,8 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER)
         message(FATAL_ERROR "mimir was found, but did not report mimir_VERSION")
     endif()
 
-    if (mimir_VERSION VERSION_LESS "0.13.60")
-        message(FATAL_ERROR "mimir >= 0.13.60 required, found ${mimir_VERSION}")
+    if (mimir_VERSION VERSION_LESS "0.14.3")
+        message(FATAL_ERROR "mimir >= 0.14.3 required, found ${mimir_VERSION}")
     endif()
 endif ()
 

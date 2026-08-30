@@ -4,7 +4,7 @@
 
 - Python `>=3.12`
 - A working C++ toolchain
-- At least one planner for encoder use: `pymimir>=0.13.60` or `pytyr==0.0.34`
+- At least one planner for encoder use: `pymimir>=0.14.3` or `pytyr==0.0.34`
 - Conan 2 (for source builds via `configure.py`)
 - Optional for PyG conversion: `torch` and `torch-geometric`
 
@@ -29,6 +29,16 @@ installing one does not install the other.
 git clone https://github.com/maichmueller/mifrost.git
 cd mifrost
 MIFROST_BUILD_BACKENDS=pytyr python -m pip install ".[pytyr]"
+```
+
+For a Pymimir build, install the release wheel before the no-build-isolation
+install. It selects the ABI-matched wheel from the maintained
+`maichmueller/mimir` release and defaults to version `0.14.3`; set
+`MIFROST_PYMIMIR_RELEASE_VERSION` for a newer release:
+
+```bash
+python scripts/install_pymimir_release.py
+MIFROST_BUILD_BACKENDS=pymimir python -m pip install --no-build-isolation ".[pymimir]"
 ```
 
 `MIFROST_BUILD_BACKENDS` accepts `core`, `pymimir`, `pytyr`, or `both`.

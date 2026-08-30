@@ -76,6 +76,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install -c requirements/constraints-ci.txt -r requirements/build.txt -r requirements.txt "mypy>=1.14,<2"
+        python scripts/install_pymimir_release.py
 
     - name: Initialize Conan profile
       run: |
@@ -190,12 +191,12 @@ jobs:
         # native library is linked against the matching PyYggdrasil/PyPDDL
         # runtime; allowing pip to select newer transitive native wheels can
         # produce an undefined C++ ABI symbol before Mifrost is imported.
-        CIBW_TEST_REQUIRES: "pymimir==0.13.63 pytyr==0.0.34 pyyggdrasil==0.0.27 pypddl==1.0.27 torch>=2.2,<3 torch-geometric>=2.7 numpy"
+        CIBW_TEST_REQUIRES: "pytyr==0.0.34 pyyggdrasil==0.0.27 pypddl==1.0.27 torch>=2.2,<3 torch-geometric>=2.7 numpy"
         CIBW_CACHE_PATH: ${{ env.CIBW_CACHE_PATH }}
         CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
-        CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
-        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -c /project/requirements/constraints-ci.txt -r /project/requirements/build.txt
-        CIBW_BEFORE_BUILD_MACOS: python -m pip install -c {project}/requirements/constraints-ci.txt -r {project}/requirements/build.txt && python -m pip install delocate
+        CIBW_TEST_COMMAND: python {project}/scripts/install_pymimir_release.py && python {project}/scripts/smoke_installed_wheel.py
+        CIBW_BEFORE_BUILD_LINUX: rm -rf /project/build && python -m pip install -c /project/requirements/constraints-ci.txt -r /project/requirements/build.txt && python /project/scripts/install_pymimir_release.py
+        CIBW_BEFORE_BUILD_MACOS: python -m pip install -c {project}/requirements/constraints-ci.txt -r {project}/requirements/build.txt && python {project}/scripts/install_pymimir_release.py && python -m pip install delocate
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: python {project}/scripts/repair_wheel.py {wheel} {dest_dir}
         CIBW_CONTAINER_ENGINE_OPTIONS: --volume ${{ env.CONAN_HOME }}:/conan_home
