@@ -122,7 +122,7 @@ jobs:
           python cbuild.py --mode ci
 
       - name: Run C++ tests
-        run: ctest --test-dir build/ci -R mifrost_tests --output-on-failure
+        run: ctest --test-dir build/ci --output-on-failure
 
       - name: Save Conan cache
         if: >-

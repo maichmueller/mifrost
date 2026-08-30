@@ -247,40 +247,57 @@ class LiftedTaskEncoder(CustomGraphEncoder):
                 name=info.name,
             )
 
-        structures: dict[str, ActionStructure] = {
-            structure.name: structure for structure in view.action_structures()
-        }
-        action_ids: dict[str, int] = {}
-        for info in view.action_schemas:
-            structure = structures[info.name]
-            action_ids[info.name] = out.add_node(
-                ("action", info.name),
-                role="action",
-                channels=(
-                    2,
-                    action_vocab.id_for(info.name) + 1,
-                    len(structure.parameters),
-                    0,
-                    0,
-                ),
-                name=info.name,
+        # ``action_schemas`` is name-unique, whereas disjunctive preconditions
+        # are flattened by StateView into several same-named structures. Keep
+        # the canonical structural order and add an occurrence discriminator to
+        # every action/parameter identity so no flattened branch overwrites a
+        # previous node.
+        action_records: list[tuple[ActionStructure, int]] = []
+        occurrences: dict[tuple[str, int], int] = {}
+        for structure in view.action_structures():
+            schema_key = (structure.name, structure.arity)
+            occurrence = occurrences.get(schema_key, 0)
+            occurrences[schema_key] = occurrence + 1
+            action_records.append((structure, occurrence))
+
+        action_ids: list[int] = []
+        for structure, occurrence in action_records:
+            action_ids.append(
+                out.add_node(
+                    ("action", structure.name, structure.arity, occurrence),
+                    role="action",
+                    channels=(
+                        2,
+                        action_vocab.id_for(structure.name) + 1,
+                        len(structure.parameters),
+                        0,
+                        0,
+                    ),
+                    name=structure.name,
+                )
             )
 
         add_edge = out.add_edge
-        for info in view.action_schemas:
-            structure = structures[info.name]
-            action_id = action_ids[info.name]
+        for (structure, occurrence), action_id in zip(
+            action_records, action_ids, strict=True
+        ):
             parameter_ids: list[int] | None = None
             if self.include_parameters:
                 parameter_ids = []
-                schema_id = action_vocab.id_for(info.name) + 1
+                schema_id = action_vocab.id_for(structure.name) + 1
                 for index, parameter_name in enumerate(structure.parameters):
                     parameter_ids.append(
                         out.add_node(
-                            ("parameter", info.name, index),
+                            (
+                                "parameter",
+                                structure.name,
+                                structure.arity,
+                                occurrence,
+                                index,
+                            ),
                             role="parameter",
                             channels=(3, schema_id, index, 0, 0),
-                            name=f"{info.name}{parameter_name}",
+                            name=f"{structure.name}{parameter_name}",
                         )
                     )
                     add_edge(parameter_ids[-1], action_id, "param_of", pos_a=index)

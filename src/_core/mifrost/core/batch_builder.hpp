@@ -112,8 +112,8 @@ class MIFROST_API BatchBuilder {
     * @param node_type e.g. "atom"
     * @param attr_name e.g. "x"
     * @param data Raw data span (num_nodes * feature_dim)
-    * @param feature_dim Dimension of feature vector (e.g. 1 for simple attributes, N for
-    * embeddings)
+    * @param feature_dim Positive dimension of feature vector (e.g. 1 for simple attributes,
+    * N for embeddings)
     */
    void add_node_features(
       const std::string& node_type,

@@ -35,6 +35,8 @@ jobs:
         python scripts/validate_generated_stub.py src/mifrost/_pytyr_adapter.pyi
 
     - name: Build SDist
+      env:
+        PIP_CONSTRAINT: ${{ github.workspace }}/requirements/constraints-ci.txt
       run: pipx run build --sdist
 
     - name: Check metadata
@@ -73,7 +75,7 @@ jobs:
     - name: Install build deps
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r requirements/build.txt -r requirements.txt "mypy>=1.14,<2"
+        python -m pip install -c requirements/constraints-ci.txt -r requirements/build.txt -r requirements.txt "mypy>=1.14,<2"
 
     - name: Initialize Conan profile
       run: |

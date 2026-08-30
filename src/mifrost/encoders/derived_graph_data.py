@@ -35,6 +35,7 @@ def normalize_derived_graph_batch_metadata(
     """
     for attr in (
         "vocab_roles",
+        "vocab_categories",
         "vocab_predicates",
         "vocab_edge_kinds",
         "channel_names",
@@ -95,9 +96,11 @@ class DerivedGraphData(Data):
                 device=value.device if isinstance(value, torch.Tensor) else None,
             )
         if key == "hyperedge_attr_ids":
-            return self._num_hyperedges()
-        if key in {"tuple_ptr", "tuple_rel_ids", "tuple_role_ids"}:
-            return self._num_tuples()
+            return 0
+        if key == "tuple_ptr":
+            return self._num_tuple_args()
+        if key in {"tuple_rel_ids", "tuple_role_ids"}:
+            return 0
         return super().__inc__(key, value, *args, **kwargs)
 
     @cached_property
@@ -133,7 +136,9 @@ class DerivedGraphData(Data):
         On re-batched batch objects ``tuple_ptr`` may carry duplicated
         boundary entries where graph fragments meet (per-graph CSRs
         concatenate; a global CSR does not). Those entries produce zero-width
-        rows, which surface as all-masked rows here.
+        rows, which surface as all-masked rows here. Decreasing or out-of-range
+        pointers are rejected instead of silently reading another graph's
+        flattened arguments.
         """
         empty_args = torch.empty((0, 0), dtype=torch.long)
         empty_mask = torch.empty((0, 0), dtype=torch.bool)
@@ -148,15 +153,23 @@ class DerivedGraphData(Data):
         num_tuples = max(ptr.numel() - 1, 0)
         if num_tuples == 0:
             return empty_args, empty_mask
+        if (
+            int(ptr[0]) < 0
+            or int(ptr[-1]) > args_flat.numel()
+            or bool((ptr.diff() < 0).any())
+        ):
+            raise ValueError(
+                "tuple_ptr must be monotonically non-decreasing and within tuple_args"
+            )
         sizes = ptr[1:] - ptr[:-1]
-        width = max(int(sizes.max().item()), 0)
+        width = int(sizes.max().item())
         out = args_flat.new_full((num_tuples, width), fill_value)
         mask = torch.zeros(
             (num_tuples, width), dtype=torch.bool, device=args_flat.device
         )
         for row in range(num_tuples):
             start = int(ptr[row])
-            step = max(int(ptr[row + 1]) - start, 0)
+            step = int(ptr[row + 1]) - start
             out[row, :step] = args_flat[start : start + step]
             mask[row, :step] = True
         return out, mask
@@ -194,6 +207,12 @@ class DerivedGraphData(Data):
         tuple_ptr = getattr(self, "tuple_ptr", None)
         if isinstance(tuple_ptr, torch.Tensor):
             return max(tuple_ptr.numel() - 1, 0)
+        return 0
+
+    def _num_tuple_args(self) -> int:
+        tuple_args = getattr(self, "tuple_args", None)
+        if isinstance(tuple_args, torch.Tensor):
+            return int(tuple_args.numel())
         return 0
 
 

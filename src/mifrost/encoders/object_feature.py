@@ -24,6 +24,10 @@ every encoded state by definition. Participation counts aggregate state and
 static facts. Nullary facts cannot attach to any object: they are skipped,
 but reported through `ObjectFeatureEncoder.last_nullary_count`.
 
+Domain constants are not part of the compact object node universe. If a fact
+or goal literal references one, encoding raises a deliberate ``ValueError``;
+use ``LiftedTaskEncoder`` when domain constants must be represented.
+
 Every state/static fact of arity >= 2 becomes directed edges between its
 argument objects per ``expansion`` — ``"clique"`` (all ordered pairs),
 ``"chain"`` (consecutive arguments) or ``"star_first"`` (first argument to
@@ -168,6 +172,28 @@ class ObjectFeatureEncoder(CustomGraphEncoder):
 
         facts: tuple[Atom, ...] = (*view.static_facts, *view.state_facts(state))
         literals = view.goal_literals(state) if goals is None else tuple(goals)
+
+        known_objects = set(view.objects)
+        unknown_arguments = sorted(
+            {
+                argument
+                for atom in facts
+                for argument in atom.args
+                if argument not in known_objects
+            }
+            | {
+                argument
+                for literal in literals
+                for argument in literal.atom.args
+                if argument not in known_objects
+            }
+        )
+        if unknown_arguments:
+            raise ValueError(
+                f"{encoder_name} cannot encode domain constant or unknown object "
+                f"references {unknown_arguments!r}; use LiftedTaskEncoder for "
+                "constant-aware task graphs"
+            )
 
         unary_holds: dict[str, set[str]] = {}
         counts: Counter[tuple[str, str]] = Counter()

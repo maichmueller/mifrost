@@ -36,6 +36,86 @@ def _assert_metadata_matches(actual, expected) -> None:
         )
 
 
+def _homo_dict_payload(*, with_edges: bool) -> dict:
+    """Build a small schema/payload pair without going through native code."""
+
+    tensors = {
+        "node/x": torch.tensor([[1.0], [2.0], [3.0]]),
+        "node/ptr": torch.tensor([0, 2, 3], dtype=torch.long),
+        "node/batch": torch.tensor([0, 0, 1], dtype=torch.long),
+    }
+    edge_tensors = [
+        {
+            "edge_type": 0,
+            "attr": "edge_index",
+            "part": "0",
+            "key": "node|edge|node/edge_index_0",
+        },
+        {
+            "edge_type": 0,
+            "attr": "edge_index",
+            "part": "1",
+            "key": "node|edge|node/edge_index_1",
+        },
+        {
+            "edge_type": 0,
+            "attr": "edge_attr",
+            "key": "node|edge|node/edge_attr",
+        },
+    ]
+    if with_edges:
+        tensors.update(
+            {
+                "node|edge|node/edge_index_0": torch.tensor([0, 2]),
+                "node|edge|node/edge_index_1": torch.tensor([2, 1]),
+                "node|edge|node/edge_attr": torch.tensor(
+                    [[1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]
+                ),
+            }
+        )
+    return {
+        "tensors": tensors,
+        "schema": {
+            "version": 1,
+            "graph_kind": "homo",
+            "node_types": ["node"],
+            "edge_types": [{"src": "node", "rel": "edge", "dst": "node"}],
+            "node_tensors": [
+                {"node_type": "node", "attr": "x", "key": "node/x"},
+                {"node_type": "node", "attr": "ptr", "key": "node/ptr"},
+                {"node_type": "node", "attr": "batch", "key": "node/batch"},
+            ],
+            "edge_tensors": edge_tensors,
+            "flags": {"include_reverse_edges": False},
+            "extensions": {},
+        },
+        "node_names": {"node": ["a", "b", "c"]},
+        "object_names": ["a", "b", "c"],
+        "graph_attrs": {"vocab_categories": ["static", "fluent"]},
+        "num_graphs": 2,
+    }
+
+
+def test_dict_homo_conversion_honors_metadata_and_explicit_reverse_flag():
+    conversion = _conversion()
+    data = conversion.to_pyg(_homo_dict_payload(with_edges=True), as_batch=True)
+
+    # The schema explicitly owns edge direction; False must not trigger a
+    # second reverse expansion in the Python dictionary path.
+    assert data.edge_index.tolist() == [[0, 2], [2, 1]]
+    assert data.node_names == [["a", "b"], ["c"]]
+    assert data.object_names == [["a", "b"], ["c"]]
+    assert data.vocab_categories == ["static", "fluent"]
+
+
+def test_dict_homo_conversion_supplies_rank_stable_empty_edges():
+    conversion = _conversion()
+    data = conversion.to_pyg(_homo_dict_payload(with_edges=False), as_batch=False)
+
+    assert data.edge_index.shape == (2, 0)
+    assert data.edge_attr.shape == (0, 3)
+
+
 def test_to_pyg_matches_native_batch_encoding_as_batch(small_blocks):
     space, domain, problem = small_blocks
     encoder = mifrost.HGraphEncoder(domain)

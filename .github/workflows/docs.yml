@@ -45,10 +45,14 @@ jobs:
       - name: Install tooling
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -c requirements/constraints-ci.txt -r requirements/build.txt -r requirements.txt
 
       - name: Build wheel
         id: build_wheel
-        run: python -m pip wheel . -w wheelhouse --no-deps
+        env:
+          MIFROST_BUILD_BACKENDS: both
+          PIP_CONSTRAINT: ${{ github.workspace }}/requirements/constraints-ci.txt
+        run: python -m pip wheel -c requirements/constraints-ci.txt . -w wheelhouse --no-deps --no-build-isolation
 
       - name: Save Conan cache
         if: always() && steps.conan_cache_restore.outcome == 'success' && steps.build_wheel.outcome == 'success'

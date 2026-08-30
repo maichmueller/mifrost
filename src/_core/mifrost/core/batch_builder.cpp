@@ -53,6 +53,28 @@ const std::vector< T >& expect_column(const NumericColumnData& data, const std::
    return *ptr;
 }
 
+template < typename T >
+void reserve_for_append(std::vector< T >& values, std::size_t additional)
+{
+   if(additional == 0) {
+      return;
+   }
+
+   const auto max_size = values.max_size();
+   if(additional > max_size - values.size()) {
+      throw std::length_error("BatchBuilder vector size overflow");
+   }
+
+   const auto required = values.size() + additional;
+   if(required <= values.capacity()) {
+      return;
+   }
+
+   const auto capacity = values.capacity();
+   const auto geometric = capacity >= max_size - capacity ? max_size : capacity * 2;
+   values.reserve(std::max(required, geometric));
+}
+
 int64_t committed_field_offset(
    const hash_map< std::string, GraphField >& fields,
    const std::string& key,
@@ -173,7 +195,7 @@ void append_with_inc(
                                 or spec.mode == GraphFieldMode::RAGGED_CAT)
                                and graph_field_cat_dim_is_one(spec.cat_dim) and spec.dim > 1;
       if(not cat_dim_one) {
-         dst.reserve(dst.size() + src.size());
+         reserve_for_append(dst, src.size());
          dst.insert(dst.end(), src.begin(), src.end());
          return;
       }
@@ -212,7 +234,7 @@ void append_with_inc(
                              or spec.mode == GraphFieldMode::RAGGED_CAT)
                             and graph_field_cat_dim_is_one(spec.cat_dim) and spec.dim > 1;
    if(not cat_dim_one) {
-      dst.reserve(dst.size() + src.size());
+      reserve_for_append(dst, src.size());
       if(inc == 0) {
          dst.insert(dst.end(), src.begin(), src.end());
          return;
@@ -397,6 +419,9 @@ void BatchBuilder::add_node_features(
    int feature_dim
 )
 {
+   if(feature_dim <= 0) {
+      throw std::invalid_argument("Node feature dim must be positive");
+   }
    set_node_feature_dim(node_type, feature_dim);
 
    const std::string key = make_type_attr_key(node_type, attr_name);
@@ -456,7 +481,7 @@ void BatchBuilder::set_node_names(const std::string& node_type, std::vector< std
    if(existing.empty()) {
       existing = std::move(names);
    } else {
-      existing.reserve(existing.size() + names.size());
+      reserve_for_append(existing, names.size());
       existing.insert(existing.end(), names.begin(), names.end());
    }
    auto [count_it, count_inserted] = current_node_counts.try_emplace(node_type, graph_count);
@@ -471,7 +496,7 @@ void BatchBuilder::set_object_names(std::vector< std::string > names)
       object_names = std::move(names);
       return;
    }
-   object_names.reserve(object_names.size() + names.size());
+   reserve_for_append(object_names, names.size());
    object_names.insert(object_names.end(), names.begin(), names.end());
 }
 
@@ -557,7 +582,7 @@ void BatchBuilder::add_lazy_target_names(std::span< const std::string > names)
          throw std::invalid_argument("Graph attr 'target_names' must be a string vector");
       }
    }
-   lazy_target_name_strings.reserve(lazy_target_name_strings.size() + names.size());
+   reserve_for_append(lazy_target_name_strings, names.size());
    lazy_target_name_strings.insert(lazy_target_name_strings.end(), names.begin(), names.end());
 }
 
@@ -825,8 +850,8 @@ void BatchBuilder::add_edges(
    int64_t src_offset = node_offsets.try_emplace(src_type, 0).first->second;
    int64_t dst_offset = node_offsets.try_emplace(dst_type, 0).first->second;
 
-   col_src.reserve(col_src.size() + src_indices.size());
-   col_dst.reserve(col_dst.size() + dst_indices.size());
+   reserve_for_append(col_src, src_indices.size());
+   reserve_for_append(col_dst, dst_indices.size());
 
    // Apply offsets and push
    for(auto idx : src_indices)
@@ -874,6 +899,9 @@ void BatchBuilder::add_edge_features(
    int feature_dim
 )
 {
+   if(feature_dim <= 0) {
+      throw std::invalid_argument("Edge feature dim must be positive");
+   }
    const std::string key = make_type_attr_key(
       make_edge_type_base_key(src_type, rel_type, dst_type), attr_name
    );
@@ -1463,7 +1491,7 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
          }
          auto& dest = get_column< int64_t >(key, 1);
          const auto& src = std::get< LongCol >(col.data);
-         dest.reserve(dest.size() + src.size());
+         reserve_for_append(dest, src.size());
          for(const auto value : src) {
             dest.push_back(value + edge_index_offset);
          }
@@ -1473,7 +1501,7 @@ void BatchBuilder::append_batch_encoding(const BatchEncoding& batch_encoding)
       std::visit(
          [&]< typename T >(const std::vector< T >& items) {
             auto& dest = get_column< T >(key, col.dim);
-            dest.reserve(dest.size() + items.size());
+            reserve_for_append(dest, items.size());
             dest.insert(dest.end(), items.begin(), items.end());
          },
          col.data

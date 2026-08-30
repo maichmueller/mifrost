@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
 #include <vector>
 
 #include "mifrost/core/encoders/common/default_relations.hpp"
@@ -98,6 +99,33 @@ TEST(BatchBuilderTest, HeteroNamesAndEdgesAreRecorded)
    EXPECT_EQ(edge_dst[0], 0);
    EXPECT_EQ(edge_src[1], 1);
    EXPECT_EQ(edge_dst[1], 1);
+}
+
+TEST(BatchBuilderTest, RejectsNonPositiveFeatureDimensions)
+{
+   BatchBuilder builder;
+   const std::vector< float > data{1.0F};
+
+   EXPECT_THROW(builder.add_node_features("node", "x", data, 0), std::invalid_argument);
+   EXPECT_THROW(builder.add_node_features("node", "x", data, -1), std::invalid_argument);
+   EXPECT_THROW(
+      builder.add_edge_features("node", "rel", "node", "weight", data, 0), std::invalid_argument
+   );
+   EXPECT_TRUE(builder.node_feature_dims.empty());
+   EXPECT_TRUE(builder.columns.empty());
+}
+
+TEST(BatchBuilderTest, MetadataAppendsGrowGeometrically)
+{
+   BatchBuilder builder;
+   builder.set_object_names({"object-0"});
+
+   for(int index = 1; index < 65; ++index) {
+      builder.set_object_names({"object-" + std::to_string(index)});
+   }
+
+   ASSERT_EQ(builder.object_names.size(), 65U);
+   EXPECT_GT(builder.object_names.capacity(), builder.object_names.size());
 }
 
 }  // namespace

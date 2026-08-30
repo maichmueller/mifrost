@@ -262,6 +262,13 @@ def _encoding_dict_to_pyg_homo(
     raw_tensors: Mapping[str, Any] = encoding_dict.get("tensors", {})
     schema = _coerce_schema_dict(encoding_dict)
     node_names_map: Mapping[str, list[str]] = encoding_dict.get("node_names", {})
+    object_names_raw = encoding_dict.get("object_names", [])
+    object_names: list[str] = (
+        object_names_raw
+        if isinstance(object_names_raw, list)
+        else list(object_names_raw)
+    )
+    graph_attrs = encoding_dict.get("graph_attrs", {})
     num_graphs = int(encoding_dict.get("num_graphs", 0))
 
     if as_batch is None:
@@ -292,7 +299,10 @@ def _encoding_dict_to_pyg_homo(
     node_types = schema.get("node_types", [])
     node_type = node_types[0] if node_types else "node"
     schema_flags = schema.get("flags", {}) or {}
-    if schema_flags.get("include_reverse_edges"):
+    # Native conversion checks flag presence, not truthiness: an explicit
+    # include_reverse_edges flag means the encoder already owns the direction
+    # policy, so conversion must never add another mirrored edge set.
+    if "include_reverse_edges" in schema_flags:
         undirected = False
 
     for entry in schema.get("node_tensors", []):
@@ -306,17 +316,29 @@ def _encoding_dict_to_pyg_homo(
 
     edge_components: dict[str, torch.Tensor] = {}
     edge_attr: torch.Tensor | None = None
+    has_edge_index_schema = False
+    has_edge_attr_schema = False
     for entry in schema.get("edge_tensors", []):
         key = entry["key"]
         if key not in tensors:
+            # Empty edge types may have schema entries without payload
+            # columns. Rank-stable empty tensors are installed below.
+            if entry["attr"] in {"edge_index", "edge_attr"}:
+                if entry["attr"] == "edge_index":
+                    has_edge_index_schema = True
+                else:
+                    has_edge_attr_schema = True
+                continue
             raise KeyError(f"Schema references missing tensor key: {key}")
         attr = entry["attr"]
         if attr == "edge_index":
+            has_edge_index_schema = True
             component = str(entry.get("part", ""))
             if component == "":
                 raise ValueError(f"Missing edge_index component for key: {key}")
             edge_components[component] = get_tensor(key, tensors[key])
         elif attr == "edge_attr":
+            has_edge_attr_schema = True
             edge_attr = get_tensor(key, tensors[key])
 
     if "0" in edge_components and "1" in edge_components:
@@ -330,13 +352,67 @@ def _encoding_dict_to_pyg_homo(
             if edge_attr is not None:
                 edge_attr = torch.cat((edge_attr, edge_attr[mask]), dim=0)
         data.edge_index = edge_index
+    elif edge_components:
+        raise ValueError("Incomplete edge_index components in homogeneous encoding")
+    elif has_edge_index_schema:
+        data.edge_index = torch.empty((2, 0), dtype=torch.long)
 
     if edge_attr is not None:
         data.edge_attr = edge_attr
+    elif has_edge_attr_schema:
+        data.edge_attr = torch.empty((0, 3), dtype=torch.float32)
+
+    for entry in schema.get("graph_tensors", []):
+        key = str(entry["key"])
+        if key not in tensors:
+            raise KeyError(f"Schema references missing graph tensor key: {key}")
+        attr = str(entry["attr"])
+        setattr(data, attr, get_tensor(key, tensors[key]))
+        ptr_key = str(entry.get("ptr_key", ""))
+        if ptr_key:
+            if ptr_key not in tensors:
+                raise KeyError(
+                    f"Schema references missing graph tensor ptr key: {ptr_key}"
+                )
+            setattr(data, f"{attr}_ptr", get_tensor(ptr_key, tensors[ptr_key]))
 
     if include_metadata:
         names = node_names_map.get(node_type, [])
-        data.node_names = names if isinstance(names, list) else list(names)
+        names_list = names if isinstance(names, list) else list(names)
+        if as_batch:
+            ptr_key = make_type_attr_key(node_type, PTR_ATTR)
+            if ptr_key in tensors:
+                ptr = get_tensor(ptr_key).long().tolist()
+                data.node_names = [
+                    names_list[ptr[index] : ptr[index + 1]]
+                    for index in range(len(ptr) - 1)
+                ]
+            else:
+                data.node_names = [names_list]
+        else:
+            data.node_names = names_list
+        if object_names:
+            # ``object_names`` is a separate flattened object table. It can
+            # only be split when the node-name table is exactly that table;
+            # derived reified graphs also carry atom/action names, so their
+            # native converter intentionally retains one flattened list.
+            if as_batch and names_list == object_names:
+                ptr_key = make_type_attr_key(node_type, PTR_ATTR)
+                if ptr_key in tensors:
+                    ptr = get_tensor(ptr_key).long().tolist()
+                    data.object_names = [
+                        object_names[ptr[index] : ptr[index + 1]]
+                        for index in range(len(ptr) - 1)
+                    ]
+                else:
+                    data.object_names = [object_names]
+            elif as_batch:
+                data.object_names = [object_names]
+            else:
+                data.object_names = object_names
+        if isinstance(graph_attrs, Mapping):
+            for key, value in graph_attrs.items():
+                setattr(data, str(key), value)
 
     if as_batch and num_graphs > 0:
         data._num_graphs = num_graphs
@@ -344,11 +420,15 @@ def _encoding_dict_to_pyg_homo(
         if batch_key in tensors:
             data.batch = get_tensor(batch_key, tensors[batch_key]).long()
 
-    if getattr(data, "x", None) is None:
+    x_ids = getattr(data, "x_ids", None)
+    if isinstance(x_ids, torch.Tensor) and x_ids.dim() > 0:
+        data.num_nodes = int(x_ids.size(0))
+    elif getattr(data, "x", None) is None:
         if hasattr(data, "num_nodes") and data.num_nodes:
             pass
         elif hasattr(data, "node_names"):
-            data.num_nodes = len(data.node_names)
+            names = data.node_names
+            data.num_nodes = len(names[0]) if as_batch and names else len(names)
 
     return data
 
@@ -382,14 +462,24 @@ def _encoding_dict_to_pyg_flat(
         if key not in raw_tensors:
             raise KeyError(f"Schema references missing graph tensor key: {key}")
         attr = str(entry["attr"])
-        setattr(out, attr, _to_tensor(raw_tensors[key]))
+        # The homogeneous conversion above has already materialized this
+        # tensor. Reuse it instead of consuming a one-shot DLPack capsule a
+        # second time (the native ``as_dict`` payloads use such capsules).
+        value = getattr(homo, attr, None)
+        if value is None:
+            value = _to_tensor(raw_tensors[key])
+        setattr(out, attr, value)
         ptr_key = str(entry.get("ptr_key", ""))
         if ptr_key:
             if ptr_key not in raw_tensors:
                 raise KeyError(
                     f"Schema references missing graph tensor ptr key: {ptr_key}"
                 )
-            setattr(out, f"{attr}_ptr", _to_tensor(raw_tensors[ptr_key]))
+            ptr_attr = f"{attr}_ptr"
+            ptr_value = getattr(homo, ptr_attr, None)
+            if ptr_value is None:
+                ptr_value = _to_tensor(raw_tensors[ptr_key])
+            setattr(out, ptr_attr, ptr_value)
     graph_attrs = encoding_dict.get("graph_attrs", {})
     if isinstance(graph_attrs, Mapping):
         for key, value in graph_attrs.items():

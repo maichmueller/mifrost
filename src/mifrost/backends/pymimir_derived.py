@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal, cast
 
@@ -161,6 +162,7 @@ class PymimirDerivedRuntime:
     """Encode Pymimir wrapper states as derived graphs via the flat reader."""
 
     backend_name: Literal["pymimir"] = "pymimir"
+    _INPUT_CACHE_LIMIT = 4096
 
     def __init__(self, problem: object, config: Any) -> None:
         """Build the flat adapter and neutral derived-graph engine."""
@@ -171,34 +173,58 @@ class PymimirDerivedRuntime:
             )
         self._adapter = FlatSemanticAdapter(PymimirSnapshotReader(problem))
         self.engine = SemanticDerivedGraphEncoderEngine(
-            self._adapter.engine.predicates, _native_config(config)
+            self._adapter.engine.predicates,
+            self._adapter.engine.actions,
+            _native_config(config),
         )
-        self._input_cache: dict[Any, Any] = {}
-        self._input_cacheable: bool | None = None
+        self._input_cache: OrderedDict[Any, Any] = OrderedDict()
 
     def _cached_input(self, state: object) -> Any:
-        """Memoize the default-lane flat input per immutable state object.
+        """Memoize a default-lane flat input per immutable state object.
 
-        Planning states are immutable value objects, so the prepared input
-        is a pure function of content; bounded cache (cleared at 4096
-        entries), transparently disabled for unhashable states.
+        Planning states are immutable value objects, so the prepared input is a
+        pure function of content. The LRU is bounded without clearing useful
+        entries wholesale when a search visits just over the cache limit.
+        Unhashable state-like objects simply bypass the cache.
         """
 
-        if self._input_cacheable is not False:
-            try:
-                cached = self._input_cache.get(state)
-            except TypeError:
-                self._input_cacheable = False
-            else:
-                if cached is not None:
-                    return cached
-                prepared = self._adapter.make_input(state)
-                cache = self._input_cache
-                if len(cache) >= 4096:
-                    cache.clear()
-                cache[state] = prepared
-                return prepared
-        return self._adapter.make_input(state)
+        cache = self._input_cache
+        try:
+            cached = cache.pop(state)
+        except KeyError:
+            pass
+        except TypeError:
+            return self._adapter.make_input(state)
+        else:
+            cache[state] = cached
+            return cached
+
+        prepared = self._adapter.make_input(state)
+        try:
+            cache[state] = prepared
+        except TypeError:
+            return prepared
+        while len(cache) > self._INPUT_CACHE_LIMIT:
+            cache.popitem(last=False)
+        return prepared
+
+    @staticmethod
+    def _uses_default_lanes(
+        *,
+        goals: object,
+        actions: object,
+        subgoal_layers: object,
+        history_subgoals: object,
+        history_max_steps: int | None,
+    ) -> bool:
+        """Return whether a request is safe to serve from the default cache."""
+        return (
+            goals is None
+            and _lane_is_empty(actions)
+            and _lane_is_empty(subgoal_layers)
+            and _lane_is_empty(history_subgoals)
+            and history_max_steps is None
+        )
 
     def _input(
         self,
@@ -247,8 +273,16 @@ class PymimirDerivedRuntime:
         history_max_steps: int | None = None,
     ) -> Any:
         """Encode one state; goals default to the problem's own goals."""
-        return self.engine.encode(
-            self._input(
+        if self._uses_default_lanes(
+            goals=goals,
+            actions=actions,
+            subgoal_layers=subgoal_layers,
+            history_subgoals=history_subgoals,
+            history_max_steps=history_max_steps,
+        ):
+            prepared = self._cached_input(state)
+        else:
+            prepared = self._input(
                 state,
                 goals=goals,
                 actions=actions,
@@ -256,7 +290,7 @@ class PymimirDerivedRuntime:
                 history_subgoals=history_subgoals,
                 history_max_steps=history_max_steps,
             )
-        )
+        return self.engine.encode(prepared)
 
     def encode_batch(
         self,
@@ -297,15 +331,12 @@ class PymimirDerivedRuntime:
         )
         inputs = []
         for index, state in enumerate(state_values):
-            if (
-                # Only None means "problem's default goals"; an explicit []
-                # is a deliberate no-goal encoding and must not hit the
-                # default-lane memo.
-                goal_values[index] is None
-                and _lane_is_empty(action_values[index])
-                and _lane_is_empty(layer_values[index])
-                and _lane_is_empty(history_values[index])
-                and history_max_steps is None
+            if self._uses_default_lanes(
+                goals=goal_values[index],
+                actions=action_values[index],
+                subgoal_layers=layer_values[index],
+                history_subgoals=history_values[index],
+                history_max_steps=history_max_steps,
             ):
                 inputs.append(self._cached_input(state))
             else:

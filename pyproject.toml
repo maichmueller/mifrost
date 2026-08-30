@@ -12,7 +12,7 @@ backend-path = ["."]
 
 [project]
 name = "mifrost"
-version = "0.5.0"
+version = "0.6.0"
 description = "STRIPS states to graph encoding C++ extension module."
 readme = "README.md"
 requires-python = ">=3.12"

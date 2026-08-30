@@ -518,6 +518,37 @@ def test_conformance_smoke_on_encode_pyg(blocks_pair) -> None:
 # --------------------------------------------------------------------------- #
 # adversarial-review hardening
 
+DISJUNCTIVE_DOMAIN = (
+    """
+(define (domain disjunctive-lifted)
+    (:requirements :adl)
+    (:predicates
+        (p ?x)
+        (q ?x)
+        (r ?x)
+    )
+    (:action act
+        :parameters (?x)
+        :precondition (or (p ?x) (q ?x))
+        :effect (r ?x)
+    )
+)
+""".strip()
+    + "\n"
+)
+
+DISJUNCTIVE_PROBLEM = (
+    """
+(define (problem disjunctive-lifted-p)
+    (:domain disjunctive-lifted)
+    (:objects a)
+    (:init (p a))
+    (:goal (r a))
+)
+""".strip()
+    + "\n"
+)
+
 CONSTANTS_DOMAIN = (
     """
 (define (domain const-lifted)
@@ -590,6 +621,45 @@ def _scratch_problem(tmp_path: Path, domain_text: str, problem_text: str):
     domain_path.write_text(domain_text, encoding="utf-8")
     problem_path.write_text(problem_text, encoding="utf-8")
     return _pymimir_problem(domain_path, problem_path)
+
+
+def test_disjunctive_preconditions_preserve_duplicate_action_structures(
+    tmp_path,
+) -> None:
+    """Flattened disjunctive branches retain separate same-named actions."""
+
+    problem = _scratch_problem(tmp_path, DISJUNCTIVE_DOMAIN, DISJUNCTIVE_PROBLEM)
+    encoder = LiftedTaskEncoder(problem, include_parameters=True)
+    structures = [
+        structure
+        for structure in encoder.view.action_structures()
+        if structure.name == "act"
+    ]
+    assert len(structures) == 2
+
+    data = _pyg(encoder, problem.get_initial_state())
+    names = list(data.node_names)
+    action_indices = [
+        index
+        for index, (role, name) in enumerate(zip(data.x_ids[:, 0].tolist(), names))
+        if int(role) == 2 and name == "act"
+    ]
+    assert len(action_indices) == 2
+
+    kinds = list(data.vocab_edge_kinds)
+    pre_edges = [
+        (names[int(src)], int(dst))
+        for src, dst, attrs in zip(
+            data.edge_index[0].tolist(),
+            data.edge_index[1].tolist(),
+            data.edge_attr.tolist(),
+            strict=True,
+        )
+        if kinds[int(attrs[0])] == "pre" and names[int(src)] in {"p", "q"}
+    ]
+    assert len(pre_edges) == 2
+    assert {source for source, _target in pre_edges} == {"p", "q"}
+    assert {target for _source, target in pre_edges} == set(action_indices)
 
 
 def test_domain_constants_in_goal_become_object_nodes(tmp_path) -> None:

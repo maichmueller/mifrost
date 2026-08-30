@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -281,3 +282,55 @@ def test_benchmark_encoder_baseline_uses_per_item_ratios():
     assert ratios["transition_batch_vs_single_per_item"] == pytest.approx(8.0)
     assert ratios["horizon_batch_vs_single_per_item"] == pytest.approx(5.0)
     assert ratios["flat_vs_hgraph_python_batch"] == pytest.approx(2.0)
+
+
+def test_derived_benchmark_selects_deterministic_modes_and_percentiles():
+    module = _load_script_module(
+        "benchmark_derived_encoders_test",
+        "scripts/benchmark_derived_encoders.py",
+    )
+
+    pool = ["s0", "s1", "s2"]
+    assert module._states_for_mode(pool, 2, "unique") == ["s0", "s1"]
+    assert module._states_for_mode(pool, 5, "repeated") == [
+        "s0",
+        "s1",
+        "s2",
+        "s0",
+        "s1",
+    ]
+    assert module._states_for_mode(pool, 4, "unique") is None
+
+    row = module._row(
+        [1.0, 2.0, 4.0, 8.0],
+        problem="test",
+        suite="suite",
+        path="path",
+        batch_size=4,
+        warmup=1,
+        repeats=4,
+    )
+    assert row.median_ms == pytest.approx(3.0)
+    assert row.p95_ms == pytest.approx(7.4)
+
+
+def test_release_metadata_and_ci_paths_are_pinned():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert project["project"]["version"] == "0.6.0"
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    assert "## Unreleased" in changelog
+    assert "## 0.6.0 - 2026-08-30" in changelog
+
+    wheels = (ROOT / ".github/workflows/wheels.yml").read_text()
+    assert (
+        "python -m pip install -c requirements/constraints-ci.txt -r requirements/build.txt"
+        in wheels
+    )
+    assert (
+        "PIP_CONSTRAINT: ${{ github.workspace }}/requirements/constraints-ci.txt"
+        in wheels
+    )
+    docs = (ROOT / ".github/workflows/docs.yml").read_text()
+    assert "python -m pip wheel -c requirements/constraints-ci.txt" in docs
+    tests = (ROOT / ".github/workflows/tests.yml").read_text()
+    assert "ctest --test-dir build/ci --output-on-failure" in tests

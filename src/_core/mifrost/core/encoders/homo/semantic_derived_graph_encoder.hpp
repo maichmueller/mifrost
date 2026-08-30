@@ -56,6 +56,11 @@ class MIFROST_API SemanticDerivedGraphEncoderEngine {
       SemanticDerivedGraphEncoderConfig config = {}
    );
    SemanticDerivedGraphEncoderEngine(
+      std::vector< SemanticPredicateSpec > predicates,
+      std::vector< SemanticActionSpec > actions,
+      SemanticDerivedGraphEncoderConfig config = {}
+   );
+   SemanticDerivedGraphEncoderEngine(
       std::shared_ptr< const SemanticSchemaContext > schema,
       SemanticDerivedGraphEncoderConfig config = {}
    );
@@ -209,6 +214,7 @@ class MIFROST_API SemanticDerivedGraphEncoderEngine {
    }
    [[nodiscard]] const Config& get_config() const { return config_; }
    [[nodiscard]] const std::vector< SemanticPredicateSpec >& get_predicates() const;
+   [[nodiscard]] const std::vector< SemanticActionSpec >& get_actions() const;
 
   private:
    std::shared_ptr< const SemanticSchemaContext > schema_context_;

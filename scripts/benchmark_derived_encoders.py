@@ -60,10 +60,13 @@ class BenchRow:
     problem: str
     suite: str
     path: str
+    state_mode: str
     batch_size: int
     repeats: int
     warmup: int
     mean_ms: float
+    median_ms: float
+    p95_ms: float
     stdev_ms: float
     min_ms: float
 
@@ -103,6 +106,15 @@ def _pick_cycle(items: list[Any], n: int) -> list[Any]:
     return out
 
 
+def _states_for_mode(pool: list[Any], n: int, mode: str) -> list[Any] | None:
+    """Select deterministic unique or repeated inputs for one measurement."""
+    if mode == "unique":
+        return list(pool[:n]) if n <= len(pool) else None
+    if mode == "repeated":
+        return _pick_cycle(pool, n)
+    raise ValueError(f"unknown state mode: {mode!r}")
+
+
 def _benchmark(
     fn: Callable[[], Any],
     *,
@@ -119,12 +131,52 @@ def _benchmark(
     return durations
 
 
+def _benchmark_cold(
+    factory: Callable[[], Any],
+    fn: Callable[[Any], Any],
+    *,
+    repeats: int,
+) -> list[float]:
+    """Measure cold calls with a fresh encoder, excluding construction time."""
+    durations: list[float] = []
+    for _ in range(max(1, repeats)):
+        subject = factory()
+        start = time.perf_counter()
+        fn(subject)
+        durations.append((time.perf_counter() - start) * 1000.0)
+    return durations
+
+
+def _benchmark_warm(
+    factory: Callable[[], Any],
+    fn: Callable[[Any], Any],
+    *,
+    warmup: int,
+    repeats: int,
+) -> list[float]:
+    """Measure warm calls on a fresh, independently warmed encoder."""
+    subject = factory()
+    return _benchmark(lambda: fn(subject), warmup=warmup, repeats=repeats)
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = (len(ordered) - 1) * fraction
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * weight
+
+
 def _row(
     durations: list[float],
     *,
     problem: str,
     suite: str,
     path: str,
+    state_mode: str = "repeated",
     batch_size: int,
     warmup: int,
     repeats: int,
@@ -133,10 +185,13 @@ def _row(
         problem=problem,
         suite=suite,
         path=path,
+        state_mode=state_mode,
         batch_size=batch_size,
         repeats=repeats,
         warmup=warmup,
         mean_ms=statistics.fmean(durations),
+        median_ms=statistics.median(durations),
+        p95_ms=_percentile(durations, 0.95),
         stdev_ms=statistics.stdev(durations) if len(durations) > 1 else 0.0,
         min_ms=min(durations),
     )
@@ -169,11 +224,20 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--problems", default="smedium,large")
     parser.add_argument("--max-states", type=int, default=256)
     parser.add_argument("--max-branch", type=int, default=4)
+    parser.add_argument(
+        "--state-modes",
+        default="unique,repeated",
+        help="Deterministic state modes for the batch-vs-single audit",
+    )
     parser.add_argument("--output-json", type=Path, default=None)
     args = parser.parse_args(argv)
 
     batch_sizes = [int(v) for v in args.batch_sizes.split(",") if v.strip()]
     problems = [v.strip() for v in args.problems.split(",") if v.strip()]
+    state_modes = [v.strip() for v in args.state_modes.split(",") if v.strip()]
+    invalid_modes = set(state_modes).difference({"unique", "repeated"})
+    if not state_modes or invalid_modes:
+        parser.error("--state-modes must contain unique and/or repeated")
 
     results: list[BenchRow] = []
     dumps_snapshot: dict[str, str] = {}
@@ -300,8 +364,11 @@ def main(argv: list[str]) -> int:
         "problem".ljust(9)
         + "suite".ljust(30)
         + "path".ljust(22)
+        + "mode".ljust(11)
         + "batch".rjust(6)
         + "mean ms".rjust(12)
+        + "median".rjust(10)
+        + "p95".rjust(10)
         + "stdev".rjust(10)
         + "min".rjust(10)
     )
@@ -312,15 +379,20 @@ def main(argv: list[str]) -> int:
             row.problem.ljust(9)
             + row.suite.ljust(30)
             + row.path.ljust(22)
+            + row.state_mode.ljust(11)
             + str(row.batch_size).rjust(6)
             + f"{row.mean_ms:12.3f}"
+            + f"{row.median_ms:10.3f}"
+            + f"{row.p95_ms:10.3f}"
             + f"{row.stdev_ms:10.3f}"
             + f"{row.min_ms:10.3f}"
         )
 
-    # Batch fast-lane audit: encode_batch must beat N singles per entry.
+    # Batch fast-lane audit. Each cold comparison gets a fresh encoder, and
+    # each warm comparison gets a separate encoder warmed only by its own path;
+    # neither path inherits the other's preparation cache.
     print()
-    print("batch fast-lane audit (min ms, batch vs N singles, same states):")
+    print("batch fast-lane audit (median/p95 ms, fair cold and warm paths):")
     for problem in problems:
         domain_obj = pymimir.Domain(ROOT / "data" / "pddl" / "blocks" / "domain.pddl")
         problem_obj = pymimir.Problem(
@@ -333,28 +405,67 @@ def main(argv: list[str]) -> int:
             root, max_states=args.max_states, max_branch=args.max_branch
         )
         for facade_name, facade_cls, kwargs in NATIVE_FACADES:
-            encoder = facade_cls(problem_obj, **kwargs)
             for batch_size in batch_sizes:
                 if batch_size < 2:
                     continue
-                states = _pick_cycle(pool, batch_size)
-                batched = _benchmark(
-                    lambda: encoder.encode_batch(states),
-                    warmup=args.warmup,
-                    repeats=args.repeats,
-                )
-                singles = _benchmark(
-                    lambda: [encoder.encode(s) for s in states],
-                    warmup=args.warmup,
-                    repeats=args.repeats,
-                )
-                advantage = min(singles) / max(min(batched), 1e-9)
-                flag = "OK " if advantage >= 1.0 else "SLOW"
-                print(
-                    f"  [{flag}] {problem.ljust(9)}{facade_name.ljust(30)}"
-                    f"n={batch_size:<5} batch {min(batched):8.2f}ms"
-                    f"  singles {min(singles):8.2f}ms  advantage {advantage:5.2f}x"
-                )
+                for state_mode in state_modes:
+                    states = _states_for_mode(pool, batch_size, state_mode)
+                    if states is None:
+                        print(
+                            f"  [SKIP] {problem.ljust(9)}{facade_name.ljust(30)}"
+                            f"n={batch_size:<5} mode={state_mode}"
+                            " (not enough unique states)"
+                        )
+                        continue
+
+                    def factory() -> Any:
+                        return facade_cls(problem_obj, **kwargs)
+
+                    for temperature, batch_fn, single_fn, warmup in (
+                        (
+                            "cold",
+                            lambda encoder: encoder.encode_batch(states),
+                            lambda encoder: [encoder.encode(s) for s in states],
+                            0,
+                        ),
+                        (
+                            "warm",
+                            lambda encoder: encoder.encode_batch(states),
+                            lambda encoder: [encoder.encode(s) for s in states],
+                            args.warmup,
+                        ),
+                    ):
+                        if temperature == "cold":
+                            batched = _benchmark_cold(
+                                factory, batch_fn, repeats=args.repeats
+                            )
+                            singles = _benchmark_cold(
+                                factory, single_fn, repeats=args.repeats
+                            )
+                        else:
+                            batched = _benchmark_warm(
+                                factory,
+                                batch_fn,
+                                warmup=warmup,
+                                repeats=args.repeats,
+                            )
+                            singles = _benchmark_warm(
+                                factory,
+                                single_fn,
+                                warmup=warmup,
+                                repeats=args.repeats,
+                            )
+                        batch_median = statistics.median(batched)
+                        single_median = statistics.median(singles)
+                        advantage = single_median / max(batch_median, 1e-9)
+                        flag = "OK " if advantage >= 1.0 else "SLOW"
+                        print(
+                            f"  [{flag}] {problem.ljust(9)}{facade_name.ljust(30)}"
+                            f"n={batch_size:<5} {state_mode.ljust(8)} {temperature}"
+                            f" batch {batch_median:8.2f}/{_percentile(batched, 0.95):.2f}ms"
+                            f" singles {single_median:8.2f}/{_percentile(singles, 0.95):.2f}ms"
+                            f" advantage {advantage:5.2f}x"
+                        )
 
     if args.output_json is not None:
         payload = {
@@ -366,6 +477,7 @@ def main(argv: list[str]) -> int:
                 "max_branch": args.max_branch,
                 "warmup": args.warmup,
                 "repeats": args.repeats,
+                "state_modes": state_modes,
             },
             "results": [asdict(row) for row in results],
             "dumps_snapshot_hex": dumps_snapshot,

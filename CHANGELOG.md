@@ -4,6 +4,8 @@ This project uses Git tags and GitHub releases for release notes.
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-30
+
 - Centralized helper-driven local CMake build modes for release, debug, stubs,
   CI-like tests, and benchmarks.
 

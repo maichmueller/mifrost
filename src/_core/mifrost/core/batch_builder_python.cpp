@@ -307,6 +307,18 @@ nb::object batch_builder_build_pyg(BatchBuilder& builder)
       }
       ptr_vectors[node_type] = ptr;
       graph_count = std::max< int64_t >(graph_count, ptr.size() - 1);
+   }
+   // A node type may first appear after the first graph.  Match the native
+   // builder's PyG contract by repeating its initial per-type offset for the
+   // graphs before it existed, so every ptr has one boundary per graph.
+   for(auto& [node_type, ptr] : ptr_vectors) {
+      (void) node_type;
+      const auto missing = static_cast< size_t >(graph_count + 1) - ptr.size();
+      if(missing > 0) {
+         ptr.insert(ptr.begin(), static_cast< long >(missing), ptr.front());
+      }
+   }
+   for(const auto& [node_type, ptr] : ptr_vectors) {
       std::vector< int64_t > batch;
       batch.reserve(ptr.back());
       for(size_t idx = 0; idx + 1 < ptr.size(); ++idx) {

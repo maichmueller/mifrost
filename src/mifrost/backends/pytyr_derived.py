@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from typing import Any, Literal, TypeGuard, cast
+from collections.abc import Iterable
+from typing import Any, Literal, cast
 
 from pytyr.formalism.planning import PlanningTask
 
@@ -69,25 +69,26 @@ def _native_config(config: Any) -> Any:
     return _neutral_core.SemanticDerivedGraphEncoderConfig(**values)
 
 
-def _is_sequence_like(value: object) -> TypeGuard[Sequence[Any]]:
-    return isinstance(value, Sequence) and not isinstance(value, _STR_BYTES)
-
-
-def _check_layer_shapes(layers: object, *, state_index: int) -> None:
-    """Validate subgoal layer nesting; the layer count itself is uncapped."""
+def _check_layer_shapes(
+    layers: object, *, state_index: int
+) -> tuple[tuple[Any, ...], ...] | None:
+    """Validate and materialize the public iterable layer nesting."""
     if layers is None:
-        return
-    if not _is_sequence_like(layers):
+        return None
+    if isinstance(layers, _STR_BYTES) or not isinstance(layers, Iterable):
         raise TypeError(
             f"subgoal_layers entry at state index {state_index} must be an "
             "iterable of goal-literal layers or None"
         )
+    normalized: list[tuple[Any, ...]] = []
     for layer_index, layer in enumerate(layers):
-        if not _is_sequence_like(layer):
+        if isinstance(layer, _STR_BYTES) or not isinstance(layer, Iterable):
             raise TypeError(
                 f"subgoal_layers entry at state index {state_index} layer at "
                 f"position {layer_index} must be an iterable of goal literals"
             )
+        normalized.append(tuple(layer))
+    return tuple(normalized)
 
 
 class _PyTyrDerivedStream:
@@ -161,13 +162,13 @@ class PyTyrDerivedRuntime:
         history_subgoals: object,
     ) -> tuple[Any, Any, Any, Any]:
         """Normalize the four optional lanes of one state encoding."""
-        _check_layer_shapes(subgoal_layers, state_index=0)
+        normalized_layers = _check_layer_shapes(subgoal_layers, state_index=0)
         return (
             cast("Iterable[object] | None", goals),
             cast("Iterable[object]", () if actions is None else actions),
             cast(
                 "Iterable[Iterable[object]]",
-                () if subgoal_layers is None else subgoal_layers,
+                () if normalized_layers is None else normalized_layers,
             ),
             cast(
                 "Iterable[tuple[int, Iterable[object]]]",
@@ -250,16 +251,16 @@ class PyTyrDerivedRuntime:
             goals, state_count=count, field="goals", leaf=is_literal
         )
         subgoal_values = _subgoal_values(subgoal_layers, state_count=count)
+        normalized_subgoal_values: list[tuple[tuple[Any, ...], ...]] = []
         for index, value in enumerate(subgoal_values):
-            _check_layer_shapes(value, state_index=index)
+            normalized = _check_layer_shapes(value, state_index=index)
+            normalized_subgoal_values.append(() if normalized is None else normalized)
         # Direct-View batch: prepared and encoded in one native crossing.
         return self._direct.encode_batch(
             state_values,
             [() if values is None else values for values in action_values],
             goals=goal_values,
-            subgoal_layers=[
-                () if values is None else values for values in subgoal_values
-            ],
+            subgoal_layers=normalized_subgoal_values,
             history=[() if values is None else values for values in history_values],
             history_max_steps=history_max_steps,
         )

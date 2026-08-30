@@ -491,6 +491,32 @@ TERNARY_PROBLEM = (
 )
 
 
+CONSTANT_DOMAIN = (
+    """
+(define (domain object-constant)
+  (:requirements :strips)
+  (:constants home)
+  (:predicates (link ?x ?y))
+  (:action noop
+    :parameters ()
+    :precondition (link home home)
+    :effect (link home home)))
+""".strip()
+    + "\n"
+)
+
+CONSTANT_PROBLEM = (
+    """
+(define (problem object-constant-p)
+  (:domain object-constant)
+  (:objects a)
+  (:init (link home a))
+  (:goal (link home a)))
+""".strip()
+    + "\n"
+)
+
+
 @pytest.mark.parametrize(
     ("expansion", "expected_edges"),
     [("clique", 6), ("chain", 4), ("star_first", 4)],
@@ -537,6 +563,20 @@ def test_ternary_fact_expansion_counts(tmp_path, expansion, expected_edges) -> N
             ("a", "c", 0, 2),
             ("c", "a", 2, 0),
         }
+
+
+def test_domain_constant_in_non_unary_fact_is_rejected(tmp_path) -> None:
+    """ObjectFeatureEncoder must not leak a domain constant as a KeyError."""
+
+    domain_path = tmp_path / "domain.pddl"
+    problem_path = tmp_path / "problem.pddl"
+    domain_path.write_text(CONSTANT_DOMAIN, encoding="utf-8")
+    problem_path.write_text(CONSTANT_PROBLEM, encoding="utf-8")
+    problem = _pymimir_problem(domain_path, problem_path)
+
+    encoder = ObjectFeatureEncoder(problem)
+    with pytest.raises(ValueError, match="domain constant"):
+        encoder.encode_pyg(problem.get_initial_state())
 
 
 # --------------------------------------------------------------------------- #

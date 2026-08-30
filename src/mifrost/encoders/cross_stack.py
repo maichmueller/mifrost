@@ -33,11 +33,13 @@ __all__ = ["to_dgl", "to_jraph"]
 
 _METADATA_ATTRS: tuple[str, ...] = (
     "vocab_roles",
+    "vocab_categories",
     "vocab_predicates",
     "vocab_edge_kinds",
     "channel_names",
     "edge_channel_names",
     "node_names",
+    "object_names",
 )
 
 _TENSOR_EXTRA_ATTRS: tuple[str, ...] = (

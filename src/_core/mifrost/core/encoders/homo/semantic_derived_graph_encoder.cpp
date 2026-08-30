@@ -422,7 +422,6 @@ void register_instance_fields(
             .dtype = GraphFieldDType::I64,
             .mode = GraphFieldMode::CAT,
             .dim = 1,
-            .inc = hyperedge_offset_inc(),
          }
       );
    }
@@ -450,7 +449,6 @@ void register_instance_fields(
             .dtype = GraphFieldDType::I64,
             .mode = GraphFieldMode::CAT,
             .dim = 1,
-            .inc = tuple_offset_inc(),
          }
       );
       builder.register_field(
@@ -459,7 +457,6 @@ void register_instance_fields(
             .dtype = GraphFieldDType::I64,
             .mode = GraphFieldMode::CAT,
             .dim = 1,
-            .inc = tuple_offset_inc(),
          }
       );
    }
@@ -919,7 +916,18 @@ void encode_impl(
 
    if constexpr(requires { semantic_actions(input); }) {
       if(not std::ranges::empty(semantic_actions(input))) {
-         for(const auto& action : semantic_actions(input)) {
+         size_t action_count = std::ranges::size(semantic_actions(input));
+         if constexpr(requires { input.action_occurrence_indices; }) {
+            action_count = input.action_occurrence_indices.size();
+         }
+         for(size_t occurrence = 0; occurrence < action_count; ++occurrence) {
+            const auto& action = [&]() -> const SemanticGroundAction& {
+               if constexpr(requires { input.action_occurrence_indices; }) {
+                  return semantic_action_at(input, input.action_occurrence_indices.at(occurrence));
+               } else {
+                  return semantic_action_at(input, occurrence);
+               }
+            }();
             const NodeKeyView view{
                .role = kRoleAction,
                .predicate = action.action,
@@ -984,12 +992,10 @@ void encode_impl(
    }
    builder.set_object_names(objects);
    builder.add_node_features(node_type, "x_ids", std::span{buffers.x_flat}, kXDim);
-   if(not buffers.edge_src.empty()) {
-      builder.add_edges(node_type, "edge", node_type, buffers.edge_src, buffers.edge_dst);
-      builder.add_edge_features(
-         node_type, "edge", node_type, "edge_attr", std::span{buffers.edge_attr_flat}, kEdgeDim
-      );
-   }
+   builder.add_edges(node_type, "edge", node_type, buffers.edge_src, buffers.edge_dst);
+   builder.add_edge_features(
+      node_type, "edge", node_type, "edge_attr", std::span{buffers.edge_attr_flat}, kEdgeDim
+   );
 
    if(collect_instances) {
       if(config.include_hyperedge_incidence) {
@@ -1035,6 +1041,22 @@ SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
 }
 
 SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
+   std::vector< SemanticPredicateSpec > predicates,
+   std::vector< SemanticActionSpec > actions,
+   SemanticDerivedGraphEncoderConfig config
+)
+    : schema_context_(require_schema_context(
+         std::make_shared< const SemanticSchemaContext >(SemanticSchemaContext{
+            .predicates = std::move(predicates),
+            .actions = std::move(actions),
+         })
+      )),
+      config_(config)
+{
+   validate_config(config_);
+}
+
+SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
    std::shared_ptr< const SemanticSchemaContext > schema,
    SemanticDerivedGraphEncoderConfig config
 )
@@ -1047,6 +1069,11 @@ const std::vector< SemanticPredicateSpec >&
 SemanticDerivedGraphEncoderEngine::get_predicates() const
 {
    return schema_context_->predicates;
+}
+
+const std::vector< SemanticActionSpec >& SemanticDerivedGraphEncoderEngine::get_actions() const
+{
+   return schema_context_->actions;
 }
 
 BatchBuilder::BatchEncoding SemanticDerivedGraphEncoderEngine::encode(

@@ -142,6 +142,34 @@ def test_transformer_bias_encoder_spd_parity() -> None:
     assert torch.equal(pymimir_data.spd_dist, pytyr_data.spd_dist)
 
 
+def test_transformer_bias_manual_batch_offsets_distinct_state_spd_indices() -> None:
+    """Manual PyG batching must offset SPD endpoints for the second graph."""
+
+    Batch = pytest.importorskip("torch_geometric.data").Batch
+    pymimir_problem, _, _ = _backend_pair()
+    first_state = pymimir_problem.get_initial_state()
+    action = first_state.generate_applicable_actions()[0]
+    second_state = action.apply(first_state)
+
+    encoder = TransformerBiasEncoder(pymimir_problem, backend="pymimir")
+    first = encoder.encode_pyg(first_state)
+    second = encoder.encode_pyg(second_state)
+    manual = Batch.from_data_list([first, second])
+    direct = encoder.encode_batch_pyg([first_state, second_state])
+
+    assert torch.equal(manual.x_ids, direct.x_ids)
+    assert torch.equal(manual.spd_src, direct.spd_src)
+    assert torch.equal(manual.spd_dst, direct.spd_dst)
+    assert torch.equal(manual.spd_dist, direct.spd_dist)
+
+    first_spd_count = first.spd_src.numel()
+    node_offset = first.x_ids.size(0)
+    assert torch.equal(manual.spd_src[:first_spd_count], first.spd_src)
+    assert torch.equal(manual.spd_src[first_spd_count:], second.spd_src + node_offset)
+    assert torch.equal(manual.spd_dst[:first_spd_count], first.spd_dst)
+    assert torch.equal(manual.spd_dst[first_spd_count:], second.spd_dst + node_offset)
+
+
 @pytest.mark.parametrize(
     ("facade_name", "kwargs"),
     (
@@ -217,15 +245,15 @@ def test_tuple_tensor_encoder_contract_and_localization() -> None:
 
     batch = encoder.encode_batch_pyg([state, state]).to_dict()
     node_offset = int(data["x_ids"].size(0)) if "x_ids" in data else 0
-    num_tuples = int(data["tuple_ptr"][-1])
     for key in ("tuple_args", "tuple_rel_ids", "tuple_role_ids"):
         value = data[key]
         batch_value = batch[key]
         assert torch.equal(batch_value[: value.numel()], value)
-        shifted = batch_value[value.numel() :] - (
-            node_offset if key == "tuple_args" else num_tuples
-        )
-        assert torch.equal(shifted, value)
+        if key == "tuple_args":
+            shifted = batch_value[value.numel() :] - node_offset
+            assert torch.equal(shifted, value)
+        else:
+            assert torch.equal(batch_value[value.numel() :], value)
     batch_ptr = batch["tuple_ptr"]
     assert int(batch_ptr[0]) == 0
     assert int(batch_ptr[-1]) == int(batch["tuple_args"].numel())
@@ -235,6 +263,107 @@ def test_tuple_tensor_encoder_contract_and_localization() -> None:
     stream.append(state)
     stream.append(state)
     assert torch.equal(stream.flush_pyg().to_dict()["tuple_ptr"], batch["tuple_ptr"])
+
+
+def test_no_edge_homogeneous_carrier_keeps_empty_shapes() -> None:
+    """An edge-free graph still exposes the documented homogeneous carriers."""
+    from mifrost import _neutral_core
+
+    predicate = _neutral_core.SemanticPredicateSpec(
+        _neutral_core.SemanticPredicateCategory.fluent, "unary", 1
+    )
+    engine = _neutral_core.SemanticDerivedGraphEncoderEngine(
+        [predicate],
+        _neutral_core.SemanticDerivedGraphEncoderConfig(
+            node_universe="objects_only", atom_expansion="clique"
+        ),
+    )
+    input_data = _neutral_core.SemanticFlatRelationInput.from_compact(
+        objects=["a"],
+        state_facts=[(0, [0])],
+        goals=[],
+        actions=[],
+        subgoal_layers=[],
+        history=[],
+    )
+
+    data = engine.encode(input_data).as_pyg(as_batch=False)
+    assert data.edge_index.shape == (2, 0)
+    assert data.edge_attr.shape == (0, 3)
+
+
+def test_pytyr_accepts_generator_subgoal_layers() -> None:
+    """The public Iterable lane contract includes one-shot generators."""
+
+    _pymimir_problem, planning_task, pytyr_search = _backend_pair()
+    state = pytyr_search.initial_node().get_state()
+    encoder = mifrost.StarGraphEncoder(planning_task, backend="pytyr")
+    data = encoder.encode_pyg(
+        state,
+        subgoal_layers=(layer for layer in ((),)),
+    )
+
+    assert data.num_nodes > 0
+
+
+def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> None:
+    """Repeated direct-view actions emit occurrences without duplicating nodes."""
+    pymimir_problem, planning_task, pytyr_search = _backend_pair()
+    pytyr_node = pytyr_search.initial_node()
+    pytyr_action = pytyr_search.generator.ground_action(
+        pytyr_search.generator.get_applicable_action_bindings(pytyr_node)[0]
+    )
+    pytyr_state = pytyr_node.get_state()
+
+    star = mifrost.StarGraphEncoder(planning_task, backend="pytyr")
+    star_single = star.encode_pyg(pytyr_state, actions=[pytyr_action])
+    star_duplicate = star.encode_pyg(pytyr_state, actions=[pytyr_action, pytyr_action])
+    assert star_duplicate.x_ids.shape == star_single.x_ids.shape
+    assert star_duplicate.edge_index.size(1) == star_single.edge_index.size(
+        1
+    ) + 2 * len(pytyr_action.get_objects())
+    assert int((star_duplicate.x_ids[:, 0] == 5).sum()) == 1
+
+    hypergraph = mifrost.HypergraphIncidenceEncoder(planning_task, backend="pytyr")
+    hyper_single = hypergraph.encode_pyg(pytyr_state, actions=[pytyr_action])
+    hyper_duplicate = hypergraph.encode_pyg(
+        pytyr_state, actions=[pytyr_action, pytyr_action]
+    )
+    assert hyper_duplicate.x_ids.shape == hyper_single.x_ids.shape
+    assert hyper_duplicate.hyperedge_attr_ids.numel() == (
+        hyper_single.hyperedge_attr_ids.numel() + 1
+    )
+
+    tuples = mifrost.TupleTensorEncoder(planning_task, backend="pytyr")
+    tuple_single = tuples.encode_pyg(pytyr_state, actions=[pytyr_action])
+    tuple_duplicate = tuples.encode_pyg(
+        pytyr_state, actions=[pytyr_action, pytyr_action]
+    )
+    assert tuple_duplicate.x_ids.shape == tuple_single.x_ids.shape
+    assert (
+        tuple_duplicate.tuple_rel_ids.numel() == tuple_single.tuple_rel_ids.numel() + 1
+    )
+    assert (
+        tuple_duplicate.tuple_role_ids.numel()
+        == tuple_single.tuple_role_ids.numel() + 1
+    )
+    assert tuple_duplicate.tuple_ptr.numel() == tuple_single.tuple_ptr.numel() + 1
+    assert tuple_duplicate.tuple_rel_ids[-1] == tuple_single.tuple_rel_ids[-1]
+    assert tuple_duplicate.tuple_role_ids[-1] == tuple_single.tuple_role_ids[-1]
+
+    # The compatibility/Pymimir path does not use ViewPreparation occurrence
+    # indices; it must retain its existing repeated-action behavior.
+    pymimir_state = pymimir_problem.get_initial_state()
+    pymimir_action = pymimir_state.generate_applicable_actions()[0]
+    pymimir_star = mifrost.StarGraphEncoder(pymimir_problem, backend="pymimir")
+    pymimir_single = pymimir_star.encode_pyg(pymimir_state, actions=[pymimir_action])
+    pymimir_duplicate = pymimir_star.encode_pyg(
+        pymimir_state, actions=[pymimir_action, pymimir_action]
+    )
+    assert pymimir_duplicate.x_ids.shape == pymimir_single.x_ids.shape
+    assert pymimir_duplicate.edge_index.size(1) == (
+        pymimir_single.edge_index.size(1) + 2 * len(pymimir_action.get_objects())
+    )
 
 
 def _collapse_consecutive_duplicates(tensor: torch.Tensor) -> torch.Tensor:

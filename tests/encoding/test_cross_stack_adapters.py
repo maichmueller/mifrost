@@ -9,9 +9,11 @@ deep behavioural contract stays with the PyG conformance suite.
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
+from mifrost.encoders import cross_stack
 from mifrost.encoders.cross_stack import to_dgl, to_jraph
 from mifrost.encoders.derived import (
     HypergraphIncidenceEncoder,
@@ -54,6 +56,17 @@ def blocks_small():
     return problem, state
 
 
+def test_metadata_collector_includes_categories_and_object_names() -> None:
+    data = SimpleNamespace(
+        vocab_categories=["static", "fluent"], object_names=["a", "b"]
+    )
+
+    assert cross_stack._collect_metadata(data) == {
+        "vocab_categories": ["static", "fluent"],
+        "object_names": ["a", "b"],
+    }
+
+
 class TestToDgl:
     def test_star_round_trip_structure(self, blocks_small) -> None:
         _import_or_skip("dgl", "pip install dgl")
@@ -88,21 +101,25 @@ class TestToDgl:
 
         for attr in (
             "vocab_roles",
+            "vocab_categories",
             "vocab_predicates",
             "vocab_edge_kinds",
             "channel_names",
             "edge_channel_names",
             "node_names",
+            "object_names",
         ):
             expected = getattr(data, attr)
             assert metadata[attr] == expected
         assert set(metadata) == {
             "vocab_roles",
+            "vocab_categories",
             "vocab_predicates",
             "vocab_edge_kinds",
             "channel_names",
             "edge_channel_names",
             "node_names",
+            "object_names",
         }
         assert all(not isinstance(value, torch.Tensor) for value in metadata.values())
 
@@ -202,11 +219,13 @@ class TestToJraph:
 
         for attr in (
             "vocab_roles",
+            "vocab_categories",
             "vocab_predicates",
             "vocab_edge_kinds",
             "channel_names",
             "edge_channel_names",
             "node_names",
+            "object_names",
         ):
             assert graphs_tuple.globals[attr] == getattr(data, attr)
             assert metadata[attr] == getattr(data, attr)
@@ -224,6 +243,7 @@ class TestToJraph:
         assert "vocab_roles" not in metadata
         assert metadata["vocab_predicates"] == data.vocab_predicates
         assert metadata["node_names"] == data.node_names
+        assert metadata["object_names"] == data.object_names
 
     def test_graph_convolution_applies(self, blocks_small) -> None:
         jax = _import_or_skip("jax", "pip install jax")

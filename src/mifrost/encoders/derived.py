@@ -900,6 +900,25 @@ class TransformerBiasEncoder(_DerivedEncoderBase):
         self.include_reverse_edges = include_reverse_edges
         self.export_node_names = export_node_names
 
+    def _to_pyg(
+        self,
+        encoding: Any,
+        *,
+        as_batch: bool,
+        include_metadata: bool = True,
+    ) -> DerivedGraphData:
+        """Materialize the SPD-aware carrier with its batching rules.
+
+        ``spd_src`` and ``spd_dst`` are graph-local index tensors. Reclassifying
+        this facade's output installs the derived carrier's ``__inc__`` contract
+        so manual ``Batch.from_data_list`` applies the node offset.
+        """
+        return _reclassify(
+            super()._to_pyg(
+                encoding, as_batch=as_batch, include_metadata=include_metadata
+            )
+        )
+
     def stream(self) -> TransformerBiasEncoderStream:
         """Create a streaming encoder sharing this engine."""
         return TransformerBiasEncoderStream(self)

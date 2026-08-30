@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import torch
 from torch_geometric.data import Batch
 
@@ -43,7 +44,7 @@ def test_hyperedge_batching_offsets_node_and_hyperedge_rows() -> None:
     assert torch.equal(
         batch.hyperedge_index, torch.tensor([[0, 1, 0, 4], [0, 0, 1, 2]])
     )
-    assert torch.equal(batch.hyperedge_attr_ids, torch.tensor([[10], [20], [32]]))
+    assert torch.equal(batch.hyperedge_attr_ids, torch.tensor([[10], [20], [30]]))
 
 
 def test_tuple_batching_and_padded_tuple_matrix() -> None:
@@ -53,6 +54,7 @@ def test_tuple_batching_and_padded_tuple_matrix() -> None:
         tuple_args=torch.tensor([10, 20, 30]),
         tuple_ptr=torch.tensor([0, 2, 3]),
         tuple_rel_ids=torch.tensor([4, 5]),
+        tuple_role_ids=torch.tensor([8, 9]),
     )
     second = DerivedGraphData(
         x_ids=torch.arange(4).unsqueeze(1),
@@ -60,11 +62,31 @@ def test_tuple_batching_and_padded_tuple_matrix() -> None:
         tuple_args=torch.tensor([40, 50, 60]),
         tuple_ptr=torch.tensor([0, 1, 3]),
         tuple_rel_ids=torch.tensor([6, 7]),
+        tuple_role_ids=torch.tensor([10, 11]),
     )
     batch = Batch.from_data_list([first, second])
     assert torch.equal(batch.tuple_args, torch.tensor([10, 20, 30, 43, 53, 63]))
-    assert torch.equal(batch.tuple_ptr, torch.tensor([0, 2, 3, 2, 3, 5]))
-    assert torch.equal(batch.tuple_rel_ids, torch.tensor([4, 5, 8, 9]))
+    assert torch.equal(batch.tuple_ptr, torch.tensor([0, 2, 3, 3, 4, 6]))
+    assert torch.equal(batch.tuple_rel_ids, torch.tensor([4, 5, 6, 7]))
+    assert torch.equal(batch.tuple_role_ids, torch.tensor([8, 9, 10, 11]))
+
+    batched_args, batched_mask = batch.padded_tuple_matrix()
+    assert torch.equal(
+        batched_args,
+        torch.tensor([[10, 20], [30, -1], [-1, -1], [43, -1], [53, 63]]),
+    )
+    assert torch.equal(
+        batched_mask,
+        torch.tensor(
+            [
+                [True, True],
+                [True, False],
+                [False, False],
+                [True, False],
+                [True, True],
+            ]
+        ),
+    )
 
     args_matrix, mask = second.padded_tuple_matrix()
     assert args_matrix.shape == (2, 2)
@@ -83,6 +105,16 @@ def test_tuple_batching_and_padded_tuple_matrix() -> None:
     assert torch.equal(
         ragged_mask, torch.tensor([[True, True, True], [True, False, False]])
     )
+
+    invalid = DerivedGraphData(
+        x_ids=torch.arange(2).unsqueeze(1),
+        edge_index=torch.empty((2, 0), dtype=torch.long),
+        tuple_args=torch.tensor([1, 2]),
+        tuple_ptr=torch.tensor([0, 2, 1]),
+        tuple_rel_ids=torch.tensor([0, 0]),
+    )
+    with pytest.raises(ValueError, match="tuple_ptr"):
+        invalid.padded_tuple_matrix()
 
     empty_data, empty_mask = DerivedGraphData().padded_tuple_matrix()
     assert empty_data.shape == (0, 0)

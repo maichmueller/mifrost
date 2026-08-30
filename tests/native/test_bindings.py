@@ -73,6 +73,22 @@ def test_batch_builder_basics():
     assert torch.equal(ptr, torch.tensor([0, 10, 20], dtype=torch.int64))
 
 
+def test_batch_builder_pyg_pads_node_types_first_seen_late():
+    builder = mifrost.BatchBuilder()
+    builder.add_nodes("root", 2)
+    builder.next_graph()
+
+    builder.add_nodes("root", 1)
+    builder.add_nodes("late", 3)
+    builder.next_graph()
+
+    batch = builder.build().as_pyg()
+
+    assert torch.equal(batch["root"].ptr, torch.tensor([0, 2, 3], dtype=torch.int64))
+    assert torch.equal(batch["late"].ptr, torch.tensor([0, 0, 3], dtype=torch.int64))
+    assert torch.equal(batch["late"].batch, torch.tensor([1, 1, 1], dtype=torch.int64))
+
+
 def test_batch_builder_graph_attrs_are_exposed_as_top_level_pyg_attrs():
     encoding = _single_graph_with_stack_field(1.0)
     state = encoding.__getstate__()

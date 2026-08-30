@@ -137,10 +137,20 @@ void init_semantic_derived_graph_encoder(nb::module_& m)
          "predicates"_a,
          "config"_a = SemanticDerivedGraphEncoderConfig{}
       )
+      .def(
+         nb::init<
+            std::vector< SemanticPredicateSpec >,
+            std::vector< SemanticActionSpec >,
+            SemanticDerivedGraphEncoderConfig >(),
+         "predicates"_a,
+         "actions"_a,
+         "config"_a = SemanticDerivedGraphEncoderConfig{}
+      )
       .def_prop_ro(
          "config", &SemanticDerivedGraphEncoderEngine::get_config, nb::rv_policy::reference_internal
       )
       .def_prop_ro("predicates", &SemanticDerivedGraphEncoderEngine::get_predicates)
+      .def_prop_ro("actions", &SemanticDerivedGraphEncoderEngine::get_actions)
       .def(
          "encode",
          static_cast< BatchBuilder::BatchEncoding (SemanticDerivedGraphEncoderEngine::*)(
