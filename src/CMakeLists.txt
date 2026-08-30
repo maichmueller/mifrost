@@ -110,7 +110,52 @@ if (MIFROST_BUILD_PYTHON)
             OPTIONAL_COMPONENTS Development.Embed
     )
 
-    find_package(nanobind CONFIG REQUIRED)
+    # nanobind comes from pip rather than conan because this module joins
+    # pymimir's nanobind type registry (NB_DOMAIN=pymimir_abi_domain) and so must
+    # be built against the same nanobind *internals generation* as the installed
+    # pymimir. pymimir >= 0.14.3 pins nanobind 2.15.x (generation 21), which
+    # conancenter cannot supply -- it stops at 2.13.0, generation 20. A mismatch
+    # is silent until the first cross-module cast; see cmake/NanobindAbi.cmake.
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/NanobindAbi.cmake")
+
+    set(MIFROST_NANOBIND_MIN_VERSION "2.15" CACHE STRING
+        "Minimum pip nanobind; must share the installed pymimir's internals generation.")
+
+    if (NOT DEFINED nanobind_DIR)
+        if (DEFINED ENV{NANOBIND_CMAKE_DIR} AND NOT "$ENV{NANOBIND_CMAKE_DIR}" STREQUAL "")
+            set(nanobind_DIR "$ENV{NANOBIND_CMAKE_DIR}" CACHE PATH "Path to nanobind CMake package")
+        else ()
+            execute_process(
+                COMMAND "${Python_EXECUTABLE}" "-c"
+                        "import pathlib, nanobind; print((pathlib.Path(nanobind.__file__).resolve().parent / 'cmake').resolve())"
+                RESULT_VARIABLE _nanobind_result
+                OUTPUT_VARIABLE _nanobind_dir
+                ERROR_VARIABLE _nanobind_error
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            if (NOT _nanobind_result EQUAL 0)
+                message(FATAL_ERROR
+                    "nanobind is not importable from ${Python_EXECUTABLE}:\n"
+                    "${_nanobind_error}\n"
+                    "Install it into that interpreter:\n"
+                    "  ${Python_EXECUTABLE} -m pip install "
+                    "'nanobind>=${MIFROST_NANOBIND_MIN_VERSION},<3'\n"
+                    "or point NANOBIND_CMAKE_DIR at a nanobind CMake package "
+                    "directory.")
+            endif ()
+            if (NOT EXISTS "${_nanobind_dir}/nanobind-config.cmake" AND
+                NOT EXISTS "${_nanobind_dir}/nanobindConfig.cmake")
+                message(FATAL_ERROR
+                    "nanobind imports from ${Python_EXECUTABLE} but ships no CMake "
+                    "package at ${_nanobind_dir}. Reinstall it with pip, or point "
+                    "NANOBIND_CMAKE_DIR at a directory holding nanobind-config.cmake.")
+            endif ()
+            set(nanobind_DIR "${_nanobind_dir}" CACHE PATH "Path to nanobind CMake package")
+        endif ()
+    endif ()
+
+    find_package(nanobind ${MIFROST_NANOBIND_MIN_VERSION} CONFIG REQUIRED)
+    nanobind_abi_require_match("${nanobind_DIR}" "${Python_EXECUTABLE}")
     if (NOT COMMAND nanobind_build_library)
         if (DEFINED nanobind_BUILD_DIRS_RELEASE AND EXISTS "${nanobind_BUILD_DIRS_RELEASE}/nanobind-config.cmake")
             include("${nanobind_BUILD_DIRS_RELEASE}/nanobind-config.cmake")

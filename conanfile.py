@@ -89,7 +89,11 @@ class MifrostRecipe(ConanFile):
         self.requires("abseil/20240116.2", override=True)
         self.requires("fmt/11.2.0")
         self.requires("range-v3/0.12.0")
-        self.requires("nanobind/2.9.2")
+        # nanobind deliberately does NOT come from conan: this module joins
+        # pymimir's nanobind type registry and must share that wheel's nanobind
+        # internals generation (pymimir >= 0.14.3 pins 2.15.x = generation 21).
+        # conancenter stops at 2.13.0, one generation short, so src/CMakeLists.txt
+        # resolves nanobind from pip -- see cmake/NanobindAbi.cmake.
         if self.options.with_benchmarks:
             self.requires("argparse/3.2")
             self.requires("benchmark/1.8.3")
@@ -117,9 +121,6 @@ class MifrostRecipe(ConanFile):
 
     def generate(self):
         deps = CMakeDeps(self)
-        # Nanobind's Conan recipe relies on its own CMake config; ensure CMakeDeps
-        # still generates a config file so cmake-conan can find it without a toolchain.
-        deps.set_property("nanobind", "cmake_find_mode", "both")
         deps.generate()
         tc = CMakeToolchain(self)
         tc.user_presets_path = False
