@@ -113,12 +113,13 @@ if (MIFROST_BUILD_PYTHON)
     # nanobind comes from pip rather than conan because this module joins
     # pymimir's nanobind type registry (NB_DOMAIN=pymimir_abi_domain) and so must
     # be built against the same nanobind *internals generation* as the installed
-    # pymimir. pymimir >= 0.14.3 pins nanobind 2.15.x (generation 21), which
-    # conancenter cannot supply -- it stops at 2.13.0, generation 20. A mismatch
-    # is silent until the first cross-module cast; see cmake/NanobindAbi.cmake.
+    # pymimir. pymimir >= 0.15.0 pins nanobind 3.0.x (generation 22), which
+    # conancenter cannot supply -- it stops at 2.13.0, generation 20, and ships
+    # no 3.x at all. A mismatch is silent until the first cross-module cast;
+    # see cmake/NanobindAbi.cmake.
     include("${CMAKE_CURRENT_LIST_DIR}/../cmake/NanobindAbi.cmake")
 
-    set(MIFROST_NANOBIND_MIN_VERSION "2.15" CACHE STRING
+    set(MIFROST_NANOBIND_MIN_VERSION "3.0" CACHE STRING
         "Minimum pip nanobind; must share the installed pymimir's internals generation.")
 
     if (NOT DEFINED nanobind_DIR)
@@ -139,7 +140,7 @@ if (MIFROST_BUILD_PYTHON)
                     "${_nanobind_error}\n"
                     "Install it into that interpreter:\n"
                     "  ${Python_EXECUTABLE} -m pip install "
-                    "'nanobind==2.15.0'\n"
+                    "'nanobind>=${MIFROST_NANOBIND_MIN_VERSION},<4'\n"
                     "or point NANOBIND_CMAKE_DIR at a nanobind CMake package "
                     "directory.")
             endif ()
@@ -311,6 +312,38 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
             )
         endif ()
     endforeach ()
+    # PyTyr's storage mode is a COMPILE-TIME contract, not a preference: its
+    # headers carry `#error "Exactly one of TYR_RELATION_STORAGE_WORD or
+    # TYR_RELATION_STORAGE_BIT must be defined"`, and the layout the installed
+    # libtyr_core.so was built with has to be the layout this adapter compiles
+    # against or the two disagree about struct contents.
+    #
+    # The list below used to be a hand-maintained copy of what pytyr exports,
+    # and it drifted: pytyr added TYR_ENABLE_SEMI_NAIVE and
+    # TYR_RELATION_STORAGE_WORD, this copy still said only
+    # TYR_STATE_STORAGE_TREE, and a fresh build of the adapter therefore failed
+    # on that #error. Read the definitions out of the installed package instead,
+    # so the two cannot drift again; the literal is only the fallback for an
+    # install that ships no CMake package.
+    set(_mifrost_tyr_defs
+        "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_ENABLE_SEMI_NAIVE;TYR_STATE_STORAGE_TREE;TYR_RELATION_STORAGE_WORD")
+    set(_mifrost_tyr_targets_file
+        "${MIFROST_PYTYR_NATIVE_PREFIX}/lib/cmake/tyr/tyrcoreTargets.cmake")
+    if (EXISTS "${_mifrost_tyr_targets_file}")
+        file(STRINGS "${_mifrost_tyr_targets_file}" _mifrost_tyr_def_lines
+             REGEX "INTERFACE_COMPILE_DEFINITIONS \"")
+        if (_mifrost_tyr_def_lines)
+            list(GET _mifrost_tyr_def_lines 0 _mifrost_tyr_def_line)
+            string(REGEX REPLACE
+                   ".*INTERFACE_COMPILE_DEFINITIONS \"([^\"]*)\".*" "\\1"
+                   _mifrost_tyr_defs "${_mifrost_tyr_def_line}")
+            message(STATUS
+                "PyTyr compile definitions taken from the installed package: ${_mifrost_tyr_defs}")
+        endif ()
+        unset(_mifrost_tyr_def_lines)
+        unset(_mifrost_tyr_def_line)
+    endif ()
+    unset(_mifrost_tyr_targets_file)
     if (NOT TARGET tyr::core)
         add_library(tyr::core SHARED IMPORTED GLOBAL)
         # The definitions below mirror INTERFACE_COMPILE_DEFINITIONS in PyTyr's
@@ -322,10 +355,11 @@ if (MIFROST_BUILD_PYTYR_ADAPTER)
         # against that file whenever the pytyr pin moves.
         set_target_properties(tyr::core PROPERTIES
             IMPORTED_LOCATION "${_mifrost_tyr_library}"
-            INTERFACE_COMPILE_DEFINITIONS "FMT_HEADER_ONLY;BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS;BOOST_MPL_LIMIT_LIST_SIZE=50;TYR_ENABLE_SEMI_NAIVE;TYR_STATE_STORAGE_TREE;TYR_RELATION_STORAGE_WORD"
+            INTERFACE_COMPILE_DEFINITIONS "${_mifrost_tyr_defs}"
             INTERFACE_INCLUDE_DIRECTORIES "${MIFROST_PYTYR_NATIVE_PREFIX}/include;${MIFROST_PYYGGDRASIL_NATIVE_PREFIX}/include;${MIFROST_PYPDDL_NATIVE_PREFIX}/include"
         )
     endif ()
+    unset(_mifrost_tyr_defs)
     message(STATUS "Using PyTyr native prefix=${MIFROST_PYTYR_NATIVE_PREFIX}")
     unset(_mifrost_tyr_library)
 endif ()

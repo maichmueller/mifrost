@@ -444,7 +444,12 @@ void init_transition_dag(nb::module_& m)
                       .def_ro("depth", &TransitionDAG::Node::depth)
                       .def_ro("action", &TransitionDAG::Node::action)
                       .def_ro("candidate_id", &TransitionDAG::Node::candidate_id)
-                      .def_prop_ro("delta_literals", [](const TransitionDAG::Node& node) {
+                      // Explicit return type: nanobind 3 makes `nb::none` a class
+                      // rather than a function returning `nb::object`, so the two
+                      // branches below no longer deduce a common lambda return
+                      // type ("inconsistent types nanobind::none and
+                      // nanobind::object").
+                      .def_prop_ro("delta_literals", [](const TransitionDAG::Node& node) -> nb::object {
                          if(not node.delta_literals.has_value()) {
                             return nb::none();
                          }

@@ -89,11 +89,23 @@ class MifrostRecipe(ConanFile):
         self.requires("abseil/20240116.2", override=True)
         self.requires("fmt/11.2.0")
         self.requires("range-v3/0.12.0")
-        # nanobind deliberately does NOT come from conan: this module joins
-        # pymimir's nanobind type registry and must share that wheel's nanobind
-        # internals generation (pymimir >= 0.14.3 pins 2.15.x = generation 21).
-        # conancenter stops at 2.13.0, one generation short, so src/CMakeLists.txt
-        # resolves nanobind from pip -- see cmake/NanobindAbi.cmake.
+        # nanobind deliberately does NOT come from conan. It is ABI-critical
+        # rather than a feature-level dependency: every extension looks its
+        # shared C++ type registry up under a key built from
+        # NB_INTERNALS_VERSION, and modules on different generations get
+        # SEPARATE registries that can no longer cast each other's types --
+        # silently, surfacing as a TypeError at the first boundary crossing.
+        #
+        # This package joins pymimir's registry (NB_DOMAIN=pymimir_abi_domain in
+        # src/CMakeLists.txt), so it must match the nanobind pymimir was built
+        # against. conancenter cannot supply that: it stops at 2.13.0
+        # (generation 20) and ships no 3.x at all, while pymimir now pins 3.0.1
+        # (generation 22). The pin here used to be 2.9.2 = generation 16, so
+        # this package silently had a different registry from pymimir.
+        #
+        # nanobind is therefore resolved from the Python environment (pip), the
+        # same source hierarchical._core uses. See src/CMakeLists.txt and
+        # cmake/NanobindAbi.cmake.
         if self.options.with_benchmarks:
             self.requires("argparse/3.2")
             self.requires("benchmark/1.8.3")

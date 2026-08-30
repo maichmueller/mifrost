@@ -10,6 +10,11 @@ requires = [
     # generation that pymimir uses instead of the removed Conan package.
     "nanobind==2.15.0",
     "PyYAML>=6.0,<7",
+    # ABI-critical, and deliberately from pip rather than conan: this package
+    # joins pymimir's nanobind type registry (NB_DOMAIN=pymimir_abi_domain) and
+    # so must share its internals generation. conancenter cannot supply 3.x.
+    # See conanfile.py's generate() and src/CMakeLists.txt.
+    "nanobind>=3,<4",
 ]
 build-backend = "build_backend"
 backend-path = ["."]
