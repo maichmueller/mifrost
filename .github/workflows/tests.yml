@@ -119,7 +119,7 @@ jobs:
           MIFROST_BUILD_BACKENDS: ${{ matrix.backends }}
         run: |
           python configure.py --mode ci --backends "${{ matrix.backends }}"
-          python cbuild.py --mode ci
+          python cbuild.py --mode ci --target all
 
       - name: Run C++ tests
         run: ctest --test-dir build/ci --output-on-failure
