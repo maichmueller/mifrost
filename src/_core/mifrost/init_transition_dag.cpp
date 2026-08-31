@@ -348,7 +348,17 @@ void init_transition_dag(nb::module_& m)
             "child"_a,
             "action"_a = std::nullopt,
             "candidate_id"_a = std::nullopt,
-            "delta_literals"_a = std::nullopt
+            // `nb::none()`, not `std::nullopt`: the two preceding arguments are
+            // `std::optional`, whose caster accepts None on its own, but this one
+            // is an `nb::handle`. A `std::nullopt` default is stored as Python
+            // None and then cast back to `nb::handle` on every call that omits
+            // it, which nanobind 3 refuses unless the argument accepts None --
+            // and the refusal sinks the whole overload, so even
+            // `register_transition(parent, child, action, candidate_id=...)`
+            // failed. `nb::none()` sets that flag itself, which is why every
+            // other Python-object argument in these bindings already spells its
+            // default this way.
+            "delta_literals"_a = nb::none()
          )
          .def(
             "register_transitions",
@@ -449,19 +459,21 @@ void init_transition_dag(nb::module_& m)
                       // branches below no longer deduce a common lambda return
                       // type ("inconsistent types nanobind::none and
                       // nanobind::object").
-                      .def_prop_ro("delta_literals", [](const TransitionDAG::Node& node) -> nb::object {
-                         if(not node.delta_literals.has_value()) {
-                            return nb::none();
+                      .def_prop_ro(
+                         "delta_literals", [](const TransitionDAG::Node& node) -> nb::object {
+                            if(not node.delta_literals.has_value()) {
+                               return nb::none();
+                            }
+                            nb::list out;
+                            for(const auto& literal_variant : *node.delta_literals) {
+                               std::visit(
+                                  [&](const auto& literal) { out.append(nb::cast(literal)); },
+                                  literal_variant
+                               );
+                            }
+                            return nb::cast(out);
                          }
-                         nb::list out;
-                         for(const auto& literal_variant : *node.delta_literals) {
-                            std::visit(
-                               [&](const auto& literal) { out.append(nb::cast(literal)); },
-                               literal_variant
-                            );
-                         }
-                         return nb::cast(out);
-                      });
+                      );
 
    dag_cls.attr("Node") = node_cls;
 }
