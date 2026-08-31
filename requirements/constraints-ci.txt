@@ -4,8 +4,8 @@
 conan>=2.4,<3
 cmake>=3.27,<4
 ninja>=1.11,<2
-nanobind==2.15.0
-pymimir==0.14.3
+nanobind==3.0.1
+pymimir==0.15.0
 pytyr==0.0.34
 pyyggdrasil==0.0.27
 pypddl==1.0.27

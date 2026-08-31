@@ -5,14 +5,12 @@ requires = [
     "cmake>=3.24,<5",
     "conan>=2.4,<3",
     "ninja>=1.11,<2",
-    # Mifrost joins pymimir's nanobind type registry. Keep this in the
-    # isolated build environment so CMake resolves the same newer nanobind
-    # generation that pymimir uses instead of the removed Conan package.
-    "nanobind==2.15.0",
     "PyYAML>=6.0,<7",
     # ABI-critical, and deliberately from pip rather than conan: this package
     # joins pymimir's nanobind type registry (NB_DOMAIN=pymimir_abi_domain) and
     # so must share its internals generation. conancenter cannot supply 3.x.
+    # Keep it in the isolated build environment so CMake resolves that same
+    # generation instead of the removed Conan package.
     # See conanfile.py's generate() and src/CMakeLists.txt.
     "nanobind>=3,<4",
 ]
@@ -34,7 +32,7 @@ license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 pymimir = [
-    "pymimir>=0.14.3",
+    "pymimir>=0.15.0",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
     "numpy",
@@ -46,7 +44,7 @@ pytyr = [
     "numpy",
 ]
 backends = [
-    "pymimir>=0.14.3",
+    "pymimir>=0.15.0",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "torch-geometric>=2.7",
@@ -58,7 +56,7 @@ torch = [
     "numpy",
 ]
 test = [
-    "pymimir>=0.14.3",
+    "pymimir>=0.15.0",
     "pytyr==0.0.34",
     "pytest>=8.0,<9",
     "torch>=2.2,<3",
@@ -66,7 +64,7 @@ test = [
     "numpy",
 ]
 perf = [
-    "pymimir>=0.14.3",
+    "pymimir>=0.15.0",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",
@@ -79,7 +77,7 @@ dev = [
     "ruff>=0.14.14,<0.15",
     "mypy>=1.14,<2",
     "PyYAML>=6.0,<7",
-    "pymimir>=0.14.3",
+    "pymimir>=0.15.0",
     "pytyr==0.0.34",
     "torch>=2.2,<3",
     "numpy",

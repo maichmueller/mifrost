@@ -442,8 +442,8 @@ if (MIFROST_BUILD_PYMIMIR_ADAPTER)
         message(FATAL_ERROR "mimir was found, but did not report mimir_VERSION")
     endif()
 
-    if (mimir_VERSION VERSION_LESS "0.14.3")
-        message(FATAL_ERROR "mimir >= 0.14.3 required, found ${mimir_VERSION}")
+    if (mimir_VERSION VERSION_LESS "0.15.0")
+        message(FATAL_ERROR "mimir >= 0.15.0 required, found ${mimir_VERSION}")
     endif()
 endif ()
 

@@ -11,7 +11,7 @@ import scikit_build_core.build as _sbc
 
 _CONAN_PREPARED: set[tuple[str, str]] = set()
 _BACKEND_BUILD_REQUIREMENTS = {
-    "pymimir": "pymimir>=0.14.3",
+    "pymimir": "pymimir>=0.15.0",
     "pytyr": "pytyr==0.0.34",
 }
 

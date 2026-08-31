@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 DEFAULT_REPOSITORY = "maichmueller/mimir"
-DEFAULT_VERSION = "0.14.3"
-MINIMUM_VERSION = "0.14.3"
+DEFAULT_VERSION = "0.15.0"
+MINIMUM_VERSION = "0.15.0"
 
 
 def _normalize_version(version: str) -> str:

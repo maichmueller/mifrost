@@ -58,9 +58,9 @@ def test_unknown_backend_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     ("selection", "expected"),
     [
         ("core", ["wheel"]),
-        ("pymimir", ["wheel", "pymimir>=0.14.3"]),
+        ("pymimir", ["wheel", "pymimir>=0.15.0"]),
         ("pytyr", ["wheel", "pytyr==0.0.34"]),
-        ("both", ["wheel", "pymimir>=0.14.3", "pytyr==0.0.34"]),
+        ("both", ["wheel", "pymimir>=0.15.0", "pytyr==0.0.34"]),
     ],
 )
 def test_build_requirements_follow_backend_selection(
@@ -95,11 +95,11 @@ def test_project_metadata_keeps_planners_optional() -> None:
     assert not any("pytyr" in requirement for requirement in build_requirements)
     extras = project["project"]["optional-dependencies"]
     torch_requirements = {"torch>=2.2,<3", "torch-geometric>=2.7", "numpy"}
-    assert set(extras["pymimir"]) == {"pymimir>=0.14.3"} | torch_requirements
+    assert set(extras["pymimir"]) == {"pymimir>=0.15.0"} | torch_requirements
     assert set(extras["pytyr"]) == {"pytyr==0.0.34"} | torch_requirements
     assert (
         set(extras["backends"])
-        == {"pymimir>=0.14.3", "pytyr==0.0.34"} | torch_requirements
+        == {"pymimir>=0.15.0", "pytyr==0.0.34"} | torch_requirements
     )
 
 
@@ -107,7 +107,11 @@ def test_wheel_rows_use_one_pinned_both_backend_build_environment() -> None:
     base_requirements = Path("requirements/base-build.txt").read_text()
     assert "pymimir" not in base_requirements.lower()
     assert "pytyr" not in base_requirements.lower()
-    assert "nanobind==2.15.0" in base_requirements
+    # base-build.txt mirrors pyproject.toml's build requirement, while the exact
+    # generation-22 pin that makes the CI build environment reproducible lives in
+    # the constraints file every workflow passes alongside it.
+    assert "nanobind>=3,<4" in base_requirements
+    assert "nanobind==3.0.1" in Path("requirements/constraints-ci.txt").read_text()
 
     default_requirements = Path("requirements/build.txt").read_text()
     assert "-r base-build.txt" in default_requirements
