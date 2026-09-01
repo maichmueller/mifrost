@@ -36,17 +36,38 @@ The graph object carries exactly the integer-id channels:
 
 | Stack | Node channels | Edge channels | Topology |
 | --- | --- | --- | --- |
-| DGL | `ndata["x_ids"]` (`[N, 6]` float) plus convenience `ndata["role_ids"] = x_ids[:, 0].long()` | `edata["edge_attr"]` (`[E, 3]` float) | int64 CPU `dgl.graph((src, dst))` over `num_nodes` nodes |
-| Jraph | `nodes` (`[N, 6]` float) | `edges` (`[E, 3]` float) | single-graph `GraphsTuple`, `senders=edge_index[0]`, `receivers=edge_index[1]`, `n_node=[N]`, `n_edge=[E]` |
+| DGL | `ndata["x_ids"]` (`[N, 6]` float) plus convenience `ndata["role_ids"] = x_ids[:, 0].long()` | `edata["edge_attr"]` (`[E, 9]` float) | int64 CPU `dgl.graph((src, dst))` over `num_nodes` nodes |
+| Jraph | `nodes` (`[N, 6]` float) | `edges` (`[E, 9]` float) | single-graph `GraphsTuple`, `senders=edge_index[0]`, `receivers=edge_index[1]`, `n_node=[N]`, `n_edge=[E]` |
+
+The edge width is 9, not 3: since the losslessness work every edge carries the
+six instance channels (`rel_id_plus_one`, `role`, `sign`, `goal_level`,
+`history_dt`, `category`) on top of `kind` / `pos_a` / `pos_b`. Read it from
+`edge_channel_names` in the metadata rather than hardcoding it. Note that
+`edge_attr[:, 7]` — like `x_ids[:, 4]` — is **signed**; the shift you need is
+in `metadata["history_dt_offset"]`.
 
 `metadata` is a plain dict holding everything else:
 
-- Vocabularies when present: `vocab_roles`, `vocab_predicates`,
-  `vocab_edge_kinds`, `channel_names`, `edge_channel_names`.
+- Vocabularies when present: `vocab_roles`, `vocab_relations`,
+  `vocab_predicates`, `vocab_actions`, `vocab_categories`,
+  `vocab_edge_kinds`, `channel_names`, `edge_channel_names`, plus the scalar
+  descriptors `num_predicates`, `node_universe`, `atom_expansion` and
+  `has_anchor`.
 - `node_names` / `object_names` style extras such as `node_names`.
-- Strategy tensors verbatim: `hyperedge_index` / `hyperedge_attr_ids`,
-  `tuple_args` / `tuple_ptr` / `tuple_rel_ids` / `tuple_role_ids`, and
-  `spd_src` / `spd_dst` / `spd_dist`.
+- Per-graph fields: `anchor_index`, `history_dt_offset`,
+  `instance_node_indices`.
+- Strategy tensors verbatim: `hyperedge_index` / `hyperedge_attr_ids` /
+  `num_hyperedges`, `tuple_args` / `tuple_sizes` / `tuple_ptr` /
+  `tuple_rel_ids` / `tuple_role_ids` / `tuple_sign_ids` / `tuple_level_ids` /
+  `tuple_dt_ids` / `tuple_category_ids` / `tuple_attr_ids` / `num_tuples`,
+  and `spd_src` / `spd_dst` / `spd_dist`.
+
+The list above is the *documented* order, not an allowlist: `_collect_metadata`
+sweeps every non-core attribute the carrier actually holds, so a field added
+to the encoder contract reaches DGL and Jraph consumers without anyone
+extending a tuple in `cross_stack.py`. Core node/edge channels (`x`, `x_ids`,
+`edge_index`, `edge_attr`, `num_nodes`, `batch`, `ptr`) are the only
+exclusions, because they are mapped onto the target library's own storage.
 
 Attributes absent from the input (e.g. `vocab_roles` on
 `ObjectFeatureEncoder` output) are simply omitted from the dict.
@@ -59,12 +80,23 @@ representations differ:
 - **PyG**: native `HypergraphConv` input via `hyperedge_index`.
 - **DGL**: core DGL has no hypergraph primitive, so the adapter additionally
   returns `metadata["hyperedge_bipartite"]`: an int64 graph over `N + M`
-  nodes in which each member node points at its hyperedge anchor, whose id is
-  the membership column offset by `N`. The raw `[2, M]` tensor also rides in
-  `metadata["hyperedge_index"]`.
+  nodes (`M` hyperedges) in which each member node points at its hyperedge
+  anchor, whose id is the hyperedge index offset by `N`. The raw
+  `[2, sum(sizes)]` membership tensor also rides in
+  `metadata["hyperedge_index"]`, and the per-hyperedge
+  labels in `metadata["hyperedge_attr_ids"]`, an `[M, 6]` table in `x_ids`
+  column order (this replaces the old `[M]` `hyperedge_attr_ids` role vector).
 - **Jraph**: the membership tensors ride in `globals` untouched; factor them
   into bipartite senders/receivers yourself if you want incidence-style
   message passing.
+
+`M` used to be inferred as `max(hyperedge_index[1]) + 1`, which undercounted
+whenever the last instance had arity 0 and therefore produced a zero-member
+hyperedge. The encoder core now guarantees every hyperedge has at least one
+member — an arity-0 instance takes the graph's anchor node — so the inferred
+count and the declared `num_hyperedges` / `hyperedge_attr_ids.size(0)` agree
+by construction. `to_dgl` prefers the declared count and raises `ValueError`
+on a disagreement rather than silently mis-sizing the bipartite graph.
 
 Tuple and spd tensors always pass through `metadata` unchanged on both
 stacks.
@@ -82,17 +114,24 @@ encoder = mifrost.StarGraphEncoder(problem)
 data = encoder.encode_pyg(state)
 graph, meta = to_dgl(data)
 
-embeds = torch.nn.ModuleList(
-    [torch.nn.Embedding(int(graph.ndata["x_ids"][:, c].max()) + 2, 8)
-     for c in range(6)]
-)
-feats = torch.cat(
-    [embeds[c](graph.ndata["x_ids"][:, c].long()) for c in range(6)], dim=-1
-)
+x_ids = graph.ndata["x_ids"]
+columns = []
+for c in range(x_ids.size(1)):
+    ids = x_ids[:, c].long()
+    if c == 4:                               # history_dt is the signed channel
+        ids = ids + meta["history_dt_offset"]
+    columns.append(torch.nn.Embedding(int(ids.max()) + 2, 8)(ids))
+feats = torch.cat(columns, dim=-1)
 
 conv = dglnn.GraphConv(feats.size(-1), 64)   # reverse edges are explicit
 out = conv(graph, feats)
 ```
+
+Column 4 carries the history age with its sign, so it is negative for history
+rows and the naive `Embedding(max + 2)` recipe raises `IndexError` the moment
+history is supplied. `metadata["history_dt_offset"]` is the shift that makes
+it a valid index; see
+[the PyG how-to](consume-with-vanilla-gnns.md#column-4-is-the-one-signed-channel).
 
 !!! note
     This snippet follows the stable public DGL API but could not be executed

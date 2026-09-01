@@ -24,6 +24,8 @@ constexpr int64_t kRoleGoal = 2;
 constexpr int64_t kRoleSubgoal = 3;
 constexpr int64_t kRoleHistory = 4;
 constexpr int64_t kRoleAction = 5;
+/// Auxiliary node that carries arity-0 instances (see `emit_anchor` below).
+constexpr int64_t kRoleAnchor = 6;
 
 constexpr int64_t kKindArgFwd = 0;
 constexpr int64_t kKindArgBwd = 1;
@@ -37,26 +39,54 @@ constexpr int64_t kKindNullarySelf = 8;
 constexpr int64_t kKindActionFwd = 9;
 constexpr int64_t kKindActionBwd = 10;
 constexpr int64_t kKindLineShare = 11;
+constexpr int64_t kKindUnarySelf = 12;
+
+constexpr int64_t kCategoryStatic = 0;
+/// Action-role nodes/instances/edges are not predicate categories; id 3 is
+/// appended to `vocab_categories` rather than reusing "static".
+constexpr int64_t kCategoryAction = 3;
 
 constexpr int kXDim = 6;
-constexpr int kEdgeDim = 3;
+constexpr int kEdgeDim = 9;
 
 constexpr std::string_view kHyperedgeSizesField = "hyperedge_sizes";
 constexpr std::string_view kHyperedgeNodeIndicesField = "hyperedge_node_indices";
 constexpr std::string_view kHyperedgeIdsField = "hyperedge_ids";
-constexpr std::string_view kHyperedgeRoleIdsField = "hyperedge_role_ids";
+constexpr std::string_view kHyperedgeAttrRowsField = "hyperedge_attr_rows";
 constexpr std::string_view kHyperedgeCountsField = "hyperedge_counts";
 // Instance channels follow multi-set semantics: the same atom occurring as a
-// state fact and as a goal literal emits two instances (and two argument-edge
-// sets), so per-instance counts exceed distinct-atom counts by design.
+// state fact and as a goal literal emits two instances, so per-instance counts
+// exceed distinct-atom counts by design. The *graph view* is a set: argument
+// edges, self-loops, the object projection and line-graph incidents fire only
+// on the first interning of an instance key.
 constexpr std::string_view kTupleArgsField = "tuple_args";
 constexpr std::string_view kTupleSlotSizesField = "tuple_slot_sizes";
 constexpr std::string_view kTupleRelIdsField = "tuple_rel_ids";
 constexpr std::string_view kTupleRoleIdsField = "tuple_role_ids";
+constexpr std::string_view kTupleSignIdsField = "tuple_sign_ids";
+constexpr std::string_view kTupleLevelIdsField = "tuple_level_ids";
+constexpr std::string_view kTupleDtIdsField = "tuple_dt_ids";
+constexpr std::string_view kTupleCategoryIdsField = "tuple_category_ids";
 constexpr std::string_view kTupleCountsField = "tuple_counts";
+constexpr std::string_view kInstanceNodeIndicesField = "instance_node_indices";
+constexpr std::string_view kAnchorIndexField = "anchor_index";
+constexpr std::string_view kHistoryDtOffsetField = "history_dt_offset";
 constexpr std::string_view kSpdSrcField = "spd_src";
 constexpr std::string_view kSpdDstField = "spd_dst";
 constexpr std::string_view kSpdDistField = "spd_dist";
+
+/**
+ * Unified relation id: predicates keep `0 .. P-1`, action schemas shift to
+ * `P + schema_id`, so a node/edge/instance channel can never confuse an action
+ * schema with a predicate. Degenerate (negative) schema ids stay `-1` ("none").
+ */
+[[nodiscard]] constexpr int64_t action_relation_id(int64_t action, size_t predicate_count)
+{
+   if(action < 0) {
+      return -1;
+   }
+   return static_cast< int64_t >(predicate_count) + action;
+}
 
 constexpr int64_t kSpdMaxObjects = 4096;
 
@@ -156,19 +186,38 @@ struct NodeKeyEqual {
    }
 };
 
-struct DerivedInstance {
+/**
+ * The six per-instance channels mirrored by `x_ids`, `edge_attr` cols 3..8 and
+ * both instance tables. `relation` is the *unified* relation id (see
+ * `action_relation_id`); `-1` means "none" and is exported as `+1 == 0`.
+ */
+struct InstanceLabels {
    int64_t role = kRoleFact;
-   int64_t predicate = -1;
+   int64_t relation = -1;
+   int64_t sign = 0;
+   int64_t level = 0;
+   int64_t dt = 0;
+   int64_t category = kCategoryStatic;
+};
+
+struct DerivedInstance {
+   InstanceLabels labels;
    SemanticArguments arguments;
+   /// Reified node carrying this instance's labels, or -1 when not reified.
+   int64_t node_index = -1;
 };
 
 struct Buffers {
    hash_map< NodeKey, int64_t, NodeKeyHash, NodeKeyEqual > node_indices;
-   /// Row-major [N, 6]: role, predicate_id+1, sign, goal_level, history_dt, category.
+   /// First-occurrence guard for the objects-only projection, which emits
+   /// edges without interning a node (graph view = set, table = multiset).
+   hash_map< NodeKey, int64_t, NodeKeyHash, NodeKeyEqual > projection_seen;
+   /// Row-major [N, 6]: role, relation_id+1, sign, goal_level, history_dt, category.
    std::vector< float > x_flat;
    std::vector< int64_t > edge_src;
    std::vector< int64_t > edge_dst;
-   /// Row-major [E, 3]: kind, pos_a, pos_b.
+   /// Row-major [E, 9]: kind, pos_a, pos_b, relation_id+1, role, sign,
+   /// goal_level, history_dt, category.
    std::vector< float > edge_attr_flat;
    std::vector< std::string > node_names;
    /// Per-object incident (fact-node, position) pairs for line-graph derivation.
@@ -182,6 +231,12 @@ struct Buffers {
    }
 };
 
+/// Result of one `intern_node` call: the node index plus first-insertion flag.
+struct InternResult {
+   int64_t index = -1;
+   bool inserted = false;
+};
+
 struct Emitter {
    const std::vector< SemanticPredicateSpec >& predicates;
    const std::vector< SemanticActionSpec >& action_specs;
@@ -189,40 +244,34 @@ struct Emitter {
    const SemanticDerivedGraphEncoderConfig& config;
    Buffers buffers;
 
-   void write_features(
-      int64_t index,
-      int64_t role,
-      int64_t predicate,
-      bool positive,
-      int64_t level,
-      int64_t dt,
-      int64_t category
-   )
+   void write_features(int64_t index, const InstanceLabels& labels)
    {
       const auto slot = static_cast< size_t >(index) * kXDim;
       buffers.x_flat.resize(std::max(buffers.x_flat.size(), slot + kXDim), 0.0F);
-      buffers.x_flat[slot] = static_cast< float >(role);
-      buffers.x_flat[slot + 1] = static_cast< float >(predicate + 1);
-      buffers.x_flat[slot + 2] = positive ? 0.0F : 1.0F;
-      buffers.x_flat[slot + 3] = static_cast< float >(level);
-      buffers.x_flat[slot + 4] = static_cast< float >(dt);
-      buffers.x_flat[slot + 5] = static_cast< float >(category);
+      buffers.x_flat[slot] = static_cast< float >(labels.role);
+      buffers.x_flat[slot + 1] = static_cast< float >(labels.relation + 1);
+      buffers.x_flat[slot + 2] = static_cast< float >(labels.sign);
+      buffers.x_flat[slot + 3] = static_cast< float >(labels.level);
+      buffers.x_flat[slot + 4] = static_cast< float >(labels.dt);
+      buffers.x_flat[slot + 5] = static_cast< float >(labels.category);
    }
 
    /// Lookup-first interning: ``make_key``/``format_name`` run only on a miss,
    /// so repeated facts neither copy their arguments nor format their names.
+   /// The returned `inserted` flag is what keeps the *graph view* a set: every
+   /// edge derived from an instance fires only on its first interning.
    template < typename MakeKey, typename FormatName >
-   [[nodiscard]] int64_t intern_node(
+   [[nodiscard]] InternResult intern_node(
       const NodeKeyView& view,
       MakeKey&& make_key,
       FormatName&& format_name,
-      int64_t category
+      const InstanceLabels& labels
    )
    {
       auto& nodes = buffers.node_indices;
       const auto found = nodes.find(view);
       if(found != nodes.end()) {
-         return found->second;
+         return InternResult{.index = found->second, .inserted = false};
       }
       // Object keys collapse to one map entry (role/predicate only), so the
       // map size lags the feature-row count; index by row count, never by
@@ -232,29 +281,47 @@ struct Emitter {
          std::forward< MakeKey >(make_key)(), next_index
       );
       if(inserted) {
-         write_features(
-            it->second,
-            it->first.role,
-            it->first.predicate,
-            it->first.positive,
-            it->first.level,
-            it->first.dt,
-            category
-         );
+         write_features(it->second, labels);
          if(config.export_node_names) {
             buffers.node_names.emplace_back(format_name());
          }
       }
-      return it->second;
+      return InternResult{.index = it->second, .inserted = inserted};
    }
 
-   void add_edge(int64_t src, int64_t dst, int64_t kind, int64_t pos_a, int64_t pos_b)
+   void add_edge(
+      int64_t src,
+      int64_t dst,
+      int64_t kind,
+      int64_t pos_a,
+      int64_t pos_b,
+      const InstanceLabels& labels
+   )
    {
       buffers.edge_src.push_back(src);
       buffers.edge_dst.push_back(dst);
       buffers.edge_attr_flat.push_back(static_cast< float >(kind));
       buffers.edge_attr_flat.push_back(static_cast< float >(pos_a));
       buffers.edge_attr_flat.push_back(static_cast< float >(pos_b));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.relation + 1));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.role));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.sign));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.level));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.dt));
+      buffers.edge_attr_flat.push_back(static_cast< float >(labels.category));
+   }
+
+   /// `line_share` shortcuts are not derived from a single instance: both
+   /// endpoints are reified fact nodes that already carry their own labels, so
+   /// label columns 3..8 are zero. This is the one permitted "none" case.
+   void add_unlabeled_edge(int64_t src, int64_t dst, int64_t kind, int64_t pos_a, int64_t pos_b)
+   {
+      buffers.edge_src.push_back(src);
+      buffers.edge_dst.push_back(dst);
+      buffers.edge_attr_flat.push_back(static_cast< float >(kind));
+      buffers.edge_attr_flat.push_back(static_cast< float >(pos_a));
+      buffers.edge_attr_flat.push_back(static_cast< float >(pos_b));
+      buffers.edge_attr_flat.insert(buffers.edge_attr_flat.end(), kEdgeDim - 3, 0.0F);
    }
 
    /// Byte-identical single-pass form of the historical fmt::join rendering.
@@ -303,7 +370,7 @@ struct Emitter {
 const std::vector< std::string >& role_vocabulary()
 {
    static const std::vector< std::string > vocabulary = {
-      "object", "fact", "goal", "subgoal", "history", "action"
+      "object", "fact", "goal", "subgoal", "history", "action", "anchor"
    };
    return vocabulary;
 }
@@ -322,28 +389,39 @@ const std::vector< std::string >& edge_kind_vocabulary()
       "nullary_self",
       "action_fwd",
       "action_bwd",
-      "line_share"
+      "line_share",
+      "unary_self"
    };
    return vocabulary;
 }
 
 const std::vector< std::string >& category_vocabulary()
 {
-   static const std::vector< std::string > vocabulary = {"static", "fluent", "derived"};
+   static const std::vector< std::string > vocabulary = {"static", "fluent", "derived", "action"};
    return vocabulary;
 }
 
 const std::vector< std::string >& channel_names()
 {
    static const std::vector< std::string > names = {
-      "role", "predicate_id_plus_one", "sign", "goal_level", "history_dt", "category"
+      "role", "relation_id_plus_one", "sign", "goal_level", "history_dt", "category"
    };
    return names;
 }
 
 const std::vector< std::string >& edge_channel_names()
 {
-   static const std::vector< std::string > names = {"kind", "pos_a", "pos_b"};
+   static const std::vector< std::string > names = {
+      "kind",
+      "pos_a",
+      "pos_b",
+      "rel_id_plus_one",
+      "role",
+      "sign",
+      "goal_level",
+      "history_dt",
+      "category"
+   };
    return names;
 }
 
@@ -355,6 +433,33 @@ std::vector< std::string > predicate_vocabulary(
    vocabulary.reserve(predicates.size());
    for(const auto& predicate : predicates) {
       vocabulary.push_back(predicate.name);
+   }
+   return vocabulary;
+}
+
+std::vector< std::string > action_vocabulary(const std::vector< SemanticActionSpec >& actions)
+{
+   std::vector< std::string > vocabulary;
+   vocabulary.reserve(actions.size());
+   for(const auto& action : actions) {
+      vocabulary.push_back(action.name);
+   }
+   return vocabulary;
+}
+
+/// `vocab_predicates ++ vocab_actions`: the unified relation id space.
+std::vector< std::string > relation_vocabulary(
+   const std::vector< SemanticPredicateSpec >& predicates,
+   const std::vector< SemanticActionSpec >& actions
+)
+{
+   std::vector< std::string > vocabulary;
+   vocabulary.reserve(predicates.size() + actions.size());
+   for(const auto& predicate : predicates) {
+      vocabulary.push_back(predicate.name);
+   }
+   for(const auto& action : actions) {
+      vocabulary.push_back(action.name);
    }
    return vocabulary;
 }
@@ -389,6 +494,20 @@ void register_instance_fields(
    const SemanticDerivedGraphEncoderConfig& config
 )
 {
+   // One reified-node back-pointer per instance row, in instance order. This
+   // is what links a hyperedge/tuple row to the node carrying its labels: the
+   // old "tuple row i == node num_objects + i" coincidence no longer holds
+   // once duplicates are deduplicated in the graph view or an anchor shifts
+   // the node indices.
+   builder.register_field(
+      std::string(kInstanceNodeIndicesField),
+      GraphFieldSpec{
+         .dtype = GraphFieldDType::I64,
+         .mode = GraphFieldMode::CAT,
+         .dim = 1,
+         .inc = node_offset_inc(),
+      }
+   );
    if(config.include_hyperedge_incidence) {
       builder.register_field(
          std::string(kHyperedgeCountsField),
@@ -416,12 +535,14 @@ void register_instance_fields(
             .inc = hyperedge_offset_inc(),
          }
       );
+      // [M, 6] row-major, mirroring `x_ids`' channels exactly:
+      // role, rel_id_plus_one, sign, goal_level, history_dt, category.
       builder.register_field(
-         std::string(kHyperedgeRoleIdsField),
+         std::string(kHyperedgeAttrRowsField),
          GraphFieldSpec{
             .dtype = GraphFieldDType::I64,
             .mode = GraphFieldMode::CAT,
-            .dim = 1,
+            .dim = 6,
          }
       );
    }
@@ -451,43 +572,84 @@ void register_instance_fields(
             .dim = 1,
          }
       );
-      builder.register_field(
-         std::string(kTupleRoleIdsField),
-         GraphFieldSpec{
-            .dtype = GraphFieldDType::I64,
-            .mode = GraphFieldMode::CAT,
-            .dim = 1,
-         }
-      );
+      for(const auto& key : {
+             kTupleRoleIdsField,
+             kTupleSignIdsField,
+             kTupleLevelIdsField,
+             kTupleDtIdsField,
+             kTupleCategoryIdsField,
+          }) {
+         builder.register_field(
+            std::string(key),
+            GraphFieldSpec{
+               .dtype = GraphFieldDType::I64,
+               .mode = GraphFieldMode::CAT,
+               .dim = 1,
+            }
+         );
+      }
    }
 }
 
 void set_instance_fields(
    BatchBuilder& builder,
    const SemanticDerivedGraphEncoderConfig& config,
-   const std::vector< DerivedInstance >& instances
+   const std::vector< DerivedInstance >& instances,
+   int64_t anchor_index
 )
 {
    const auto instance_count = static_cast< int64_t >(instances.size());
+   // Reified node per instance. Zero-arity instances that were not reified
+   // (objects-only projection) point at the anchor; the rest of the
+   // objects-only table has no reified node and reports -1.
+   std::vector< int64_t > instance_nodes;
+   instance_nodes.reserve(instances.size());
+   for(const auto& instance : instances) {
+      if(instance.node_index >= 0) {
+         instance_nodes.push_back(instance.node_index);
+      } else {
+         instance_nodes.push_back(instance.arguments.empty() ? anchor_index : int64_t{-1});
+      }
+   }
+   builder.set_field(std::string{kInstanceNodeIndicesField}, instance_nodes);
+
    if(config.include_hyperedge_incidence) {
       std::vector< int64_t > sizes;
       std::vector< int64_t > members;
       std::vector< int64_t > ids;
-      std::vector< int64_t > roles;
+      std::vector< int64_t > attr_rows;
       sizes.reserve(instances.size());
       ids.reserve(instances.size());
-      roles.reserve(instances.size());
+      attr_rows.reserve(instances.size() * 6);
       int64_t next_id = 0;
       for(const auto& instance : instances) {
-         sizes.push_back(static_cast< int64_t >(instance.arguments.size()));
-         members.insert(members.end(), instance.arguments.begin(), instance.arguments.end());
+         if(instance.arguments.empty()) {
+            // A zero-member hyperedge is invisible to HypergraphConv and
+            // desyncs its inferred `num_edges`; anchor it instead.
+            if(anchor_index < 0) {
+               throw std::logic_error(
+                  "derived-graph hyperedge incidence requires the anchor node for arity-0 "
+                  "instances"
+               );
+            }
+            sizes.push_back(1);
+            members.push_back(anchor_index);
+         } else {
+            sizes.push_back(static_cast< int64_t >(instance.arguments.size()));
+            members.insert(members.end(), instance.arguments.begin(), instance.arguments.end());
+         }
          ids.push_back(next_id++);
-         roles.push_back(instance.role);
+         attr_rows.push_back(instance.labels.role);
+         attr_rows.push_back(instance.labels.relation + 1);
+         attr_rows.push_back(instance.labels.sign);
+         attr_rows.push_back(instance.labels.level);
+         attr_rows.push_back(instance.labels.dt);
+         attr_rows.push_back(instance.labels.category);
       }
       builder.set_field(std::string{kHyperedgeSizesField}, sizes);
       builder.set_field(std::string{kHyperedgeNodeIndicesField}, members);
       builder.set_field(std::string{kHyperedgeIdsField}, ids);
-      builder.set_field(std::string{kHyperedgeRoleIdsField}, roles);
+      builder.set_field(std::string{kHyperedgeAttrRowsField}, attr_rows);
       builder.set_field(
          std::string{kHyperedgeCountsField}, std::span< const int64_t >{&instance_count, 1}
       );
@@ -497,19 +659,35 @@ void set_instance_fields(
       std::vector< int64_t > slot_sizes;
       std::vector< int64_t > rel_ids;
       std::vector< int64_t > role_ids;
+      std::vector< int64_t > sign_ids;
+      std::vector< int64_t > level_ids;
+      std::vector< int64_t > dt_ids;
+      std::vector< int64_t > category_ids;
       slot_sizes.reserve(instances.size());
       rel_ids.reserve(instances.size());
       role_ids.reserve(instances.size());
+      sign_ids.reserve(instances.size());
+      level_ids.reserve(instances.size());
+      dt_ids.reserve(instances.size());
+      category_ids.reserve(instances.size());
       for(const auto& instance : instances) {
          args.insert(args.end(), instance.arguments.begin(), instance.arguments.end());
          slot_sizes.push_back(static_cast< int64_t >(instance.arguments.size()));
-         rel_ids.push_back(instance.predicate);
-         role_ids.push_back(instance.role);
+         rel_ids.push_back(instance.labels.relation);
+         role_ids.push_back(instance.labels.role);
+         sign_ids.push_back(instance.labels.sign);
+         level_ids.push_back(instance.labels.level);
+         dt_ids.push_back(instance.labels.dt);
+         category_ids.push_back(instance.labels.category);
       }
       builder.set_field(std::string{kTupleSlotSizesField}, slot_sizes);
       builder.set_field(std::string{kTupleArgsField}, args);
       builder.set_field(std::string{kTupleRelIdsField}, rel_ids);
       builder.set_field(std::string{kTupleRoleIdsField}, role_ids);
+      builder.set_field(std::string{kTupleSignIdsField}, sign_ids);
+      builder.set_field(std::string{kTupleLevelIdsField}, level_ids);
+      builder.set_field(std::string{kTupleDtIdsField}, dt_ids);
+      builder.set_field(std::string{kTupleCategoryIdsField}, category_ids);
       builder.set_field(
          std::string{kTupleCountsField}, std::span< const int64_t >{&instance_count, 1}
       );
@@ -687,25 +865,62 @@ void encode_impl(
          .predicate = -1,
       };
       buffers.node_indices.emplace(key, static_cast< int64_t >(index));
-      emitter.write_features(static_cast< int64_t >(index), kRoleObject, -1, true, 0, 0, 0);
+      emitter.write_features(
+         static_cast< int64_t >(index), InstanceLabels{.role = kRoleObject, .relation = -1}
+      );
       if(config.export_node_names) {
          buffers.node_names.push_back(objects[index]);
       }
    }
 
-   const auto emit_literal_arguments = [&](int64_t fact_index, const SemanticAtom& atom) {
-      for(int64_t position = 0; position < static_cast< int64_t >(atom.arguments.size());
-          ++position) {
-         const auto object_index = atom.arguments[static_cast< size_t >(position)];
-         emitter.add_edge(fact_index, object_index, kKindArgFwd, position, position);
-         if(config.include_reverse_edges) {
-            emitter.add_edge(object_index, fact_index, kKindArgBwd, position, position);
-         }
+   // A single auxiliary node carrying arity-0 instances. Emitted for the
+   // objects-only projection (which has no reified atom nodes at all, so a
+   // nullary literal would leave no trace) and whenever hyperedge incidence is
+   // requested (so no hyperedge is ever empty). It is appended as the *last*
+   // node, leaving every object and fact-node index unchanged, and it is not an
+   // object: it never enters `object_names` or the `spd_*` object loops.
+   const bool emit_anchor = config.node_universe == DerivedNodeUniverse::objects_only
+                            or config.include_hyperedge_incidence;
+   int64_t anchor_index = -1;
+   const auto ensure_anchor = [&]() -> int64_t {
+      if(anchor_index >= 0) {
+         return anchor_index;
       }
+      anchor_index = buffers.node_count();
+      buffers.node_indices.emplace(NodeKey{.role = kRoleAnchor, .predicate = -1}, anchor_index);
+      emitter.write_features(anchor_index, InstanceLabels{.role = kRoleAnchor, .relation = -1});
+      if(config.export_node_names) {
+         buffers.node_names.emplace_back("<nullary>");
+      }
+      return anchor_index;
    };
+   /// Arity-0 objects-only instances: the anchor is allocated last, so their
+   /// self-loops are replayed once its index is known.
+   std::vector< InstanceLabels > pending_anchor_self_loops;
 
-   const auto emit_object_projection = [&](const SemanticAtom& atom) {
+   const auto emit_literal_arguments =
+      [&](int64_t fact_index, const SemanticAtom& atom, const InstanceLabels& labels) {
+         for(int64_t position = 0; position < static_cast< int64_t >(atom.arguments.size());
+             ++position) {
+            const auto object_index = atom.arguments[static_cast< size_t >(position)];
+            emitter.add_edge(fact_index, object_index, kKindArgFwd, position, position, labels);
+            if(config.include_reverse_edges) {
+               emitter.add_edge(object_index, fact_index, kKindArgBwd, position, position, labels);
+            }
+         }
+      };
+
+   const auto emit_object_projection = [&](const SemanticAtom& atom, const InstanceLabels& labels) {
       const auto arity = static_cast< int64_t >(atom.arguments.size());
+      if(arity == 0) {
+         pending_anchor_self_loops.push_back(labels);
+         return;
+      }
+      if(arity == 1) {
+         const auto argument = atom.arguments.front();
+         emitter.add_edge(argument, argument, kKindUnarySelf, 0, 0, labels);
+         return;
+      }
       switch(config.atom_expansion) {
          case DerivedAtomExpansion::star: {
             throw std::logic_error("star expansion never reaches object projection");
@@ -718,7 +933,8 @@ void encode_impl(
                      atom.arguments[static_cast< size_t >(j)],
                      kKindCliqueFwd,
                      i,
-                     j
+                     j,
+                     labels
                   );
                   if(config.include_reverse_edges) {
                      emitter.add_edge(
@@ -726,7 +942,8 @@ void encode_impl(
                         atom.arguments[static_cast< size_t >(i)],
                         kKindCliqueBwd,
                         j,
-                        i
+                        i,
+                        labels
                      );
                   }
                }
@@ -740,7 +957,8 @@ void encode_impl(
                   atom.arguments[static_cast< size_t >(i + 1)],
                   kKindChainFwd,
                   i,
-                  i + 1
+                  i + 1,
+                  labels
                );
                if(config.include_reverse_edges) {
                   emitter.add_edge(
@@ -748,7 +966,8 @@ void encode_impl(
                      atom.arguments[static_cast< size_t >(i)],
                      kKindChainBwd,
                      i + 1,
-                     i
+                     i,
+                     labels
                   );
                }
             }
@@ -761,7 +980,8 @@ void encode_impl(
                   atom.arguments[static_cast< size_t >(j)],
                   kKindStarFirstFwd,
                   0,
-                  j
+                  j,
+                  labels
                );
                if(config.include_reverse_edges) {
                   emitter.add_edge(
@@ -769,13 +989,35 @@ void encode_impl(
                      atom.arguments.front(),
                      kKindStarFirstBwd,
                      j,
-                     0
+                     0,
+                     labels
                   );
                }
             }
             break;
          }
       }
+   };
+
+   /// First-occurrence guard for the objects-only projection: it emits edges
+   /// without interning a node, so it needs its own set of seen instance keys.
+   const auto first_projection = [&](const NodeKeyView& view) {
+      auto& seen = buffers.projection_seen;
+      if(seen.find(view) != seen.end()) {
+         return false;
+      }
+      seen.emplace(
+         NodeKey{
+            .role = view.role,
+            .predicate = view.predicate,
+            .arguments = SemanticArguments(view.arguments.begin(), view.arguments.end()),
+            .positive = view.positive,
+            .level = view.level,
+            .dt = view.dt,
+         },
+         int64_t{0}
+      );
+      return true;
    };
 
    const auto ensure_fact_node = [&](
@@ -786,14 +1028,14 @@ void encode_impl(
                                     int64_t dt,
                                     int64_t category
                                  ) -> int64_t {
-      if(collect_instances) {
-         buffers.instances.push_back(DerivedInstance{role, atom.predicate, atom.arguments});
-      }
-      const auto reified = config.node_universe == DerivedNodeUniverse::objects_and_atoms;
-      if(not reified) {
-         emit_object_projection(atom);
-         return -1;
-      }
+      const InstanceLabels labels{
+         .role = role,
+         .relation = atom.predicate,
+         .sign = positive ? 0 : 1,
+         .level = level,
+         .dt = dt,
+         .category = category,
+      };
       const NodeKeyView view{
          .role = role,
          .predicate = atom.predicate,
@@ -802,48 +1044,69 @@ void encode_impl(
          .level = level,
          .dt = dt,
       };
-      const auto index = emitter.intern_node(
-         view,
-         [&]() {
-            return NodeKey{
-               .role = role,
-               .predicate = atom.predicate,
-               .arguments = SemanticArguments(atom.arguments),
-               .positive = positive,
-               .level = level,
-               .dt = dt,
-            };
-         },
-         [&]() {
-            auto suffix = std::string_view();
-            if(role == kRoleGoal or role == kRoleSubgoal) {
-               const auto bounded = std::min< size_t >(
-                  static_cast< size_t >(level), kGoalSuffixes.size() - 1
-               );
-               suffix = kGoalSuffixes.at(bounded);
+      const auto reified = config.node_universe == DerivedNodeUniverse::objects_and_atoms;
+      int64_t index = -1;
+      if(reified) {
+         const auto interned = emitter.intern_node(
+            view,
+            [&]() {
+               return NodeKey{
+                  .role = role,
+                  .predicate = atom.predicate,
+                  .arguments = SemanticArguments(atom.arguments),
+                  .positive = positive,
+                  .level = level,
+                  .dt = dt,
+               };
+            },
+            [&]() {
+               std::string suffix_storage;
+               auto suffix = std::string_view();
+               if(role == kRoleGoal or role == kRoleSubgoal) {
+                  if(level >= 0 and static_cast< size_t >(level) < kGoalSuffixes.size()) {
+                     suffix = kGoalSuffixes.at(static_cast< size_t >(level));
+                  } else {
+                     // Beyond the spelled-out ladder, render the level
+                     // explicitly instead of clamping: clamping made every
+                     // level >= 3 share the name "[sssg]".
+                     suffix_storage = "[sg" + std::to_string(level) + "]";
+                     suffix = suffix_storage;
+                  }
+               }
+               std::string name = emitter.format_atom_name(atom, positive, suffix);
+               if(role == kRoleHistory) {
+                  name += "[dt";
+                  name += std::to_string(dt);
+                  name += "]";
+               }
+               return name;
+            },
+            labels
+         );
+         index = interned.index;
+         if(interned.inserted) {
+            if(atom.arguments.empty()) {
+               emitter.add_edge(index, index, kKindNullarySelf, 0, 0, labels);
+            } else {
+               emit_literal_arguments(index, atom, labels);
+               if(config.include_line_graph) {
+                  for(int64_t position = 0;
+                      position < static_cast< int64_t >(atom.arguments.size());
+                      ++position) {
+                     buffers.object_incidents
+                        .at(static_cast< size_t >(atom.arguments[static_cast< size_t >(position)]))
+                        .emplace_back(index, position);
+                  }
+               }
             }
-            std::string name = emitter.format_atom_name(atom, positive, suffix);
-            if(role == kRoleHistory) {
-               name += "[dt";
-               name += std::to_string(dt);
-               name += "]";
-            }
-            return name;
-         },
-         category
-      );
-      if(atom.arguments.empty()) {
-         emitter.add_edge(index, index, kKindNullarySelf, 0, 0);
-         return index;
-      }
-      emit_literal_arguments(index, atom);
-      if(config.include_line_graph) {
-         for(int64_t position = 0; position < static_cast< int64_t >(atom.arguments.size());
-             ++position) {
-            buffers.object_incidents
-               .at(static_cast< size_t >(atom.arguments[static_cast< size_t >(position)]))
-               .emplace_back(index, position);
          }
+      } else if(first_projection(view)) {
+         emit_object_projection(atom, labels);
+      }
+      if(collect_instances) {
+         buffers.instances.push_back(
+            DerivedInstance{.labels = labels, .arguments = atom.arguments, .node_index = index}
+         );
       }
       return index;
    };
@@ -904,7 +1167,17 @@ void encode_impl(
       }
       return entries;
    }();
-   ;
+   // `history_dt` (x_ids col 4 / edge_attr col 7) is the one *signed* channel:
+   // history entries carry negative dt. Export the shift that turns it into a
+   // non-negative embedding id, `x_ids[:, 4] + history_dt_offset`, without
+   // destroying the signed truth in the channel itself.
+   int64_t history_dt_offset = 0;
+   for(const auto& [dt, literals] : history_entries) {
+      if(literals.empty()) {
+         continue;
+      }
+      history_dt_offset = std::max(history_dt_offset, -dt);
+   }
    for(const auto& [dt, literals] : history_entries) {
       for(const auto& literal : literals) {
          const auto category = static_cast< int64_t >(
@@ -936,12 +1209,15 @@ void encode_impl(
                .level = 0,
                .dt = 0,
             };
-            if(collect_instances) {
-               buffers.instances.push_back(
-                  DerivedInstance{kRoleAction, action.action, action.arguments}
-               );
-            }
-            const auto index = emitter.intern_node(
+            // Action schemas live in the *shifted* half of the unified
+            // relation id space, so an action can never be decoded as a
+            // predicate of the same raw id.
+            const InstanceLabels labels{
+               .role = kRoleAction,
+               .relation = action_relation_id(action.action, predicates.size()),
+               .category = kCategoryAction,
+            };
+            const auto interned = emitter.intern_node(
                view,
                [&]() {
                   return NodeKey{
@@ -951,15 +1227,27 @@ void encode_impl(
                   };
                },
                [&]() { return emitter.format_action_name(action); },
-               0
+               labels
             );
-            for(int64_t position = 0; position < static_cast< int64_t >(action.arguments.size());
-                ++position) {
-               const auto object_index = action.arguments[static_cast< size_t >(position)];
-               emitter.add_edge(index, object_index, kKindActionFwd, position, position);
-               if(config.include_reverse_edges) {
-                  emitter.add_edge(object_index, index, kKindActionBwd, position, position);
+            const auto index = interned.index;
+            if(interned.inserted) {
+               for(int64_t position = 0; position < static_cast< int64_t >(action.arguments.size());
+                   ++position) {
+                  const auto object_index = action.arguments[static_cast< size_t >(position)];
+                  emitter.add_edge(index, object_index, kKindActionFwd, position, position, labels);
+                  if(config.include_reverse_edges) {
+                     emitter.add_edge(
+                        object_index, index, kKindActionBwd, position, position, labels
+                     );
+                  }
                }
+            }
+            if(collect_instances) {
+               buffers.instances.push_back(
+                  DerivedInstance{
+                     .labels = labels, .arguments = action.arguments, .node_index = index
+                  }
+               );
             }
          }
       }
@@ -978,10 +1266,22 @@ void encode_impl(
                if(src == dst) {
                   continue;
                }
-               emitter.add_edge(src, dst, kKindLineShare, src_position, dst_position);
-               emitter.add_edge(dst, src, kKindLineShare, dst_position, src_position);
+               // A fact pair sharing `m` objects yields `m` shortcuts per
+               // direction with distinct pos_a/pos_b: deliberate, not a
+               // duplicate. The reverse direction obeys include_reverse_edges.
+               emitter.add_unlabeled_edge(src, dst, kKindLineShare, src_position, dst_position);
+               if(config.include_reverse_edges) {
+                  emitter.add_unlabeled_edge(dst, src, kKindLineShare, dst_position, src_position);
+               }
             }
          }
+      }
+   }
+
+   if(emit_anchor) {
+      ensure_anchor();
+      for(const auto& labels : pending_anchor_self_loops) {
+         emitter.add_edge(anchor_index, anchor_index, kKindNullarySelf, 0, 0, labels);
       }
    }
 
@@ -1002,22 +1302,56 @@ void encode_impl(
          builder.set_graph_attr(
             "hyperedge_note",
             std::string(
-               "members are object nodes; hyperedge_sizes counts members per "
-               "hyperedge (possibly zero) - expand ids via "
-               "repeat_interleave(hyperedge_ids, hyperedge_sizes) to pair with "
-               "hyperedge_node_indices"
+               "members are object nodes, or the anchor node for an arity-0 "
+               "instance, so every hyperedge has at least one member and "
+               "hyperedge_index[1].max() + 1 equals the hyperedge count. The "
+               "native staging fields are hyperedge_sizes / hyperedge_ids / "
+               "hyperedge_node_indices, paired via "
+               "repeat_interleave(hyperedge_ids, hyperedge_sizes); encode_pyg "
+               "already applies that expansion and exposes the result as "
+               "hyperedge_index [2, M] plus hyperedge_attr_ids [M, 6] and "
+               "num_hyperedges, so the staging fields are absent there"
             )
          );
       }
       register_instance_fields(builder, config);
-      set_instance_fields(builder, config, buffers.instances);
+      set_instance_fields(builder, config, buffers.instances, anchor_index);
    }
    if(config.include_spd) {
       emit_spd_fields(builder, config, static_cast< int64_t >(objects.size()), buffers.instances);
    }
 
+   // Per-graph scalars must be graph *fields*, not graph attrs: a graph attr
+   // is batch-invariant metadata (BatchBuilder rejects a second, different
+   // value), while these change with every graph.
+   builder.register_field(
+      std::string(kHistoryDtOffsetField),
+      GraphFieldSpec{.dtype = GraphFieldDType::I64, .mode = GraphFieldMode::STACK, .dim = 1}
+   );
+   builder.set_field(
+      std::string(kHistoryDtOffsetField), std::span< const int64_t >{&history_dt_offset, 1}
+   );
+   if(emit_anchor) {
+      builder.register_field(
+         std::string(kAnchorIndexField),
+         GraphFieldSpec{
+            .dtype = GraphFieldDType::I64,
+            .mode = GraphFieldMode::STACK,
+            .dim = 1,
+            .inc = node_offset_inc(),
+         }
+      );
+      builder.set_field(
+         std::string(kAnchorIndexField), std::span< const int64_t >{&anchor_index, 1}
+      );
+   }
+
    builder.set_graph_attr("vocab_roles", role_vocabulary());
    builder.set_graph_attr("vocab_predicates", predicate_vocabulary(predicates));
+   builder.set_graph_attr("vocab_actions", action_vocabulary(action_specs));
+   builder.set_graph_attr("vocab_relations", relation_vocabulary(predicates, action_specs));
+   builder.set_graph_attr("num_predicates", static_cast< int64_t >(predicates.size()));
+   builder.set_graph_attr("has_anchor", static_cast< int64_t >(emit_anchor ? 1 : 0));
    builder.set_graph_attr("vocab_edge_kinds", edge_kind_vocabulary());
    builder.set_graph_attr("vocab_categories", category_vocabulary());
    builder.set_graph_attr("channel_names", channel_names());
@@ -1025,6 +1359,16 @@ void encode_impl(
 }
 
 }  // namespace
+
+SemanticDerivedGraphEncoderConfig normalize_semantic_derived_graph_encoder_config(
+   SemanticDerivedGraphEncoderConfig config
+)
+{
+   if(config.node_universe == DerivedNodeUniverse::objects_only) {
+      config.include_tuple_tensors = true;
+   }
+   return config;
+}
 
 SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
    std::vector< SemanticPredicateSpec > predicates,
@@ -1035,7 +1379,7 @@ SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
             SemanticSchemaContext{.predicates = std::move(predicates)}
          )
       )),
-      config_(config)
+      config_(normalize_semantic_derived_graph_encoder_config(config))
 {
    validate_config(config_);
 }
@@ -1051,7 +1395,7 @@ SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
             .actions = std::move(actions),
          })
       )),
-      config_(config)
+      config_(normalize_semantic_derived_graph_encoder_config(config))
 {
    validate_config(config_);
 }
@@ -1060,7 +1404,8 @@ SemanticDerivedGraphEncoderEngine::SemanticDerivedGraphEncoderEngine(
    std::shared_ptr< const SemanticSchemaContext > schema,
    SemanticDerivedGraphEncoderConfig config
 )
-    : schema_context_(require_schema_context(schema)), config_(config)
+    : schema_context_(require_schema_context(schema)),
+      config_(normalize_semantic_derived_graph_encoder_config(config))
 {
    validate_config(config_);
 }

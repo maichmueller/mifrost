@@ -1,0 +1,8 @@
+(define (problem tri1)
+  (:domain tri)
+  (:objects a b c d)
+  (:init (between a b c)
+         (between a b d)
+         (link c d)
+         (flag))
+  (:goal (and (between d b a))))

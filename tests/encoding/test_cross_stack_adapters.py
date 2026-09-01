@@ -16,7 +16,9 @@ import pytest
 from mifrost.encoders import cross_stack
 from mifrost.encoders.cross_stack import to_dgl, to_jraph
 from mifrost.encoders.derived import (
+    AtomLineGraphEncoder,
     HypergraphIncidenceEncoder,
+    ObjectGraphEncoder,
     StarGraphEncoder,
     TransformerBiasEncoder,
     TupleTensorEncoder,
@@ -67,6 +69,113 @@ def test_metadata_collector_includes_categories_and_object_names() -> None:
     }
 
 
+#: Every derived facade, keyed by the name used in test ids.
+_DERIVED_FACADES = {
+    "star": lambda problem: StarGraphEncoder(problem),
+    "object_clique": lambda problem: ObjectGraphEncoder(
+        problem, atom_expansion="clique"
+    ),
+    "line": lambda problem: AtomLineGraphEncoder(problem),
+    "hyper": lambda problem: HypergraphIncidenceEncoder(problem),
+    "tuple": lambda problem: TupleTensorEncoder(problem),
+    "spd": lambda problem: TransformerBiasEncoder(problem),
+}
+
+
+def _all_lanes(problem, state) -> dict:
+    """Encode kwargs that switch on every optional lane at once.
+
+    Goals, a negated goal, a subgoal layer, a history step and a grounded
+    action between them populate every id channel, so the carrier holds the
+    widest set of attributes it ever holds.
+    """
+    predicates = {p.get_name(): p for p in problem.get_domain().get_predicates()}
+    objects = {o.get_name(): o for o in problem.get_objects()}
+    names = sorted(objects)
+
+    def literal(predicate: str, args, positive: bool = True):
+        atom = problem.new_ground_atom(
+            predicates[predicate], [objects[name] for name in args]
+        )
+        return problem.new_ground_literal(atom, positive)
+
+    return {
+        "goals": [
+            literal("on", [names[0], names[1]]),
+            literal("clear", [names[0]], False),
+        ],
+        "subgoal_layers": [[literal("clear", [names[1]])]],
+        "history_subgoals": [(-1, [literal("handempty", [])])],
+        "actions": list(state.generate_applicable_actions()[:1]),
+    }
+
+
+@pytest.mark.parametrize("facade_name", sorted(_DERIVED_FACADES))
+def test_collect_metadata_keeps_every_non_core_carrier_attribute(
+    facade_name, blocks_small
+) -> None:
+    """``_collect_metadata`` must never silently drop an encoder field.
+
+    The adapters used to copy a hard-coded allowlist of attribute names, so
+    every field the encoder contract gained (``vocab_actions``,
+    ``vocab_relations``, ``num_predicates``, ``anchor_index``,
+    ``history_dt_offset``, ``instance_node_indices``, the widened ``tuple_*``
+    channels) reached DGL and Jraph consumers as *nothing at all*, with no
+    error. Neither DGL nor Jraph is installed in most environments, so every
+    adapter test above skips and that loss is invisible; this test needs no
+    optional dependency, which is the whole point of it.
+    """
+    problem, state = blocks_small
+    encoder = _DERIVED_FACADES[facade_name](problem)
+    data = encoder.encode_pyg(state, **_all_lanes(problem, state))
+
+    carried = set(map(str, data.keys()))
+    non_core = carried - cross_stack._CORE_ATTRS
+    metadata = cross_stack._collect_metadata(data)
+
+    assert non_core, "the carrier must hold at least the shared vocabularies"
+    assert not non_core - set(metadata), (
+        "cross-stack export drops carrier attributes: "
+        f"{sorted(non_core - set(metadata))}"
+    )
+    assert not set(metadata) - non_core, (
+        "cross-stack export invents attributes the carrier does not hold: "
+        f"{sorted(set(metadata) - non_core)}"
+    )
+    for key in non_core:
+        expected = getattr(data, key)
+        value = metadata[key]
+        if hasattr(expected, "shape"):
+            import torch
+
+            assert torch.equal(value, expected)
+        else:
+            assert value == expected
+
+
+@pytest.mark.parametrize("facade_name", sorted(_DERIVED_FACADES))
+def test_collect_metadata_covers_the_documented_allowlists(
+    facade_name, blocks_small
+) -> None:
+    """The documented name lists must stay in step with the real contract.
+
+    The sweep in :func:`cross_stack._collect_metadata` makes losing a field
+    structurally impossible, but the explicit lists are what the docstrings
+    and the reader rely on for a stable, readable ordering. A field that only
+    ever arrives through the sweep is an undocumented field.
+    """
+    problem, state = blocks_small
+    encoder = _DERIVED_FACADES[facade_name](problem)
+    data = encoder.encode_pyg(state, **_all_lanes(problem, state))
+
+    documented = set(cross_stack._METADATA_ATTRS) | set(cross_stack._TENSOR_EXTRA_ATTRS)
+    non_core = set(map(str, data.keys())) - cross_stack._CORE_ATTRS
+    assert not non_core - documented, (
+        "carrier attributes missing from the documented cross-stack lists: "
+        f"{sorted(non_core - documented)}"
+    )
+
+
 class TestToDgl:
     def test_star_round_trip_structure(self, blocks_small) -> None:
         _import_or_skip("dgl", "pip install dgl")
@@ -103,25 +212,52 @@ class TestToDgl:
             "vocab_roles",
             "vocab_categories",
             "vocab_predicates",
+            "vocab_actions",
+            "vocab_relations",
+            "vocab_edge_kinds",
+            "channel_names",
+            "edge_channel_names",
+            "node_names",
+            "object_names",
+            "node_universe",
+            "atom_expansion",
+            "num_predicates",
+            "has_anchor",
+        ):
+            expected = getattr(data, attr)
+            assert metadata[attr] == expected
+
+        # The carrier itself decides what metadata exists: everything that is
+        # not a core node/edge channel must survive the conversion, and the
+        # adapter must not invent keys. A star carrier holds no hyperedge
+        # membership, so no ``hyperedge_bipartite`` is synthesized here.
+        assert set(metadata) == set(map(str, data.keys())) - cross_stack._CORE_ATTRS
+        assert "hyperedge_bipartite" not in metadata
+
+        # Metadata is no longer tensor-free: the carrier exports per-graph
+        # tensors (``history_dt_offset`` always, plus the strategy lanes).
+        # What must hold is that the string vocabularies stay plain python and
+        # that every tensor entry is a documented strategy tensor.
+        for attr in (
+            "vocab_roles",
+            "vocab_categories",
+            "vocab_predicates",
+            "vocab_actions",
+            "vocab_relations",
             "vocab_edge_kinds",
             "channel_names",
             "edge_channel_names",
             "node_names",
             "object_names",
         ):
-            expected = getattr(data, attr)
-            assert metadata[attr] == expected
-        assert set(metadata) == {
-            "vocab_roles",
-            "vocab_categories",
-            "vocab_predicates",
-            "vocab_edge_kinds",
-            "channel_names",
-            "edge_channel_names",
-            "node_names",
-            "object_names",
+            assert isinstance(metadata[attr], list)
+            assert all(isinstance(entry, str) for entry in metadata[attr])
+        assert isinstance(metadata["history_dt_offset"], torch.Tensor)
+        tensor_keys = {
+            key for key, value in metadata.items() if isinstance(value, torch.Tensor)
         }
-        assert all(not isinstance(value, torch.Tensor) for value in metadata.values())
+        assert tensor_keys
+        assert tensor_keys <= set(cross_stack._TENSOR_EXTRA_ATTRS)
 
     def test_hyper_facade_bipartite_membership(self, blocks_small) -> None:
         _import_or_skip("dgl", "pip install dgl")

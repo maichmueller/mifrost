@@ -47,6 +47,19 @@ struct SemanticDerivedGraphEncoderConfig {
    int64_t spd_max_hops = 4;
 };
 
+/**
+ * Config normalisation every engine constructor applies before validation.
+ *
+ * `objects_only` folds each instance into pairwise object edges, which cannot
+ * express *which* pairs belong to one arity>=3 instance, so it forces
+ * `include_tuple_tensors` on: the tuple instance table is the authoritative
+ * instance list that makes the projection lossless. Exposed so callers that
+ * build a config first (the Python facades) can report the same flags the
+ * engine will actually use.
+ */
+[[nodiscard]] MIFROST_API SemanticDerivedGraphEncoderConfig
+normalize_semantic_derived_graph_encoder_config(SemanticDerivedGraphEncoderConfig config);
+
 class MIFROST_API SemanticDerivedGraphEncoderEngine {
   public:
    using Config = SemanticDerivedGraphEncoderConfig;

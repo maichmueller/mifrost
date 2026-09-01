@@ -265,8 +265,16 @@ def test_tuple_tensor_encoder_contract_and_localization() -> None:
     assert torch.equal(stream.flush_pyg().to_dict()["tuple_ptr"], batch["tuple_ptr"])
 
 
-def test_no_edge_homogeneous_carrier_keeps_empty_shapes() -> None:
-    """An edge-free graph still exposes the documented homogeneous carriers."""
+def test_unary_fact_objects_only_emits_labeled_unary_self_loop() -> None:
+    """A lone arity-1 fact leaves a *labeled* trace in ``objects_only``.
+
+    A pairwise projection has no pair to draw for an arity-1 literal, so this
+    graph used to come out completely edge-free -- the fact vanished. The
+    projection now emits a ``unary_self`` loop on the argument object, and the
+    loop carries the instance's relation / role / sign / goal level /
+    history dt / category in ``edge_attr`` columns 3..8, so the literal is
+    still recoverable from the tensors alone.
+    """
     from mifrost import _neutral_core
 
     predicate = _neutral_core.SemanticPredicateSpec(
@@ -288,8 +296,23 @@ def test_no_edge_homogeneous_carrier_keeps_empty_shapes() -> None:
     )
 
     data = engine.encode(input_data).as_pyg(as_batch=False)
-    assert data.edge_index.shape == (2, 0)
-    assert data.edge_attr.shape == (0, 3)
+    edge_kinds = list(data.vocab_edge_kinds)
+    channels = list(data.edge_channel_names)
+    assert data.edge_attr.shape == (1, len(channels))
+    # The self-loop sits on the only object node, not on the anchor.
+    assert data.edge_index.shape == (2, 1)
+    assert data.edge_index.tolist() == [[0], [0]]
+
+    row = dict(zip(channels, data.edge_attr[0].long().tolist()))
+    assert row["kind"] == edge_kinds.index("unary_self")
+    assert (row["pos_a"], row["pos_b"]) == (0, 0)
+    # Columns 3..8 carry the originating instance's full label.
+    assert row["rel_id_plus_one"] == list(data.vocab_relations).index("unary") + 1
+    assert row["role"] == list(data.vocab_roles).index("fact")
+    assert row["sign"] == 0
+    assert row["goal_level"] == 0
+    assert row["history_dt"] == 0
+    assert row["category"] == list(data.vocab_categories).index("fluent")
 
 
 def test_pytyr_accepts_generator_subgoal_layers() -> None:
@@ -319,9 +342,10 @@ def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> No
     star_single = star.encode_pyg(pytyr_state, actions=[pytyr_action])
     star_duplicate = star.encode_pyg(pytyr_state, actions=[pytyr_action, pytyr_action])
     assert star_duplicate.x_ids.shape == star_single.x_ids.shape
-    assert star_duplicate.edge_index.size(1) == star_single.edge_index.size(
-        1
-    ) + 2 * len(pytyr_action.get_objects())
+    # The graph view is a *set*: a repeated occurrence interns to the same
+    # node and re-emits nothing, so the topology is byte-identical.
+    assert torch.equal(star_duplicate.edge_index, star_single.edge_index)
+    assert torch.equal(star_duplicate.edge_attr, star_single.edge_attr)
     assert int((star_duplicate.x_ids[:, 0] == 5).sum()) == 1
 
     hypergraph = mifrost.HypergraphIncidenceEncoder(planning_task, backend="pytyr")
@@ -330,8 +354,20 @@ def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> No
         pytyr_state, actions=[pytyr_action, pytyr_action]
     )
     assert hyper_duplicate.x_ids.shape == hyper_single.x_ids.shape
-    assert hyper_duplicate.hyperedge_attr_ids.numel() == (
-        hyper_single.hyperedge_attr_ids.numel() + 1
+    assert torch.equal(hyper_duplicate.edge_index, hyper_single.edge_index)
+    # ``hyperedge_attr_ids`` is ``[M, 6]``; the multiset gains exactly one row
+    # and it repeats the occurrence that was already there.
+    assert hyper_duplicate.hyperedge_attr_ids.size(0) == (
+        hyper_single.hyperedge_attr_ids.size(0) + 1
+    )
+    assert hyper_duplicate.hyperedge_attr_ids.size(1) == (
+        hyper_single.hyperedge_attr_ids.size(1)
+    )
+    assert torch.equal(
+        hyper_duplicate.hyperedge_attr_ids[-1], hyper_single.hyperedge_attr_ids[-1]
+    )
+    assert int(hyper_duplicate.num_hyperedges.sum()) == (
+        int(hyper_single.num_hyperedges.sum()) + 1
     )
 
     tuples = mifrost.TupleTensorEncoder(planning_task, backend="pytyr")
@@ -340,6 +376,7 @@ def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> No
         pytyr_state, actions=[pytyr_action, pytyr_action]
     )
     assert tuple_duplicate.x_ids.shape == tuple_single.x_ids.shape
+    assert torch.equal(tuple_duplicate.edge_index, tuple_single.edge_index)
     assert (
         tuple_duplicate.tuple_rel_ids.numel() == tuple_single.tuple_rel_ids.numel() + 1
     )
@@ -351,8 +388,8 @@ def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> No
     assert tuple_duplicate.tuple_rel_ids[-1] == tuple_single.tuple_rel_ids[-1]
     assert tuple_duplicate.tuple_role_ids[-1] == tuple_single.tuple_role_ids[-1]
 
-    # The compatibility/Pymimir path does not use ViewPreparation occurrence
-    # indices; it must retain its existing repeated-action behavior.
+    # Set-vs-multiset is a core rule, not a view-preparation detail, so the
+    # compatibility/Pymimir path must reach the same conclusion.
     pymimir_state = pymimir_problem.get_initial_state()
     pymimir_action = pymimir_state.generate_applicable_actions()[0]
     pymimir_star = mifrost.StarGraphEncoder(pymimir_problem, backend="pymimir")
@@ -361,9 +398,8 @@ def test_duplicate_pytyr_actions_share_nodes_but_preserve_instance_lanes() -> No
         pymimir_state, actions=[pymimir_action, pymimir_action]
     )
     assert pymimir_duplicate.x_ids.shape == pymimir_single.x_ids.shape
-    assert pymimir_duplicate.edge_index.size(1) == (
-        pymimir_single.edge_index.size(1) + 2 * len(pymimir_action.get_objects())
-    )
+    assert torch.equal(pymimir_duplicate.edge_index, pymimir_single.edge_index)
+    assert torch.equal(pymimir_duplicate.edge_attr, pymimir_single.edge_attr)
 
 
 def _collapse_consecutive_duplicates(tensor: torch.Tensor) -> torch.Tensor:
@@ -434,3 +470,96 @@ def test_single_batch_conversion_consistency(
         )
         assert torch.equal(rebatched.tuple_rel_ids, batch.tuple_rel_ids)
         assert torch.equal(rebatched.tuple_role_ids, batch.tuple_role_ids)
+
+
+TERNARY_FACADE_CASES = (
+    ("StarGraphEncoder", {}),
+    ("ObjectGraphEncoder", {"atom_expansion": "clique"}),
+    ("ObjectGraphEncoder", {"atom_expansion": "chain"}),
+    ("ObjectGraphEncoder", {"atom_expansion": "star_first"}),
+    ("AtomLineGraphEncoder", {}),
+    ("HypergraphIncidenceEncoder", {}),
+    ("TupleTensorEncoder", {}),
+    ("TransformerBiasEncoder", {}),
+)
+
+
+def _make_facade(facade_name: str, problem_or_task: Any, backend: str, **kwargs: Any):
+    from mifrost.encoders.derived import (
+        AtomLineGraphEncoder,
+        HypergraphIncidenceEncoder,
+        StarGraphEncoder,
+        TupleTensorEncoder,
+    )
+
+    facade = {
+        "StarGraphEncoder": StarGraphEncoder,
+        "ObjectGraphEncoder": ObjectGraphEncoder,
+        "AtomLineGraphEncoder": AtomLineGraphEncoder,
+        "HypergraphIncidenceEncoder": HypergraphIncidenceEncoder,
+        "TupleTensorEncoder": TupleTensorEncoder,
+        "TransformerBiasEncoder": TransformerBiasEncoder,
+    }[facade_name]
+    return facade(problem_or_task, backend=backend, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("facade_name", "kwargs"),
+    TERNARY_FACADE_CASES,
+    ids=[
+        f"{facade}-{kwargs.get('atom_expansion', 'default')}"
+        for facade, kwargs in TERNARY_FACADE_CASES
+    ],
+)
+def test_ternary_domain_backend_parity(
+    facade_name: str, kwargs: dict[str, Any]
+) -> None:
+    """``tri`` is the only bundled domain with an arity >= 3 predicate.
+
+    ``(between ?x ?y ?z)`` is the fixture that separates a genuinely lossless
+    projection from one that only looks lossless on binary domains: pairwise
+    edges cannot say which pairs came from ``(between a b c)`` and which from
+    ``(between a b d)``. It also carries the nullary ``(flag)``. Both backends
+    must agree field-for-field on it, exactly as they do on ``blocks``.
+    """
+    pymimir_problem, planning_task, pytyr_search = _backend_pair("tri", "p1")
+    pymimir_state, pytyr_state = _root_states(pymimir_problem, pytyr_search)
+
+    pymimir_data = _make_facade(
+        facade_name, pymimir_problem, "pymimir", **kwargs
+    ).encode_pyg(pymimir_state)
+    pytyr_data = _make_facade(facade_name, planning_task, "pytyr", **kwargs).encode_pyg(
+        pytyr_state
+    )
+
+    _assert_structural_equality(pymimir_data, pytyr_data)
+    _assert_pyg_dicts_equal(pymimir_data.to_dict(), pytyr_data.to_dict())
+    # The ternary and nullary literals really are in this fixture.
+    assert "between" in pymimir_data.vocab_predicates
+    assert "flag" in pymimir_data.vocab_predicates
+
+
+@pytest.mark.parametrize(
+    ("facade_name", "kwargs"),
+    TERNARY_FACADE_CASES,
+    ids=[
+        f"{facade}-{kwargs.get('atom_expansion', 'default')}"
+        for facade, kwargs in TERNARY_FACADE_CASES
+    ],
+)
+def test_ternary_domain_batch_backend_parity(
+    facade_name: str, kwargs: dict[str, Any]
+) -> None:
+    """Native batching of the ternary fixture agrees across backends too."""
+    pymimir_problem, planning_task, pytyr_search = _backend_pair("tri", "p1")
+    pymimir_state, pytyr_state = _root_states(pymimir_problem, pytyr_search)
+
+    pymimir_batch = _make_facade(
+        facade_name, pymimir_problem, "pymimir", **kwargs
+    ).encode_batch_pyg([pymimir_state, pymimir_state])
+    pytyr_batch = _make_facade(
+        facade_name, planning_task, "pytyr", **kwargs
+    ).encode_batch_pyg([pytyr_state, pytyr_state])
+
+    assert pymimir_batch.num_graphs == pytyr_batch.num_graphs == 2
+    _assert_pyg_dicts_equal(pymimir_batch.to_dict(), pytyr_batch.to_dict())

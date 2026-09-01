@@ -115,6 +115,10 @@ void init_semantic_derived_graph_encoder(nb::module_& m)
          [](SemanticDerivedGraphEncoderConfig* self, const nb::kwargs& kwargs) {
             new(self) SemanticDerivedGraphEncoderConfig();
             apply_derived_config_kwargs(*self, kwargs);
+            // Report the flags the engine will actually use: `objects_only`
+            // forces the tuple instance table on (it is the only channel that
+            // can group an arity>=3 instance's pairwise projection edges).
+            *self = normalize_semantic_derived_graph_encoder_config(*self);
          }
       )
       .def_rw("node_universe", &SemanticDerivedGraphEncoderConfig::node_universe)
@@ -173,6 +177,14 @@ void init_semantic_derived_graph_encoder(nb::module_& m)
          ) const >(&SemanticDerivedGraphEncoderEngine::encode_batch),
          "inputs"_a
       );
+
+   m.def(
+      "normalize_semantic_derived_config",
+      &normalize_semantic_derived_graph_encoder_config,
+      "config"_a,
+      "Return the config an engine would actually run with (objects_only "
+      "forces include_tuple_tensors on)."
+   );
 
    m.def(
       "_semantic_derived_config_capsule",
