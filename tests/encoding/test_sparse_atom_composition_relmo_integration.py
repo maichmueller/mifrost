@@ -16,6 +16,7 @@ from tests.conftest import problem_setup
 from mifrost.encoders.sparse_atom import (
     CHANNEL_SATISFIED,
     CHANNEL_UNSATISFIED,
+    STATUS_ENCODING_VOCABULARY,
     SparseAtomCompositionEncoder,
     validate_sparse_atom_composition,
 )
@@ -134,7 +135,7 @@ def test_encoder_output_accepted_by_sparse_atom_composition_gnn(blocks_problem) 
         embedding_size=16,
         num_layers=2,
         predicate_arities=list(encoder.predicate_arities),
-        num_channels=4,
+        num_channels=encoder.num_channels,
     )
     prepared = model.prepare(encoding)  # must not raise
     output = model(prepared)
@@ -161,7 +162,7 @@ def test_encoder_batch_output_accepted_by_sparse_atom_composition_gnn(
         embedding_size=8,
         num_layers=2,
         predicate_arities=list(encoder.predicate_arities),
-        num_channels=4,
+        num_channels=encoder.num_channels,
     )
     output = model(batch)
     assert output.state.shape == (2, 8)
@@ -181,7 +182,7 @@ def test_exact_tuple_exchange_end_to_end(blocks_problem) -> None:
         embedding_size=8,
         num_layers=1,
         predicate_arities=list(encoder.predicate_arities),
-        num_channels=4,
+        num_channels=encoder.num_channels,
         exact_tuple_exchange=True,
     )
     output = model(encoding)
@@ -205,7 +206,99 @@ def test_relmo_prepare_rejects_a_broken_carrier(blocks_problem) -> None:
         embedding_size=8,
         num_layers=1,
         predicate_arities=list(encoder.predicate_arities),
-        num_channels=4,
+        num_channels=encoder.num_channels,
     )
     with pytest.raises(ValueError):
         model.prepare(encoding)
+
+
+# --------------------------------------------------------------------------
+# R4: object(o) as the carrier, on a real backend problem
+# --------------------------------------------------------------------------
+
+
+def test_real_backend_object_facts_cover_every_object_no_fallback_needed(
+    blocks_problem,
+) -> None:
+    """On a real pymimir problem, `object(o)` is already a static fact for
+    every domain object, so the R4 carrier fallback synthesis is never
+    exercised here -- only the synthetic star (auxiliary) carrier, when a
+    nullary predicate like `handempty` is represented, needs synthesis."""
+    from mifrost.encoders.sparse_atom import (
+        CHANNEL_STATE,
+        CHANNEL_AUXILIARY,
+        OBJECT_PREDICATE,
+    )
+
+    encoder = SparseAtomCompositionEncoder(blocks_problem)
+    state = blocks_problem.get_initial_state()
+    encoding = encoder.encode(state, goals=encoder.view.goal_literals(state))
+
+    object_base_id = encoder.schema.base_name_to_id[OBJECT_PREDICATE]
+    object_mask = encoding.atom_predicate_ids == object_base_id
+    object_channels = encoding.atom_channel_ids[object_mask].tolist()
+    real_objects = len(encoder.view.objects)
+    # Every real object's carrier is in the state channel (a genuine static
+    # fact); at most one extra auxiliary entry is the synthesized star.
+    assert object_channels[:real_objects] == [CHANNEL_STATE] * real_objects
+    assert all(
+        channel == CHANNEL_AUXILIARY for channel in object_channels[real_objects:]
+    )
+
+
+# --------------------------------------------------------------------------
+# status_encoding="vocabulary": same topology, native GNN round-trip
+# --------------------------------------------------------------------------
+
+
+def test_vocabulary_status_encoding_matches_channel_topology_on_real_problem(
+    blocks_problem,
+) -> None:
+    channel_encoder = SparseAtomCompositionEncoder(blocks_problem)
+    vocab_encoder = SparseAtomCompositionEncoder(
+        blocks_problem, status_encoding=STATUS_ENCODING_VOCABULARY
+    )
+    assert vocab_encoder.num_channels == 1
+    assert channel_encoder.num_channels == 4
+
+    state = blocks_problem.get_initial_state()
+    goal_literals = channel_encoder.view.goal_literals(state)
+    channel_encoding = channel_encoder.encode(state, goals=goal_literals)
+    vocab_encoding = vocab_encoder.encode(state, goals=goal_literals)
+
+    validate_sparse_atom_composition(
+        vocab_encoding,
+        predicate_arities=vocab_encoder.predicate_arities,
+        num_channels=vocab_encoder.num_channels,
+    )
+    assert torch.equal(vocab_encoding.pair_objects, channel_encoding.pair_objects)
+    assert torch.equal(
+        vocab_encoding.composition_triplets, channel_encoding.composition_triplets
+    )
+    assert torch.equal(vocab_encoding.atom_pair_ids, channel_encoding.atom_pair_ids)
+    assert bool((vocab_encoding.atom_channel_ids == 0).all())
+
+
+def test_vocabulary_status_encoding_accepted_by_sparse_atom_composition_gnn(
+    blocks_problem,
+) -> None:
+    encoder = SparseAtomCompositionEncoder(
+        blocks_problem, status_encoding=STATUS_ENCODING_VOCABULARY
+    )
+    state = blocks_problem.get_initial_state()
+    goal_literals = encoder.view.goal_literals(state)
+    encoding = encoder.encode(state, goals=goal_literals)
+    validate_sparse_atom_composition(
+        encoding, predicate_arities=encoder.predicate_arities, num_channels=1
+    )
+
+    model = relmo_models.SparseAtomCompositionGNN(
+        embedding_size=8,
+        num_layers=2,
+        predicate_arities=list(encoder.predicate_arities),
+        num_channels=encoder.num_channels,
+    )
+    prepared = model.prepare(encoding)
+    output = model(prepared)
+    assert output.state.shape == (1, 8)
+    assert torch.isfinite(output.state).all()

@@ -19,8 +19,8 @@ is a standalone reimplementation of every invariant that consumer's
 | Field | Shape | Meaning |
 | --- | --- | --- |
 | `atom_args`, `atom_offsets` | `[I]`, `[Q+1]` | Packed ordered atom argument tuples (CSR) |
-| `atom_predicate_ids` | `[Q]` | **Base** predicate id (shared across channels -- see below) |
-| `atom_channel_ids` | `[Q]` | One of the four frozen channels |
+| `atom_predicate_ids` | `[Q]` | Emitted predicate id -- meaning depends on `status_encoding` (see below) |
+| `atom_channel_ids` | `[Q]` | One of the four frozen channels in `"channel"` status encoding; always `0` in `"vocabulary"` |
 | `atom_batch`, `object_batch` | `[Q]`, `[O]` | Graph id per atom / per object |
 | `pair_objects` | `[P, 2]` | Ordered, non-diagonal, deduplicated object pairs |
 | `pair_support_offsets/atom_ids/i/j` | CSR over `[S]` | Every `(atom, i, j)` contributing to a pair |
@@ -37,10 +37,12 @@ tensor; `SparseAtomCompositionEncoding` (the encoder's carrier dataclass) has
 exactly these attribute names, so it can be passed directly to
 `SparseAtomCompositionGNN(...)`.
 
-Base-predicate arities aren't carried on the tensor contract at all: they are
-a *model constructor* argument (`predicate_arities=...`), fixed once from
+Predicate arities aren't carried on the tensor contract at all: they are a
+*model constructor* argument (`predicate_arities=...`), fixed once from
 `SparseAtomCompositionEncoder.schema` (a `SparseAtomPredicateSchema`) at
-construction time, shared by every graph the encoder ever produces.
+construction time, shared by every graph the encoder ever produces. The same
+goes for the reported channel cardinality (`num_channels`) -- see
+[Status encoding](#status-encoding-channel-vs-vocabulary) below.
 
 ## Channel convention
 
@@ -53,12 +55,14 @@ Frozen, do not renumber:
 | 2 | `unsatisfied` | supplied goal atom that is currently false |
 | 3 | `auxiliary` | encoding artefacts that are not themselves facts (only the nullary star's carrier) |
 
-The consumer allocates one wide atom MLP per `(channel, base_predicate)`
-pair, so `atom_predicate_ids` **must** be the base predicate id, not a
-channel-qualified relation id: `on[state]`, `on[sat]` and `on[unsat]` all
-share predicate id `on`, differing only in `atom_channel_ids`. This is what
-lets the architecture's `M_state,on`, `M_sat,on`, `M_unsat,on` split exist
-without tripling the predicate vocabulary.
+In `"channel"` status encoding, the consumer allocates one wide atom MLP per
+`(channel, base_predicate)` pair, so `atom_predicate_ids` **must** be the
+base predicate id, not a channel-qualified relation id: `on[state]`,
+`on[sat]` and `on[unsat]` all share predicate id `on`, differing only in
+`atom_channel_ids`. This is what lets the architecture's `M_state,on`,
+`M_sat,on`, `M_unsat,on` split exist without tripling the predicate
+vocabulary. In `"vocabulary"` status encoding these four rows fold into the
+predicate vocabulary instead -- see below.
 
 ## Why `plain` is off
 
@@ -158,11 +162,50 @@ No arity-0 atom is ever emitted by this encoder. The consumer's own
 message, and `validate_sparse_atom_composition` checks the same invariant
 standalone.
 
-The within-atom equality pattern `epsilon_q = (1[o_{q,i} = o_{q,j}])_{i,j}`
-(which pairs of argument positions refer to the same object) is not part of
-this encoder's contract at all: it is a function of an atom's own arguments,
-so the consumer derives it directly from `atom_args` rather than the encoder
-interning it into a categorical vocabulary.
+## Status encoding: channel vs. vocabulary
+
+`build_predicate_schema` (and `SparseAtomCompositionEncoder`) take a
+`status_encoding` argument with two values, matching the two ways the
+architecture document's baseline comparison represents goal status:
+
+- **`"channel"`** (default): as described above -- `atom_predicate_ids` is
+  the base predicate, `atom_channel_ids` distinguishes
+  state/satisfied/unsatisfied/auxiliary, and the schema reports
+  `num_channels == 4`.
+- **`"vocabulary"`**: there is no status *channel* at all. Every
+  `(base predicate, channel)` pair gets its own vocabulary entry instead --
+  the schema is four times as large -- `atom_channel_ids` is always `0`, and
+  `num_channels == 1`. This is how `relmo.models.FlatRelationalGNN`
+  represents goal status: it extends the *relation vocabulary* with separate
+  relations (`P`, or `P_sat`/`P_unsat`) rather than carrying a status
+  channel. Vocabulary-mode names reuse the flat native encoder family's own
+  `RelationKey` bracket convention (see
+  `src/_core/mifrost/core/encoders/common/relation_key.cpp`): `on[state]`,
+  `on[sat]`, `on[unsat]`, `on[g]` (the last for the auxiliary channel, which
+  has no flat-family analogue of its own).
+
+Both modes encode *exactly* the same atoms and sparse topology --
+`pair_objects`, `composition_triplets`, `atom_pair_ids`,
+`object_carrier_occurrence_ids`, everything -- only the predicate/channel
+labelling differs; `atom_predicate_ids` is precisely
+`schema.relation_id(base_predicate_id, channel)` applied pointwise to the
+channel-mode ids. This is what makes vocabulary mode useful: it is what the
+architecture document's "identical input encodings across architectures
+within each comparison" requirement needs for a like-for-like comparison
+against `FlatRelationalGNN`, since both models can then be sized from the
+same predicate vocabulary (`predicate_arities`, `num_channels`).
+
+That equivalence has one asymmetry worth knowing before benchmarking with
+it: `SparseAtomCompositionGNN`'s `join_sharing` ablation derives a per-pair
+join-template key from `atom_channel_ids` in `prepare()` (a pair keys on its
+support channel when that support is channel-homogeneous, and on a
+distinguished "mixed" key otherwise). In `"vocabulary"` status encoding every
+atom's channel is `0`, so every pair collapses onto the same template --
+correct, not a bug, since the status distinction already lives in the
+predicate id there, but it means the join-sharing ablation is only
+*meaningful* in `"channel"` status encoding. Use `"vocabulary"` for a
+like-for-like vocabulary comparison against `FlatRelationalGNN`; use
+`"channel"` when the join-sharing ablation itself is what is being studied.
 
 ## Pairs and witnesses (R7/R8/R9)
 

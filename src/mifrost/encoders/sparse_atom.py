@@ -29,6 +29,26 @@ Channel convention (frozen, see :data:`CHANNEL_NAMES`)
 represented atom carries exactly one of these four channel ids, and the
 consumer allocates one wide atom MLP per ``(channel, base_predicate)`` pair.
 
+Status encoding: channel vs. vocabulary
+------------------------------------------
+The four channels above are one of two ways to carry goal-status
+information; which one is active is chosen per :class:`SparseAtomPredicateSchema`
+via ``status_encoding`` (see :func:`build_predicate_schema`):
+
+- ``"channel"`` (the default, described above): the base predicate id is
+  shared across channels and ``atom_channel_ids`` distinguishes
+  state/satisfied/unsatisfied/auxiliary.
+- ``"vocabulary"``: there is no status channel at all -- every
+  ``(base predicate, channel)`` pair gets its own vocabulary entry instead,
+  ``atom_channel_ids`` is always ``0``, and the schema reports
+  ``num_channels == 1``. This is how ``relmo.models.FlatRelationalGNN``
+  represents goal status (separate relations rather than a channel), so
+  vocabulary mode is what makes a like-for-like comparison against that
+  baseline possible: both models can be sized from the same predicate
+  vocabulary. The two modes encode the exact same atoms and sparse
+  topology (``pair_objects``, ``composition_triplets``, ``atom_pair_ids``,
+  ...) -- only the predicate/channel labelling differs.
+
 Goal-status encoding
 ---------------------
 Only ``satisfied``/``unsatisfied`` goal-status atoms are emitted, mirroring
@@ -105,6 +125,21 @@ CHANNEL_NAMES: tuple[str, ...] = ("state", "satisfied", "unsatisfied", "auxiliar
 #: fact.
 OBJECT_PREDICATE = "object"
 
+#: :func:`build_predicate_schema` ``status_encoding=`` values.
+STATUS_ENCODING_CHANNEL = "channel"
+STATUS_ENCODING_VOCABULARY = "vocabulary"
+_STATUS_ENCODINGS = (STATUS_ENCODING_CHANNEL, STATUS_ENCODING_VOCABULARY)
+
+#: Per-channel vocabulary suffixes used only in ``status_encoding="vocabulary"``
+#: mode, indexed by channel id. These reuse the flat native encoder family's
+#: own ``RelationKey`` bracket convention (see
+#: ``src/_core/mifrost/core/encoders/common/relation_key.cpp``: ``[state]``
+#: marks a per-state fact, ``[sat]``/``[unsat]`` a goal-derivation status, and
+#: ``[g]`` a plain/undifferentiated relation) so a vocabulary-mode predicate
+#: name lines up with the equivalent ``FlatRelationalGNN`` relation name.
+#: Frozen, indexed by channel id: do not renumber.
+CHANNEL_STATUS_SUFFIXES: tuple[str, ...] = ("[state]", "[sat]", "[unsat]", "[g]")
+
 #: Distinguished auxiliary object nullary atoms are normalized onto. This is
 #: the exact literal used by the native hetero family's
 #: ``nullary_object_name`` default; kept identical so tooling that already
@@ -119,18 +154,35 @@ NULLARY_OBJECT_NAME = "![nullary_symbol]!"
 
 @dataclass(frozen=True)
 class SparseAtomPredicateSchema:
-    """Fixed base-predicate vocabulary shared by a batch of encoded graphs.
+    """Fixed predicate vocabulary shared by a batch of encoded graphs.
 
     ``arities`` is the *encoded* arity: a nullary predicate is reported with
     arity 1 here (its normalized unary-on-``star`` form), matching what
     ``SparseAtomCompositionGNN(predicate_arities=...)`` expects and what every
     emitted atom of that predicate actually has. ``logical_arities`` keeps the
     original PDDL arity (0 for nullary predicates) for diagnostics.
+
+    ``names``/``arities``/``logical_arities`` are indexed by *emitted*
+    predicate id -- the id space ``atom_predicate_ids`` actually uses, which
+    depends on ``status_encoding``:
+
+    - ``"channel"``: emitted ids are the base predicates verbatim (one entry
+      per base predicate); status lives in ``atom_channel_ids``.
+    - ``"vocabulary"``: emitted ids are ``base_predicate_id * 4 + channel``
+      (one entry per ``(base predicate, channel)`` pair, in that order), and
+      every encoded atom's channel is ``0``.
+
+    ``base_names`` always holds the underlying, un-suffixed per-predicate
+    names (what a caller passed to :func:`build_predicate_schema`, plus the
+    object carrier); use :attr:`base_name_to_id` to look one up by its raw
+    predicate name regardless of ``status_encoding``.
     """
 
     names: tuple[str, ...]
     arities: tuple[int, ...]
     logical_arities: tuple[int, ...]
+    status_encoding: str = STATUS_ENCODING_CHANNEL
+    base_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if len(self.names) != len(self.arities) or len(self.names) != len(
@@ -147,15 +199,45 @@ class SparseAtomPredicateSchema:
                 "SparseAtomPredicateSchema arities must all be positive: nullary "
                 "predicates are normalized to encoded arity 1"
             )
+        if self.status_encoding not in _STATUS_ENCODINGS:
+            raise ValueError(
+                f"status_encoding must be one of {_STATUS_ENCODINGS!r}, got "
+                f"{self.status_encoding!r}"
+            )
 
     @cached_property
     def name_to_id(self) -> dict[str, int]:
-        """Map each base predicate name to its fixed schema index."""
+        """Map each emitted predicate name to its fixed schema index."""
         return {name: index for index, name in enumerate(self.names)}
+
+    @cached_property
+    def base_name_to_id(self) -> dict[str, int]:
+        """Map each raw (un-suffixed) predicate name to its base index."""
+        return {name: index for index, name in enumerate(self.base_names)}
+
+    @property
+    def num_channels(self) -> int:
+        """Reported channel cardinality for the active ``status_encoding``."""
+        if self.status_encoding == STATUS_ENCODING_VOCABULARY:
+            return 1
+        return len(CHANNEL_NAMES)
+
+    def relation_id(self, base_predicate_id: int, channel: int) -> tuple[int, int]:
+        """Map a base predicate id + channel to the emitted ``(predicate_id, channel_id)``.
+
+        Identity in ``"channel"`` status encoding. In ``"vocabulary"`` status
+        encoding, the channel is folded into the predicate id and the emitted
+        channel is always ``0``.
+        """
+        if self.status_encoding == STATUS_ENCODING_VOCABULARY:
+            return base_predicate_id * len(CHANNEL_NAMES) + channel, 0
+        return base_predicate_id, channel
 
 
 def build_predicate_schema(
     predicates: Iterable[tuple[str, int]],
+    *,
+    status_encoding: str = STATUS_ENCODING_CHANNEL,
 ) -> SparseAtomPredicateSchema:
     """Build a :class:`SparseAtomPredicateSchema` from ``(name, arity)`` pairs.
 
@@ -166,7 +248,21 @@ def build_predicate_schema(
     appending only happens for hand-built schemas that omit it. Raises
     ``ValueError`` if a supplied predicate name is duplicated, or if a
     supplied ``object`` predicate does not have arity 1.
+
+    ``status_encoding`` selects how goal-status information is represented
+    (see the module docstring's "Status encoding" section):
+
+    - ``"channel"`` (default): one schema entry per base predicate.
+    - ``"vocabulary"``: one schema entry per ``(base predicate, channel)``
+      pair -- four times as many entries, named with
+      :data:`CHANNEL_STATUS_SUFFIXES`.
     """
+
+    if status_encoding not in _STATUS_ENCODINGS:
+        raise ValueError(
+            f"status_encoding must be one of {_STATUS_ENCODINGS!r}, got "
+            f"{status_encoding!r}"
+        )
 
     names: list[str] = []
     logical: list[int] = []
@@ -194,8 +290,35 @@ def build_predicate_schema(
         names.append(OBJECT_PREDICATE)
         logical.append(1)
         encoded.append(1)
+
+    base_names = tuple(names)
+    base_arities = tuple(encoded)
+    base_logical = tuple(logical)
+
+    if status_encoding == STATUS_ENCODING_CHANNEL:
+        return SparseAtomPredicateSchema(
+            names=base_names,
+            arities=base_arities,
+            logical_arities=base_logical,
+            status_encoding=status_encoding,
+            base_names=base_names,
+        )
+
+    vocabulary_names = tuple(
+        f"{base}{suffix}" for base in base_names for suffix in CHANNEL_STATUS_SUFFIXES
+    )
+    vocabulary_arities = tuple(
+        arity for arity in base_arities for _ in CHANNEL_STATUS_SUFFIXES
+    )
+    vocabulary_logical = tuple(
+        arity for arity in base_logical for _ in CHANNEL_STATUS_SUFFIXES
+    )
     return SparseAtomPredicateSchema(
-        names=tuple(names), arities=tuple(encoded), logical_arities=tuple(logical)
+        names=vocabulary_names,
+        arities=vocabulary_arities,
+        logical_arities=vocabulary_logical,
+        status_encoding=status_encoding,
+        base_names=base_names,
     )
 
 
@@ -376,16 +499,21 @@ def encode_sparse_atom_facts(
                 "supplied object universe"
             ) from exc
 
-    # entries: (base_predicate_id, channel_id, resolved_arg_ids)
+    # entries: (emitted_predicate_id, emitted_channel_id, resolved_arg_ids)
     entries: list[tuple[int, int, tuple[int, ...]]] = []
 
-    def predicate_id_for(name: str) -> int:
-        found = schema.name_to_id.get(name)
+    def base_predicate_id_for(name: str) -> int:
+        found = schema.base_name_to_id.get(name)
         if found is None:
             raise ValueError(f"unknown predicate {name!r}: not in the supplied schema")
         return found
 
-    object_base_id = predicate_id_for(OBJECT_PREDICATE)
+    def emit(base_predicate_id: int, channel: int, args: tuple[int, ...]) -> int:
+        predicate_id, emitted_channel = schema.relation_id(base_predicate_id, channel)
+        entries.append((predicate_id, emitted_channel, args))
+        return len(entries) - 1
+
+    object_base_id = base_predicate_id_for(OBJECT_PREDICATE)
 
     # R4: per-object carriers. `carrier_entry_index[o]` records the first
     # current atom that already carries `o` via a genuine `object(o)` fact,
@@ -394,8 +522,7 @@ def encode_sparse_atom_facts(
     state_key_to_index: dict[tuple[str, tuple[str, ...]], int] = {}
     for atom in current_atoms:
         args = resolve_args(atom)
-        entry_index = len(entries)
-        entries.append((predicate_id_for(atom.predicate), CHANNEL_STATE, args))
+        entry_index = emit(base_predicate_id_for(atom.predicate), CHANNEL_STATE, args)
         state_key_to_index[(atom.predicate, atom.args)] = entry_index
         if atom.predicate == OBJECT_PREDICATE and len(args) == 1:
             object_id = args[0]
@@ -411,9 +538,8 @@ def encode_sparse_atom_facts(
             channel = (
                 CHANNEL_SATISFIED if state_index is not None else CHANNEL_UNSATISFIED
             )
-            entry_index = len(entries)
-            entries.append(
-                (predicate_id_for(atom.predicate), channel, resolve_args(atom))
+            entry_index = emit(
+                base_predicate_id_for(atom.predicate), channel, resolve_args(atom)
             )
             if state_index is not None:
                 satisfied_links.append((entry_index, state_index))
@@ -424,14 +550,16 @@ def encode_sparse_atom_facts(
     for object_id in range(num_objects):
         if object_id == star_id or carrier_entry_index[object_id] is not None:
             continue
-        carrier_entry_index[object_id] = len(entries)
-        entries.append((object_base_id, CHANNEL_STATE, (object_id,)))
+        carrier_entry_index[object_id] = emit(
+            object_base_id, CHANNEL_STATE, (object_id,)
+        )
 
     # The distinguished nullary object is never a real PDDL object, so its
     # carrier is always synthesized, and always in the auxiliary channel.
     if star_id is not None:
-        carrier_entry_index[star_id] = len(entries)
-        entries.append((object_base_id, CHANNEL_AUXILIARY, (star_id,)))
+        carrier_entry_index[star_id] = emit(
+            object_base_id, CHANNEL_AUXILIARY, (star_id,)
+        )
 
     num_atoms = len(entries)
     arities = [len(entry[2]) for entry in entries]
@@ -751,6 +879,16 @@ class SparseAtomCompositionEncoder:
     ``goals=encoder.view.goal_literals(state)`` explicitly to encode the
     problem's own goal, or ``goals=()`` for a supplied-empty goal (zeta=1,
     G=empty; same atom set as goal-free, but ``goal_available=True``).
+
+    ``status_encoding`` selects how goal-status information is represented in
+    :attr:`schema` (see the module docstring's "Status encoding" section):
+    ``"channel"`` (default) carries it in ``atom_channel_ids``; ``"vocabulary"``
+    extends the predicate vocabulary instead, the way
+    ``relmo.models.FlatRelationalGNN`` does, with ``num_channels == 1``. Both
+    modes encode identical atoms and sparse topology; only the
+    predicate/channel labelling differs. Use :attr:`predicate_arities` and
+    :attr:`num_channels` to size a consumer model for whichever mode is
+    active.
     """
 
     CHANNEL_NAMES = CHANNEL_NAMES
@@ -763,13 +901,19 @@ class SparseAtomCompositionEncoder:
         *,
         backend: str | None = None,
         exact_tuple_exchange: bool = False,
+        status_encoding: str = STATUS_ENCODING_CHANNEL,
     ) -> None:
         self.view = StateView(source, backend=backend)
         self.backend = self.view.backend
         self.schema = build_predicate_schema(
             [(info.name, info.arity) for info in self.view.predicates],
+            status_encoding=status_encoding,
         )
         self.exact_tuple_exchange = bool(exact_tuple_exchange)
+
+    @property
+    def status_encoding(self) -> str:
+        return self.schema.status_encoding
 
     @property
     def predicate_names(self) -> tuple[str, ...]:
@@ -777,8 +921,13 @@ class SparseAtomCompositionEncoder:
 
     @property
     def predicate_arities(self) -> tuple[int, ...]:
-        """Encoded base-predicate arities, ready for ``SparseAtomCompositionGNN``."""
+        """Encoded predicate arities, ready for ``SparseAtomCompositionGNN``."""
         return self.schema.arities
+
+    @property
+    def num_channels(self) -> int:
+        """Channel cardinality, ready for ``SparseAtomCompositionGNN(num_channels=...)``."""
+        return self.schema.num_channels
 
     def _current_atoms(self, state: Any) -> list[Atom]:
         return [*self.view.static_facts, *self.view.state_facts(state)]
@@ -1161,9 +1310,12 @@ __all__ = [
     "CHANNEL_NAMES",
     "CHANNEL_SATISFIED",
     "CHANNEL_STATE",
+    "CHANNEL_STATUS_SUFFIXES",
     "CHANNEL_UNSATISFIED",
     "NULLARY_OBJECT_NAME",
     "OBJECT_PREDICATE",
+    "STATUS_ENCODING_CHANNEL",
+    "STATUS_ENCODING_VOCABULARY",
     "SparseAtomCompositionEncoder",
     "SparseAtomCompositionEncoding",
     "SparseAtomPredicateSchema",

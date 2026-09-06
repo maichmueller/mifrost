@@ -15,10 +15,13 @@ import torch
 from mifrost.encoders.custom.state_view import Atom
 from mifrost.encoders.sparse_atom import (
     CHANNEL_AUXILIARY,
+    CHANNEL_NAMES,
     CHANNEL_SATISFIED,
     CHANNEL_STATE,
+    CHANNEL_STATUS_SUFFIXES,
     CHANNEL_UNSATISFIED,
     OBJECT_PREDICATE,
+    STATUS_ENCODING_VOCABULARY,
     SparseAtomPredicateSchema,
     batch_sparse_atom_encodings,
     build_predicate_schema,
@@ -46,7 +49,9 @@ def _encode(
         schema,
         exact_tuple_exchange=exact_tuple_exchange,
     )
-    validate_sparse_atom_composition(encoding, predicate_arities=schema.arities)
+    validate_sparse_atom_composition(
+        encoding, predicate_arities=schema.arities, num_channels=schema.num_channels
+    )
     return encoding
 
 
@@ -61,6 +66,8 @@ def test_build_predicate_schema_appends_object_carrier_predicate() -> None:
     assert schema.arities[-1] == 1
     assert schema.name_to_id["on"] == 0
     assert schema.arities == (2, 1, 1)
+    assert schema.base_names == schema.names
+    assert schema.num_channels == len(CHANNEL_NAMES)
 
 
 def test_build_predicate_schema_reuses_declared_object_predicate() -> None:
@@ -86,6 +93,29 @@ def test_build_predicate_schema_normalizes_nullary_arity() -> None:
 def test_build_predicate_schema_rejects_duplicate_names() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         build_predicate_schema([("on", 2), ("on", 2)])
+
+
+def test_build_predicate_schema_rejects_unknown_status_encoding() -> None:
+    with pytest.raises(ValueError, match="status_encoding"):
+        build_predicate_schema([("on", 2)], status_encoding="bogus")
+
+
+def test_vocabulary_status_encoding_expands_schema_and_names() -> None:
+    assert CHANNEL_STATUS_SUFFIXES == ("[state]", "[sat]", "[unsat]", "[g]")
+    schema = build_predicate_schema(
+        [("on", 2), ("clear", 1)], status_encoding=STATUS_ENCODING_VOCABULARY
+    )
+    assert schema.num_channels == 1
+    assert schema.base_names == ("on", "clear", OBJECT_PREDICATE)
+    assert len(schema.names) == len(schema.base_names) * len(CHANNEL_NAMES)
+
+    on_base = schema.base_name_to_id["on"]
+    assert schema.names[on_base * 4 + CHANNEL_STATE] == "on[state]"
+    assert schema.names[on_base * 4 + CHANNEL_SATISFIED] == "on[sat]"
+    assert schema.names[on_base * 4 + CHANNEL_UNSATISFIED] == "on[unsat]"
+    assert schema.names[on_base * 4 + CHANNEL_AUXILIARY] == "on[g]"
+    assert schema.arities[on_base * 4 + CHANNEL_STATE] == 2
+    assert schema.relation_id(on_base, CHANNEL_STATE) == (on_base * 4, 0)
 
 
 # --------------------------------------------------------------------------
@@ -604,6 +634,58 @@ def test_goal_relabeling_leaves_pairs_and_triplets_unchanged() -> None:
 
     assert torch.equal(before.pair_objects, after.pair_objects)
     assert torch.equal(before.composition_triplets, after.composition_triplets)
+
+
+# --------------------------------------------------------------------------
+# status_encoding="channel" vs "vocabulary": identical atoms and topology
+# --------------------------------------------------------------------------
+
+
+def test_vocabulary_and_channel_encodings_share_topology() -> None:
+    channel_schema = _schema([("on", 2), ("clear", 1)])
+    vocab_schema = build_predicate_schema(
+        [("on", 2), ("clear", 1)], status_encoding=STATUS_ENCODING_VOCABULARY
+    )
+    current = [Atom("on", ("a", "b")), Atom("clear", ("a",))]
+    goals = [Atom("on", ("a", "b")), Atom("on", ("b", "a"))]
+
+    channel_encoding = _encode(["a", "b"], current, goals, channel_schema)
+    vocab_encoding = _encode(["a", "b"], current, goals, vocab_schema)
+
+    # Same atoms, same sparse topology -- only the predicate/channel
+    # labelling differs.
+    assert torch.equal(vocab_encoding.atom_offsets, channel_encoding.atom_offsets)
+    assert torch.equal(vocab_encoding.atom_args, channel_encoding.atom_args)
+    assert torch.equal(vocab_encoding.pair_objects, channel_encoding.pair_objects)
+    assert torch.equal(
+        vocab_encoding.composition_triplets, channel_encoding.composition_triplets
+    )
+    assert torch.equal(vocab_encoding.atom_pair_ids, channel_encoding.atom_pair_ids)
+    assert torch.equal(
+        vocab_encoding.atom_pair_occurrence_i, channel_encoding.atom_pair_occurrence_i
+    )
+    assert torch.equal(
+        vocab_encoding.atom_pair_occurrence_j, channel_encoding.atom_pair_occurrence_j
+    )
+    assert torch.equal(
+        vocab_encoding.object_carrier_occurrence_ids,
+        channel_encoding.object_carrier_occurrence_ids,
+    )
+
+    # Only the labelling differs: vocabulary mode has a single channel...
+    assert bool((vocab_encoding.atom_channel_ids == 0).all())
+    # ...and its predicate id is exactly the channel-mode (predicate, channel)
+    # pair folded together via schema.relation_id.
+    expected_predicate_ids = torch.tensor(
+        [
+            vocab_schema.relation_id(base_id, channel)[0]
+            for base_id, channel in zip(
+                channel_encoding.atom_predicate_ids.tolist(),
+                channel_encoding.atom_channel_ids.tolist(),
+            )
+        ]
+    )
+    assert torch.equal(vocab_encoding.atom_predicate_ids, expected_predicate_ids)
 
 
 # --------------------------------------------------------------------------
