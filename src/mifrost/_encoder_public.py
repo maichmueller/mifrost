@@ -259,12 +259,6 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
             top_level=False,
         ),
         LazyEncoderExport(
-            "EqualityPatternTable",
-            ".sparse_atom",
-            "EqualityPatternTable",
-            top_level=False,
-        ),
-        LazyEncoderExport(
             "build_predicate_schema",
             ".sparse_atom",
             "build_predicate_schema",

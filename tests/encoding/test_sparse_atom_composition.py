@@ -19,7 +19,6 @@ from mifrost.encoders.sparse_atom import (
     CHANNEL_SATISFIED,
     CHANNEL_STATE,
     CHANNEL_UNSATISFIED,
-    EqualityPatternTable,
     SparseAtomPredicateSchema,
     batch_sparse_atom_encodings,
     build_predicate_schema,
@@ -38,18 +37,13 @@ def _encode(
     goals,
     schema,
     *,
-    equality_table: EqualityPatternTable | None = None,
     exact_tuple_exchange: bool = False,
 ):
-    table = equality_table or EqualityPatternTable(
-        max_arity=max(schema.arities, default=0)
-    )
     encoding = encode_sparse_atom_facts(
         objects,
         current,
         goals,
         schema,
-        table,
         exact_tuple_exchange=exact_tuple_exchange,
     )
     validate_sparse_atom_composition(encoding, predicate_arities=schema.arities)
@@ -130,12 +124,6 @@ def test_repeated_argument_excluded_from_pairs_and_atom_pair_maps() -> None:
     assert encoding.num_pairs == 0
     assert encoding.atom_pair_ids.numel() == 0
     assert encoding.atom_pair_occurrence_i.numel() == 0
-    # the repeated-argument atom still gets its own equality pattern id,
-    # distinct from a same-arity atom with distinct arguments
-    pattern_repeated = encoding.equality_pattern_ids[0].item()
-    other = _encode(["a", "b"], [Atom("touches", ("a", "b"))], None, schema)
-    pattern_distinct = other.equality_pattern_ids[0].item()
-    assert pattern_repeated != pattern_distinct
 
 
 def test_nullary_atom_normalized_onto_star_object() -> None:
@@ -213,32 +201,18 @@ def test_satisfied_goal_keeps_separate_current_atom() -> None:
 
 
 # --------------------------------------------------------------------------
-# R6: equality pattern interning
+# R6: the within-atom equality pattern is derived downstream, not encoded
 # --------------------------------------------------------------------------
 
 
-def test_equality_pattern_table_canonicalizes_by_shape_not_identity() -> None:
-    table = EqualityPatternTable()
-    id_ab = table.id_for((10, 20))
-    id_xy = table.id_for((99, 42))
-    assert id_ab == id_xy
-    id_aa = table.id_for((10, 10))
-    assert id_aa != id_ab
-
-
-def test_equality_pattern_table_seed_arities_is_complete_and_stable() -> None:
-    table = EqualityPatternTable(max_arity=3)
-    # Bell(1) + Bell(2) + Bell(3) = 1 + 2 + 5
-    assert len(table) == 8
-    before = table.patterns
-    # interning an already-seeded pattern must not grow the table
-    table.id_for((1, 2, 1))
-    assert table.patterns == before
-
-
-def test_equality_pattern_table_seed_arities_rejects_absurd_arity() -> None:
-    with pytest.raises(ValueError, match="Bell"):
-        EqualityPatternTable(max_arity=50)
+def test_encoding_carries_no_equality_pattern_vocabulary() -> None:
+    # eps_q = (1[o_{q,i}=o_{q,j}])_{i,j} is derived by relmo's prepare()
+    # directly from atom_args (row j, width max_arity); interning it into a
+    # categorical id was a relmo implementation artefact that has since been
+    # removed, so the encoder must not compute or carry one at all.
+    schema = _schema([("touches", 2)])
+    encoding = _encode(["a"], [Atom("touches", ("a", "a"))], None, schema)
+    assert not hasattr(encoding, "equality_pattern_ids")
 
 
 # --------------------------------------------------------------------------
@@ -541,7 +515,6 @@ def test_object_renaming_produces_isomorphic_topology() -> None:
     assert torch.equal(first.composition_triplets, second.composition_triplets)
     assert torch.equal(first.atom_channel_ids, second.atom_channel_ids)
     assert torch.equal(first.atom_predicate_ids, second.atom_predicate_ids)
-    assert torch.equal(first.equality_pattern_ids, second.equality_pattern_ids)
 
 
 # --------------------------------------------------------------------------

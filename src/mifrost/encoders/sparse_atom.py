@@ -187,116 +187,6 @@ def build_predicate_schema(
 
 
 # --------------------------------------------------------------------------
-# Equality-pattern interning (R6)
-# --------------------------------------------------------------------------
-
-
-#: Safety cap on ``EqualityPatternTable.seed_arities``: the number of
-#: canonical patterns for arity ``r`` is the Bell number ``B(r)``, which grows
-#: super-exponentially. No PDDL predicate arity in practice comes close to
-#: this; the cap exists only to fail loudly instead of silently allocating an
-#: enormous table if it ever would.
-_MAX_SEEDED_ARITY = 9
-
-
-def _enumerate_equality_patterns(length: int) -> list[tuple[int, ...]]:
-    """Enumerate every canonical restricted-growth string of ``length``.
-
-    A restricted-growth string (``a_0 = 0``, ``a_i <= 1 + max(a_0..a_{i-1})``)
-    is already the first-occurrence-relabeled canonical form
-    :meth:`EqualityPatternTable.canonical` would produce for any concrete
-    tuple realizing that partition of positions, and there is exactly one RGS
-    per partition of ``{0, ..., length-1}`` -- ``Bell(length)`` of them.
-    """
-    partial: list[tuple[int, ...]] = [()]
-    for _ in range(length):
-        next_partial: list[tuple[int, ...]] = []
-        for sequence in partial:
-            max_label = max(sequence) if sequence else -1
-            for label in range(max_label + 2):
-                next_partial.append(sequence + (label,))
-        partial = next_partial
-    return partial
-
-
-class EqualityPatternTable:
-    """Insertion-ordered intern table for the within-atom equality pattern.
-
-    The pattern ``epsilon_q = (1[o_{q,i} = o_{q,j}])_{i,j}`` is stored in its
-    canonical compact form: positions are relabeled by first-occurrence order
-    of their object, so ``(u, v, u)`` and ``(x, y, x)`` intern to the same id
-    (``(0, 1, 0)``) while ``(u, v)`` and ``(u, u)`` intern to different ids
-    (``(0, 1)`` vs ``(0, 0)``). This is a bijective encoding of the full
-    equality matrix and is exactly what ``s_{q,j}`` needs to carry.
-
-    A consumer model sizes its equality-pattern embedding table
-    (``num_equality_patterns``) at *construction* time, before any state is
-    encoded, so growing this table lazily as new repeated-argument shapes are
-    encountered would leave that cardinality unknown up front. Pass
-    ``max_arity`` (or call :meth:`seed_arities` before constructing the
-    model) to pre-populate the *complete* pattern vocabulary for every arity
-    up to it -- ``sum(Bell(1..max_arity))`` patterns, fixed and known in
-    advance. ``id_for`` still accepts new patterns afterwards (e.g. if a
-    caller needs to work with an un-seeded table for exploration), but a
-    seeded table never needs to grow for any atom within its arity range.
-    """
-
-    def __init__(self, *, max_arity: int = 0) -> None:
-        self._ids: dict[tuple[int, ...], int] = {}
-        self._patterns: list[tuple[int, ...]] = []
-        if max_arity:
-            self.seed_arities(max_arity)
-
-    def seed_arities(self, max_arity: int) -> None:
-        """Pre-intern every equality pattern for arities ``1..max_arity``."""
-        if max_arity > _MAX_SEEDED_ARITY:
-            raise ValueError(
-                f"refusing to seed equality patterns up to arity {max_arity}: "
-                f"the pattern count is the Bell number B({max_arity}), which "
-                f"exceeds the {_MAX_SEEDED_ARITY} safety cap; pass a smaller "
-                "max_arity or seed manually if this is intentional"
-            )
-        for arity in range(1, int(max_arity) + 1):
-            for pattern in _enumerate_equality_patterns(arity):
-                if pattern not in self._ids:
-                    index = len(self._patterns)
-                    self._ids[pattern] = index
-                    self._patterns.append(pattern)
-
-    @staticmethod
-    def canonical(args: Sequence[int]) -> tuple[int, ...]:
-        """Return the first-occurrence relabeling of ``args``."""
-        labels: dict[int, int] = {}
-        out: list[int] = []
-        for value in args:
-            label = labels.get(value)
-            if label is None:
-                label = len(labels)
-                labels[value] = label
-            out.append(label)
-        return tuple(out)
-
-    def id_for(self, args: Sequence[int]) -> int:
-        """Intern ``args``'s equality pattern and return its id."""
-        key = self.canonical(args)
-        found = self._ids.get(key)
-        if found is not None:
-            return found
-        index = len(self._patterns)
-        self._ids[key] = index
-        self._patterns.append(key)
-        return index
-
-    @property
-    def patterns(self) -> tuple[tuple[int, ...], ...]:
-        """Interned canonical patterns, in id order."""
-        return tuple(self._patterns)
-
-    def __len__(self) -> int:
-        return len(self._patterns)
-
-
-# --------------------------------------------------------------------------
 # Carrier
 # --------------------------------------------------------------------------
 
@@ -332,7 +222,6 @@ class SparseAtomCompositionEncoding:
     atom_pair_occurrence_i: Tensor
     atom_pair_occurrence_j: Tensor
     goal_available: Tensor
-    equality_pattern_ids: Tensor
     object_carrier_occurrence_ids: Tensor
     counterpart_occurrence_ids: Tensor | None = None
     object_type_ids: Tensor | None = field(default=None, repr=False)
@@ -419,7 +308,6 @@ def encode_sparse_atom_facts(
     current_atoms: Sequence[Atom],
     goal_atoms: Sequence[Atom] | None,
     schema: SparseAtomPredicateSchema,
-    equality_table: EqualityPatternTable,
     *,
     exact_tuple_exchange: bool = False,
 ) -> SparseAtomCompositionEncoding:
@@ -526,10 +414,6 @@ def encode_sparse_atom_facts(
         [object_id for entry in entries for object_id in entry[2]], dtype=torch.long
     )
     num_occurrences = int(atom_args.numel())
-
-    equality_pattern_ids = torch.tensor(
-        [equality_table.id_for(entry[2]) for entry in entries], dtype=torch.long
-    )
 
     object_carrier_occurrence_ids = torch.tensor(
         [int(atom_offsets[carrier_entry_index[o]].item()) for o in range(num_objects)],
@@ -671,7 +555,6 @@ def encode_sparse_atom_facts(
         atom_pair_occurrence_i=atom_pair_occurrence_i,
         atom_pair_occurrence_j=atom_pair_occurrence_j,
         goal_available=goal_available,
-        equality_pattern_ids=equality_pattern_ids,
         object_carrier_occurrence_ids=object_carrier_occurrence_ids,
         counterpart_occurrence_ids=counterpart_occurrence_ids,
     )
@@ -719,7 +602,6 @@ def batch_sparse_atom_encodings(
     atom_pair_occurrence_i_parts: list[Tensor] = []
     atom_pair_occurrence_j_parts: list[Tensor] = []
     goal_available_parts: list[Tensor] = []
-    equality_pattern_id_parts: list[Tensor] = []
     object_carrier_occurrence_id_parts: list[Tensor] = []
     counterpart_parts: list[Tensor] = []
 
@@ -760,7 +642,6 @@ def batch_sparse_atom_encodings(
             encoding.atom_pair_occurrence_j + occurrence_offset
         )
         goal_available_parts.append(encoding.goal_available)
-        equality_pattern_id_parts.append(encoding.equality_pattern_ids)
         object_carrier_occurrence_id_parts.append(
             encoding.object_carrier_occurrence_ids + occurrence_offset
         )
@@ -797,7 +678,6 @@ def batch_sparse_atom_encodings(
         atom_pair_occurrence_i=torch.cat(atom_pair_occurrence_i_parts),
         atom_pair_occurrence_j=torch.cat(atom_pair_occurrence_j_parts),
         goal_available=torch.cat(goal_available_parts),
-        equality_pattern_ids=torch.cat(equality_pattern_id_parts),
         object_carrier_occurrence_ids=torch.cat(object_carrier_occurrence_id_parts),
         counterpart_occurrence_ids=(
             torch.cat(counterpart_parts) if any_counterparts else None
@@ -828,12 +708,6 @@ class SparseAtomCompositionEncoder:
     ``goals=encoder.view.goal_literals(state)`` explicitly to encode the
     problem's own goal, or ``goals=()`` for a supplied-empty goal (zeta=1,
     G=empty; same atom set as goal-free, but ``goal_available=True``).
-
-    :attr:`equality_patterns` is seeded at construction with the complete
-    equality-pattern vocabulary for every arity up to the schema's maximum
-    (see :meth:`EqualityPatternTable.seed_arities`), so
-    :attr:`num_equality_patterns` is fixed and known before any state is
-    encoded -- construct the consumer model with it up front.
     """
 
     CHANNEL_NAMES = CHANNEL_NAMES
@@ -853,9 +727,6 @@ class SparseAtomCompositionEncoder:
             [(info.name, info.arity) for info in self.view.predicates],
             auxiliary_predicate_name=self.AUXILIARY_OBJECT_PREDICATE,
         )
-        self.equality_patterns = EqualityPatternTable(
-            max_arity=max(self.schema.arities, default=0)
-        )
         self.exact_tuple_exchange = bool(exact_tuple_exchange)
 
     @property
@@ -866,11 +737,6 @@ class SparseAtomCompositionEncoder:
     def predicate_arities(self) -> tuple[int, ...]:
         """Encoded base-predicate arities, ready for ``SparseAtomCompositionGNN``."""
         return self.schema.arities
-
-    @property
-    def num_equality_patterns(self) -> int:
-        """Size of the (pre-seeded) equality-pattern vocabulary."""
-        return len(self.equality_patterns)
 
     def _current_atoms(self, state: Any) -> list[Atom]:
         return [*self.view.static_facts, *self.view.state_facts(state)]
@@ -899,7 +765,6 @@ class SparseAtomCompositionEncoder:
             current,
             goal_atoms,
             self.schema,
-            self.equality_patterns,
             exact_tuple_exchange=self.exact_tuple_exchange,
         )
 
@@ -979,7 +844,6 @@ def validate_sparse_atom_composition(
     goal_available = torch.as_tensor(encoding.goal_available)
     if goal_available.dtype != torch.bool:
         goal_available = goal_available != 0
-    equality_pattern_ids = getattr(encoding, "equality_pattern_ids", None)
     object_carrier_occurrence_ids = getattr(
         encoding, "object_carrier_occurrence_ids", None
     )
@@ -1065,11 +929,6 @@ def validate_sparse_atom_composition(
         object_graphs = object_batch.index_select(0, atom_args)
         if bool((occurrence_batch != object_graphs).any()):
             raise ValueError("atom arguments must not connect separate graphs")
-
-    if equality_pattern_ids is not None:
-        equality_pattern_ids = _as_long(equality_pattern_ids)
-        if int(equality_pattern_ids.numel()) != q:
-            raise ValueError("equality_pattern_ids must contain one entry per atom")
 
     offsets = pair_support_offsets
     if int(offsets.numel()) != int(pair_objects.size(0)) + 1:
@@ -1263,7 +1122,6 @@ __all__ = [
     "CHANNEL_STATE",
     "CHANNEL_UNSATISFIED",
     "NULLARY_OBJECT_NAME",
-    "EqualityPatternTable",
     "SparseAtomCompositionEncoder",
     "SparseAtomCompositionEncoding",
     "SparseAtomPredicateSchema",

@@ -135,7 +135,6 @@ def test_encoder_output_accepted_by_sparse_atom_composition_gnn(blocks_problem) 
         num_layers=2,
         predicate_arities=list(encoder.predicate_arities),
         num_channels=4,
-        num_equality_patterns=encoder.num_equality_patterns,
     )
     prepared = model.prepare(encoding)  # must not raise
     output = model(prepared)
@@ -163,7 +162,6 @@ def test_encoder_batch_output_accepted_by_sparse_atom_composition_gnn(
         num_layers=2,
         predicate_arities=list(encoder.predicate_arities),
         num_channels=4,
-        num_equality_patterns=encoder.num_equality_patterns,
     )
     output = model(batch)
     assert output.state.shape == (2, 8)
@@ -184,7 +182,6 @@ def test_exact_tuple_exchange_end_to_end(blocks_problem) -> None:
         num_layers=1,
         predicate_arities=list(encoder.predicate_arities),
         num_channels=4,
-        num_equality_patterns=encoder.num_equality_patterns,
         exact_tuple_exchange=True,
     )
     output = model(encoding)
@@ -209,7 +206,6 @@ def test_relmo_prepare_rejects_a_broken_carrier(blocks_problem) -> None:
         num_layers=1,
         predicate_arities=list(encoder.predicate_arities),
         num_channels=4,
-        num_equality_patterns=encoder.num_equality_patterns,
     )
     with pytest.raises(ValueError):
         model.prepare(encoding)

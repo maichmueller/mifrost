@@ -27,7 +27,6 @@ is a standalone reimplementation of every invariant that consumer's
 | `composition_triplets` | `[K, 3]` | `(target_pair, left_pair, right_pair)` witness rows |
 | `atom_pair_ids`, `atom_pair_occurrence_i/j` | `[M]` | Atom-to-pair maps, in global occurrence indices |
 | `goal_available` | `[B]` | Per-graph zeta flag |
-| `equality_pattern_ids` | `[Q]` | Interned within-atom equality pattern per atom |
 | `object_carrier_occurrence_ids` | `[O]` | One auxiliary-carrier occurrence per object, ordered by object id |
 | `counterpart_occurrence_ids` | `[I]`, optional | R11 exact-tuple exchange, `-1` where none |
 
@@ -41,9 +40,7 @@ exactly these attribute names, so it can be passed directly to
 Base-predicate arities aren't carried on the tensor contract at all: they are
 a *model constructor* argument (`predicate_arities=...`), fixed once from
 `SparseAtomCompositionEncoder.schema` (a `SparseAtomPredicateSchema`) at
-construction time, shared by every graph the encoder ever produces. The same
-goes for the equality-pattern vocabulary size (`num_equality_patterns`) --
-see [Equality patterns](#equality-patterns) below.
+construction time, shared by every graph the encoder ever produces.
 
 ## Channel convention
 
@@ -120,21 +117,11 @@ No arity-0 atom is ever emitted by this encoder. The consumer's own
 message, and `validate_sparse_atom_composition` checks the same invariant
 standalone.
 
-## Equality patterns
-
 The within-atom equality pattern `epsilon_q = (1[o_{q,i} = o_{q,j}])_{i,j}`
-(which pairs of argument positions refer to the same object) is interned
-into a compact id via `EqualityPatternTable`, keyed by the first-occurrence
-relabeling of an
-atom's argument tuple (e.g. `(u, v, u)` and `(x, y, x)` intern to the same
-id; `(u, v)` and `(u, u)` do not). A consumer model sizes its equality
-embedding table at construction time, before any state is encoded, so
-`SparseAtomCompositionEncoder` seeds the table with the *complete* pattern
-vocabulary for every arity up to the schema's maximum
-(`EqualityPatternTable.seed_arities`) -- `sum(Bell(1..max_arity))` patterns,
-fixed and known up front via `encoder.num_equality_patterns`. There is a
-safety cap (arity 9) on that eager enumeration; no real PDDL predicate arity
-comes close to it.
+(which pairs of argument positions refer to the same object) is not part of
+this encoder's contract at all: it is a function of an atom's own arguments,
+so the consumer derives it directly from `atom_args` rather than the encoder
+interning it into a categorical vocabulary.
 
 ## Pairs and witnesses (R7/R8/R9)
 
@@ -185,8 +172,7 @@ through this encoder.
 Two layers are exposed:
 
 - `encode_sparse_atom_facts` / `batch_sparse_atom_encodings` /
-  `build_predicate_schema` / `EqualityPatternTable` operate on plain
-  `(predicate, args)` tuples
+  `build_predicate_schema` operate on plain `(predicate, args)` tuples
   (`mifrost.encoders.custom.state_view.Atom`) and never touch pymimir or
   pytyr. This is what most of `tests/encoding/test_sparse_atom_composition.py`
   exercises directly -- hand-built Blocksworld-style and synthetic-graph
