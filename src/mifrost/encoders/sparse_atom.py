@@ -86,17 +86,24 @@ CHANNEL_UNSATISFIED = 2
 CHANNEL_AUXILIARY = 3
 CHANNEL_NAMES: tuple[str, ...] = ("state", "satisfied", "unsatisfied", "auxiliary")
 
-#: Base predicate used for the R4 auxiliary unary ``object(o)`` carrier.
+#: Base predicate used for the R4 per-object carrier.
 #:
 #: The architecture note writes this predicate ``object`` (as in
-#: :math:`\operatorname{object}^{\aux}(o)`), but a plain ``"object"`` collides
-#: with the built-in unary ``object`` type predicate most PDDL domain schemas
-#: already expose (pymimir and pytyr both surface the root PDDL type as a
-#: static unary predicate named ``object``). This bracketed literal follows
-#: the same reserved-symbol convention as :data:`NULLARY_OBJECT_NAME` --
-#: characters no PDDL identifier can contain -- so it never collides with a
-#: real domain predicate.
-AUXILIARY_OBJECT_PREDICATE = "![object_carrier]!"
+#: :math:`\operatorname{object}^{\aux}(o)`), and that is exactly the unary
+#: ``object`` predicate real PDDL backends already expose for the root PDDL
+#: type: pymimir and pytyr both surface it as a static fact ``object(o)`` for
+#: every domain object (verified on ``blocks:small`` -- ``static_facts`` is
+#: exactly one ``object(o)`` atom per object). There is no name collision to
+#: avoid: this *is* the carrier relation, so :func:`build_predicate_schema`
+#: reuses the backend's own ``object`` predicate rather than inventing a
+#: second one. A domain or backend that does not cover every object with a
+#: real ``object(o)`` fact gets the missing carriers synthesized per-object
+#: by :func:`encode_sparse_atom_facts` instead of leaving a gap in the
+#: contract; only the distinguished nullary :data:`NULLARY_OBJECT_NAME`
+#: object -- never a real PDDL object -- always needs synthesis, and stays in
+#: the auxiliary channel since it is an encoding artefact rather than a true
+#: fact.
+OBJECT_PREDICATE = "object"
 
 #: Distinguished auxiliary object nullary atoms are normalized onto. This is
 #: the exact literal used by the native hetero family's
@@ -149,38 +156,44 @@ class SparseAtomPredicateSchema:
 
 def build_predicate_schema(
     predicates: Iterable[tuple[str, int]],
-    *,
-    auxiliary_predicate_name: str = AUXILIARY_OBJECT_PREDICATE,
 ) -> SparseAtomPredicateSchema:
     """Build a :class:`SparseAtomPredicateSchema` from ``(name, arity)`` pairs.
 
-    Appends the reserved auxiliary carrier predicate
-    (``auxiliary_predicate_name``, encoded arity 1) after the supplied
-    predicates. Raises ``ValueError`` if a supplied predicate name collides
-    with it or duplicates another supplied name.
+    Ensures the fixed unary :data:`OBJECT_PREDICATE` carrier is present,
+    appending it (encoded arity 1) if the supplied predicates do not already
+    declare it. Every real PDDL backend (pymimir, pytyr) already exposes
+    ``object`` as a static unary predicate for the root PDDL type, so
+    appending only happens for hand-built schemas that omit it. Raises
+    ``ValueError`` if a supplied predicate name is duplicated, or if a
+    supplied ``object`` predicate does not have arity 1.
     """
 
     names: list[str] = []
     logical: list[int] = []
     encoded: list[int] = []
     seen: set[str] = set()
+    object_declared = False
     for name, arity in predicates:
         name = str(name)
-        if name == auxiliary_predicate_name:
-            raise ValueError(
-                f"predicate name {name!r} collides with the reserved auxiliary "
-                "carrier predicate; pass a different auxiliary_predicate_name"
-            )
         if name in seen:
             raise ValueError(f"duplicate predicate name in schema: {name!r}")
         seen.add(name)
-        names.append(name)
         arity = int(arity)
+        if name == OBJECT_PREDICATE:
+            object_declared = True
+            if arity != 1:
+                raise ValueError(
+                    f"the {OBJECT_PREDICATE!r} predicate must have arity 1 (the "
+                    "PDDL root-type carrier this encoder relies on), got "
+                    f"{arity}"
+                )
+        names.append(name)
         logical.append(arity)
         encoded.append(arity if arity >= 1 else 1)
-    names.append(auxiliary_predicate_name)
-    logical.append(1)
-    encoded.append(1)
+    if not object_declared:
+        names.append(OBJECT_PREDICATE)
+        logical.append(1)
+        encoded.append(1)
     return SparseAtomPredicateSchema(
         names=tuple(names), arities=tuple(encoded), logical_arities=tuple(logical)
     )
@@ -324,6 +337,17 @@ def encode_sparse_atom_facts(
     it is a member of ``current_atoms`` (by predicate + argument-tuple
     equality, computed before nullary/star normalization), else
     ``unsatisfied`` -- never ``plain``, never both (R2).
+
+    R4 per-object carriers: an ``object(o)`` atom already present in
+    ``current_atoms`` (a genuine static fact from the backend) is reused as
+    ``o``'s carrier and stays in the state channel where it was emitted; any
+    object the supplied facts do not cover gets a carrier synthesized in the
+    state channel too, decided per object so isolated objects are never
+    skipped. The one exception is the distinguished nullary object (see
+    :data:`NULLARY_OBJECT_NAME`), which is never a real PDDL object -- no
+    backend ever supplies ``object(star)`` -- so its carrier is always
+    synthesized, and lands in the auxiliary channel since it is an encoding
+    artefact rather than a true fact.
     """
 
     zeta = goal_atoms is not None
@@ -361,12 +385,22 @@ def encode_sparse_atom_facts(
             raise ValueError(f"unknown predicate {name!r}: not in the supplied schema")
         return found
 
+    object_base_id = predicate_id_for(OBJECT_PREDICATE)
+
+    # R4: per-object carriers. `carrier_entry_index[o]` records the first
+    # current atom that already carries `o` via a genuine `object(o)` fact,
+    # so a synthesized fallback is only added where real coverage is missing.
+    carrier_entry_index: list[int | None] = [None] * num_objects
     state_key_to_index: dict[tuple[str, tuple[str, ...]], int] = {}
     for atom in current_atoms:
-        state_key_to_index[(atom.predicate, atom.args)] = len(entries)
-        entries.append(
-            (predicate_id_for(atom.predicate), CHANNEL_STATE, resolve_args(atom))
-        )
+        args = resolve_args(atom)
+        entry_index = len(entries)
+        entries.append((predicate_id_for(atom.predicate), CHANNEL_STATE, args))
+        state_key_to_index[(atom.predicate, atom.args)] = entry_index
+        if atom.predicate == OBJECT_PREDICATE and len(args) == 1:
+            object_id = args[0]
+            if carrier_entry_index[object_id] is None:
+                carrier_entry_index[object_id] = entry_index
 
     # (goal_entry_index, state_entry_index) pairs for R11 exact-tuple exchange.
     satisfied_links: list[tuple[int, int]] = []
@@ -384,11 +418,20 @@ def encode_sparse_atom_facts(
             if state_index is not None:
                 satisfied_links.append((entry_index, state_index))
 
-    aux_predicate_id = predicate_id_for(AUXILIARY_OBJECT_PREDICATE)
-    carrier_entry_index = [0] * num_objects
+    # Fallback: synthesize a state-channel carrier for every real object the
+    # supplied facts did not already cover. Decided per object, not per
+    # domain, so an isolated object still gets one.
     for object_id in range(num_objects):
+        if object_id == star_id or carrier_entry_index[object_id] is not None:
+            continue
         carrier_entry_index[object_id] = len(entries)
-        entries.append((aux_predicate_id, CHANNEL_AUXILIARY, (object_id,)))
+        entries.append((object_base_id, CHANNEL_STATE, (object_id,)))
+
+    # The distinguished nullary object is never a real PDDL object, so its
+    # carrier is always synthesized, and always in the auxiliary channel.
+    if star_id is not None:
+        carrier_entry_index[star_id] = len(entries)
+        entries.append((object_base_id, CHANNEL_AUXILIARY, (star_id,)))
 
     num_atoms = len(entries)
     arities = [len(entry[2]) for entry in entries]
@@ -711,7 +754,7 @@ class SparseAtomCompositionEncoder:
     """
 
     CHANNEL_NAMES = CHANNEL_NAMES
-    AUXILIARY_OBJECT_PREDICATE = AUXILIARY_OBJECT_PREDICATE
+    OBJECT_PREDICATE = OBJECT_PREDICATE
     NULLARY_OBJECT_NAME = NULLARY_OBJECT_NAME
 
     def __init__(
@@ -725,7 +768,6 @@ class SparseAtomCompositionEncoder:
         self.backend = self.view.backend
         self.schema = build_predicate_schema(
             [(info.name, info.arity) for info in self.view.predicates],
-            auxiliary_predicate_name=self.AUXILIARY_OBJECT_PREDICATE,
         )
         self.exact_tuple_exchange = bool(exact_tuple_exchange)
 
@@ -1115,13 +1157,13 @@ def validate_sparse_atom_composition(
 
 
 __all__ = [
-    "AUXILIARY_OBJECT_PREDICATE",
     "CHANNEL_AUXILIARY",
     "CHANNEL_NAMES",
     "CHANNEL_SATISFIED",
     "CHANNEL_STATE",
     "CHANNEL_UNSATISFIED",
     "NULLARY_OBJECT_NAME",
+    "OBJECT_PREDICATE",
     "SparseAtomCompositionEncoder",
     "SparseAtomCompositionEncoding",
     "SparseAtomPredicateSchema",

@@ -14,11 +14,11 @@ import torch
 
 from mifrost.encoders.custom.state_view import Atom
 from mifrost.encoders.sparse_atom import (
-    AUXILIARY_OBJECT_PREDICATE,
     CHANNEL_AUXILIARY,
     CHANNEL_SATISFIED,
     CHANNEL_STATE,
     CHANNEL_UNSATISFIED,
+    OBJECT_PREDICATE,
     SparseAtomPredicateSchema,
     batch_sparse_atom_encodings,
     build_predicate_schema,
@@ -55,23 +55,32 @@ def _encode(
 # --------------------------------------------------------------------------
 
 
-def test_build_predicate_schema_appends_auxiliary_predicate() -> None:
+def test_build_predicate_schema_appends_object_carrier_predicate() -> None:
     schema = _schema([("on", 2), ("clear", 1)])
-    assert schema.names[-1] == AUXILIARY_OBJECT_PREDICATE
+    assert schema.names[-1] == OBJECT_PREDICATE
     assert schema.arities[-1] == 1
     assert schema.name_to_id["on"] == 0
     assert schema.arities == (2, 1, 1)
+
+
+def test_build_predicate_schema_reuses_declared_object_predicate() -> None:
+    # Real backends (pymimir, pytyr) already declare `object` as a static
+    # unary predicate for the PDDL root type -- verified on `blocks:small` --
+    # so the schema must reuse it, not append a second carrier predicate.
+    schema = _schema([("on", 2), (OBJECT_PREDICATE, 1)])
+    assert schema.names.count(OBJECT_PREDICATE) == 1
+    assert schema.arities == (2, 1)
+
+
+def test_build_predicate_schema_rejects_non_unary_object_predicate() -> None:
+    with pytest.raises(ValueError, match="arity 1"):
+        build_predicate_schema([(OBJECT_PREDICATE, 2)])
 
 
 def test_build_predicate_schema_normalizes_nullary_arity() -> None:
     schema = _schema([("handempty", 0)])
     assert schema.logical_arities[schema.name_to_id["handempty"]] == 0
     assert schema.arities[schema.name_to_id["handempty"]] == 1
-
-
-def test_build_predicate_schema_rejects_collision_with_auxiliary_name() -> None:
-    with pytest.raises(ValueError, match="collides"):
-        build_predicate_schema([(AUXILIARY_OBJECT_PREDICATE, 1)])
 
 
 def test_build_predicate_schema_rejects_duplicate_names() -> None:
@@ -87,16 +96,64 @@ def test_build_predicate_schema_rejects_duplicate_names() -> None:
 def test_unary_atom_and_isolated_object_get_carriers() -> None:
     schema = _schema([("clear", 1)])
     encoding = _encode(["a", "b"], [Atom("clear", ("a",))], None, schema)
-    # 1 clear atom + 2 object carriers (a is used, b is isolated)
+    # 1 clear atom + 2 object carriers (a is used, b is isolated); neither
+    # object has a real backend-supplied `object(o)` fact here, so both
+    # carriers are synthesized fallbacks -- in the *state* channel, since
+    # `object(o)` is a genuine fact, not an encoding artefact.
     assert encoding.num_atoms == 3
     assert encoding.num_objects == 2
     assert torch.equal(
         encoding.object_carrier_occurrence_ids,
         torch.tensor([int(encoding.atom_offsets[1]), int(encoding.atom_offsets[2])]),
     )
-    aux_id = schema.name_to_id[AUXILIARY_OBJECT_PREDICATE]
-    assert bool((encoding.atom_predicate_ids[1:] == aux_id).all())
-    assert bool((encoding.atom_channel_ids[1:] == CHANNEL_AUXILIARY).all())
+    object_id = schema.name_to_id[OBJECT_PREDICATE]
+    assert bool((encoding.atom_predicate_ids[1:] == object_id).all())
+    assert bool((encoding.atom_channel_ids[1:] == CHANNEL_STATE).all())
+
+
+def test_existing_object_carrier_from_current_atoms_is_reused() -> None:
+    schema = _schema([("clear", 1)])
+    current = [
+        Atom(OBJECT_PREDICATE, ("a",)),
+        Atom(OBJECT_PREDICATE, ("b",)),
+        Atom("clear", ("a",)),
+    ]
+    encoding = _encode(["a", "b"], current, None, schema)
+    # both carriers already exist as genuine current facts: no fallback
+    # synthesis is needed, so num_atoms is exactly the 3 supplied atoms.
+    assert encoding.num_atoms == 3
+    assert bool((encoding.atom_channel_ids == CHANNEL_STATE).all())
+    assert torch.equal(
+        encoding.object_carrier_occurrence_ids,
+        torch.tensor([int(encoding.atom_offsets[0]), int(encoding.atom_offsets[1])]),
+    )
+
+
+def test_missing_object_carrier_is_synthesized_per_object() -> None:
+    schema = _schema([("clear", 1)])
+    # 'a' has a real carrier already; 'b' (isolated) needs a synthesized one
+    # -- decided per object, both land in the state channel.
+    current = [Atom(OBJECT_PREDICATE, ("a",)), Atom("clear", ("a",))]
+    encoding = _encode(["a", "b"], current, None, schema)
+    assert encoding.num_atoms == 3
+    assert bool((encoding.atom_channel_ids == CHANNEL_STATE).all())
+    object_id = schema.name_to_id[OBJECT_PREDICATE]
+    a_carrier, b_carrier = encoding.object_carrier_occurrence_ids.tolist()
+    assert a_carrier == 0  # the real object(a) fact, first atom
+    assert encoding.atom_predicate_ids[2].item() == object_id  # synthesized object(b)
+
+
+def test_star_carrier_is_always_auxiliary_even_with_real_object_facts() -> None:
+    schema = _schema([("handempty", 0)])
+    current = [Atom(OBJECT_PREDICATE, ("a",)), Atom("handempty", ())]
+    encoding = _encode(["a"], current, None, schema)
+    assert encoding.num_objects == 2  # 'a' plus the synthetic star object
+    object_id = schema.name_to_id[OBJECT_PREDICATE]
+    # the star carrier is always synthesized last
+    assert encoding.atom_predicate_ids[-1].item() == object_id
+    assert encoding.atom_channel_ids[-1].item() == CHANNEL_AUXILIARY
+    # 'a's carrier is the real fact, in the state channel
+    assert encoding.atom_channel_ids[0].item() == CHANNEL_STATE
 
 
 def test_binary_atom_produces_ordered_pair() -> None:

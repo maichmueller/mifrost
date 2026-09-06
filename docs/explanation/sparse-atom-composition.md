@@ -27,7 +27,7 @@ is a standalone reimplementation of every invariant that consumer's
 | `composition_triplets` | `[K, 3]` | `(target_pair, left_pair, right_pair)` witness rows |
 | `atom_pair_ids`, `atom_pair_occurrence_i/j` | `[M]` | Atom-to-pair maps, in global occurrence indices |
 | `goal_available` | `[B]` | Per-graph zeta flag |
-| `object_carrier_occurrence_ids` | `[O]` | One auxiliary-carrier occurrence per object, ordered by object id |
+| `object_carrier_occurrence_ids` | `[O]` | One `object(o)` carrier occurrence per object, ordered by object id |
 | `counterpart_occurrence_ids` | `[I]`, optional | R11 exact-tuple exchange, `-1` where none |
 
 `Q` = atoms, `I` = occurrences (`sum(arity)`), `O` = objects, `P` = pairs,
@@ -48,10 +48,10 @@ Frozen, do not renumber:
 
 | id | name | meaning |
 | -- | ---- | ------- |
-| 0 | `state` | current true atom (includes static facts) |
+| 0 | `state` | current true atom (includes static facts, and every `object(o)` carrier) |
 | 1 | `satisfied` | supplied goal atom that is currently true |
 | 2 | `unsatisfied` | supplied goal atom that is currently false |
-| 3 | `auxiliary` | R4/R5 carrier atoms (object carriers, nullary normalization) |
+| 3 | `auxiliary` | encoding artefacts that are not themselves facts (only the nullary star's carrier) |
 
 The consumer allocates one wide atom MLP per `(channel, base_predicate)`
 pair, so `atom_predicate_ids` **must** be the base predicate id, not a
@@ -92,6 +92,46 @@ A satisfied goal keeps its current-fact representation too: `q(o)` being
 both true and a goal produces *two* atoms (one `state`, one `satisfied`),
 not one atom carrying both roles.
 
+## Per-object carriers (R4)
+
+Every object needs a persistent unary "carrier" atom so `object_readout`
+and the exact-tuple exchange have somewhere to attach an object-level
+representation even when an object appears in no other atom. That carrier
+relation is the backend's own `object` predicate -- not an invented one.
+Real PDDL backends already expose it: on `blocks:small`, `StateView(problem).predicates`
+includes `PredicateInfo(name='object', arity=1, category='static')`, and
+`static_facts` is exactly `[Atom('object', ('a',)), Atom('object', ('b',))]`
+-- one `object(o)` static fact per domain object, already part of the
+current-atom set `S`. There is no name collision to design around: the
+`object` relation the backend exposes *is* the carrier relation the
+architecture note writes as `object^aux(o)`, so `build_predicate_schema`
+reuses it (appending it, with encoded arity 1, only if a hand-built schema
+omits it) instead of minting a second, reserved-looking predicate.
+
+Because `object(o)` is a genuine static fact, its carrier occurrence lives in
+the **state** channel, as part of the current atoms `S` -- not a separate
+auxiliary channel. `object_carrier_occurrence_ids[o]` points at that
+occurrence, one per object, ordered by object id (the consumer asserts this
+ordering).
+
+**Fallback.** If a domain or backend does not supply `object(o)` for every
+object -- a hand-built test schema, or a future backend with gaps -- the
+missing carriers are synthesized, still in the state channel, decided
+*per object* rather than per domain: whatever is missing gets synthesized,
+so an isolated object with no other atom mentioning it still gets a carrier.
+On the two real Blocksworld fixtures exercised by
+`tests/encoding/test_sparse_atom_composition_relmo_integration.py`, this
+fallback path is never taken -- both backends already cover every object --
+so it is verified there via hand-built `Atom` lists instead
+(`tests/encoding/test_sparse_atom_composition.py::test_missing_object_carrier_is_synthesized_per_object`).
+
+The one object that *never* gets a real `object(o)` fact is the distinguished
+nullary object star (see [Nullary normalization](#nullary-normalization)
+below): it is not a real PDDL object, so no backend ever emits
+`object(star)`. Its carrier is therefore always synthesized, and it stays in
+the **auxiliary** channel, since it is an encoding artefact rather than a
+true fact -- the only auxiliary-channel atom this encoder ever emits.
+
 ## Nullary normalization
 
 A nullary atom such as `handempty()` has no argument to attach a persistent
@@ -107,7 +147,8 @@ The star object:
 - is added to a graph's object universe only when that graph actually
   contains a nullary atom (a state with no nullary predicates never carries
   a dangling unused star);
-- gets its own R4 auxiliary carrier, exactly like every other object;
+- always gets a synthesized `object(star)` carrier in the auxiliary channel
+  (see [Per-object carriers](#per-object-carriers-r4) above);
 - participates in pairs and witnesses like any other object once it appears
   in a *non*-nullary atom's arguments too (it never does on its own, since
   every atom mentioning it is now unary).
