@@ -91,6 +91,7 @@ nav:
       - explanation/streaming-model.md
       - explanation/encoder-coverage.md
       - explanation/derived-encoding-strategies.md
+      - explanation/sparse-atom-composition.md
   - Development:
       - development/build-and-test.md
       - development/architecture.md

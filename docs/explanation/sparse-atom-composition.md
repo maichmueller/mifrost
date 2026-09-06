@@ -1,0 +1,203 @@
+# Sparse Atom-Composition Encoding
+
+`mifrost.encoders.sparse_atom` is a pure-Python (Stage 1: no native engine
+involved) encoder for the sparse atom-composition architecture described in
+"Sparse Atom Compositions for Relational STRIPS Message Passing". It stores
+one persistent vector per *argument occurrence* of a represented atom, rather
+than one vector per object, and exposes sparse pair/witness indices so a
+consumer model can compose atoms that share an object pair without
+materializing the dense object-pair universe.
+
+The consumer is `relmo.models.SparseAtomCompositionGNN` (in the sibling
+`relm` repository); `SparseAtomCompositionEncoder` produces its exact input
+contract, `SparseAtomCompositionBatch`. `mifrost.encoders.sparse_atom.validate_sparse_atom_composition`
+is a standalone reimplementation of every invariant that consumer's
+`prepare()` checks, usable without constructing a model.
+
+## The contract, at a glance
+
+| Field | Shape | Meaning |
+| --- | --- | --- |
+| `atom_args`, `atom_offsets` | `[I]`, `[Q+1]` | Packed ordered atom argument tuples (CSR) |
+| `atom_predicate_ids` | `[Q]` | **Base** predicate id (shared across channels -- see below) |
+| `atom_channel_ids` | `[Q]` | One of the four frozen channels |
+| `atom_batch`, `object_batch` | `[Q]`, `[O]` | Graph id per atom / per object |
+| `pair_objects` | `[P, 2]` | Ordered, non-diagonal, deduplicated object pairs |
+| `pair_support_offsets/atom_ids/i/j` | CSR over `[S]` | Every `(atom, i, j)` contributing to a pair |
+| `composition_triplets` | `[K, 3]` | `(target_pair, left_pair, right_pair)` witness rows |
+| `atom_pair_ids`, `atom_pair_occurrence_i/j` | `[M]` | Atom-to-pair maps, in global occurrence indices |
+| `goal_available` | `[B]` | Per-graph zeta flag |
+| `equality_pattern_ids` | `[Q]` | Interned within-atom equality pattern per atom |
+| `object_carrier_occurrence_ids` | `[O]` | One auxiliary-carrier occurrence per object, ordered by object id |
+| `counterpart_occurrence_ids` | `[I]`, optional | R11 exact-tuple exchange, `-1` where none |
+
+`Q` = atoms, `I` = occurrences (`sum(arity)`), `O` = objects, `P` = pairs,
+`S` = pair-support entries, `K` = witness triplets, `M` = atom-pair mappings,
+`B` = graphs in the batch. Everything is a plain `torch.long`/`torch.bool`
+tensor; `SparseAtomCompositionEncoding` (the encoder's carrier dataclass) has
+exactly these attribute names, so it can be passed directly to
+`SparseAtomCompositionGNN(...)`.
+
+Base-predicate arities aren't carried on the tensor contract at all: they are
+a *model constructor* argument (`predicate_arities=...`), fixed once from
+`SparseAtomCompositionEncoder.schema` (a `SparseAtomPredicateSchema`) at
+construction time, shared by every graph the encoder ever produces. The same
+goes for the equality-pattern vocabulary size (`num_equality_patterns`) --
+see [Equality patterns](#equality-patterns) below.
+
+## Channel convention
+
+Frozen, do not renumber:
+
+| id | name | meaning |
+| -- | ---- | ------- |
+| 0 | `state` | current true atom (includes static facts) |
+| 1 | `satisfied` | supplied goal atom that is currently true |
+| 2 | `unsatisfied` | supplied goal atom that is currently false |
+| 3 | `auxiliary` | R4/R5 carrier atoms (object carriers, nullary normalization) |
+
+The consumer allocates one wide atom MLP per `(channel, base_predicate)`
+pair, so `atom_predicate_ids` **must** be the base predicate id, not a
+channel-qualified relation id: `on[state]`, `on[sat]` and `on[unsat]` all
+share predicate id `on`, differing only in `atom_channel_ids`. This is what
+lets the architecture's `M_state,on`, `M_sat,on`, `M_unsat,on` split exist
+without tripling the predicate vocabulary.
+
+## Why `plain` is off
+
+The native flat-encoder family's `GoalDerivation` enum has five values
+(`plain`, `satisfied`, `unsatisfied`, `added_satisfied`,
+`added_unsatisfied`), and its *library default* is `{plain, satisfied}` --
+every goal gets one plain atom, and satisfied goals additionally get a
+`satisfied` atom, but there is **no `unsatisfied` atom at all**. That
+default is a different encoding, tuned for a different architecture. This
+encoder never emits `plain`: every supplied goal atom `p(o)` in the goal
+conjunction `G` becomes exactly one status atom, `satisfied` **xor**
+`unsatisfied`, depending on whether `p(o)` is already a member of the
+current true-atom set `S`:
+
+```text
+Atoms_goal(S, G) =
+    { p_satisfied(o)   : p(o) in G and p(o) in S }
+  U { p_unsatisfied(o) : p(o) in G and p(o) not in S }
+```
+
+Using the library default here would silently produce a *plain* goal atom
+for every goal and *no* `unsatisfied` atoms at all -- voiding the two-tower
+Blocksworld separation the architecture relies on (`on_satisfied`/
+`on_unsatisfied` needs both a satisfied *and* an unsatisfied label to exist
+for the separation argument to apply). `tests/encoding/test_sparse_atom_composition.py::test_goal_status_split_exactly_one_atom_per_goal`
+asserts this directly: goal-derived channels are always a subset of
+`{satisfied, unsatisfied}` and their count always equals the number of
+supplied goal atoms -- never zero, never doubled.
+
+A satisfied goal keeps its current-fact representation too: `q(o)` being
+both true and a goal produces *two* atoms (one `state`, one `satisfied`),
+not one atom carrying both roles.
+
+## Nullary normalization
+
+A nullary atom such as `handempty()` has no argument to attach a persistent
+occurrence vector to. This encoder ports the native hetero family's
+`nullary_object_name`/`add_nullary_predicates` approach rather than the flat
+family's `ignore_zero_arity_relations=True` default, which would silently
+*drop* `handempty` instead of representing it: every nullary atom becomes a
+unary atom on a distinguished auxiliary object,
+`mifrost.encoders.sparse_atom.NULLARY_OBJECT_NAME`
+(`"![nullary_symbol]!"`, the same literal the hetero family already uses).
+The star object:
+
+- is added to a graph's object universe only when that graph actually
+  contains a nullary atom (a state with no nullary predicates never carries
+  a dangling unused star);
+- gets its own R4 auxiliary carrier, exactly like every other object;
+- participates in pairs and witnesses like any other object once it appears
+  in a *non*-nullary atom's arguments too (it never does on its own, since
+  every atom mentioning it is now unary).
+
+No arity-0 atom is ever emitted by this encoder. The consumer's own
+`prepare()` rejects arity 0 outright, naming this normalization in its error
+message, and `validate_sparse_atom_composition` checks the same invariant
+standalone.
+
+## Equality patterns
+
+The within-atom equality pattern `epsilon_q = (1[o_{q,i} = o_{q,j}])_{i,j}`
+(which pairs of argument positions refer to the same object) is interned
+into a compact id via `EqualityPatternTable`, keyed by the first-occurrence
+relabeling of an
+atom's argument tuple (e.g. `(u, v, u)` and `(x, y, x)` intern to the same
+id; `(u, v)` and `(u, u)` do not). A consumer model sizes its equality
+embedding table at construction time, before any state is encoded, so
+`SparseAtomCompositionEncoder` seeds the table with the *complete* pattern
+vocabulary for every arity up to the schema's maximum
+(`EqualityPatternTable.seed_arities`) -- `sum(Bell(1..max_arity))` patterns,
+fixed and known up front via `encoder.num_equality_patterns`. There is a
+safety cap (arity 9) on that eager enumeration; no real PDDL predicate arity
+comes close to it.
+
+## Pairs and witnesses (R7/R8/R9)
+
+For distinct objects `u`, `v`, `pair_objects` holds every ordered pair with
+at least one supporting occurrence -- `(u, v)` and `(v, u)` are independent
+records, and *both* arise automatically from any single atom that mentions
+`u` and `v` at two different argument positions (the position loop is over
+all ordered `(i, j)`, not just `i < j`). `composition_triplets` is built by
+listing every triangle of the resulting undirected support graph exactly
+once via degeneracy ordering (`O(alpha * M)`, the same construction
+`relmo`'s own topology-stats triangle counter uses) and expanding each into
+its 6 ordered `(target, left, right)` rows. `atom_pair_ids` /
+`atom_pair_occurrence_i` / `atom_pair_occurrence_j` are the atom-to-pair maps
+`D`+`AGGR^args` needs to distribute pair/composition information back to
+occurrence stores; occurrence indices there are always *global*
+(`atom_offsets[q] + position]`), never atom-local.
+
+## Batching (R12)
+
+`batch_sparse_atom_encodings` concatenates a list of single-graph (or
+already-batched) encodings into one, explicitly rebasing every index space
+by that graph's own running totals before concatenating -- objects, atoms,
+occurrences, pairs, and pair-support entries each get their own running
+offset. No pair or witness triplet can span two input graphs: `pair_objects`
+only ever references two objects with equal `object_batch` entries, by
+construction (each graph's own `pair_objects` already only references its
+own objects, and rebasing preserves that).
+
+## Known gap: object types (R13)
+
+The architecture's per-occurrence side information `s_{q,j}` includes
+argument object types, and the consumer carrier has an `object_type_ids`
+slot for them. Neither backend `StateView` wrapper exposes per-object type
+data today --
+[`StateView.object_types`](../reference/api/index.md) documents that it
+*always* returns `None`, since neither the pymimir nor the pytyr `Object`
+wrapper exposes anything beyond `get_index`/`get_name`. This encoder
+therefore emits **no** `object_type_ids`/`occurrence_type_ids` at all (both
+stay `None` on `SparseAtomCompositionEncoding`) rather than faking a
+constant placeholder value that would silently present as "every object has
+the same type" to a downstream embedding table. Wiring real per-object types
+through requires extending the backend snapshot layer first; until then, any
+type-conditioned behavior described in the architecture note is unavailable
+through this encoder.
+
+## Backend-free core vs. the StateView facade
+
+Two layers are exposed:
+
+- `encode_sparse_atom_facts` / `batch_sparse_atom_encodings` /
+  `build_predicate_schema` / `EqualityPatternTable` operate on plain
+  `(predicate, args)` tuples
+  (`mifrost.encoders.custom.state_view.Atom`) and never touch pymimir or
+  pytyr. This is what most of `tests/encoding/test_sparse_atom_composition.py`
+  exercises directly -- hand-built Blocksworld-style and synthetic-graph
+  scenarios (six-cycle vs. two triangles, the two-tower goal-witness
+  separation, and so on) without needing a PDDL problem at all.
+- `SparseAtomCompositionEncoder` is a thin `StateView` facade over a real
+  pymimir/pytyr problem. Its `goals=` parameter deliberately differs from
+  `CustomGraphEncoder`'s lane convention: `goals=None` means *goal-free*
+  (zeta=0) here, not "use the problem's own goal" -- this encoder has a
+  genuine goal-free mode, and reusing the other convention would make it
+  unreachable. Pass `goals=encoder.view.goal_literals(state)` explicitly for
+  the problem's own goal, or `goals=()` for a supplied-empty goal (zeta=1,
+  `G=∅`; the same atom set as goal-free, differing only in
+  `goal_available`).
