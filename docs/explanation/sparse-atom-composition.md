@@ -274,20 +274,41 @@ guarantee `build_predicate_schema` already gives predicate ids: two
 problems of one domain that happen to instantiate different subsets of its
 declared types still agree on which type gets which id.
 
-**Only the most specific declared type**, never the ancestor chain, is
-carried. The one real consumer, `SparseAtomCompositionGNN
-.object_type_embedding`, is a single `nn.Embedding` lookup -- a categorical
-id, not a set -- and the most specific type is the most informative single
-label a PDDL declaration gives (a `truck` implies `locatable` implies
-`object`, never the reverse). The ancestor chain remains separately
-derivable from the domain's type declarations (walk `pymimir.Type
-.get_bases()` from a name in `StateView.type_names`) if some future
-consumer needs it; it is not threaded through today because nothing reads
-it, and an unread field would be exactly the write-only plumbing this
-design avoids. An object declared with a PDDL `either` type (more than one
-base) has no single "the" type, so pymimir's snapshot layer raises
-`ValueError` for it rather than guessing -- no domain under `data/pddl/`
-exercises this today.
+**`object_type_ids` carries only the most specific declared type**; the
+hierarchy travels beside it. The per-object field stays a categorical id,
+matching its consumer (`SparseAtomCompositionGNN.object_type_embedding`, a
+single `nn.Embedding` lookup), and the most specific type is the most
+informative single label a PDDL declaration gives (a `truck` implies
+`locatable` implies `object`, never the reverse).
+
+The hierarchy itself is *domain* schema, not per-object data, so it is
+carried once as direct parent edges (`DomainSnapshot.type_bases`,
+`StateView.type_bases`) and closed into
+`SparseAtomTypeSchema.ancestor_matrix` -- a square 0/1 matrix over the type
+vocabulary, exposed as `SparseAtomCompositionEncoder.type_ancestors`. The
+closure lives at the schema because that is where type *ids* are assigned,
+and the matrix has to be indexed by them. Its diagonal is always set: the
+consumer reparametrises its table as `A @ E`, and the diagonal is what
+leaves every type a free row of its own, so a zero there would remove
+capacity rather than merely change a prior. A backend that reports type
+names but no hierarchy yields the identity, which reproduces the leaf-only
+encoding exactly.
+
+Whether that reparametrisation earns anything is domain-dependent, and
+mostly it does not: untyped domains encode types as unary predicates
+instead, flat hierarchies contribute nothing, and most typed domains
+(spanner, barman, delivery, transport) branch exactly at their predicate
+slots, where the shared row is constant within a role and absorbed by the
+consumer's role-conditioned map. Logistics is the clear exception --
+`locatable -> {package, vehicle -> {truck, airplane}}` is three deep, so at
+`at`'s first argument the `vehicle` row genuinely separates vehicles from
+packages.
+
+An object declared with a PDDL `either` type (more than one base) has no
+single "the" type, so pymimir's snapshot layer raises `ValueError` for it
+rather than guessing -- no domain under `data/pddl/` exercises this today.
+The ancestor matrix does not change that: it is indexed by leaf id, so an
+`either` object still has no id to look up.
 
 **Untyped domains degrade to a single real type id, not an absent field.**
 Because pymimir always resolves at least the implicit root type `"object"`
