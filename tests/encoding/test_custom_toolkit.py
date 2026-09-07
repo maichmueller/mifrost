@@ -241,7 +241,15 @@ def test_state_view_parity_across_backends(blocks_pair) -> None:
     assert pm_view.backend == "pymimir"
     assert pt_view.backend == "pytyr"
     assert pm_view.objects == pt_view.objects
-    assert pm_view.object_types is None and pt_view.object_types is None
+    # Object types are the one place these two backends legitimately diverge:
+    # pymimir resolves real PDDL types (blocksworld is untyped, so every
+    # object degrades to the implicit root type "object"), while pytyr's
+    # translated task drops type information before this reader ever sees it
+    # -- see StateView.object_types's docstring for the full investigation.
+    assert pm_view.object_types == ["object"] * len(pm_view.objects)
+    assert pm_view.type_names == ["object"]
+    assert pt_view.object_types is None
+    assert pt_view.type_names is None
     assert pm_view.predicates == pt_view.predicates
     assert pm_view.action_schemas == pt_view.action_schemas
     assert pm_view.static_facts == pt_view.static_facts

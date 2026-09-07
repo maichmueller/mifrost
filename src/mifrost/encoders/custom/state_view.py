@@ -294,6 +294,8 @@ class StateView:
         problem = self._reader.problem_snapshot()
         self._problem_name: str = problem.name
         self._objects: list[str] = list(problem.objects)
+        self._object_types: tuple[str, ...] | None = problem.object_types
+        self._type_names: tuple[str, ...] | None = domain.types
         self._predicates: tuple[PredicateInfo, ...] = tuple(
             PredicateInfo(key.name, key.arity, key.category.value)
             for key in domain.predicates
@@ -318,16 +320,80 @@ class StateView:
         return list(self._objects)
 
     @property
-    def object_types(self) -> list[str] | None:
-        """Per-object type names, or ``None`` when unavailable.
+    def type_names(self) -> list[str] | None:
+        """Domain-declared object-type names, or ``None`` when unavailable.
 
-        Neither the pymimir wrapper ``Object`` nor the pytyr ``Object``
-        exposes type information today (both offer only ``get_index`` and
-        ``get_name``), so no uniform cross-backend record exists and this
-        property currently always returns ``None``.
+        Scoped to the whole *domain*, like :attr:`predicates` and
+        :attr:`action_schemas` -- stable across every problem of the same
+        domain, independent of which types a particular problem's objects
+        happen to use, and independent of state. Always includes the
+        implicit PDDL root type ``"object"`` when not ``None`` (see
+        :attr:`object_types`).
+
+        ``None`` exactly when :attr:`object_types` is ``None`` (pytyr): both
+        come from the same backend capability, so a caller never sees one
+        without the other.
         """
 
-        return None
+        if self._type_names is None:
+            return None
+        return list(self._type_names)
+
+    @property
+    def object_types(self) -> list[str] | None:
+        """Per-object most specific declared type name, or ``None`` if unavailable.
+
+        Index-aligned with :attr:`objects`. Backend support is asymmetric:
+
+        - **pymimir**: resolved from ``Object.get_bases()``. Contrary to an
+          earlier assumption recorded here, the installed pymimir wrapper's
+          ``Object`` (and ``Type``) expose ``get_bases()`` in addition to
+          ``get_index``/``get_name`` -- verified directly against
+          ``pymimir.advanced.formalism.Object``/``Type``. Every object,
+          even in an untyped domain, resolves to at least the implicit PDDL
+          root type ``"object"``, since pymimir's ``Domain.get_types()``
+          always declares it (confirmed on every domain under
+          ``data/pddl/``, typed and untyped alike) -- so an untyped domain
+          degrades to a single, real type id rather than an absent field:
+          the field being present reflects "this backend can classify
+          objects", not "this domain declares more than one type".
+        - **pytyr**: always ``None``. The translated
+          ``pytyr.formalism.planning`` task this backend wraps drops type
+          information during PDDL-to-task translation -- confirmed at the
+          C++ layer too, not just the Python binding: PDDL types exist on
+          the raw parsed AST (``pypddl.formalism.Task.get_objects()[i]
+          .get_types()``, with the full ancestor chain reachable via
+          ``Type.get_bases()``) but ``tyr::formalism::planning::Object``'s
+          own ``Data`` struct (pytyr's ``native/include/tyr/formalism/
+          object_data.hpp``) stores only ``index`` and ``name`` -- the
+          translation compiles types away rather than merely omitting a
+          binding for them. The ``PlanningTask`` this reader is built from
+          keeps no reference back to that AST or to the original PDDL file
+          paths needed to re-parse it, so this is a genuine backend
+          capability gap, not unfinished plumbing.
+
+        Only the **most specific** declared type is exposed, never the
+        ancestor chain: the one real consumer today
+        (``mifrost.encoders.sparse_atom``, feeding
+        ``relmo.models.SparseAtomCompositionGNN.object_type_embedding``)
+        models this as a single categorical id via one embedding lookup, and
+        the most specific type is the most informative single label (a
+        ``truck`` implies ``locatable`` implies ``object``, never the
+        reverse). The ancestor chain remains separately derivable, domain
+        side, by walking ``pymimir.Type.get_bases()`` from the type named in
+        :attr:`type_names`; it is not threaded through here because nothing
+        today reads it, and adding an unread field would be exactly the kind
+        of write-only plumbing this design avoids.
+
+        An object declared with a PDDL ``either`` type (more than one
+        declared base) has no single "the" type; pymimir's snapshot layer
+        raises ``ValueError`` in that case rather than silently choosing one
+        (no domain under ``data/pddl/`` exercises this).
+        """
+
+        if self._object_types is None:
+            return None
+        return list(self._object_types)
 
     @property
     def predicates(self) -> list[PredicateInfo]:
