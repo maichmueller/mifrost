@@ -300,6 +300,20 @@ class PyTyrSnapshotReader:
         return self._planning_task.get_task()
 
     def domain_snapshot(self) -> DomainSnapshot:
+        # `types`/`object_types` are deliberately omitted (left `None`) below:
+        # this translated `planning.Domain`/`planning.Object` binding carries
+        # no type surface at all -- `Domain` has no `get_types()`, and
+        # `Object`/`Type` expose only `get_index`/`get_name`. This is not a
+        # missing binding to add: the underlying C++ struct itself has no
+        # type field (`tyr::formalism::planning::Object`'s `Data` in pytyr's
+        # own `native/include/tyr/formalism/object_data.hpp` stores only
+        # `index` and `name`). PDDL types exist on the raw parsed AST before
+        # translation (`pypddl.formalism.Task.get_objects()[i].get_types()`,
+        # `Type.get_bases()`) but are compiled away by the translation into
+        # this `planning.Task` representation, and the `PlanningTask` this
+        # reader wraps keeps no reference back to that AST or to the original
+        # PDDL file paths needed to re-parse it -- so there is nothing this
+        # backend can expose without reaching outside its documented input.
         domain = self._task.get_domain()
         predicates = [
             *(

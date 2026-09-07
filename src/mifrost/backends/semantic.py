@@ -113,11 +113,20 @@ def _literal_sort_key(
 
 @dataclass(frozen=True, slots=True)
 class DomainSnapshot:
-    """Canonical domain schema independent of backend iteration order."""
+    """Canonical domain schema independent of backend iteration order.
+
+    ``types`` is the domain's declared object-type vocabulary (see
+    :func:`ProblemSnapshot.canonical`'s ``object_types``), scoped to the
+    *domain* rather than any one problem -- the same stability guarantee
+    ``predicates``/``actions`` already have -- and ``None`` when the backend
+    cannot resolve type declarations at all (see
+    ``mifrost.backends.pytyr.PyTyrSnapshotReader.domain_snapshot``).
+    """
 
     name: str
     predicates: tuple[PredicateKey, ...]
     actions: tuple[ActionSchemaKey, ...]
+    types: tuple[str, ...] | None = None
 
     @classmethod
     def canonical(
@@ -126,23 +135,37 @@ class DomainSnapshot:
         name: str,
         predicates: Iterable[PredicateKey],
         actions: Iterable[ActionSchemaKey],
+        types: Iterable[str] | None = None,
     ) -> DomainSnapshot:
+        resolved_types = (
+            None if types is None else tuple(sorted(str(value) for value in types))
+        )
         return cls(
             name=str(name),
             predicates=tuple(sorted(predicates, key=_predicate_sort_key)),
             actions=tuple(sorted(actions, key=_action_sort_key)),
+            types=resolved_types,
         )
 
 
 @dataclass(frozen=True, slots=True)
 class ProblemSnapshot:
-    """Canonical problem metadata needed by backend-neutral encoders."""
+    """Canonical problem metadata needed by backend-neutral encoders.
+
+    ``object_types`` is the most specific declared PDDL type name for each
+    entry of ``objects``, index-aligned with it (both are permuted by the
+    same name-sort in :meth:`canonical`); ``None`` when the backend cannot
+    resolve object types at all. See
+    ``mifrost.encoders.custom.state_view.StateView.object_types`` for which
+    backends support this and why.
+    """
 
     name: str
     domain_name: str
     objects: tuple[str, ...]
     static_atoms: tuple[AtomKey, ...]
     goals: tuple[LiteralKey, ...]
+    object_types: tuple[str, ...] | None = None
 
     @classmethod
     def canonical(
@@ -153,16 +176,32 @@ class ProblemSnapshot:
         objects: Iterable[object],
         static_atoms: Iterable[AtomKey],
         goals: Iterable[LiteralKey],
+        object_types: Iterable[str] | None = None,
     ) -> ProblemSnapshot:
-        object_names = tuple(sorted(str(value) for value in objects))
+        object_list = [str(value) for value in objects]
+        if object_types is None:
+            type_list: list[str] | None = None
+        else:
+            type_list = [str(value) for value in object_types]
+            if len(type_list) != len(object_list):
+                raise ValueError(
+                    "object_types must have exactly one entry per object: got "
+                    f"{len(type_list)} types for {len(object_list)} objects"
+                )
+        order = sorted(range(len(object_list)), key=lambda index: object_list[index])
+        object_names = tuple(object_list[index] for index in order)
         if len(set(object_names)) != len(object_names):
             raise ValueError("problem object names must be unique")
+        resolved_types = (
+            None if type_list is None else tuple(type_list[index] for index in order)
+        )
         return cls(
             name=str(name),
             domain_name=str(domain_name),
             objects=object_names,
             static_atoms=tuple(sorted(static_atoms, key=_atom_sort_key)),
             goals=tuple(sorted(goals, key=_literal_sort_key)),
+            object_types=resolved_types,
         )
 
 

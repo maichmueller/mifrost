@@ -42,6 +42,42 @@ def _atom_key(atom: Any) -> AtomKey:
     )
 
 
+#: PDDL's builtin numeric-fluent type. Pymimir's ``Domain.get_types()``
+#: always reports it -- even for domains with no ``:functions`` section at
+#: all (verified against every fixture under ``data/pddl/``) -- but by PDDL
+#: semantics it can only ever type a function's numeric return value, never
+#: an object: no ``:objects``/``:constants`` declaration can name it.
+#: Excluding it from the object-type vocabulary isn't a heuristic tuned to
+#: today's fixtures, it is a structural fact about what the type means, so
+#: unlike every other declared type it would otherwise be a permanently
+#: unreachable id (see :func:`domain_snapshot`).
+_NUMBER_TYPE_NAME = "number"
+
+
+def _object_type_name(value: Any) -> str:
+    """Resolve one pymimir ``Object``'s most specific declared PDDL type.
+
+    ``Object.get_bases()`` returns the object's own declared type(s) -- a
+    list because PDDL's ``either`` typing allows more than one -- not the
+    full ancestor chain (a spanner-domain ``man`` object reports only
+    ``['man']``, not ``['man', 'locatable', 'object']``; see
+    ``StateView.object_types`` for why only the most specific type is
+    exposed). An untyped object still resolves to the implicit PDDL root
+    type ``"object"``, since pymimir's ``Domain.get_types()`` always
+    declares it. A real ``either``-typed object (more than one declared
+    base) has no single "the" type, so this raises rather than guessing.
+    """
+
+    bases = list(value.get_bases())
+    if len(bases) != 1:
+        raise ValueError(
+            f"pymimir object {value.get_name()!r} declares {len(bases)} types "
+            "via PDDL 'either' typing; a single per-object type id needs "
+            "exactly one declared type per object"
+        )
+    return str(bases[0].get_name())
+
+
 def _literal_key(literal: Any) -> LiteralKey:
     return LiteralKey(_atom_key(literal.get_atom()), bool(literal.get_polarity()))
 
@@ -72,8 +108,13 @@ class PymimirSnapshotReader:
             ActionSchemaKey(str(action.get_name()), int(action.get_arity()))
             for action in domain.get_actions()
         )
+        types = (
+            str(value.get_name())
+            for value in domain.get_types()
+            if str(value.get_name()) != _NUMBER_TYPE_NAME
+        )
         return DomainSnapshot.canonical(
-            name=domain.get_name(), predicates=predicates, actions=actions
+            name=domain.get_name(), predicates=predicates, actions=actions, types=types
         )
 
     def problem_snapshot(self) -> ProblemSnapshot:
@@ -85,10 +126,12 @@ class PymimirSnapshotReader:
             _literal_key(literal)
             for literal in self._problem.get_goal_condition().get_literals()
         )
+        objects = list(self._problem.get_objects())
         return ProblemSnapshot.canonical(
             name=self._problem.get_name(),
             domain_name=self._problem.get_domain().get_name(),
-            objects=(value.get_name() for value in self._problem.get_objects()),
+            objects=(value.get_name() for value in objects),
+            object_types=(_object_type_name(value) for value in objects),
             static_atoms=static_atoms,
             goals=goals,
         )

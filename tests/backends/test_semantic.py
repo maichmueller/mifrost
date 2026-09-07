@@ -84,3 +84,59 @@ def test_problem_snapshot_canonicalizes_goals_without_losing_polarity() -> None:
     )
 
     assert snapshot.goals == (LiteralKey(atom, False), LiteralKey(atom, True))
+
+
+def test_domain_snapshot_types_default_to_none_and_are_sorted() -> None:
+    fluent = PredicateKey(PredicateCategory.FLUENT, "at", 2)
+    move = ActionSchemaKey("move", 1)
+
+    untyped = DomainSnapshot.canonical(name="d", predicates=[fluent], actions=[move])
+    assert untyped.types is None
+
+    typed = DomainSnapshot.canonical(
+        name="d",
+        predicates=[fluent],
+        actions=[move],
+        types=["truck", "object", "location"],
+    )
+    assert typed.types == ("location", "object", "truck")
+
+
+def test_problem_snapshot_object_types_stay_aligned_with_sorted_objects() -> None:
+    # Objects are re-sorted by name in `canonical()`; object_types must move
+    # with them, not just be sorted independently, or a type would silently
+    # attach to the wrong object.
+    snapshot = ProblemSnapshot.canonical(
+        name="problem",
+        domain_name="domain",
+        objects=["truck1", "airplane1", "city1"],
+        object_types=["truck", "airplane", "city"],
+        static_atoms=[],
+        goals=[],
+    )
+
+    assert snapshot.objects == ("airplane1", "city1", "truck1")
+    assert snapshot.object_types == ("airplane", "city", "truck")
+
+
+def test_problem_snapshot_object_types_default_to_none() -> None:
+    snapshot = ProblemSnapshot.canonical(
+        name="problem",
+        domain_name="domain",
+        objects=["a", "b"],
+        static_atoms=[],
+        goals=[],
+    )
+    assert snapshot.object_types is None
+
+
+def test_problem_snapshot_rejects_mismatched_object_types_length() -> None:
+    with pytest.raises(ValueError, match="one entry per object"):
+        ProblemSnapshot.canonical(
+            name="problem",
+            domain_name="domain",
+            objects=["a", "b"],
+            object_types=["truck"],
+            static_atoms=[],
+            goals=[],
+        )
