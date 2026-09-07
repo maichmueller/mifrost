@@ -29,6 +29,7 @@ is a standalone reimplementation of every invariant that consumer's
 | `goal_available` | `[B]` | Per-graph zeta flag |
 | `object_carrier_occurrence_ids` | `[O]` | One `object(o)` carrier occurrence per object, ordered by object id |
 | `counterpart_occurrence_ids` | `[I]`, optional | R11 exact-tuple exchange, `-1` where none |
+| `object_type_ids` | `[O]`, optional | R13 per-object declared PDDL type id; `None` when the backend cannot resolve types |
 
 `Q` = atoms, `I` = occurrences (`sum(arity)`), `O` = objects, `P` = pairs,
 `S` = pair-support entries, `K` = witness triplets, `M` = atom-pair mappings,
@@ -234,22 +235,98 @@ only ever references two objects with equal `object_batch` entries, by
 construction (each graph's own `pair_objects` already only references its
 own objects, and rebasing preserves that).
 
-## Known gap: object types (R13)
+## Object types (R13)
 
 The architecture's per-occurrence side information `s_{q,j}` includes
-argument object types, and the consumer carrier has an `object_type_ids`
-slot for them. Neither backend `StateView` wrapper exposes per-object type
-data today --
-[`StateView.object_types`](../reference/api/index.md) documents that it
-*always* returns `None`, since neither the pymimir nor the pytyr `Object`
-wrapper exposes anything beyond `get_index`/`get_name`. This encoder
-therefore emits **no** `object_type_ids`/`occurrence_type_ids` at all (both
-stay `None` on `SparseAtomCompositionEncoding`) rather than faking a
-constant placeholder value that would silently present as "every object has
-the same type" to a downstream embedding table. Wiring real per-object types
-through requires extending the backend snapshot layer first; until then, any
-type-conditioned behavior described in the architecture note is unavailable
-through this encoder.
+argument object types, and the consumer carrier (`object_type_ids`) has a
+slot for them. Whether a backend can supply them turned out to be
+asymmetric, not a uniformly unfinished feature:
+
+- **pymimir**: yes. The installed pymimir wrapper's `Object` (and `Type`)
+  expose `get_bases()` in addition to `get_index`/`get_name` --
+  contradicting an earlier assumption recorded in this codebase that only
+  the latter two existed. `Object.get_bases()` returns the object's own
+  declared type(s), and `Domain.get_types()` always includes the implicit
+  PDDL root type `"object"`, even for domains with no `:types` section at
+  all (verified against every fixture under `data/pddl/`).
+- **pytyr**: no, genuinely. The `pytyr.formalism.planning` task `StateView`
+  wraps is a *translated* representation, and PDDL types are compiled away
+  before it exists: its `Domain` has no `get_types()`, and its
+  `Object`/`Type` really do expose only `get_index`/`get_name` -- confirmed
+  at the C++ layer, not just the binding surface. `tyr::formalism::planning
+  ::Object`'s `Data` struct (pytyr's own
+  `native/include/tyr/formalism/object_data.hpp`) stores only `index` and
+  `name`, nothing else. The type hierarchy does exist earlier, on the raw
+  parsed AST (`pypddl.formalism.Task.get_objects()[i].get_types()`, with
+  `Type.get_bases()` walking the full ancestor chain there), but the
+  `PlanningTask` this reader is built from keeps no reference back to that
+  AST or to the original PDDL file paths needed to re-parse it. This is a
+  capability gap in what the translated task carries, not a missing
+  binding to add.
+
+`SparseAtomCompositionEncoder`/`encode_sparse_atom_facts` populate
+`object_type_ids` whenever `StateView.object_types` is available and leave
+it `None` otherwise -- never a fabricated constant that would silently
+present as "every object has the same type." Ids come from a fixed,
+*domain-scoped* vocabulary (`SparseAtomTypeSchema`, built by
+`build_type_schema` from `StateView.type_names`), the same stability
+guarantee `build_predicate_schema` already gives predicate ids: two
+problems of one domain that happen to instantiate different subsets of its
+declared types still agree on which type gets which id.
+
+**Only the most specific declared type**, never the ancestor chain, is
+carried. The one real consumer, `SparseAtomCompositionGNN
+.object_type_embedding`, is a single `nn.Embedding` lookup -- a categorical
+id, not a set -- and the most specific type is the most informative single
+label a PDDL declaration gives (a `truck` implies `locatable` implies
+`object`, never the reverse). The ancestor chain remains separately
+derivable from the domain's type declarations (walk `pymimir.Type
+.get_bases()` from a name in `StateView.type_names`) if some future
+consumer needs it; it is not threaded through today because nothing reads
+it, and an unread field would be exactly the write-only plumbing this
+design avoids. An object declared with a PDDL `either` type (more than one
+base) has no single "the" type, so pymimir's snapshot layer raises
+`ValueError` for it rather than guessing -- no domain under `data/pddl/`
+exercises this today.
+
+**Untyped domains degrade to a single real type id, not an absent field.**
+Because pymimir always resolves at least the implicit root type `"object"`
+for every object -- typed domain or not -- `object_type_ids` being present
+reflects "this backend can classify objects", not "this domain declares
+more than one type". A Blocksworld problem therefore gets a real (constant,
+all-zero) `object_type_ids` with `num_object_types == 1`, computationally
+identical to leaving the field `None` (the consumer's own fallback is also
+"treat every object as type 0"), but explicit rather than silent about why.
+The synthetic nullary "star" object (see
+[Nullary normalization](#nullary-normalization) above) follows the same
+logic from the other direction: it is not a real PDDL object, so rather
+than leave it without a type (every id in the schema must be a genuine,
+resolvable row) it is typed generically as the schema's root entry,
+`mifrost.encoders.sparse_atom.ROOT_TYPE_NAME` (`"object"` -- the same
+literal as `OBJECT_PREDICATE`, not by coincidence: pymimir reports it as
+the real root of every domain's type hierarchy, the same way it reports
+`object` as a real static predicate for the R4 carrier).
+`build_type_schema` always guarantees this entry, synthesizing it if the
+supplied type names omit it -- mirroring how `build_predicate_schema`
+always guarantees `OBJECT_PREDICATE`.
+
+Batching (`batch_sparse_atom_encodings`) concatenates `object_type_ids`
+**without index offsetting**: it is a domain-scoped categorical *value*,
+like `atom_predicate_ids`, not a per-graph local index like `atom_args` or
+`pair_objects` (compare `kEntityRoleIdsField` -- `GraphFieldMode::CAT` with
+no `inc` -- against `kObjectIndicesField`'s `GraphFieldMode::CAT` plus
+`GraphFieldInc::Kind::NODE_OFFSET`, in
+`src/_core/mifrost/core/encoders/flat/flat_encoder_common.cpp`, which draws
+exactly this distinction for the native flat-encoder family). It must be
+present on every encoding in a batch or none: unlike
+`counterpart_occurrence_ids` (whose `-1` filler the consumer explicitly
+treats as "no counterpart"), every id in `[0, num_object_types)` is a
+genuine declared type, so there is no spare sentinel value for a graph with
+no types once others in the batch declare real ones -- mixing them raises.
+
+`occurrence_type_ids` -- a different, still-unaddressed R13 component (a
+per-argument-*position* type drawn from the predicate/action signature,
+rather than a per-*object* type) -- remains out of scope and stays `None`.
 
 ## Backend-free core vs. the StateView facade
 

@@ -21,10 +21,12 @@ from mifrost.encoders.sparse_atom import (
     CHANNEL_STATUS_SUFFIXES,
     CHANNEL_UNSATISFIED,
     OBJECT_PREDICATE,
+    ROOT_TYPE_NAME,
     STATUS_ENCODING_VOCABULARY,
     SparseAtomPredicateSchema,
     batch_sparse_atom_encodings,
     build_predicate_schema,
+    build_type_schema,
     encode_sparse_atom_facts,
     validate_sparse_atom_composition,
 )
@@ -41,6 +43,8 @@ def _encode(
     schema,
     *,
     exact_tuple_exchange: bool = False,
+    object_types=None,
+    type_schema=None,
 ):
     encoding = encode_sparse_atom_facts(
         objects,
@@ -48,9 +52,14 @@ def _encode(
         goals,
         schema,
         exact_tuple_exchange=exact_tuple_exchange,
+        object_types=object_types,
+        type_schema=type_schema,
     )
     validate_sparse_atom_composition(
-        encoding, predicate_arities=schema.arities, num_channels=schema.num_channels
+        encoding,
+        predicate_arities=schema.arities,
+        num_channels=schema.num_channels,
+        num_object_types=(len(type_schema.names) if type_schema is not None else None),
     )
     return encoding
 
@@ -116,6 +125,37 @@ def test_vocabulary_status_encoding_expands_schema_and_names() -> None:
     assert schema.names[on_base * 4 + CHANNEL_AUXILIARY] == "on[g]"
     assert schema.arities[on_base * 4 + CHANNEL_STATE] == 2
     assert schema.relation_id(on_base, CHANNEL_STATE) == (on_base * 4, 0)
+
+
+# --------------------------------------------------------------------------
+# R13: object-type schema
+# --------------------------------------------------------------------------
+
+
+def test_build_type_schema_appends_root_type() -> None:
+    schema = build_type_schema(["truck", "airplane", "city"])
+    assert schema.names == ("truck", "airplane", "city", ROOT_TYPE_NAME)
+    assert schema.name_to_id["truck"] == 0
+    assert schema.name_to_id[ROOT_TYPE_NAME] == 3
+
+
+def test_build_type_schema_reuses_declared_root_type() -> None:
+    # Real backends (pymimir) already declare "object" as the implicit root
+    # of every type hierarchy, even in an untyped domain -- so the schema
+    # must reuse it, not append a second root entry.
+    schema = build_type_schema(["truck", ROOT_TYPE_NAME])
+    assert schema.names.count(ROOT_TYPE_NAME) == 1
+    assert schema.names == ("truck", ROOT_TYPE_NAME)
+
+
+def test_build_type_schema_rejects_duplicate_names() -> None:
+    with pytest.raises(ValueError, match="duplicate"):
+        build_type_schema(["truck", "truck"])
+
+
+def test_build_type_schema_degrades_to_root_only_for_untyped_domains() -> None:
+    schema = build_type_schema([])
+    assert schema.names == (ROOT_TYPE_NAME,)
 
 
 # --------------------------------------------------------------------------
@@ -500,6 +540,117 @@ def test_unsatisfied_goal_has_no_counterpart() -> None:
 
 
 # --------------------------------------------------------------------------
+# R13: object types
+# --------------------------------------------------------------------------
+
+
+def test_object_type_ids_default_to_none() -> None:
+    schema = _schema([("on", 2)])
+    encoding = _encode(["a", "b"], [Atom("on", ("a", "b"))], None, schema)
+    assert encoding.object_type_ids is None
+
+
+def test_object_type_ids_are_resolved_per_object() -> None:
+    schema = _schema([("at", 2)])
+    type_schema = build_type_schema(["truck", "city"])
+    encoding = _encode(
+        ["t1", "c1", "c2"],
+        [Atom("at", ("t1", "c1"))],
+        None,
+        schema,
+        object_types=["truck", "city", "city"],
+        type_schema=type_schema,
+    )
+    assert encoding.object_type_ids is not None
+    assert encoding.object_type_ids.tolist() == [
+        type_schema.name_to_id["truck"],
+        type_schema.name_to_id["city"],
+        type_schema.name_to_id["city"],
+    ]
+
+
+def test_star_object_is_typed_as_root_type() -> None:
+    schema = _schema([("handempty", 0)])
+    type_schema = build_type_schema(["block"])
+    encoding = _encode(
+        ["a"],
+        [Atom("handempty", ())],
+        None,
+        schema,
+        object_types=["block"],
+        type_schema=type_schema,
+    )
+    assert encoding.num_objects == 2  # 'a' plus the synthetic star object
+    assert encoding.object_type_ids.tolist() == [
+        type_schema.name_to_id["block"],
+        type_schema.name_to_id[ROOT_TYPE_NAME],
+    ]
+
+
+def test_object_types_and_type_schema_must_be_supplied_together() -> None:
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck"])
+    with pytest.raises(ValueError, match="together"):
+        encode_sparse_atom_facts(
+            ["a", "b"],
+            [Atom("on", ("a", "b"))],
+            None,
+            schema,
+            object_types=["truck", "truck"],
+        )
+    with pytest.raises(ValueError, match="together"):
+        encode_sparse_atom_facts(
+            ["a", "b"], [Atom("on", ("a", "b"))], None, schema, type_schema=type_schema
+        )
+
+
+def test_object_types_length_must_match_objects() -> None:
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck"])
+    with pytest.raises(ValueError, match="one entry per object"):
+        encode_sparse_atom_facts(
+            ["a", "b"],
+            [Atom("on", ("a", "b"))],
+            None,
+            schema,
+            object_types=["truck"],
+            type_schema=type_schema,
+        )
+
+
+def test_unknown_object_type_name_is_rejected() -> None:
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck"])
+    with pytest.raises(ValueError, match="unknown object type"):
+        encode_sparse_atom_facts(
+            ["a", "b"],
+            [Atom("on", ("a", "b"))],
+            None,
+            schema,
+            object_types=["truck", "spaceship"],
+            type_schema=type_schema,
+        )
+
+
+def test_untyped_domain_degrades_to_single_root_type_id() -> None:
+    # The "single id, not an absent field" degrade-gracefully decision: every
+    # object of a domain whose only type is the implicit PDDL root still gets
+    # a real (constant) object_type_ids entry.
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema([])
+    assert type_schema.names == (ROOT_TYPE_NAME,)
+    encoding = _encode(
+        ["a", "b"],
+        [Atom("on", ("a", "b"))],
+        None,
+        schema,
+        object_types=[ROOT_TYPE_NAME, ROOT_TYPE_NAME],
+        type_schema=type_schema,
+    )
+    assert encoding.object_type_ids.tolist() == [0, 0]
+
+
+# --------------------------------------------------------------------------
 # R12: batching / index rebasing
 # --------------------------------------------------------------------------
 
@@ -571,6 +722,57 @@ def test_batching_single_encoding_is_identity() -> None:
 def test_batch_sparse_atom_encodings_requires_nonempty_list() -> None:
     with pytest.raises(ValueError):
         batch_sparse_atom_encodings([])
+
+
+def test_batching_concatenates_object_type_ids_without_offset() -> None:
+    # object_type_ids indexes a *shared, domain-scoped* type vocabulary, not
+    # a per-graph local object array, so batching must concatenate the raw
+    # values verbatim -- unlike atom_args/pair_objects, which get rebased by
+    # each graph's running object offset.
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck", "city"])
+    first = _encode(
+        ["a", "b"],
+        [Atom("on", ("a", "b"))],
+        None,
+        schema,
+        object_types=["truck", "city"],
+        type_schema=type_schema,
+    )
+    second = _encode(
+        ["c", "d"],
+        [Atom("on", ("c", "d"))],
+        None,
+        schema,
+        object_types=["city", "truck"],
+        type_schema=type_schema,
+    )
+    batch = batch_sparse_atom_encodings([first, second])
+    validate_sparse_atom_composition(
+        batch, predicate_arities=schema.arities, num_object_types=len(type_schema.names)
+    )
+    assert batch.object_type_ids.tolist() == [
+        type_schema.name_to_id["truck"],
+        type_schema.name_to_id["city"],
+        type_schema.name_to_id["city"],
+        type_schema.name_to_id["truck"],
+    ]
+
+
+def test_batching_rejects_mixed_object_type_presence() -> None:
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck"])
+    typed = _encode(
+        ["a", "b"],
+        [Atom("on", ("a", "b"))],
+        None,
+        schema,
+        object_types=["truck", "truck"],
+        type_schema=type_schema,
+    )
+    untyped = _encode(["c", "d"], [Atom("on", ("c", "d"))], None, schema)
+    with pytest.raises(ValueError, match="object_type_ids"):
+        batch_sparse_atom_encodings([typed, untyped])
 
 
 # --------------------------------------------------------------------------
@@ -745,3 +947,32 @@ def test_validator_accepts_a_clean_batch() -> None:
     )
     batch = batch_sparse_atom_encodings([first, second])
     validate_sparse_atom_composition(batch, predicate_arities=schema.arities)
+
+
+def test_validator_rejects_wrong_length_object_type_ids() -> None:
+    schema = _schema([("on", 2)])
+    encoding = _encode(["a", "b"], [Atom("on", ("a", "b"))], None, schema)
+    encoding.object_type_ids = torch.tensor([0], dtype=torch.long)
+    with pytest.raises(ValueError, match="object_type_ids"):
+        validate_sparse_atom_composition(encoding, predicate_arities=schema.arities)
+
+
+def test_validator_rejects_out_of_range_object_type_id() -> None:
+    schema = _schema([("on", 2)])
+    type_schema = build_type_schema(["truck"])
+    encoding = _encode(
+        ["a", "b"],
+        [Atom("on", ("a", "b"))],
+        None,
+        schema,
+        object_types=["truck", "truck"],
+        type_schema=type_schema,
+    )
+    encoding.object_type_ids = encoding.object_type_ids.clone()
+    encoding.object_type_ids[0] = len(type_schema.names)  # one past the end
+    with pytest.raises(ValueError, match="outside the model schema"):
+        validate_sparse_atom_composition(
+            encoding,
+            predicate_arities=schema.arities,
+            num_object_types=len(type_schema.names),
+        )

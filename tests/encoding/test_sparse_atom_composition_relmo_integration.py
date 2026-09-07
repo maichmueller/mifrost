@@ -8,6 +8,8 @@ mifrost installed.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import torch
 
@@ -16,20 +18,45 @@ from tests.conftest import problem_setup
 from mifrost.encoders.sparse_atom import (
     CHANNEL_SATISFIED,
     CHANNEL_UNSATISFIED,
+    ROOT_TYPE_NAME,
     STATUS_ENCODING_VOCABULARY,
     SparseAtomCompositionEncoder,
     validate_sparse_atom_composition,
 )
+from mifrost.encoders.custom.state_view import StateView
 
 relmo_models = pytest.importorskip(
     "relmo.models", reason="relmo is not installed in this environment"
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="module")
 def blocks_problem():
     _space, _domain, problem = problem_setup("blocks", "smedium")
     return problem
+
+
+@pytest.fixture(scope="module")
+def spanner_problem():
+    # spanner is genuinely typed with a 2-level hierarchy (locatable ->
+    # man/nut/spanner, plus location), unlike blocksworld -- needed to
+    # exercise real (non-degenerate) object_type_ids.
+    _space, _domain, problem = problem_setup("spanner", "small")
+    return problem
+
+
+def _pytyr_planning_task(domain: str, problem: str):
+    """Build a PyTyr ``PlanningTask`` without touching the ABI-broken
+    ``pytyr.planning.lifted.StateRepositoryFactory`` path -- object/type
+    resolution never needs a state repository, only the parsed task."""
+    pypddl_formalism = pytest.importorskip("pypddl.formalism")
+    pytyr_planning = pytest.importorskip("pytyr.formalism.planning")
+    directory = ROOT / "data" / "pddl" / domain
+    options = pypddl_formalism.ParserOptions()
+    parser = pytyr_planning.Parser(str(directory / "domain.pddl"), options)
+    return parser.parse_task(str(directory / f"{problem}.pddl"), options)
 
 
 def test_encoder_schema_is_stable_and_arity_normalized(blocks_problem) -> None:
@@ -302,3 +329,123 @@ def test_vocabulary_status_encoding_accepted_by_sparse_atom_composition_gnn(
     output = model(prepared)
     assert output.state.shape == (1, 8)
     assert torch.isfinite(output.state).all()
+
+
+# --------------------------------------------------------------------------
+# R13: object types
+# --------------------------------------------------------------------------
+
+
+def test_untyped_blocksworld_degrades_to_single_root_type(blocks_problem) -> None:
+    encoder = SparseAtomCompositionEncoder(blocks_problem)
+    assert encoder.type_names == (ROOT_TYPE_NAME,)
+    assert encoder.num_object_types == 1
+
+    state = blocks_problem.get_initial_state()
+    encoding = encoder.encode(state, goals=encoder.view.goal_literals(state))
+    # A real (constant) field, not an absent one -- see the "untyped domain"
+    # decision in docs/explanation/sparse-atom-composition.md.
+    assert encoding.object_type_ids is not None
+    assert bool((encoding.object_type_ids == 0).all())
+    validate_sparse_atom_composition(
+        encoding,
+        predicate_arities=encoder.predicate_arities,
+        num_object_types=encoder.num_object_types,
+    )
+
+
+def test_spanner_domain_resolves_the_declared_type_hierarchy(spanner_problem) -> None:
+    encoder = SparseAtomCompositionEncoder(spanner_problem)
+    # spanner declares location/locatable plus man/nut/spanner under
+    # locatable, and the schema always adds the implicit root.
+    assert set(encoder.type_names) == {
+        "location",
+        "locatable",
+        "man",
+        "nut",
+        "spanner",
+        ROOT_TYPE_NAME,
+    }
+    assert encoder.num_object_types == len(encoder.type_names)
+
+    # Known fixture: bob is a man, gate/location1/shed are locations, nut1/2
+    # are nuts, spanner1/2 are spanners (data/pddl/spanner/small.pddl).
+    object_types = dict(zip(encoder.view.objects, encoder.view.object_types))
+    assert object_types["bob"] == "man"
+    assert object_types["gate"] == "location"
+    assert object_types["nut1"] == "nut"
+    assert object_types["spanner1"] == "spanner"
+
+
+def test_spanner_object_type_ids_accepted_by_sparse_atom_composition_gnn(
+    spanner_problem,
+) -> None:
+    encoder = SparseAtomCompositionEncoder(spanner_problem)
+    state = spanner_problem.get_initial_state()
+    goal_literals = encoder.view.goal_literals(state)
+    encoding = encoder.encode(state, goals=goal_literals)
+    validate_sparse_atom_composition(
+        encoding,
+        predicate_arities=encoder.predicate_arities,
+        num_channels=encoder.num_channels,
+        num_object_types=encoder.num_object_types,
+    )
+    assert encoding.object_type_ids is not None
+    assert int(encoding.object_type_ids.numel()) == encoding.num_objects
+
+    model = relmo_models.SparseAtomCompositionGNN(
+        embedding_size=8,
+        num_layers=2,
+        predicate_arities=list(encoder.predicate_arities),
+        num_channels=encoder.num_channels,
+        num_object_types=encoder.num_object_types,
+    )
+    prepared = model.prepare(encoding)  # must not raise
+    output = model(prepared)
+    assert output.object.shape == (encoding.num_objects, 8)
+    assert torch.isfinite(output.object).all()
+
+
+def test_spanner_batch_object_type_ids_accepted_by_sparse_atom_composition_gnn(
+    spanner_problem,
+) -> None:
+    encoder = SparseAtomCompositionEncoder(spanner_problem)
+    state = spanner_problem.get_initial_state()
+    goal_literals = encoder.view.goal_literals(state)
+    batch = encoder.encode_batch([state, state], goals=[None, goal_literals])
+    validate_sparse_atom_composition(
+        batch,
+        predicate_arities=encoder.predicate_arities,
+        num_channels=encoder.num_channels,
+        num_object_types=encoder.num_object_types,
+    )
+
+    model = relmo_models.SparseAtomCompositionGNN(
+        embedding_size=8,
+        num_layers=2,
+        predicate_arities=list(encoder.predicate_arities),
+        num_channels=encoder.num_channels,
+        num_object_types=encoder.num_object_types,
+    )
+    output = model(batch)
+    assert output.state.shape == (2, 8)
+    assert torch.isfinite(output.state).all()
+
+
+def test_pytyr_backend_has_no_object_types() -> None:
+    """The documented backend asymmetry: pytyr's translated task drops PDDL
+    type information before this reader ever sees it (see
+    ``StateView.object_types``'s docstring), so both properties -- and the
+    encoder built on top of them -- degrade to "unavailable"/"single type"
+    rather than raising. Needs no state at all, so it does not touch the
+    ABI-broken ``StateRepositoryFactory`` path."""
+    planning_task = _pytyr_planning_task("spanner", "small")
+    view = StateView(planning_task)
+    assert view.backend == "pytyr"
+    assert view.object_types is None
+    assert view.type_names is None
+
+    encoder = SparseAtomCompositionEncoder(planning_task)
+    assert encoder.type_schema is None
+    assert encoder.type_names is None
+    assert encoder.num_object_types == 1

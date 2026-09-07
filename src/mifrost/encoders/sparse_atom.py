@@ -74,16 +74,36 @@ and participates in pairs/witnesses like any other object. No arity-0 atom is
 ever emitted; the consumer rejects arity 0 outright, naming this
 normalization in its error message.
 
-Known gap: object types (R13)
--------------------------------
+Object types (R13)
+-------------------
 The architecture's per-occurrence side information ``s_{q,j}`` includes
-object types, but neither backend StateView wraps
-(:attr:`~mifrost.encoders.custom.state_view.StateView.object_types`) exposes
-per-object type data today -- it always returns ``None``. This encoder
-therefore emits no ``object_type_ids``/``occurrence_type_ids`` at all (the
-carrier's optional fields stay ``None``) rather than faking a constant
-placeholder that would silently present as "one type for everything" to a
-downstream embedding table.
+object types. This encoder populates ``object_type_ids`` whenever
+:attr:`~mifrost.encoders.custom.state_view.StateView.object_types` is
+available (pymimir; see that property's docstring for the full backend
+investigation) and leaves it ``None`` when it is not (pytyr -- a genuine
+backend capability gap, not an unfinished binding: the type hierarchy is
+compiled away before pytyr's translated task exists). ``object_type_ids`` is
+one *global*, domain-scoped type id per object (see
+:func:`build_type_schema`), never re-derived per problem, matching how
+:func:`build_predicate_schema` already scopes predicate ids to the domain.
+An untyped domain still gets a real (constant) ``object_type_ids`` rather
+than an absent field, because pymimir always resolves at least the implicit
+PDDL root type ``"object"`` for every object -- see :data:`ROOT_TYPE_NAME`
+and :attr:`~mifrost.encoders.custom.state_view.StateView.object_types`.
+
+Only the object's most specific declared type is carried, never its
+ancestor chain -- see ``StateView.object_types`` for why. The synthetic
+nullary "star" object (see the "Nullary normalization" section below) is
+not a real PDDL object, so it is typed generically as
+:data:`ROOT_TYPE_NAME` rather than left without a type id: every id in the
+schema must be a genuine, resolvable embedding row, so there is no spare
+sentinel value to give it instead (unlike ``counterpart_occurrence_ids``,
+whose ``-1`` filler the *consumer* explicitly treats as "no counterpart").
+
+``occurrence_type_ids`` -- a different, still-unaddressed R13 component (a
+per-argument-*position* type drawn from the predicate/action signature,
+rather than a per-*object* type) -- remains out of scope here and stays
+``None``.
 """
 
 from __future__ import annotations
@@ -145,6 +165,18 @@ CHANNEL_STATUS_SUFFIXES: tuple[str, ...] = ("[state]", "[sat]", "[unsat]", "[g]"
 #: ``nullary_object_name`` default; kept identical so tooling that already
 #: recognizes it (e.g. visualization) continues to.
 NULLARY_OBJECT_NAME = "![nullary_symbol]!"
+
+#: The implicit universal PDDL root type -- every declared type ultimately
+#: derives from it, and an untyped domain's objects are all directly of this
+#: type. This coincides textually with :data:`OBJECT_PREDICATE`, and that is
+#: not a coincidence: pymimir reports it as the real root of
+#: ``Domain.get_types()`` for every domain, typed or not (see
+#: ``StateView.object_types``), the same way it reports ``object`` as a real
+#: static predicate for the R4 carrier. :func:`build_type_schema` always
+#: guarantees an entry for it, so the synthetic nullary "star" object always
+#: has a valid, resolvable type id to fall back to (see
+#: :func:`encode_sparse_atom_facts`).
+ROOT_TYPE_NAME = "object"
 
 
 # --------------------------------------------------------------------------
@@ -323,6 +355,66 @@ def build_predicate_schema(
 
 
 # --------------------------------------------------------------------------
+# Object-type schema (R13)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SparseAtomTypeSchema:
+    """Fixed object-type vocabulary shared by a batch of encoded graphs.
+
+    Domain-scoped and stable across every problem of the same domain, the
+    same way :class:`SparseAtomPredicateSchema` is: two problems of one
+    domain that happen to instantiate different subsets of its declared
+    types must still agree on which type gets which id, so ``names`` comes
+    from the *domain's* type declarations
+    (:attr:`~mifrost.encoders.custom.state_view.StateView.type_names`),
+    never from which types a particular problem's objects happen to use.
+
+    ``names`` always contains :data:`ROOT_TYPE_NAME`, appended by
+    :func:`build_type_schema` if the supplied names omit it -- mirroring how
+    :func:`build_predicate_schema` always guarantees :data:`OBJECT_PREDICATE`.
+    """
+
+    names: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if len(set(self.names)) != len(self.names):
+            raise ValueError("SparseAtomTypeSchema type names must be unique")
+
+    @cached_property
+    def name_to_id(self) -> dict[str, int]:
+        """Map each declared type name to its fixed schema index."""
+        return {name: index for index, name in enumerate(self.names)}
+
+
+def build_type_schema(type_names: Iterable[str]) -> SparseAtomTypeSchema:
+    """Build a :class:`SparseAtomTypeSchema` from declared domain type names.
+
+    Ensures the fixed :data:`ROOT_TYPE_NAME` entry is present, appending it
+    (as the last entry) if the supplied names do not already declare it --
+    every PDDL type hierarchy is rooted at it, even when a domain's own
+    ``:types`` section never spells it out. Raises ``ValueError`` if a
+    supplied type name is duplicated.
+    """
+
+    names: list[str] = []
+    seen: set[str] = set()
+    root_declared = False
+    for name in type_names:
+        name = str(name)
+        if name in seen:
+            raise ValueError(f"duplicate type name in schema: {name!r}")
+        seen.add(name)
+        if name == ROOT_TYPE_NAME:
+            root_declared = True
+        names.append(name)
+    if not root_declared:
+        names.append(ROOT_TYPE_NAME)
+    return SparseAtomTypeSchema(names=tuple(names))
+
+
+# --------------------------------------------------------------------------
 # Carrier
 # --------------------------------------------------------------------------
 
@@ -338,8 +430,12 @@ class SparseAtomCompositionEncoding:
     already "batch of one": ``atom_batch``/``object_batch`` are all zero and
     ``goal_available`` has one entry.
 
-    ``object_type_ids``/``occurrence_type_ids`` are always ``None`` -- see the
-    module docstring's "Known gap" section (R13).
+    ``object_type_ids`` is populated whenever the source backend can resolve
+    object types (pymimir) and ``None`` when it cannot (pytyr); shape
+    ``[O]``, one domain-scoped type id per object, index-aligned with
+    ``object_batch``. ``occurrence_type_ids`` is a separate, still-unaddressed
+    R13 component and is always ``None`` -- see the module docstring's
+    "Object types" section.
     """
 
     atom_args: Tensor
@@ -446,6 +542,8 @@ def encode_sparse_atom_facts(
     schema: SparseAtomPredicateSchema,
     *,
     exact_tuple_exchange: bool = False,
+    object_types: Sequence[str] | None = None,
+    type_schema: SparseAtomTypeSchema | None = None,
 ) -> SparseAtomCompositionEncoding:
     """Encode one state (plus optional goal) into a sparse atom-composition graph.
 
@@ -471,7 +569,21 @@ def encode_sparse_atom_facts(
     backend ever supplies ``object(star)`` -- so its carrier is always
     synthesized, and lands in the auxiliary channel since it is an encoding
     artefact rather than a true fact.
+
+    R13 object types: ``object_types`` (one declared type name per entry of
+    ``objects``, e.g. ``StateView.object_types``) and ``type_schema`` (e.g.
+    :func:`build_type_schema` applied to ``StateView.type_names``) must be
+    supplied together or not at all -- either produces a real
+    ``object_type_ids`` on the result, or neither does. When supplied, the
+    synthesized nullary star object (if any) is typed as
+    :data:`ROOT_TYPE_NAME`, since it is not a real PDDL object and every id
+    in the schema must be a genuine, resolvable type.
     """
+
+    if (object_types is None) != (type_schema is None):
+        raise ValueError(
+            "object_types and type_schema must be supplied together, or not at all"
+        )
 
     zeta = goal_atoms is not None
     goal_list = list(goal_atoms) if zeta else []
@@ -481,11 +593,35 @@ def encode_sparse_atom_facts(
     )
     object_names = list(objects)
     object_index = {name: index for index, name in enumerate(object_names)}
+    num_real_objects = len(object_names)
     star_id: int | None = None
     if needs_star:
         star_id = len(object_names)
         object_names.append(NULLARY_OBJECT_NAME)
     num_objects = len(object_names)
+
+    object_type_ids: Tensor | None = None
+    if object_types is not None:
+        assert type_schema is not None  # guaranteed by the check above
+        if len(object_types) != num_real_objects:
+            raise ValueError(
+                "object_types must have exactly one entry per object in "
+                f"`objects` ({num_real_objects}), got {len(object_types)}"
+            )
+
+        def type_id_for(name: str) -> int:
+            found = type_schema.name_to_id.get(name)
+            if found is None:
+                raise ValueError(
+                    f"unknown object type {name!r}: not in the supplied type schema"
+                )
+            return found
+
+        type_id_list = [type_id_for(str(name)) for name in object_types]
+        if star_id is not None:
+            # build_type_schema guarantees ROOT_TYPE_NAME is always present.
+            type_id_list.append(type_schema.name_to_id[ROOT_TYPE_NAME])
+        object_type_ids = torch.tensor(type_id_list, dtype=torch.long)
 
     def resolve_args(atom: Atom) -> tuple[int, ...]:
         if not atom.args:
@@ -728,6 +864,7 @@ def encode_sparse_atom_facts(
         goal_available=goal_available,
         object_carrier_occurrence_ids=object_carrier_occurrence_ids,
         counterpart_occurrence_ids=counterpart_occurrence_ids,
+        object_type_ids=object_type_ids,
     )
 
 
@@ -746,6 +883,16 @@ def batch_sparse_atom_encodings(
     occurrences, pairs, pair-support entries, graphs) before concatenation,
     and each input graph's internal structure -- already validated at
     encode time -- is preserved verbatim.
+
+    ``object_type_ids`` is a domain-scoped categorical *value* (like
+    ``atom_predicate_ids``), not a per-graph local index, so it is
+    concatenated verbatim with no offsetting -- unlike ``atom_args`` or
+    ``pair_objects``, which index into a per-graph object array and so are
+    rebased by ``object_offset``. It must be present on every encoding or
+    none: unlike ``counterpart_occurrence_ids`` (whose ``-1`` filler the
+    consumer explicitly treats as "no counterpart"), every id in
+    ``[0, num_object_types)`` is a genuine declared type, so there is no
+    spare sentinel value to fill in for a graph that has none.
     """
 
     if not encodings:
@@ -756,6 +903,15 @@ def batch_sparse_atom_encodings(
     any_counterparts = any(
         encoding.counterpart_occurrence_ids is not None for encoding in encodings
     )
+    object_type_flags = {encoding.object_type_ids is not None for encoding in encodings}
+    if len(object_type_flags) > 1:
+        raise ValueError(
+            "batch_sparse_atom_encodings requires object_type_ids to be "
+            "present on every encoding or none of them: there is no "
+            "principled filler value for a graph with no object types once "
+            "other graphs in the batch declare real ones"
+        )
+    any_object_types = True in object_type_flags
 
     atom_args_parts: list[Tensor] = []
     atom_offset_tail_parts: list[Tensor] = [torch.zeros(1, dtype=torch.long)]
@@ -775,6 +931,7 @@ def batch_sparse_atom_encodings(
     goal_available_parts: list[Tensor] = []
     object_carrier_occurrence_id_parts: list[Tensor] = []
     counterpart_parts: list[Tensor] = []
+    object_type_id_parts: list[Tensor] = []
 
     object_offset = 0
     occurrence_offset = 0
@@ -824,6 +981,9 @@ def batch_sparse_atom_encodings(
             else:
                 local = torch.full((num_occurrences,), -1, dtype=torch.long)
             counterpart_parts.append(local)
+        if any_object_types:
+            assert encoding.object_type_ids is not None  # uniform, checked above
+            object_type_id_parts.append(encoding.object_type_ids)
 
         object_offset += num_objects
         occurrence_offset += num_occurrences
@@ -853,6 +1013,7 @@ def batch_sparse_atom_encodings(
         counterpart_occurrence_ids=(
             torch.cat(counterpart_parts) if any_counterparts else None
         ),
+        object_type_ids=(torch.cat(object_type_id_parts) if any_object_types else None),
     )
 
 
@@ -889,6 +1050,13 @@ class SparseAtomCompositionEncoder:
     predicate/channel labelling differs. Use :attr:`predicate_arities` and
     :attr:`num_channels` to size a consumer model for whichever mode is
     active.
+
+    :attr:`type_schema` is likewise fixed at construction time from
+    ``self.view.type_names`` (``None`` when the backend cannot resolve
+    object types -- see ``StateView.object_types``); use :attr:`num_object_types`
+    to size ``SparseAtomCompositionGNN(num_object_types=...)`` for either
+    case (it is ``1`` exactly when :attr:`type_schema` is ``None``, matching
+    that constructor's own untyped default).
     """
 
     CHANNEL_NAMES = CHANNEL_NAMES
@@ -909,6 +1077,10 @@ class SparseAtomCompositionEncoder:
             [(info.name, info.arity) for info in self.view.predicates],
             status_encoding=status_encoding,
         )
+        type_names = self.view.type_names
+        self.type_schema: SparseAtomTypeSchema | None = (
+            build_type_schema(type_names) if type_names is not None else None
+        )
         self.exact_tuple_exchange = bool(exact_tuple_exchange)
 
     @property
@@ -928,6 +1100,22 @@ class SparseAtomCompositionEncoder:
     def num_channels(self) -> int:
         """Channel cardinality, ready for ``SparseAtomCompositionGNN(num_channels=...)``."""
         return self.schema.num_channels
+
+    @property
+    def type_names(self) -> tuple[str, ...] | None:
+        """Declared object-type vocabulary, or ``None`` when unavailable."""
+        return self.type_schema.names if self.type_schema is not None else None
+
+    @property
+    def num_object_types(self) -> int:
+        """Object-type cardinality, ready for ``SparseAtomCompositionGNN(num_object_types=...)``.
+
+        ``1`` when object types are unavailable, matching that constructor's
+        own untyped default -- ``object_type_ids`` is ``None`` in that case
+        too, so the model's fallback (every object treated as type ``0``)
+        agrees with this cardinality either way.
+        """
+        return len(self.type_schema.names) if self.type_schema is not None else 1
 
     def _current_atoms(self, state: Any) -> list[Atom]:
         return [*self.view.static_facts, *self.view.state_facts(state)]
@@ -957,6 +1145,8 @@ class SparseAtomCompositionEncoder:
             goal_atoms,
             self.schema,
             exact_tuple_exchange=self.exact_tuple_exchange,
+            object_types=self.view.object_types,
+            type_schema=self.type_schema,
         )
 
     def encode_batch(
@@ -997,6 +1187,7 @@ def validate_sparse_atom_composition(
     *,
     predicate_arities: Sequence[int] | None = None,
     num_channels: int = len(CHANNEL_NAMES),
+    num_object_types: int | None = None,
 ) -> None:
     """Assert every structural invariant ``SparseAtomCompositionGNN.prepare()`` checks.
 
@@ -1005,7 +1196,10 @@ def validate_sparse_atom_composition(
     works too). Raises ``ValueError`` naming the first violated invariant;
     returns ``None`` on success. Pass ``predicate_arities`` (the sequence a
     consumer model would be constructed with) to additionally check that
-    every atom's arity matches its declared base predicate.
+    every atom's arity matches its declared base predicate, and
+    ``num_object_types`` (e.g. ``SparseAtomCompositionEncoder.num_object_types``)
+    to additionally check that every ``object_type_ids`` entry, if present,
+    is in range.
 
     This function is a standalone reimplementation of the checks in
     ``relmo.models.sparse_atom_composition.SparseAtomCompositionGNN.prepare``,
@@ -1039,6 +1233,7 @@ def validate_sparse_atom_composition(
         encoding, "object_carrier_occurrence_ids", None
     )
     counterpart_occurrence_ids = getattr(encoding, "counterpart_occurrence_ids", None)
+    object_type_ids = getattr(encoding, "object_type_ids", None)
 
     q = int(atom_predicate_ids.numel())
     num_objects = int(object_batch.numel())
@@ -1304,6 +1499,22 @@ def validate_sparse_atom_composition(
                 "object carrier occurrences must stay within their object graphs"
             )
 
+    if object_type_ids is not None:
+        object_type_ids = _as_long(object_type_ids)
+        if int(object_type_ids.numel()) != num_objects:
+            raise ValueError("object_type_ids must contain one entry per object")
+        if (
+            num_object_types is not None
+            and int(object_type_ids.numel())
+            and (
+                int(object_type_ids.min().item()) < 0
+                or int(object_type_ids.max().item()) >= num_object_types
+            )
+        ):
+            raise ValueError(
+                "object_type_ids references a type outside the model schema"
+            )
+
 
 __all__ = [
     "CHANNEL_AUXILIARY",
@@ -1314,13 +1525,16 @@ __all__ = [
     "CHANNEL_UNSATISFIED",
     "NULLARY_OBJECT_NAME",
     "OBJECT_PREDICATE",
+    "ROOT_TYPE_NAME",
     "STATUS_ENCODING_CHANNEL",
     "STATUS_ENCODING_VOCABULARY",
     "SparseAtomCompositionEncoder",
     "SparseAtomCompositionEncoding",
     "SparseAtomPredicateSchema",
+    "SparseAtomTypeSchema",
     "batch_sparse_atom_encodings",
     "build_predicate_schema",
+    "build_type_schema",
     "encode_sparse_atom_facts",
     "validate_sparse_atom_composition",
 ]
