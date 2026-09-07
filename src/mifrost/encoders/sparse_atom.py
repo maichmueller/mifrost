@@ -110,7 +110,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import torch
 from torch import Tensor
@@ -377,18 +377,79 @@ class SparseAtomTypeSchema:
     """
 
     names: tuple[str, ...]
+    bases: Mapping[str, tuple[str, ...]] | None = None
 
     def __post_init__(self) -> None:
         if len(set(self.names)) != len(self.names):
             raise ValueError("SparseAtomTypeSchema type names must be unique")
+        if self.bases is None:
+            return
+        known = set(self.names)
+        unknown = sorted(set(self.bases) - known)
+        if unknown:
+            raise ValueError(f"bases names types absent from the schema: {unknown}")
+        dangling = sorted(
+            {base for parents in self.bases.values() for base in parents} - known
+        )
+        if dangling:
+            raise ValueError(
+                f"bases refers to types absent from the schema: {dangling}"
+            )
 
     @cached_property
     def name_to_id(self) -> dict[str, int]:
         """Map each declared type name to its fixed schema index."""
         return {name: index for index, name in enumerate(self.names)}
 
+    @cached_property
+    def ancestor_matrix(self) -> tuple[tuple[int, ...], ...]:
+        """Square 0/1 closure of the type hierarchy, indexed by type id.
 
-def build_type_schema(type_names: Iterable[str]) -> SparseAtomTypeSchema:
+        ``ancestor_matrix[t][a]`` is 1 when type ``a`` is ``t`` itself or one
+        of its (transitive) ancestors. The diagonal is therefore always 1:
+        a type is its own ancestor. That is not a convention but a
+        requirement of the consumer -- a model that embeds
+        ``A @ E`` keeps a free per-type row only because of the diagonal, so
+        a zero diagonal would silently remove capacity rather than merely
+        change the prior.
+
+        Returns the identity when :attr:`bases` is ``None`` (no hierarchy
+        known), which makes ``A @ E == E`` -- the leaf-only encoding.
+
+        Raises ``ValueError`` on a cyclic hierarchy; PDDL type declarations
+        are a DAG, so a cycle means the backend handed us something
+        malformed rather than an exotic-but-valid domain.
+        """
+
+        index = self.name_to_id
+        size = len(self.names)
+        rows = [[0] * size for _ in range(size)]
+        for position in range(size):
+            rows[position][position] = 1
+        if self.bases is None:
+            return tuple(tuple(row) for row in rows)
+
+        def close(name: str, seen: frozenset[str]) -> set[str]:
+            if name in seen:
+                raise ValueError(
+                    f"cyclic PDDL type hierarchy through {name!r}: {sorted(seen)}"
+                )
+            out: set[str] = set()
+            for parent in self.bases.get(name, ()):
+                out.add(parent)
+                out |= close(parent, seen | {name})
+            return out
+
+        for name in self.names:
+            for ancestor in close(name, frozenset()):
+                rows[index[name]][index[ancestor]] = 1
+        return tuple(tuple(row) for row in rows)
+
+
+def build_type_schema(
+    type_names: Iterable[str],
+    type_bases: Mapping[str, Iterable[str]] | None = None,
+) -> SparseAtomTypeSchema:
     """Build a :class:`SparseAtomTypeSchema` from declared domain type names.
 
     Ensures the fixed :data:`ROOT_TYPE_NAME` entry is present, appending it
@@ -396,6 +457,13 @@ def build_type_schema(type_names: Iterable[str]) -> SparseAtomTypeSchema:
     every PDDL type hierarchy is rooted at it, even when a domain's own
     ``:types`` section never spells it out. Raises ``ValueError`` if a
     supplied type name is duplicated.
+
+    ``type_bases`` optionally supplies each type's direct parents (see
+    :attr:`~mifrost.encoders.custom.state_view.StateView.type_bases`), which
+    is what makes :attr:`SparseAtomTypeSchema.ancestor_matrix` informative;
+    without it the schema reports the identity and consumers fall back to the
+    leaf-only encoding. A :data:`ROOT_TYPE_NAME` appended here is recorded as
+    a root (no parents).
     """
 
     names: list[str] = []
@@ -411,7 +479,14 @@ def build_type_schema(type_names: Iterable[str]) -> SparseAtomTypeSchema:
         names.append(name)
     if not root_declared:
         names.append(ROOT_TYPE_NAME)
-    return SparseAtomTypeSchema(names=tuple(names))
+    if type_bases is None:
+        return SparseAtomTypeSchema(names=tuple(names))
+    resolved = {
+        str(name): tuple(str(base) for base in bases)
+        for name, bases in type_bases.items()
+    }
+    resolved.setdefault(ROOT_TYPE_NAME, ())
+    return SparseAtomTypeSchema(names=tuple(names), bases=resolved)
 
 
 # --------------------------------------------------------------------------
@@ -1079,7 +1154,9 @@ class SparseAtomCompositionEncoder:
         )
         type_names = self.view.type_names
         self.type_schema: SparseAtomTypeSchema | None = (
-            build_type_schema(type_names) if type_names is not None else None
+            build_type_schema(type_names, self.view.type_bases)
+            if type_names is not None
+            else None
         )
         self.exact_tuple_exchange = bool(exact_tuple_exchange)
 
@@ -1105,6 +1182,22 @@ class SparseAtomCompositionEncoder:
     def type_names(self) -> tuple[str, ...] | None:
         """Declared object-type vocabulary, or ``None`` when unavailable."""
         return self.type_schema.names if self.type_schema is not None else None
+
+    @property
+    def type_ancestors(self) -> tuple[tuple[int, ...], ...] | None:
+        """Square 0/1 ancestor closure over :attr:`type_names`, or ``None``.
+
+        Ready for ``SparseAtomCompositionGNN(type_ancestors=...)``, which
+        reparametrises its type-embedding table as ``A @ E`` so that types
+        sharing a supertype share an additive component. ``None`` when
+        object types are unavailable at all; the identity when the backend
+        gives names but no hierarchy, which reproduces the leaf-only
+        encoding exactly.
+        """
+
+        return (
+            self.type_schema.ancestor_matrix if self.type_schema is not None else None
+        )
 
     @property
     def num_object_types(self) -> int:

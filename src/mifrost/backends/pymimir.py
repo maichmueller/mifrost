@@ -108,13 +108,31 @@ class PymimirSnapshotReader:
             ActionSchemaKey(str(action.get_name()), int(action.get_arity()))
             for action in domain.get_actions()
         )
-        types = (
-            str(value.get_name())
+        declared = [
+            value
             for value in domain.get_types()
             if str(value.get_name()) != _NUMBER_TYPE_NAME
-        )
+        ]
+        types = [str(value.get_name()) for value in declared]
+        # `Type.get_bases()` yields *direct* parents only (spanner's `man`
+        # reports `['locatable']`, not `['locatable', 'object']`); the
+        # transitive closure is built downstream where type ids are assigned.
+        # `number` is filtered above, so drop it here too rather than leave a
+        # parent edge pointing at a name absent from the vocabulary.
+        type_bases = {
+            str(value.get_name()): [
+                str(base.get_name())
+                for base in value.get_bases()
+                if str(base.get_name()) != _NUMBER_TYPE_NAME
+            ]
+            for value in declared
+        }
         return DomainSnapshot.canonical(
-            name=domain.get_name(), predicates=predicates, actions=actions, types=types
+            name=domain.get_name(),
+            predicates=predicates,
+            actions=actions,
+            types=types,
+            type_bases=type_bases,
         )
 
     def problem_snapshot(self) -> ProblemSnapshot:

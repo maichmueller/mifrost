@@ -300,7 +300,8 @@ class PyTyrSnapshotReader:
         return self._planning_task.get_task()
 
     def domain_snapshot(self) -> DomainSnapshot:
-        # `types`/`object_types` are deliberately omitted (left `None`) below:
+        # `types`/`type_bases`/`object_types` are deliberately omitted (left
+        # `None`) below:
         # this translated `planning.Domain`/`planning.Object` binding carries
         # no type surface at all -- `Domain` has no `get_types()`, and
         # `Object`/`Type` expose only `get_index`/`get_name`. This is not a

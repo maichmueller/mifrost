@@ -24,6 +24,7 @@ from mifrost.encoders.sparse_atom import (
     ROOT_TYPE_NAME,
     STATUS_ENCODING_VOCABULARY,
     SparseAtomPredicateSchema,
+    SparseAtomTypeSchema,
     batch_sparse_atom_encodings,
     build_predicate_schema,
     build_type_schema,
@@ -976,3 +977,84 @@ def test_validator_rejects_out_of_range_object_type_id() -> None:
             predicate_arities=schema.arities,
             num_object_types=len(type_schema.names),
         )
+
+
+# --------------------------------------------------------------------------
+# Type hierarchy: ancestor closure
+# --------------------------------------------------------------------------
+
+
+def _logistics_bases() -> dict[str, tuple[str, ...]]:
+    """The logistics :types section -- the shallowest genuinely 3-deep case."""
+    return {
+        "object": (),
+        "locatable": ("object",),
+        "city": ("object",),
+        "location": ("object",),
+        "package": ("locatable",),
+        "vehicle": ("locatable",),
+        "truck": ("vehicle",),
+        "airplane": ("vehicle",),
+        "airport": ("location",),
+    }
+
+
+def test_ancestor_matrix_is_the_identity_without_bases() -> None:
+    schema = build_type_schema(["truck", "package"])
+    matrix = schema.ancestor_matrix
+    size = len(schema.names)
+    assert matrix == tuple(
+        tuple(int(row == col) for col in range(size)) for row in range(size)
+    )
+
+
+def test_ancestor_matrix_closes_the_logistics_hierarchy_transitively() -> None:
+    bases = _logistics_bases()
+    schema = build_type_schema(bases, bases)
+    index = schema.name_to_id
+    matrix = schema.ancestor_matrix
+
+    def ancestors(name: str) -> set[str]:
+        return {n for n in schema.names if matrix[index[name]][index[n]]}
+
+    # truck's parent is vehicle, whose parent is locatable: the closure must
+    # reach `object` two hops past the direct edge the backend reports.
+    assert ancestors("truck") == {"truck", "vehicle", "locatable", "object"}
+    assert ancestors("airplane") == {"airplane", "vehicle", "locatable", "object"}
+    # This is the whole point of the hierarchy in logistics: truck and
+    # airplane share `vehicle`, package does not.
+    assert ancestors("package") == {"package", "locatable", "object"}
+    assert "vehicle" not in ancestors("package")
+    assert ancestors("object") == {"object"}
+
+
+def test_ancestor_matrix_diagonal_is_always_set() -> None:
+    bases = _logistics_bases()
+    schema = build_type_schema(bases, bases)
+    matrix = schema.ancestor_matrix
+    # Load-bearing: a consumer embedding `A @ E` keeps a free per-type row
+    # only because of the diagonal, so a zero there would remove capacity
+    # rather than merely change the prior.
+    assert all(matrix[i][i] == 1 for i in range(len(schema.names)))
+
+
+def test_ancestor_matrix_rejects_a_cyclic_hierarchy() -> None:
+    schema = build_type_schema(["a", "b"], {"a": ("b",), "b": ("a",)})
+    with pytest.raises(ValueError, match="cyclic PDDL type hierarchy"):
+        _ = schema.ancestor_matrix
+
+
+def test_type_schema_rejects_bases_naming_unknown_types() -> None:
+    with pytest.raises(ValueError, match="absent from the schema"):
+        SparseAtomTypeSchema(names=("object", "truck"), bases={"lorry": ("object",)})
+
+
+def test_type_schema_rejects_bases_pointing_at_unknown_parents() -> None:
+    with pytest.raises(ValueError, match="absent from the schema"):
+        SparseAtomTypeSchema(names=("object", "truck"), bases={"truck": ("vehicle",)})
+
+
+def test_build_type_schema_records_an_appended_root_as_a_root() -> None:
+    schema = build_type_schema(["truck"], {"truck": ()})
+    assert ROOT_TYPE_NAME in schema.names
+    assert schema.bases[ROOT_TYPE_NAME] == ()

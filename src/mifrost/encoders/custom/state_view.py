@@ -9,7 +9,7 @@ files produce identical records.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -296,6 +296,7 @@ class StateView:
         self._objects: list[str] = list(problem.objects)
         self._object_types: tuple[str, ...] | None = problem.object_types
         self._type_names: tuple[str, ...] | None = domain.types
+        self._type_bases: Mapping[str, tuple[str, ...]] | None = domain.type_bases
         self._predicates: tuple[PredicateInfo, ...] = tuple(
             PredicateInfo(key.name, key.arity, key.category.value)
             for key in domain.predicates
@@ -338,6 +339,26 @@ class StateView:
         if self._type_names is None:
             return None
         return list(self._type_names)
+
+    @property
+    def type_bases(self) -> dict[str, tuple[str, ...]] | None:
+        """Direct parents of each declared type, or ``None`` when unavailable.
+
+        One entry per name in :attr:`type_names`; a root type maps to an
+        empty tuple. These are the *direct* edges of the PDDL type
+        hierarchy, not its transitive closure -- ``spanner``'s ``man`` maps
+        to ``("locatable",)``, not ``("locatable", "object")``. Consumers
+        that need ancestors close the relation themselves, since the closure
+        is only useful once type *ids* have been assigned (see
+        ``mifrost.encoders.sparse_atom.SparseAtomTypeSchema.ancestor_matrix``).
+
+        ``None`` exactly when :attr:`type_names` is ``None``, for the same
+        backend reason.
+        """
+
+        if self._type_bases is None:
+            return None
+        return {name: tuple(bases) for name, bases in self._type_bases.items()}
 
     @property
     def object_types(self) -> list[str] | None:

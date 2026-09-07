@@ -449,3 +449,34 @@ def test_pytyr_backend_has_no_object_types() -> None:
     assert encoder.type_schema is None
     assert encoder.type_names is None
     assert encoder.num_object_types == 1
+
+
+def test_spanner_type_ancestors_close_the_declared_hierarchy(spanner_problem) -> None:
+    encoder = SparseAtomCompositionEncoder(spanner_problem)
+    names = encoder.type_names
+    matrix = encoder.type_ancestors
+    assert matrix is not None
+    index = {name: position for position, name in enumerate(names)}
+
+    def ancestors(name: str) -> set[str]:
+        return {other for other in names if matrix[index[name]][index[other]]}
+
+    # spanner declares man/nut/spanner - locatable and location - object.
+    for leaf in ("man", "nut", "spanner"):
+        assert ancestors(leaf) == {leaf, "locatable", "object"}
+    assert ancestors("location") == {"location", "object"}
+    assert all(matrix[i][i] == 1 for i in range(len(names)))
+
+
+def test_blocks_untyped_domain_yields_an_identity_ancestor_matrix(
+    blocks_problem,
+) -> None:
+    encoder = SparseAtomCompositionEncoder(blocks_problem)
+    matrix = encoder.type_ancestors
+    assert matrix is not None
+    size = len(encoder.type_names)
+    # An untyped domain resolves every object to the root type alone, so the
+    # closure has nothing to add and `A @ E == E` reproduces leaf-only.
+    assert matrix == tuple(
+        tuple(int(row == col) for col in range(size)) for row in range(size)
+    )

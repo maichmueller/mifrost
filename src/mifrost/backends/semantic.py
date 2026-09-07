@@ -7,9 +7,10 @@ specification for the compact native representation used by encoders.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
 
@@ -121,12 +122,20 @@ class DomainSnapshot:
     ``predicates``/``actions`` already have -- and ``None`` when the backend
     cannot resolve type declarations at all (see
     ``mifrost.backends.pytyr.PyTyrSnapshotReader.domain_snapshot``).
+
+    ``type_bases`` records each declared type's *direct* parents, one entry
+    per name in ``types``. It is the edge set of the PDDL type hierarchy,
+    left untransitive on purpose: the closure is a derived quantity, and the
+    consumer that needs it (``SparseAtomTypeSchema.ancestor_matrix``) also
+    owns the type-id assignment the closure has to be indexed by. A root
+    type maps to an empty tuple. ``None`` exactly when ``types`` is ``None``.
     """
 
     name: str
     predicates: tuple[PredicateKey, ...]
     actions: tuple[ActionSchemaKey, ...]
     types: tuple[str, ...] | None = None
+    type_bases: Mapping[str, tuple[str, ...]] | None = None
 
     @classmethod
     def canonical(
@@ -136,15 +145,43 @@ class DomainSnapshot:
         predicates: Iterable[PredicateKey],
         actions: Iterable[ActionSchemaKey],
         types: Iterable[str] | None = None,
+        type_bases: Mapping[str, Iterable[str]] | None = None,
     ) -> DomainSnapshot:
         resolved_types = (
             None if types is None else tuple(sorted(str(value) for value in types))
         )
+        if type_bases is None:
+            resolved_bases: Mapping[str, tuple[str, ...]] | None = None
+        elif resolved_types is None:
+            raise ValueError("type_bases requires types to be supplied as well")
+        else:
+            known = set(resolved_types)
+            resolved_bases = MappingProxyType(
+                {
+                    name: tuple(sorted(str(base) for base in bases))
+                    for name, bases in sorted(
+                        (str(key), value) for key, value in type_bases.items()
+                    )
+                }
+            )
+            unknown = sorted(set(resolved_bases) - known)
+            if unknown:
+                raise ValueError(
+                    f"type_bases names types absent from the vocabulary: {unknown}"
+                )
+            dangling = sorted(
+                {base for bases in resolved_bases.values() for base in bases} - known
+            )
+            if dangling:
+                raise ValueError(
+                    f"type_bases refers to undeclared parent types: {dangling}"
+                )
         return cls(
             name=str(name),
             predicates=tuple(sorted(predicates, key=_predicate_sort_key)),
             actions=tuple(sorted(actions, key=_action_sort_key)),
             types=resolved_types,
+            type_bases=resolved_bases,
         )
 
 
