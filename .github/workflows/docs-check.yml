@@ -7,6 +7,15 @@ on:
       - "**"
   workflow_dispatch:
 
+env:
+  # Both sides of the MkDocs 2.0 dispute print an advocacy banner on every
+  # `mkdocs` invocation: properdocs (pulled in by mkdocs-gen-files,
+  # mkdocs-literate-nav and mkdocs-section-index) urges switching away from
+  # mkdocs, and mkdocs-material warns against MkDocs 2.0. We stay on mkdocs 1.x
+  # with the Material theme, so silence both rather than clutter build logs.
+  DISABLE_MKDOCS_2_WARNING: "true"
+  NO_MKDOCS_2_WARNING: "true"
+
 jobs:
   docs-check:
     runs-on: ubuntu-latest

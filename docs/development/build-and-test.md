@@ -166,3 +166,14 @@ Strict docs build (fails on warnings):
 ```bash
 mkdocs build --strict
 ```
+
+Both sides of the MkDocs 2.0 dispute print an advocacy banner on every
+`mkdocs` invocation: `properdocs` (a transitive dependency of `mkdocs-gen-files`,
+`mkdocs-literate-nav` and `mkdocs-section-index`) urges switching away from
+`mkdocs`, and `mkdocs-material` warns against MkDocs 2.0. We stay on `mkdocs`
+1.x with the Material theme, and `docs/requirements.txt` caps `mkdocs<2`.
+Export both opt-outs to silence the banners locally -- CI already sets them:
+
+```bash
+export DISABLE_MKDOCS_2_WARNING=true NO_MKDOCS_2_WARNING=true
+```
