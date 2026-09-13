@@ -156,11 +156,13 @@ On `blocks/smedium` with the single applicable action supplied, the
 objects-only graph is 5 nodes — `a`, `b`, `c`, `@(unstack a b)`, `<nullary>` —
 with the anchor still last.
 
-One consequence for the consumer: because nothing is reified, `x_ids` in this
-view is information-free — every object row is zeros and the anchor row is
-`[6, 0, 0, 0, 0, 0]`. All the state content sits on `edge_attr` and in the
-tuple table, so this view needs an edge-conditioned layer or a model that
-reads the instance table. The how-to has the
+One consequence for the consumer: because no *fact* is reified, `x_ids` in
+this view carries almost nothing — every object row is zeros and the anchor
+row is `[6, 0, 0, 0, 0, 0]`. Action rows are the sole exception
+(`@(unstack a b)` is `[5, 11, 0, 0, 0, 3]`), so when no action is supplied
+`x_ids` is information-free outright. All the *state* content sits on
+`edge_attr` and in the tuple table, so this view needs an edge-conditioned
+layer or a model that reads the instance table. The how-to has the
 [recipe](../how-to/consume-with-vanilla-gnns.md#objects-only-facades-the-content-is-on-the-edges).
 
 Pick this when you want compact object-only graphs, are happy to read instance
