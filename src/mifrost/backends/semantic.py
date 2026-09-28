@@ -8,10 +8,10 @@ specification for the compact native representation used by encoders.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol, TypeVar, runtime_checkable
 
 
 class PredicateCategory(StrEnum):
@@ -131,6 +131,10 @@ class DomainSnapshot:
     type maps to an empty tuple. ``None`` exactly when ``types`` is ``None``.
     """
 
+    #: Fields a backend may leave ``None`` because it cannot resolve them at
+    #: all; see :func:`shared_capabilities`.
+    OPTIONAL_CAPABILITIES: ClassVar[tuple[str, ...]] = ("types", "type_bases")
+
     name: str
     predicates: tuple[PredicateKey, ...]
     actions: tuple[ActionSchemaKey, ...]
@@ -197,6 +201,10 @@ class ProblemSnapshot:
     backends support this and why.
     """
 
+    #: Fields a backend may leave ``None`` because it cannot resolve them at
+    #: all; see :func:`shared_capabilities`.
+    OPTIONAL_CAPABILITIES: ClassVar[tuple[str, ...]] = ("object_types",)
+
     name: str
     domain_name: str
     objects: tuple[str, ...]
@@ -240,6 +248,36 @@ class ProblemSnapshot:
             goals=tuple(sorted(goals, key=_literal_sort_key)),
             object_types=resolved_types,
         )
+
+
+_CapabilitySnapshot = TypeVar("_CapabilitySnapshot", DomainSnapshot, ProblemSnapshot)
+
+
+def shared_capabilities(
+    left: _CapabilitySnapshot, right: _CapabilitySnapshot
+) -> tuple[_CapabilitySnapshot, _CapabilitySnapshot]:
+    """Project two snapshots onto the fields both of their backends resolve.
+
+    An optional capability (see ``OPTIONAL_CAPABILITIES``) is ``None`` when a
+    backend cannot resolve it at all -- PyTyr has no PDDL type surface, for
+    example -- which is a capability gap, not a semantic disagreement. The
+    returned pair clears every optional field that either side leaves
+    unresolved and keeps the rest untouched, so ``==`` on the result is the
+    cross-backend parity contract: everything mandatory must agree, and so
+    must every optional field that both backends do resolve.
+    """
+
+    if type(left) is not type(right):
+        raise TypeError(
+            "shared_capabilities compares snapshots of one kind, got "
+            f"{type(left).__name__} and {type(right).__name__}"
+        )
+    unresolved: dict[str, Any] = {
+        name: None
+        for name in left.OPTIONAL_CAPABILITIES
+        if getattr(left, name) is None or getattr(right, name) is None
+    }
+    return replace(left, **unresolved), replace(right, **unresolved)
 
 
 @dataclass(frozen=True, slots=True)

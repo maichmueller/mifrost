@@ -15,6 +15,7 @@ from .semantic import (
     ProblemSnapshot,
     SnapshotReader,
     StateSnapshot,
+    shared_capabilities,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "ProblemSnapshot",
     "SnapshotReader",
     "StateSnapshot",
+    "shared_capabilities",
 ]

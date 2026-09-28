@@ -11,6 +11,7 @@ from mifrost.backends import (
     PredicateCategory,
     PredicateKey,
     ProblemSnapshot,
+    shared_capabilities,
 )
 
 
@@ -140,3 +141,63 @@ def test_problem_snapshot_rejects_mismatched_object_types_length() -> None:
             static_atoms=[],
             goals=[],
         )
+
+
+def _typed_domain(types: list[str] | None) -> DomainSnapshot:
+    return DomainSnapshot.canonical(
+        name="d",
+        predicates=[PredicateKey(PredicateCategory.FLUENT, "at", 2)],
+        actions=[ActionSchemaKey("move", 1)],
+        types=types,
+        type_bases=None if types is None else {name: [] for name in types},
+    )
+
+
+def test_shared_capabilities_ignores_a_one_sided_capability_gap() -> None:
+    resolved = _typed_domain(["object", "truck"])
+    unresolved = _typed_domain(None)
+
+    left, right = shared_capabilities(resolved, unresolved)
+
+    assert left == right
+    assert left.types is None and left.type_bases is None
+    # The inputs themselves are left untouched.
+    assert resolved.types == ("object", "truck")
+
+
+def test_shared_capabilities_still_compares_capabilities_both_sides_resolve() -> None:
+    left, right = shared_capabilities(
+        _typed_domain(["object", "truck"]), _typed_domain(["object", "plane"])
+    )
+
+    assert left != right
+    assert left.types == ("object", "truck")
+
+
+def test_shared_capabilities_never_masks_mandatory_fields() -> None:
+    def problem(objects: list[str], types: list[str] | None) -> ProblemSnapshot:
+        return ProblemSnapshot.canonical(
+            name="p",
+            domain_name="d",
+            objects=objects,
+            object_types=types,
+            static_atoms=[],
+            goals=[],
+        )
+
+    typed, untyped = shared_capabilities(
+        problem(["a"], ["truck"]), problem(["a"], None)
+    )
+    assert typed == untyped
+
+    left, right = shared_capabilities(problem(["a"], None), problem(["b"], None))
+    assert left != right
+
+
+def test_shared_capabilities_rejects_mixed_snapshot_kinds() -> None:
+    problem = ProblemSnapshot.canonical(
+        name="p", domain_name="d", objects=[], static_atoms=[], goals=[]
+    )
+
+    with pytest.raises(TypeError, match="one kind"):
+        shared_capabilities(_typed_domain(None), problem)

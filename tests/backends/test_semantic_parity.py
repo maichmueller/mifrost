@@ -21,7 +21,11 @@ from pytyr.planning.lifted import (
 
 from mifrost.backends.pymimir import PymimirSnapshotReader
 from mifrost.backends.pytyr import PyTyrSnapshotReader
-from mifrost.backends.semantic import PredicateCategory, SnapshotReader
+from mifrost.backends.semantic import (
+    PredicateCategory,
+    SnapshotReader,
+    shared_capabilities,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +38,13 @@ PARITY_CASES = (
     ("delivery", "instance_2x2_p-1_0"),
     ("reward", "instance_3x3_0"),
 )
+
+
+def _assert_semantic_parity(expected: Any, actual: Any) -> None:
+    """Snapshots agree on every field that both backends resolve."""
+
+    expected, actual = shared_capabilities(expected, actual)
+    assert expected == actual
 
 
 def _pddl_paths(domain: str, problem: str) -> tuple[Path, Path]:
@@ -172,8 +183,12 @@ def test_readers_satisfy_backend_neutral_contract(backend_pair) -> None:
 def test_domain_and_problem_snapshots_have_semantic_parity(backend_pair) -> None:
     pymimir_reader, _, pytyr_reader, _ = backend_pair
 
-    assert pymimir_reader.domain_snapshot() == pytyr_reader.domain_snapshot()
-    assert pymimir_reader.problem_snapshot() == pytyr_reader.problem_snapshot()
+    _assert_semantic_parity(
+        pymimir_reader.domain_snapshot(), pytyr_reader.domain_snapshot()
+    )
+    _assert_semantic_parity(
+        pymimir_reader.problem_snapshot(), pytyr_reader.problem_snapshot()
+    )
 
 
 @pytest.mark.parametrize(("domain", "problem"), PARITY_CASES)
@@ -184,8 +199,12 @@ def test_domain_problem_and_root_state_parity_across_fixtures(
         domain, problem
     )
 
-    assert pymimir_reader.domain_snapshot() == pytyr_reader.domain_snapshot()
-    assert pymimir_reader.problem_snapshot() == pytyr_reader.problem_snapshot()
+    _assert_semantic_parity(
+        pymimir_reader.domain_snapshot(), pytyr_reader.domain_snapshot()
+    )
+    _assert_semantic_parity(
+        pymimir_reader.problem_snapshot(), pytyr_reader.problem_snapshot()
+    )
     assert pymimir_reader.state_snapshot(
         pymimir_problem.get_initial_state()
     ) == pytyr_reader.state_snapshot(pytyr_search.initial_node().get_state())
@@ -215,9 +234,11 @@ def test_typed_equality_negative_goal_and_derived_fact_parity(
         tmp_path
     )
 
-    assert pymimir_reader.domain_snapshot() == pytyr_reader.domain_snapshot()
+    _assert_semantic_parity(
+        pymimir_reader.domain_snapshot(), pytyr_reader.domain_snapshot()
+    )
     pymimir_problem_snapshot = pymimir_reader.problem_snapshot()
-    assert pymimir_problem_snapshot == pytyr_reader.problem_snapshot()
+    _assert_semantic_parity(pymimir_problem_snapshot, pytyr_reader.problem_snapshot())
 
     pymimir_state = pymimir_reader.state_snapshot(pymimir_problem.get_initial_state())
     assert pymimir_state == pytyr_reader.state_snapshot(
@@ -298,7 +319,7 @@ def test_independent_readers_can_alternate_in_one_process(backend_pair) -> None:
     expected_domain = pymimir_reader.domain_snapshot()
     expected_state = pymimir_reader.state_snapshot(pymimir_problem.get_initial_state())
     for _ in range(3):
-        assert pytyr_reader.domain_snapshot() == expected_domain
+        _assert_semantic_parity(expected_domain, pytyr_reader.domain_snapshot())
         assert pymimir_reader.domain_snapshot() == expected_domain
         assert (
             pytyr_reader.state_snapshot(pytyr_search.initial_node().get_state())
