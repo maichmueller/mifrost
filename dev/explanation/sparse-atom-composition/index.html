@@ -1,0 +1,2049 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="High-performance graph encoders for planning states and transitions.">
+      
+      
+      
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/explanation/sparse-atom-composition/">
+      
+      
+        <link rel="prev" href="../derived-encoding-strategies/">
+      
+      
+        <link rel="next" href="../../development/build-and-test/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Sparse Atom-Composition Encoding - mifrost</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sparse-atom-composition-encoding" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mifrost
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Sparse Atom-Composition Encoding
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../tutorials/installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Tutorials
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../how-to/choose-an-encoder/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How-To
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../reference/native/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="../native-first/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Explanation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Development
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mifrost
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/installation/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-encoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/batching-and-streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batching and Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../how-to/choose-an-encoder/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-goals-actions-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/dynamic-graph-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters for Custom Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Guidance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/native/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../native-first/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema-and-tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema and Tensor Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../streaming-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encoder-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-contract-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The contract, at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-plain-is-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why plain is off
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-object-carriers-r4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-object carriers (R4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nullary-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nullary normalization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-encoding-channel-vs-vocabulary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status encoding: channel vs. vocabulary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pairs-and-witnesses-r7r8r9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pairs and witnesses (R7/R8/R9)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batching-r12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching (R12)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#object-types-r13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object types (R13)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-free-core-vs-the-stateview-facade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend-free core vs. the StateView facade
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-contract-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The contract, at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-plain-is-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why plain is off
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-object-carriers-r4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-object carriers (R4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nullary-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nullary normalization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-encoding-channel-vs-vocabulary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status encoding: channel vs. vocabulary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pairs-and-witnesses-r7r8r9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pairs and witnesses (R7/R8/R9)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batching-r12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching (R12)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#object-types-r13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object types (R13)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-free-core-vs-the-stateview-facade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend-free core vs. the StateView facade
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="sparse-atom-composition-encoding">Sparse Atom-Composition Encoding</h1>
+<p><code>mifrost.encoders.sparse_atom</code> is a pure-Python (Stage 1: no native engine
+involved) encoder for the sparse atom-composition architecture described in
+"Sparse Atom Compositions for Relational STRIPS Message Passing". It stores
+one persistent vector per <em>argument occurrence</em> of a represented atom, rather
+than one vector per object, and exposes sparse pair/witness indices so a
+consumer model can compose atoms that share an object pair without
+materializing the dense object-pair universe.</p>
+<p>The consumer is <code>relmo.models.SparseAtomCompositionGNN</code> (in the sibling
+<code>relm</code> repository); <code>SparseAtomCompositionEncoder</code> produces its exact input
+contract, <code>SparseAtomCompositionBatch</code>. <code>mifrost.encoders.sparse_atom.validate_sparse_atom_composition</code>
+is a standalone reimplementation of every invariant that consumer's
+<code>prepare()</code> checks, usable without constructing a model.</p>
+<h2 id="the-contract-at-a-glance">The contract, at a glance</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Shape</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>atom_args</code>, <code>atom_offsets</code></td>
+<td><code>[I]</code>, <code>[Q+1]</code></td>
+<td>Packed ordered atom argument tuples (CSR)</td>
+</tr>
+<tr>
+<td><code>atom_predicate_ids</code></td>
+<td><code>[Q]</code></td>
+<td>Emitted predicate id -- meaning depends on <code>status_encoding</code> (see below)</td>
+</tr>
+<tr>
+<td><code>atom_channel_ids</code></td>
+<td><code>[Q]</code></td>
+<td>One of the four frozen channels in <code>"channel"</code> status encoding; always <code>0</code> in <code>"vocabulary"</code></td>
+</tr>
+<tr>
+<td><code>atom_batch</code>, <code>object_batch</code></td>
+<td><code>[Q]</code>, <code>[O]</code></td>
+<td>Graph id per atom / per object</td>
+</tr>
+<tr>
+<td><code>pair_objects</code></td>
+<td><code>[P, 2]</code></td>
+<td>Ordered, non-diagonal, deduplicated object pairs</td>
+</tr>
+<tr>
+<td><code>pair_support_offsets/atom_ids/i/j</code></td>
+<td>CSR over <code>[S]</code></td>
+<td>Every <code>(atom, i, j)</code> contributing to a pair</td>
+</tr>
+<tr>
+<td><code>composition_triplets</code></td>
+<td><code>[K, 3]</code></td>
+<td><code>(target_pair, left_pair, right_pair)</code> witness rows</td>
+</tr>
+<tr>
+<td><code>atom_pair_ids</code>, <code>atom_pair_occurrence_i/j</code></td>
+<td><code>[M]</code></td>
+<td>Atom-to-pair maps, in global occurrence indices</td>
+</tr>
+<tr>
+<td><code>goal_available</code></td>
+<td><code>[B]</code></td>
+<td>Per-graph zeta flag</td>
+</tr>
+<tr>
+<td><code>object_carrier_occurrence_ids</code></td>
+<td><code>[O]</code></td>
+<td>One <code>object(o)</code> carrier occurrence per object, ordered by object id</td>
+</tr>
+<tr>
+<td><code>counterpart_occurrence_ids</code></td>
+<td><code>[I]</code>, optional</td>
+<td>R11 exact-tuple exchange, <code>-1</code> where none</td>
+</tr>
+<tr>
+<td><code>object_type_ids</code></td>
+<td><code>[O]</code>, optional</td>
+<td>R13 per-object declared PDDL type id; <code>None</code> when the backend cannot resolve types</td>
+</tr>
+</tbody>
+</table>
+<p><code>Q</code> = atoms, <code>I</code> = occurrences (<code>sum(arity)</code>), <code>O</code> = objects, <code>P</code> = pairs,
+<code>S</code> = pair-support entries, <code>K</code> = witness triplets, <code>M</code> = atom-pair mappings,
+<code>B</code> = graphs in the batch. Everything is a plain <code>torch.long</code>/<code>torch.bool</code>
+tensor; <code>SparseAtomCompositionEncoding</code> (the encoder's carrier dataclass) has
+exactly these attribute names, so it can be passed directly to
+<code>SparseAtomCompositionGNN(...)</code>.</p>
+<p>Predicate arities aren't carried on the tensor contract at all: they are a
+<em>model constructor</em> argument (<code>predicate_arities=...</code>), fixed once from
+<code>SparseAtomCompositionEncoder.schema</code> (a <code>SparseAtomPredicateSchema</code>) at
+construction time, shared by every graph the encoder ever produces. The same
+goes for the reported channel cardinality (<code>num_channels</code>) -- see
+<a href="#status-encoding-channel-vs-vocabulary">Status encoding</a> below.</p>
+<h2 id="channel-convention">Channel convention</h2>
+<p>Frozen, do not renumber:</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>name</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>state</code></td>
+<td>current true atom (includes static facts, and every <code>object(o)</code> carrier)</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>satisfied</code></td>
+<td>supplied goal atom that is currently true</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>unsatisfied</code></td>
+<td>supplied goal atom that is currently false</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>auxiliary</code></td>
+<td>encoding artefacts that are not themselves facts (only the nullary star's carrier)</td>
+</tr>
+</tbody>
+</table>
+<p>In <code>"channel"</code> status encoding, the consumer allocates one wide atom MLP per
+<code>(channel, base_predicate)</code> pair, so <code>atom_predicate_ids</code> <strong>must</strong> be the
+base predicate id, not a channel-qualified relation id: <code>on[state]</code>,
+<code>on[sat]</code> and <code>on[unsat]</code> all share predicate id <code>on</code>, differing only in
+<code>atom_channel_ids</code>. This is what lets the architecture's <code>M_state,on</code>,
+<code>M_sat,on</code>, <code>M_unsat,on</code> split exist without tripling the predicate
+vocabulary. In <code>"vocabulary"</code> status encoding these four rows fold into the
+predicate vocabulary instead -- see below.</p>
+<h2 id="why-plain-is-off">Why <code>plain</code> is off</h2>
+<p>The native flat-encoder family's <code>GoalDerivation</code> enum has five values
+(<code>plain</code>, <code>satisfied</code>, <code>unsatisfied</code>, <code>added_satisfied</code>,
+<code>added_unsatisfied</code>), and its <em>library default</em> is <code>{plain, satisfied}</code> --
+every goal gets one plain atom, and satisfied goals additionally get a
+<code>satisfied</code> atom, but there is <strong>no <code>unsatisfied</code> atom at all</strong>. That
+default is a different encoding, tuned for a different architecture. This
+encoder never emits <code>plain</code>: every supplied goal atom <code>p(o)</code> in the goal
+conjunction <code>G</code> becomes exactly one status atom, <code>satisfied</code> <strong>xor</strong>
+<code>unsatisfied</code>, depending on whether <code>p(o)</code> is already a member of the
+current true-atom set <code>S</code>:</p>
+<div class="highlight"><pre><span></span><code>Atoms_goal(S, G) =
+    { p_satisfied(o)   : p(o) in G and p(o) in S }
+  U { p_unsatisfied(o) : p(o) in G and p(o) not in S }
+</code></pre></div>
+<p>Using the library default here would silently produce a <em>plain</em> goal atom
+for every goal and <em>no</em> <code>unsatisfied</code> atoms at all -- voiding the two-tower
+Blocksworld separation the architecture relies on (<code>on_satisfied</code>/
+<code>on_unsatisfied</code> needs both a satisfied <em>and</em> an unsatisfied label to exist
+for the separation argument to apply). <code>tests/encoding/test_sparse_atom_composition.py::test_goal_status_split_exactly_one_atom_per_goal</code>
+asserts this directly: goal-derived channels are always a subset of
+<code>{satisfied, unsatisfied}</code> and their count always equals the number of
+supplied goal atoms -- never zero, never doubled.</p>
+<p>A satisfied goal keeps its current-fact representation too: <code>q(o)</code> being
+both true and a goal produces <em>two</em> atoms (one <code>state</code>, one <code>satisfied</code>),
+not one atom carrying both roles.</p>
+<h2 id="per-object-carriers-r4">Per-object carriers (R4)</h2>
+<p>Every object needs a persistent unary "carrier" atom so <code>object_readout</code>
+and the exact-tuple exchange have somewhere to attach an object-level
+representation even when an object appears in no other atom. That carrier
+relation is the backend's own <code>object</code> predicate -- not an invented one.
+Real PDDL backends already expose it: on <code>blocks:small</code>, <code>StateView(problem).predicates</code>
+includes <code>PredicateInfo(name='object', arity=1, category='static')</code>, and
+<code>static_facts</code> is exactly <code>[Atom('object', ('a',)), Atom('object', ('b',))]</code>
+-- one <code>object(o)</code> static fact per domain object, already part of the
+current-atom set <code>S</code>. There is no name collision to design around: the
+<code>object</code> relation the backend exposes <em>is</em> the carrier relation the
+architecture note writes as <code>object^aux(o)</code>, so <code>build_predicate_schema</code>
+reuses it (appending it, with encoded arity 1, only if a hand-built schema
+omits it) instead of minting a second, reserved-looking predicate.</p>
+<p>Because <code>object(o)</code> is a genuine static fact, its carrier occurrence lives in
+the <strong>state</strong> channel, as part of the current atoms <code>S</code> -- not a separate
+auxiliary channel. <code>object_carrier_occurrence_ids[o]</code> points at that
+occurrence, one per object, ordered by object id (the consumer asserts this
+ordering).</p>
+<p><strong>Fallback.</strong> If a domain or backend does not supply <code>object(o)</code> for every
+object -- a hand-built test schema, or a future backend with gaps -- the
+missing carriers are synthesized, still in the state channel, decided
+<em>per object</em> rather than per domain: whatever is missing gets synthesized,
+so an isolated object with no other atom mentioning it still gets a carrier.
+On the two real Blocksworld fixtures exercised by
+<code>tests/encoding/test_sparse_atom_composition_relmo_integration.py</code>, this
+fallback path is never taken -- both backends already cover every object --
+so it is verified there via hand-built <code>Atom</code> lists instead
+(<code>tests/encoding/test_sparse_atom_composition.py::test_missing_object_carrier_is_synthesized_per_object</code>).</p>
+<p>The one object that <em>never</em> gets a real <code>object(o)</code> fact is the distinguished
+nullary object star (see <a href="#nullary-normalization">Nullary normalization</a>
+below): it is not a real PDDL object, so no backend ever emits
+<code>object(star)</code>. Its carrier is therefore always synthesized, and it stays in
+the <strong>auxiliary</strong> channel, since it is an encoding artefact rather than a
+true fact -- the only auxiliary-channel atom this encoder ever emits.</p>
+<h2 id="nullary-normalization">Nullary normalization</h2>
+<p>A nullary atom such as <code>handempty()</code> has no argument to attach a persistent
+occurrence vector to. This encoder ports the native hetero family's
+<code>nullary_object_name</code>/<code>add_nullary_predicates</code> approach rather than the flat
+family's <code>ignore_zero_arity_relations=True</code> default, which would silently
+<em>drop</em> <code>handempty</code> instead of representing it: every nullary atom becomes a
+unary atom on a distinguished auxiliary object,
+<code>mifrost.encoders.sparse_atom.NULLARY_OBJECT_NAME</code>
+(<code>"![nullary_symbol]!"</code>, the same literal the hetero family already uses).
+The star object:</p>
+<ul>
+<li>is added to a graph's object universe only when that graph actually
+  contains a nullary atom (a state with no nullary predicates never carries
+  a dangling unused star);</li>
+<li>always gets a synthesized <code>object(star)</code> carrier in the auxiliary channel
+  (see <a href="#per-object-carriers-r4">Per-object carriers</a> above);</li>
+<li>participates in pairs and witnesses like any other object once it appears
+  in a <em>non</em>-nullary atom's arguments too (it never does on its own, since
+  every atom mentioning it is now unary).</li>
+</ul>
+<p>No arity-0 atom is ever emitted by this encoder. The consumer's own
+<code>prepare()</code> rejects arity 0 outright, naming this normalization in its error
+message, and <code>validate_sparse_atom_composition</code> checks the same invariant
+standalone.</p>
+<h2 id="status-encoding-channel-vs-vocabulary">Status encoding: channel vs. vocabulary</h2>
+<p><code>build_predicate_schema</code> (and <code>SparseAtomCompositionEncoder</code>) take a
+<code>status_encoding</code> argument with two values, matching the two ways the
+architecture document's baseline comparison represents goal status:</p>
+<ul>
+<li><strong><code>"channel"</code></strong> (default): as described above -- <code>atom_predicate_ids</code> is
+  the base predicate, <code>atom_channel_ids</code> distinguishes
+  state/satisfied/unsatisfied/auxiliary, and the schema reports
+  <code>num_channels == 4</code>.</li>
+<li><strong><code>"vocabulary"</code></strong>: there is no status <em>channel</em> at all. Every
+  <code>(base predicate, channel)</code> pair gets its own vocabulary entry instead --
+  the schema is four times as large -- <code>atom_channel_ids</code> is always <code>0</code>, and
+  <code>num_channels == 1</code>. This is how <code>relmo.models.FlatRelationalGNN</code>
+  represents goal status: it extends the <em>relation vocabulary</em> with separate
+  relations (<code>P</code>, or <code>P_sat</code>/<code>P_unsat</code>) rather than carrying a status
+  channel. Vocabulary-mode names reuse the flat native encoder family's own
+  <code>RelationKey</code> bracket convention (see
+  <code>src/_core/mifrost/core/encoders/common/relation_key.cpp</code>): <code>on[state]</code>,
+  <code>on[sat]</code>, <code>on[unsat]</code>, <code>on[g]</code> (the last for the auxiliary channel, which
+  has no flat-family analogue of its own).</li>
+</ul>
+<p>Both modes encode <em>exactly</em> the same atoms and sparse topology --
+<code>pair_objects</code>, <code>composition_triplets</code>, <code>atom_pair_ids</code>,
+<code>object_carrier_occurrence_ids</code>, everything -- only the predicate/channel
+labelling differs; <code>atom_predicate_ids</code> is precisely
+<code>schema.relation_id(base_predicate_id, channel)</code> applied pointwise to the
+channel-mode ids. This is what makes vocabulary mode useful: it is what the
+architecture document's "identical input encodings across architectures
+within each comparison" requirement needs for a like-for-like comparison
+against <code>FlatRelationalGNN</code>, since both models can then be sized from the
+same predicate vocabulary (<code>predicate_arities</code>, <code>num_channels</code>).</p>
+<p>That equivalence has one asymmetry worth knowing before benchmarking with
+it: <code>SparseAtomCompositionGNN</code>'s <code>join_sharing</code> ablation derives a per-pair
+join-template key from <code>atom_channel_ids</code> in <code>prepare()</code> (a pair keys on its
+support channel when that support is channel-homogeneous, and on a
+distinguished "mixed" key otherwise). In <code>"vocabulary"</code> status encoding every
+atom's channel is <code>0</code>, so every pair collapses onto the same template --
+correct, not a bug, since the status distinction already lives in the
+predicate id there, but it means the join-sharing ablation is only
+<em>meaningful</em> in <code>"channel"</code> status encoding. Use <code>"vocabulary"</code> for a
+like-for-like vocabulary comparison against <code>FlatRelationalGNN</code>; use
+<code>"channel"</code> when the join-sharing ablation itself is what is being studied.</p>
+<h2 id="pairs-and-witnesses-r7r8r9">Pairs and witnesses (R7/R8/R9)</h2>
+<p>For distinct objects <code>u</code>, <code>v</code>, <code>pair_objects</code> holds every ordered pair with
+at least one supporting occurrence -- <code>(u, v)</code> and <code>(v, u)</code> are independent
+records, and <em>both</em> arise automatically from any single atom that mentions
+<code>u</code> and <code>v</code> at two different argument positions (the position loop is over
+all ordered <code>(i, j)</code>, not just <code>i &lt; j</code>). <code>composition_triplets</code> is built by
+listing every triangle of the resulting undirected support graph exactly
+once via degeneracy ordering (<code>O(alpha * M)</code>, the same construction
+<code>relmo</code>'s own topology-stats triangle counter uses) and expanding each into
+its 6 ordered <code>(target, left, right)</code> rows. <code>atom_pair_ids</code> /
+<code>atom_pair_occurrence_i</code> / <code>atom_pair_occurrence_j</code> are the atom-to-pair maps
+<code>D</code>+<code>AGGR^args</code> needs to distribute pair/composition information back to
+occurrence stores; occurrence indices there are always <em>global</em>
+(<code>atom_offsets[q] + position]</code>), never atom-local.</p>
+<h2 id="batching-r12">Batching (R12)</h2>
+<p><code>batch_sparse_atom_encodings</code> concatenates a list of single-graph (or
+already-batched) encodings into one, explicitly rebasing every index space
+by that graph's own running totals before concatenating -- objects, atoms,
+occurrences, pairs, and pair-support entries each get their own running
+offset. No pair or witness triplet can span two input graphs: <code>pair_objects</code>
+only ever references two objects with equal <code>object_batch</code> entries, by
+construction (each graph's own <code>pair_objects</code> already only references its
+own objects, and rebasing preserves that).</p>
+<h2 id="object-types-r13">Object types (R13)</h2>
+<p>The architecture's per-occurrence side information <code>s_{q,j}</code> includes
+argument object types, and the consumer carrier (<code>object_type_ids</code>) has a
+slot for them. Whether a backend can supply them turned out to be
+asymmetric, not a uniformly unfinished feature:</p>
+<ul>
+<li><strong>pymimir</strong>: yes. The installed pymimir wrapper's <code>Object</code> (and <code>Type</code>)
+  expose <code>get_bases()</code> in addition to <code>get_index</code>/<code>get_name</code> --
+  contradicting an earlier assumption recorded in this codebase that only
+  the latter two existed. <code>Object.get_bases()</code> returns the object's own
+  declared type(s), and <code>Domain.get_types()</code> always includes the implicit
+  PDDL root type <code>"object"</code>, even for domains with no <code>:types</code> section at
+  all (verified against every fixture under <code>data/pddl/</code>).</li>
+<li><strong>pytyr</strong>: no, genuinely. The <code>pytyr.formalism.planning</code> task <code>StateView</code>
+  wraps is a <em>translated</em> representation, and PDDL types are compiled away
+  before it exists: its <code>Domain</code> has no <code>get_types()</code>, and its
+  <code>Object</code>/<code>Type</code> really do expose only <code>get_index</code>/<code>get_name</code> -- confirmed
+  at the C++ layer, not just the binding surface. <code>tyr::formalism::planning
+  ::Object</code>'s <code>Data</code> struct (pytyr's own
+  <code>native/include/tyr/formalism/object_data.hpp</code>) stores only <code>index</code> and
+  <code>name</code>, nothing else. The type hierarchy does exist earlier, on the raw
+  parsed AST (<code>pypddl.formalism.Task.get_objects()[i].get_types()</code>, with
+  <code>Type.get_bases()</code> walking the full ancestor chain there), but the
+  <code>PlanningTask</code> this reader is built from keeps no reference back to that
+  AST or to the original PDDL file paths needed to re-parse it. This is a
+  capability gap in what the translated task carries, not a missing
+  binding to add.</li>
+</ul>
+<p><code>SparseAtomCompositionEncoder</code>/<code>encode_sparse_atom_facts</code> populate
+<code>object_type_ids</code> whenever <code>StateView.object_types</code> is available and leave
+it <code>None</code> otherwise -- never a fabricated constant that would silently
+present as "every object has the same type." Ids come from a fixed,
+<em>domain-scoped</em> vocabulary (<code>SparseAtomTypeSchema</code>, built by
+<code>build_type_schema</code> from <code>StateView.type_names</code>), the same stability
+guarantee <code>build_predicate_schema</code> already gives predicate ids: two
+problems of one domain that happen to instantiate different subsets of its
+declared types still agree on which type gets which id.</p>
+<p><strong><code>object_type_ids</code> carries only the most specific declared type</strong>; the
+hierarchy travels beside it. The per-object field stays a categorical id,
+matching its consumer (<code>SparseAtomCompositionGNN.object_type_embedding</code>, a
+single <code>nn.Embedding</code> lookup), and the most specific type is the most
+informative single label a PDDL declaration gives (a <code>truck</code> implies
+<code>locatable</code> implies <code>object</code>, never the reverse).</p>
+<p>The hierarchy itself is <em>domain</em> schema, not per-object data, so it is
+carried once as direct parent edges (<code>DomainSnapshot.type_bases</code>,
+<code>StateView.type_bases</code>) and closed into
+<code>SparseAtomTypeSchema.ancestor_matrix</code> -- a square 0/1 matrix over the type
+vocabulary, exposed as <code>SparseAtomCompositionEncoder.type_ancestors</code>. The
+closure lives at the schema because that is where type <em>ids</em> are assigned,
+and the matrix has to be indexed by them. Its diagonal is always set: the
+consumer reparametrises its table as <code>A @ E</code>, and the diagonal is what
+leaves every type a free row of its own, so a zero there would remove
+capacity rather than merely change a prior. A backend that reports type
+names but no hierarchy yields the identity, which reproduces the leaf-only
+encoding exactly.</p>
+<p>Whether that reparametrisation earns anything is domain-dependent, and
+mostly it does not: untyped domains encode types as unary predicates
+instead, flat hierarchies contribute nothing, and most typed domains
+(spanner, barman, delivery, transport) branch exactly at their predicate
+slots, where the shared row is constant within a role and absorbed by the
+consumer's role-conditioned map. Logistics is the clear exception --
+<code>locatable -&gt; {package, vehicle -&gt; {truck, airplane}}</code> is three deep, so at
+<code>at</code>'s first argument the <code>vehicle</code> row genuinely separates vehicles from
+packages.</p>
+<p>An object declared with a PDDL <code>either</code> type (more than one base) has no
+single "the" type, so pymimir's snapshot layer raises <code>ValueError</code> for it
+rather than guessing -- no domain under <code>data/pddl/</code> exercises this today.
+The ancestor matrix does not change that: it is indexed by leaf id, so an
+<code>either</code> object still has no id to look up.</p>
+<p><strong>Untyped domains degrade to a single real type id, not an absent field.</strong>
+Because pymimir always resolves at least the implicit root type <code>"object"</code>
+for every object -- typed domain or not -- <code>object_type_ids</code> being present
+reflects "this backend can classify objects", not "this domain declares
+more than one type". A Blocksworld problem therefore gets a real (constant,
+all-zero) <code>object_type_ids</code> with <code>num_object_types == 1</code>, computationally
+identical to leaving the field <code>None</code> (the consumer's own fallback is also
+"treat every object as type 0"), but explicit rather than silent about why.
+The synthetic nullary "star" object (see
+<a href="#nullary-normalization">Nullary normalization</a> above) follows the same
+logic from the other direction: it is not a real PDDL object, so rather
+than leave it without a type (every id in the schema must be a genuine,
+resolvable row) it is typed generically as the schema's root entry,
+<code>mifrost.encoders.sparse_atom.ROOT_TYPE_NAME</code> (<code>"object"</code> -- the same
+literal as <code>OBJECT_PREDICATE</code>, not by coincidence: pymimir reports it as
+the real root of every domain's type hierarchy, the same way it reports
+<code>object</code> as a real static predicate for the R4 carrier).
+<code>build_type_schema</code> always guarantees this entry, synthesizing it if the
+supplied type names omit it -- mirroring how <code>build_predicate_schema</code>
+always guarantees <code>OBJECT_PREDICATE</code>.</p>
+<p>Batching (<code>batch_sparse_atom_encodings</code>) concatenates <code>object_type_ids</code>
+<strong>without index offsetting</strong>: it is a domain-scoped categorical <em>value</em>,
+like <code>atom_predicate_ids</code>, not a per-graph local index like <code>atom_args</code> or
+<code>pair_objects</code> (compare <code>kEntityRoleIdsField</code> -- <code>GraphFieldMode::CAT</code> with
+no <code>inc</code> -- against <code>kObjectIndicesField</code>'s <code>GraphFieldMode::CAT</code> plus
+<code>GraphFieldInc::Kind::NODE_OFFSET</code>, in
+<code>src/_core/mifrost/core/encoders/flat/flat_encoder_common.cpp</code>, which draws
+exactly this distinction for the native flat-encoder family). It must be
+present on every encoding in a batch or none: unlike
+<code>counterpart_occurrence_ids</code> (whose <code>-1</code> filler the consumer explicitly
+treats as "no counterpart"), every id in <code>[0, num_object_types)</code> is a
+genuine declared type, so there is no spare sentinel value for a graph with
+no types once others in the batch declare real ones -- mixing them raises.</p>
+<p><code>occurrence_type_ids</code> -- a different, still-unaddressed R13 component (a
+per-argument-<em>position</em> type drawn from the predicate/action signature,
+rather than a per-<em>object</em> type) -- remains out of scope and stays <code>None</code>.</p>
+<h2 id="backend-free-core-vs-the-stateview-facade">Backend-free core vs. the StateView facade</h2>
+<p>Two layers are exposed:</p>
+<ul>
+<li><code>encode_sparse_atom_facts</code> / <code>batch_sparse_atom_encodings</code> /
+  <code>build_predicate_schema</code> operate on plain <code>(predicate, args)</code> tuples
+  (<code>mifrost.encoders.custom.state_view.Atom</code>) and never touch pymimir or
+  pytyr. This is what most of <code>tests/encoding/test_sparse_atom_composition.py</code>
+  exercises directly -- hand-built Blocksworld-style and synthetic-graph
+  scenarios (six-cycle vs. two triangles, the two-tower goal-witness
+  separation, and so on) without needing a PDDL problem at all.</li>
+<li><code>SparseAtomCompositionEncoder</code> is a thin <code>StateView</code> facade over a real
+  pymimir/pytyr problem. Its <code>goals=</code> parameter deliberately differs from
+  <code>CustomGraphEncoder</code>'s lane convention: <code>goals=None</code> means <em>goal-free</em>
+  (zeta=0) here, not "use the problem's own goal" -- this encoder has a
+  genuine goal-free mode, and reusing the other convention would make it
+  unreachable. Pass <code>goals=encoder.view.goal_literals(state)</code> explicitly for
+  the problem's own goal, or <code>goals=()</code> for a supplied-empty goal (zeta=1,
+  <code>G=∅</code>; the same atom set as goal-free, differing only in
+  <code>goal_available</code>).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

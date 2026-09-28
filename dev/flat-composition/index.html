@@ -542,6 +542,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -665,6 +671,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -854,6 +944,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -977,6 +1071,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1397,7 +1547,7 @@ emit into the same graph-local <code>FlatRelationSink</code>:</p>
 <span class="k">auto</span><span class="w"> </span><span class="n">engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">builder</span><span class="p">).</span><span class="n">compile</span><span class="p">();</span>
 
 <span class="n">SemanticAnnotations</span><span class="w"> </span><span class="n">annotations</span><span class="p">;</span>
-<span class="n">annotations</span><span class="p">.</span><span class="n">emplace</span><span class="o">&lt;</span><span class="n">MyGraphData</span><span class="o">&gt;</span><span class="p">(</span><span class="s">&quot;my_data&quot;</span><span class="p">,</span><span class="w"> </span><span class="cm">/* constructor arguments */</span><span class="p">);</span>
+<span class="n">annotations</span><span class="p">.</span><span class="n">emplace</span><span class="o">&lt;</span><span class="n">MyGraphData</span><span class="o">&gt;</span><span class="p">(</span><span class="s">"my_data"</span><span class="p">,</span><span class="w"> </span><span class="cm">/* constructor arguments */</span><span class="p">);</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">.</span><span class="n">encode</span><span class="p">(</span><span class="n">SemanticFlatRelationGraphInput</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">annotations</span><span class="p">)));</span>
 </code></pre></div>
 <p>The Horizon specialization follows the same lifecycle:</p>
@@ -1406,7 +1556,7 @@ emit into the same graph-local <code>FlatRelationSink</code>:</p>
 <span class="k">auto</span><span class="w"> </span><span class="n">engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">builder</span><span class="p">).</span><span class="n">compile</span><span class="p">();</span>
 
 <span class="n">SemanticAnnotations</span><span class="w"> </span><span class="n">annotations</span><span class="p">;</span>
-<span class="n">annotations</span><span class="p">.</span><span class="n">emplace</span><span class="o">&lt;</span><span class="n">MyGraphData</span><span class="o">&gt;</span><span class="p">(</span><span class="s">&quot;my_data&quot;</span><span class="p">,</span><span class="w"> </span><span class="cm">/* constructor arguments */</span><span class="p">);</span>
+<span class="n">annotations</span><span class="p">.</span><span class="n">emplace</span><span class="o">&lt;</span><span class="n">MyGraphData</span><span class="o">&gt;</span><span class="p">(</span><span class="s">"my_data"</span><span class="p">,</span><span class="w"> </span><span class="cm">/* constructor arguments */</span><span class="p">);</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">.</span><span class="n">encode</span><span class="p">(</span><span class="n">SemanticFlatHorizonInput</span><span class="p">(</span><span class="n">dag</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">annotations</span><span class="p">)));</span>
 </code></pre></div>
 <p><code>SemanticFlatRelationPreparedGraph</code> and <code>SemanticFlatHorizonPreparedGraph</code> are

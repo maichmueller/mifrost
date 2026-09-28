@@ -1,4 +1,8 @@
-mkdocs>=1.6
+# mkdocs is capped below 2.0: the plugins below already declare
+# `mkdocs<=1.6.1` and MkDocs 2.0 is announced as a breaking rewrite that
+# drops existing themes, plugins and config files. Lift the cap only once
+# mkdocs-material and the three plugins support it.
+mkdocs>=1.6,<2
 mkdocs-material>=9.6
 mkdocstrings[python]>=0.28
 mkdocs-gen-files>=0.5

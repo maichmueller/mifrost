@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/development/build-and-test/">
       
       
-        <link rel="prev" href="../../explanation/encoder-coverage/">
+        <link rel="prev" href="../../explanation/sparse-atom-composition/">
       
       
         <link rel="next" href="../architecture/">
@@ -548,6 +548,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -671,6 +677,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -860,6 +950,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -983,6 +1077,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1231,10 +1381,12 @@
 checks or tests. Editable installs should use the normal rebuild behavior so
 native C++ changes are reflected in Python runtime checks.</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>dev<span class="o">]</span>
+python<span class="w"> </span>scripts/install_pymimir_release.py
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[dev]"</span>
 </code></pre></div>
 <p>If your environment does not provide extras, install the minimal tools directly:</p>
-<div class="highlight"><pre><span></span><code><span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pymimir<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>pymimir<span class="o">]</span>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>scripts/install_pymimir_release.py
+<span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pymimir<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[pymimir]"</span>
 python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pytest<span class="w"> </span>mkdocs<span class="w"> </span>mkdocs-material
 </code></pre></div>
 <h2 id="build-and-install">Build and install</h2>
@@ -1281,10 +1433,10 @@ editable install afterwards so the source tree holds Release artifacts again.</p
 experiments, but prefer <code>--mode</code> for checked-in commands and reproducible
 developer workflows.</p>
 <p>Install the package (this triggers a full native build):</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;.[backends]&quot;</span>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-v<span class="w"> </span><span class="s2">".[backends]"</span>
 </code></pre></div>
 <p>For editable development:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[backends]&quot;</span>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[backends]"</span>
 </code></pre></div>
 <p>The Python build backend builds both native adapters by default. Set
 <code>MIFROST_BUILD_BACKENDS</code> to <code>core</code>, <code>pymimir</code>, <code>pytyr</code>, or <code>both</code> to exercise a
@@ -1337,6 +1489,14 @@ python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class
 <h2 id="build-docs">Build docs</h2>
 <p>Strict docs build (fails on warnings):</p>
 <div class="highlight"><pre><span></span><code>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
+</code></pre></div>
+<p>Both sides of the MkDocs 2.0 dispute print an advocacy banner on every
+<code>mkdocs</code> invocation: <code>properdocs</code> (a transitive dependency of <code>mkdocs-gen-files</code>,
+<code>mkdocs-literate-nav</code> and <code>mkdocs-section-index</code>) urges switching away from
+<code>mkdocs</code>, and <code>mkdocs-material</code> warns against MkDocs 2.0. We stay on <code>mkdocs</code>
+1.x with the Material theme, and <code>docs/requirements.txt</code> caps <code>mkdocs&lt;2</code>.
+Export both opt-outs to silence the banners locally -- CI already sets them:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">DISABLE_MKDOCS_2_WARNING</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">NO_MKDOCS_2_WARNING</span><span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
 
 

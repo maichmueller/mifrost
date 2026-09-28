@@ -1,0 +1,3220 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="High-performance graph encoders for planning states and transitions.">
+      
+      
+      
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/reference/api/derived/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Derived-Graph Encoders - mifrost</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#derived-graph-encoders" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mifrost
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Derived-Graph Encoders
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../tutorials/installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Tutorials
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../how-to/choose-an-encoder/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How-To
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../native/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../explanation/native-first/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Explanation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../development/build-and-test/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Development
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mifrost
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/installation/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/first-encoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/batching-and-streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batching and Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../how-to/choose-an-encoder/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/encode-goals-actions-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/dynamic-graph-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters for Custom Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Guidance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../native/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../explanation/native-first/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/schema-and-tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema and Tensor Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/streaming-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/encoder-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../development/build-and-test/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../development/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.StarGraphEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StarGraphEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StarGraphEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.StarGraphEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.StarGraphEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.ObjectGraphEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ObjectGraphEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ObjectGraphEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.ObjectGraphEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.ObjectGraphEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.AtomLineGraphEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AtomLineGraphEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AtomLineGraphEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.AtomLineGraphEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.AtomLineGraphEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.HypergraphIncidenceEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HypergraphIncidenceEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="HypergraphIncidenceEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.HypergraphIncidenceEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.HypergraphIncidenceEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TupleTensorEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TupleTensorEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TupleTensorEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TupleTensorEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TupleTensorEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TransformerBiasEncoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TransformerBiasEncoder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TransformerBiasEncoder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TransformerBiasEncoder.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mifrost.encoders.derived.TransformerBiasEncoder.stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="derived-graph-encoders">Derived-Graph Encoders</h1>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.StarGraphEncoder" class="doc doc-heading">
+            <code>StarGraphEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Reified star view over objects and atoms.</p>
+<p>Each atom becomes a fact node connected to its argument object nodes via
+star (hub) edges; goal atoms are marked in the goal channel.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">StarGraphEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Reified star view over objects and atoms.</span>
+
+<span class="sd">    Each atom becomes a fact node connected to its argument object nodes via</span>
+<span class="sd">    star (hub) edges; goal atoms are marked in the goal channel.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a star-view derived-graph encoder for one problem."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+            <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StarGraphEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+        <span class="k">return</span> <span class="n">StarGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.StarGraphEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_reverse_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a star-view derived-graph encoder for one problem.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a star-view derived-graph encoder for one problem."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.StarGraphEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this encoder's engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StarGraphEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+    <span class="k">return</span> <span class="n">StarGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.ObjectGraphEncoder" class="doc doc-heading">
+            <code>ObjectGraphEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Objects-only projection with a configurable atom expansion.</p>
+<p>Only object nodes are materialized; each atom connects its arguments
+according to <code>atom_expansion</code>:</p>
+<ul>
+<li><code>"clique"</code>: fully connect the atom's arguments.</li>
+<li><code>"chain"</code>: chain the arguments in order.</li>
+<li><code>"star_first"</code>: hub on the first argument.</li>
+</ul>
+<p>Arity-1 literals emit a <code>unary_self</code> loop and arity-0 literals a
+<code>nullary_self</code> loop on the trailing anchor node, so every instance
+leaves a labeled trace. Pairwise edges still cannot say which pairs
+belong to the same arity &gt;= 3 literal, so this universe <em>always</em> carries
+the tuple instance table (<code>include_tuple_tensors</code> is forced on by the
+engine's config normalization) — that table is the authoritative,
+lossless instance list.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">658</span>
+<span class="normal">659</span>
+<span class="normal">660</span>
+<span class="normal">661</span>
+<span class="normal">662</span>
+<span class="normal">663</span>
+<span class="normal">664</span>
+<span class="normal">665</span>
+<span class="normal">666</span>
+<span class="normal">667</span>
+<span class="normal">668</span>
+<span class="normal">669</span>
+<span class="normal">670</span>
+<span class="normal">671</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span>
+<span class="normal">680</span>
+<span class="normal">681</span>
+<span class="normal">682</span>
+<span class="normal">683</span>
+<span class="normal">684</span>
+<span class="normal">685</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span>
+<span class="normal">692</span>
+<span class="normal">693</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span>
+<span class="normal">701</span>
+<span class="normal">702</span>
+<span class="normal">703</span>
+<span class="normal">704</span>
+<span class="normal">705</span>
+<span class="normal">706</span>
+<span class="normal">707</span>
+<span class="normal">708</span>
+<span class="normal">709</span>
+<span class="normal">710</span>
+<span class="normal">711</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span>
+<span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span>
+<span class="normal">727</span>
+<span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span>
+<span class="normal">731</span>
+<span class="normal">732</span>
+<span class="normal">733</span>
+<span class="normal">734</span>
+<span class="normal">735</span>
+<span class="normal">736</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ObjectGraphEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Objects-only projection with a configurable atom expansion.</span>
+
+<span class="sd">    Only object nodes are materialized; each atom connects its arguments</span>
+<span class="sd">    according to ``atom_expansion``:</span>
+
+<span class="sd">    - ``"clique"``: fully connect the atom's arguments.</span>
+<span class="sd">    - ``"chain"``: chain the arguments in order.</span>
+<span class="sd">    - ``"star_first"``: hub on the first argument.</span>
+
+<span class="sd">    Arity-1 literals emit a ``unary_self`` loop and arity-0 literals a</span>
+<span class="sd">    ``nullary_self`` loop on the trailing anchor node, so every instance</span>
+<span class="sd">    leaves a labeled trace. Pairwise edges still cannot say which pairs</span>
+<span class="sd">    belong to the same arity &gt;= 3 literal, so this universe *always* carries</span>
+<span class="sd">    the tuple instance table (``include_tuple_tensors`` is forced on by the</span>
+<span class="sd">    engine's config normalization) — that table is the authoritative,</span>
+<span class="sd">    lossless instance list.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"clique"</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create an objects-only derived-graph encoder for one problem."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_only"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="n">atom_expansion</span><span class="p">,</span>
+            <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">atom_expansion</span> <span class="o">=</span> <span class="n">atom_expansion</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_accepted_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_accepted_kwargs</span><span class="p">()</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"atom_expansion"</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">state</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_atom_expansion</span><span class="p">(</span><span class="n">atom_expansion</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span>
+            <span class="n">state</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode_batch</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">states</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_atom_expansion</span><span class="p">(</span><span class="n">atom_expansion</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_encode_batch</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_atom_expansion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atom_expansion</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">atom_expansion</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">atom_expansion</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">atom_expansion</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"atom_expansion is fixed at construction "</span>
+                <span class="sa">f</span><span class="s2">"(configured </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">atom_expansion</span><span class="si">!r}</span><span class="s2">, got </span><span class="si">{</span><span class="n">atom_expansion</span><span class="si">!r}</span><span class="s2">)"</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ObjectGraphEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+        <span class="k">return</span> <span class="n">ObjectGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.ObjectGraphEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">atom_expansion</span><span class="o">=</span><span class="s1">'clique'</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_reverse_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create an objects-only derived-graph encoder for one problem.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">681</span>
+<span class="normal">682</span>
+<span class="normal">683</span>
+<span class="normal">684</span>
+<span class="normal">685</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span>
+<span class="normal">692</span>
+<span class="normal">693</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">atom_expansion</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"clique"</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create an objects-only derived-graph encoder for one problem."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_only"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="n">atom_expansion</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">atom_expansion</span> <span class="o">=</span> <span class="n">atom_expansion</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.ObjectGraphEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this encoder's engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ObjectGraphEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+    <span class="k">return</span> <span class="n">ObjectGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.AtomLineGraphEncoder" class="doc doc-heading">
+            <code>AtomLineGraphEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Atom line graph over the star universe.</p>
+<p>Builds the star view (objects and atoms) and additionally connects
+co-occurring argument edges of high-degree atoms through line-share
+edges bounded by <code>line_graph_max_degree</code>.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AtomLineGraphEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Atom line graph over the star universe.</span>
+
+<span class="sd">    Builds the star view (objects and atoms) and additionally connects</span>
+<span class="sd">    co-occurring argument edges of high-degree atoms through line-share</span>
+<span class="sd">    edges bounded by ``line_graph_max_degree``.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">line_graph_max_degree</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create an atom line-graph encoder for one problem."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+            <span class="n">include_line_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+            <span class="n">line_graph_max_degree</span><span class="o">=</span><span class="n">line_graph_max_degree</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">line_graph_max_degree</span> <span class="o">=</span> <span class="n">line_graph_max_degree</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AtomLineGraphEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+        <span class="k">return</span> <span class="n">AtomLineGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.AtomLineGraphEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">line_graph_max_degree</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_reverse_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create an atom line-graph encoder for one problem.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">line_graph_max_degree</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create an atom line-graph encoder for one problem."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+        <span class="n">include_line_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+        <span class="n">line_graph_max_degree</span><span class="o">=</span><span class="n">line_graph_max_degree</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">line_graph_max_degree</span> <span class="o">=</span> <span class="n">line_graph_max_degree</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.AtomLineGraphEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this encoder's engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AtomLineGraphEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+    <span class="k">return</span> <span class="n">AtomLineGraphEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.HypergraphIncidenceEncoder" class="doc doc-heading">
+            <code>HypergraphIncidenceEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Hyperedge incidence view over objects and atoms.</p>
+<p>Every encoded literal instance (static facts, state facts, goal and
+subgoal literals, history literals, grounded actions) becomes one
+hyperedge over its argument object nodes. <code>encode_pyg</code> restacks the
+native incidence fields into <code>hyperedge_index</code> /
+<code>hyperedge_attr_ids</code> so stock PyG hypergraph layers consume the output.</p>
+<p><code>hyperedge_attr_ids</code> is <code>[M, 6]</code> in <code>x_ids</code> column order (role,
+<code>relation_id + 1</code>, sign, goal level, history dt, category) — one label
+row per instance, not just its role. A zero-arity instance takes the
+anchor node as its single member, so no hyperedge is empty and
+<code>hyperedge_index[1].max() + 1 == hyperedge_attr_ids.size(0)</code> — exactly
+the edge count <code>torch_geometric.nn.HypergraphConv</code> infers when
+<code>num_edges</code> is not passed. <code>num_hyperedges</code> carries the authoritative
+per-graph count.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">813</span>
+<span class="normal">814</span>
+<span class="normal">815</span>
+<span class="normal">816</span>
+<span class="normal">817</span>
+<span class="normal">818</span>
+<span class="normal">819</span>
+<span class="normal">820</span>
+<span class="normal">821</span>
+<span class="normal">822</span>
+<span class="normal">823</span>
+<span class="normal">824</span>
+<span class="normal">825</span>
+<span class="normal">826</span>
+<span class="normal">827</span>
+<span class="normal">828</span>
+<span class="normal">829</span>
+<span class="normal">830</span>
+<span class="normal">831</span>
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span>
+<span class="normal">848</span>
+<span class="normal">849</span>
+<span class="normal">850</span>
+<span class="normal">851</span>
+<span class="normal">852</span>
+<span class="normal">853</span>
+<span class="normal">854</span>
+<span class="normal">855</span>
+<span class="normal">856</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span>
+<span class="normal">870</span>
+<span class="normal">871</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span>
+<span class="normal">884</span>
+<span class="normal">885</span>
+<span class="normal">886</span>
+<span class="normal">887</span>
+<span class="normal">888</span>
+<span class="normal">889</span>
+<span class="normal">890</span>
+<span class="normal">891</span>
+<span class="normal">892</span>
+<span class="normal">893</span>
+<span class="normal">894</span>
+<span class="normal">895</span>
+<span class="normal">896</span>
+<span class="normal">897</span>
+<span class="normal">898</span>
+<span class="normal">899</span>
+<span class="normal">900</span>
+<span class="normal">901</span>
+<span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span>
+<span class="normal">907</span>
+<span class="normal">908</span>
+<span class="normal">909</span>
+<span class="normal">910</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HypergraphIncidenceEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Hyperedge incidence view over objects and atoms.</span>
+
+<span class="sd">    Every encoded literal instance (static facts, state facts, goal and</span>
+<span class="sd">    subgoal literals, history literals, grounded actions) becomes one</span>
+<span class="sd">    hyperedge over its argument object nodes. ``encode_pyg`` restacks the</span>
+<span class="sd">    native incidence fields into ``hyperedge_index`` /</span>
+<span class="sd">    ``hyperedge_attr_ids`` so stock PyG hypergraph layers consume the output.</span>
+
+<span class="sd">    ``hyperedge_attr_ids`` is ``[M, 6]`` in ``x_ids`` column order (role,</span>
+<span class="sd">    ``relation_id + 1``, sign, goal level, history dt, category) — one label</span>
+<span class="sd">    row per instance, not just its role. A zero-arity instance takes the</span>
+<span class="sd">    anchor node as its single member, so no hyperedge is empty and</span>
+<span class="sd">    ``hyperedge_index[1].max() + 1 == hyperedge_attr_ids.size(0)`` — exactly</span>
+<span class="sd">    the edge count ``torch_geometric.nn.HypergraphConv`` infers when</span>
+<span class="sd">    ``num_edges`` is not passed. ``num_hyperedges`` carries the authoritative</span>
+<span class="sd">    per-graph count.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a hyperedge-incidence derived-graph encoder for one problem."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+            <span class="n">include_hyperedge_incidence</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_accepted_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_accepted_kwargs</span><span class="p">()</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"hyperedge"</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_hyperedge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hyperedge</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">hyperedge</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">hyperedge</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"hyperedge is fixed at construction "</span>
+                <span class="s2">"(hyperedge incidence is always enabled)"</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">state</span><span class="p">:</span> <span class="n">StateInput</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">hyperedge</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_hyperedge</span><span class="p">(</span><span class="n">hyperedge</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_encode</span><span class="p">(</span>
+            <span class="n">state</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_encode_batch</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">states</span><span class="p">:</span> <span class="n">StateBatchInput</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">goals</span><span class="p">:</span> <span class="n">GoalBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">hyperedge</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_hyperedge</span><span class="p">(</span><span class="n">hyperedge</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_encode_batch</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span>
+            <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+            <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
+            <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
+            <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
+            <span class="n">history_max_steps</span><span class="o">=</span><span class="n">history_max_steps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HypergraphIncidenceEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this engine."""</span>
+        <span class="k">return</span> <span class="n">HypergraphIncidenceEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.HypergraphIncidenceEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_reverse_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a hyperedge-incidence derived-graph encoder for one problem.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span>
+<span class="normal">848</span>
+<span class="normal">849</span>
+<span class="normal">850</span>
+<span class="normal">851</span>
+<span class="normal">852</span>
+<span class="normal">853</span>
+<span class="normal">854</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a hyperedge-incidence derived-graph encoder for one problem."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+        <span class="n">include_hyperedge_incidence</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.HypergraphIncidenceEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">908</span>
+<span class="normal">909</span>
+<span class="normal">910</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HypergraphIncidenceEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this engine."""</span>
+    <span class="k">return</span> <span class="n">HypergraphIncidenceEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.TupleTensorEncoder" class="doc doc-heading">
+            <code>TupleTensorEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Star view over objects and atoms with reified tuple channels.</p>
+<p>Builds the star view (objects and atoms) and additionally exposes every
+encoded literal instance as a variable-arity tuple: <code>tuple_args</code> holds
+the argument node ids, <code>tuple_sizes</code> their per-tuple arity and
+<code>tuple_ptr</code> the CSR derived from it, while <code>tuple_rel_ids</code> /
+<code>tuple_role_ids</code> / <code>tuple_sign_ids</code> / <code>tuple_level_ids</code> /
+<code>tuple_dt_ids</code> / <code>tuple_category_ids</code> mirror the six <code>x_ids</code>
+channels one row per instance (also stacked as <code>tuple_attr_ids</code>).</p>
+<p>Relation ids are now <strong>unified</strong>: <code>tuple_rel_ids</code> indexes
+<code>vocab_relations</code>, which is <code>vocab_predicates ++ vocab_actions</code>, so a
+predicate keeps id <code>p</code> and action schema <code>a</code> gets <code>num_predicates +
+a</code>. Action-role and predicate-role tuples can no longer collide, one
+<code>Embedding(len(vocab_relations) + 1, ...)</code> covers the whole channel, and
+<code>num_predicates</code> splits the space without string compares. The one
+remaining caveat is the <code>-1</code> sentinel: <code>tuple_rel_ids</code> stores the
+<em>raw</em> relation id, using <code>-1</code> for "no relation", whereas <code>x_ids[:, 1]</code>
+and <code>tuple_attr_ids[:, 1]</code> store <code>relation_id + 1</code> with <code>0</code> meaning
+the same thing — shift before sharing an embedding table with <code>x_ids</code>.</p>
+<p>The graph view is a <em>set</em> (a repeated instance interns to one node and
+emits its edges once) while this tuple table is a <em>multiset</em>: two
+identical goal literals produce two rows pointing at the same node. That
+is what makes the table, not the topology, the lossless record.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">920</span>
+<span class="normal">921</span>
+<span class="normal">922</span>
+<span class="normal">923</span>
+<span class="normal">924</span>
+<span class="normal">925</span>
+<span class="normal">926</span>
+<span class="normal">927</span>
+<span class="normal">928</span>
+<span class="normal">929</span>
+<span class="normal">930</span>
+<span class="normal">931</span>
+<span class="normal">932</span>
+<span class="normal">933</span>
+<span class="normal">934</span>
+<span class="normal">935</span>
+<span class="normal">936</span>
+<span class="normal">937</span>
+<span class="normal">938</span>
+<span class="normal">939</span>
+<span class="normal">940</span>
+<span class="normal">941</span>
+<span class="normal">942</span>
+<span class="normal">943</span>
+<span class="normal">944</span>
+<span class="normal">945</span>
+<span class="normal">946</span>
+<span class="normal">947</span>
+<span class="normal">948</span>
+<span class="normal">949</span>
+<span class="normal">950</span>
+<span class="normal">951</span>
+<span class="normal">952</span>
+<span class="normal">953</span>
+<span class="normal">954</span>
+<span class="normal">955</span>
+<span class="normal">956</span>
+<span class="normal">957</span>
+<span class="normal">958</span>
+<span class="normal">959</span>
+<span class="normal">960</span>
+<span class="normal">961</span>
+<span class="normal">962</span>
+<span class="normal">963</span>
+<span class="normal">964</span>
+<span class="normal">965</span>
+<span class="normal">966</span>
+<span class="normal">967</span>
+<span class="normal">968</span>
+<span class="normal">969</span>
+<span class="normal">970</span>
+<span class="normal">971</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TupleTensorEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Star view over objects and atoms with reified tuple channels.</span>
+
+<span class="sd">    Builds the star view (objects and atoms) and additionally exposes every</span>
+<span class="sd">    encoded literal instance as a variable-arity tuple: ``tuple_args`` holds</span>
+<span class="sd">    the argument node ids, ``tuple_sizes`` their per-tuple arity and</span>
+<span class="sd">    ``tuple_ptr`` the CSR derived from it, while ``tuple_rel_ids`` /</span>
+<span class="sd">    ``tuple_role_ids`` / ``tuple_sign_ids`` / ``tuple_level_ids`` /</span>
+<span class="sd">    ``tuple_dt_ids`` / ``tuple_category_ids`` mirror the six ``x_ids``</span>
+<span class="sd">    channels one row per instance (also stacked as ``tuple_attr_ids``).</span>
+
+<span class="sd">    Relation ids are now **unified**: ``tuple_rel_ids`` indexes</span>
+<span class="sd">    ``vocab_relations``, which is ``vocab_predicates ++ vocab_actions``, so a</span>
+<span class="sd">    predicate keeps id ``p`` and action schema ``a`` gets ``num_predicates +</span>
+<span class="sd">    a``. Action-role and predicate-role tuples can no longer collide, one</span>
+<span class="sd">    ``Embedding(len(vocab_relations) + 1, ...)`` covers the whole channel, and</span>
+<span class="sd">    ``num_predicates`` splits the space without string compares. The one</span>
+<span class="sd">    remaining caveat is the ``-1`` sentinel: ``tuple_rel_ids`` stores the</span>
+<span class="sd">    *raw* relation id, using ``-1`` for "no relation", whereas ``x_ids[:, 1]``</span>
+<span class="sd">    and ``tuple_attr_ids[:, 1]`` store ``relation_id + 1`` with ``0`` meaning</span>
+<span class="sd">    the same thing — shift before sharing an embedding table with ``x_ids``.</span>
+
+<span class="sd">    The graph view is a *set* (a repeated instance interns to one node and</span>
+<span class="sd">    emits its edges once) while this tuple table is a *multiset*: two</span>
+<span class="sd">    identical goal literals produce two rows pointing at the same node. That</span>
+<span class="sd">    is what makes the table, not the topology, the lossless record.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a tuple-channel derived-graph encoder for one problem."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+            <span class="n">include_tuple_tensors</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TupleTensorEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+        <span class="k">return</span> <span class="n">TupleTensorEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.TupleTensorEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a tuple-channel derived-graph encoder for one problem.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">952</span>
+<span class="normal">953</span>
+<span class="normal">954</span>
+<span class="normal">955</span>
+<span class="normal">956</span>
+<span class="normal">957</span>
+<span class="normal">958</span>
+<span class="normal">959</span>
+<span class="normal">960</span>
+<span class="normal">961</span>
+<span class="normal">962</span>
+<span class="normal">963</span>
+<span class="normal">964</span>
+<span class="normal">965</span>
+<span class="normal">966</span>
+<span class="normal">967</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a tuple-channel derived-graph encoder for one problem."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_and_atoms"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"star"</span><span class="p">,</span>
+        <span class="n">include_tuple_tensors</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.TupleTensorEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this encoder's engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">969</span>
+<span class="normal">970</span>
+<span class="normal">971</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TupleTensorEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's engine."""</span>
+    <span class="k">return</span> <span class="n">TupleTensorEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="mifrost.encoders.derived.TransformerBiasEncoder" class="doc doc-heading">
+            <code>TransformerBiasEncoder</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="mifrost.encoders.derived._DerivedEncoderBase">_DerivedEncoderBase</span></code></p>
+
+
+
+        <p>Objects-only clique projection with shortest-path distance biases.</p>
+<p>Only object nodes are materialized (clique atom expansion); every pair of
+objects connected through shared fact instances within <code>spd_max_hops</code>
+bipartite hops is reported via <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code>
+for transformer attention-bias consumption.</p>
+<p>Being an <code>objects_only</code> view, it inherits that universe's contract: an
+anchor node is appended, and the tuple instance table is always carried
+(see :class:<code>ObjectGraphEncoder</code>). The anchor is not an object, so the
+<code>spd_*</code> lanes never reference it.</p>
+<p>The input must be a <code>pymimir.Problem</code> or <code>pytyr.PlanningTask</code>.
+Domains are rejected because object tables are problem-scoped.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 981</span>
+<span class="normal"> 982</span>
+<span class="normal"> 983</span>
+<span class="normal"> 984</span>
+<span class="normal"> 985</span>
+<span class="normal"> 986</span>
+<span class="normal"> 987</span>
+<span class="normal"> 988</span>
+<span class="normal"> 989</span>
+<span class="normal"> 990</span>
+<span class="normal"> 991</span>
+<span class="normal"> 992</span>
+<span class="normal"> 993</span>
+<span class="normal"> 994</span>
+<span class="normal"> 995</span>
+<span class="normal"> 996</span>
+<span class="normal"> 997</span>
+<span class="normal"> 998</span>
+<span class="normal"> 999</span>
+<span class="normal">1000</span>
+<span class="normal">1001</span>
+<span class="normal">1002</span>
+<span class="normal">1003</span>
+<span class="normal">1004</span>
+<span class="normal">1005</span>
+<span class="normal">1006</span>
+<span class="normal">1007</span>
+<span class="normal">1008</span>
+<span class="normal">1009</span>
+<span class="normal">1010</span>
+<span class="normal">1011</span>
+<span class="normal">1012</span>
+<span class="normal">1013</span>
+<span class="normal">1014</span>
+<span class="normal">1015</span>
+<span class="normal">1016</span>
+<span class="normal">1017</span>
+<span class="normal">1018</span>
+<span class="normal">1019</span>
+<span class="normal">1020</span>
+<span class="normal">1021</span>
+<span class="normal">1022</span>
+<span class="normal">1023</span>
+<span class="normal">1024</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TransformerBiasEncoder</span><span class="p">(</span><span class="n">_DerivedEncoderBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Objects-only clique projection with shortest-path distance biases.</span>
+
+<span class="sd">    Only object nodes are materialized (clique atom expansion); every pair of</span>
+<span class="sd">    objects connected through shared fact instances within ``spd_max_hops``</span>
+<span class="sd">    bipartite hops is reported via ``spd_src`` / ``spd_dst`` / ``spd_dist``</span>
+<span class="sd">    for transformer attention-bias consumption.</span>
+
+<span class="sd">    Being an ``objects_only`` view, it inherits that universe's contract: an</span>
+<span class="sd">    anchor node is appended, and the tuple instance table is always carried</span>
+<span class="sd">    (see :class:`ObjectGraphEncoder`). The anchor is not an object, so the</span>
+<span class="sd">    ``spd_*`` lanes never reference it.</span>
+
+<span class="sd">    The input must be a ``pymimir.Problem`` or ``pytyr.PlanningTask``.</span>
+<span class="sd">    Domains are rejected because object tables are problem-scoped.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">spd_max_hops</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create an spd-annotated objects-only derived-graph encoder."""</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+            <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_only"</span><span class="p">,</span>
+            <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"clique"</span><span class="p">,</span>
+            <span class="n">include_spd</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">spd_max_hops</span><span class="o">=</span><span class="n">spd_max_hops</span><span class="p">,</span>
+            <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+            <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spd_max_hops</span> <span class="o">=</span> <span class="n">spd_max_hops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TransformerBiasEncoderStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this engine."""</span>
+        <span class="k">return</span> <span class="n">TransformerBiasEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.TransformerBiasEncoder.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">spd_max_hops</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_reverse_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_node_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create an spd-annotated objects-only derived-graph encoder.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 999</span>
+<span class="normal">1000</span>
+<span class="normal">1001</span>
+<span class="normal">1002</span>
+<span class="normal">1003</span>
+<span class="normal">1004</span>
+<span class="normal">1005</span>
+<span class="normal">1006</span>
+<span class="normal">1007</span>
+<span class="normal">1008</span>
+<span class="normal">1009</span>
+<span class="normal">1010</span>
+<span class="normal">1011</span>
+<span class="normal">1012</span>
+<span class="normal">1013</span>
+<span class="normal">1014</span>
+<span class="normal">1015</span>
+<span class="normal">1016</span>
+<span class="normal">1017</span>
+<span class="normal">1018</span>
+<span class="normal">1019</span>
+<span class="normal">1020</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">problem</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">spd_max_hops</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">DerivedBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">include_reverse_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create an spd-annotated objects-only derived-graph encoder."""</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticDerivedGraphEncoderConfig</span><span class="p">(</span>
+        <span class="n">node_universe</span><span class="o">=</span><span class="s2">"objects_only"</span><span class="p">,</span>
+        <span class="n">atom_expansion</span><span class="o">=</span><span class="s2">"clique"</span><span class="p">,</span>
+        <span class="n">include_spd</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">spd_max_hops</span><span class="o">=</span><span class="n">spd_max_hops</span><span class="p">,</span>
+        <span class="n">include_reverse_edges</span><span class="o">=</span><span class="n">include_reverse_edges</span><span class="p">,</span>
+        <span class="n">export_node_names</span><span class="o">=</span><span class="n">export_node_names</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">spd_max_hops</span> <span class="o">=</span> <span class="n">spd_max_hops</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">include_reverse_edges</span> <span class="o">=</span> <span class="n">include_reverse_edges</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">export_node_names</span> <span class="o">=</span> <span class="n">export_node_names</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="mifrost.encoders.derived.TransformerBiasEncoder.stream" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stream</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create a streaming encoder sharing this engine.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/derived.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1022</span>
+<span class="normal">1023</span>
+<span class="normal">1024</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TransformerBiasEncoderStream</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this engine."""</span>
+    <span class="k">return</span> <span class="n">TransformerBiasEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

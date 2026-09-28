@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/how-to/dynamic-graph-fields/">
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/how-to/cross-stack-adapters/">
       
       
-        <link rel="prev" href="../encode-semantic-flat-inputs/">
+        <link rel="prev" href="../write-your-own-encoder/">
       
       
-        <link rel="next" href="../consume-with-vanilla-gnns/">
+        <link rel="next" href="../adapters/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Dynamic Graph Fields - mifrost</title>
+        <title>How to Export Derived Graphs to DGL and Jraph - mifrost</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dynamic-graph-fields" class="md-skip">
+        <a href="#how-to-export-derived-graphs-to-dgl-and-jraph" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dynamic Graph Fields
+              How to Export Derived Graphs to DGL and Jraph
             
           </span>
         </div>
@@ -671,37 +671,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Dynamic Graph Fields
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../dynamic-graph-fields/" class="md-nav__link">
         
   
   
@@ -717,70 +690,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#program" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Program
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#output" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Output
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#current-native-behavior" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current Native Behavior
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#collision-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Collision Rules
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -846,10 +755,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../cross-stack-adapters/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -865,6 +801,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-reach-for-these-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Reach for These Adapters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-graph-metadata-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The (graph, metadata) Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hyperedge-handling-per-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hyperedge Handling per Stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-snippet-dgl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Snippet: DGL
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-snippet-jraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Snippet: Jraph
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#facade-delegation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Facade Delegation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Guarantee
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1374,10 +1407,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#program" class="md-nav__link">
+  <a href="#when-to-reach-for-these-adapters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Program
+        When to Reach for These Adapters
       
     </span>
   </a>
@@ -1385,10 +1418,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#output" class="md-nav__link">
+  <a href="#the-graph-metadata-contract" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Output
+        The (graph, metadata) Contract
       
     </span>
   </a>
@@ -1396,10 +1429,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-native-behavior" class="md-nav__link">
+  <a href="#hyperedge-handling-per-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Current Native Behavior
+        Hyperedge Handling per Stack
       
     </span>
   </a>
@@ -1407,10 +1440,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#collision-rules" class="md-nav__link">
+  <a href="#worked-snippet-dgl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Collision Rules
+        Worked Snippet: DGL
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-snippet-jraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Snippet: Jraph
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#facade-delegation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Facade Delegation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Guarantee
       
     </span>
   </a>
@@ -1437,135 +1503,175 @@
   
 
 
-<h1 id="dynamic-graph-fields">Dynamic Graph Fields</h1>
-<p>Use dynamic graph fields when you need per-graph attributes collated during native batching.</p>
-<p>This is a standalone program and its captured output for this version:</p>
-<p>This page fragment is generated from <code>docs/snippets/dynamic_graph_fields.py</code>.
-It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
-<h2 id="program">Program</h2>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mifrost.graph_fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">DType</span><span class="p">,</span> <span class="n">Mode</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">first_successor</span><span class="p">,</span> <span class="n">load_problem</span><span class="p">,</span> <span class="n">print_encoding_summary</span><span class="p">,</span> <span class="n">to_py_list</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state0</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"smedium"</span><span class="p">)</span>
-    <span class="n">_action</span><span class="p">,</span> <span class="n">state1</span> <span class="o">=</span> <span class="n">first_successor</span><span class="p">(</span><span class="n">space</span><span class="p">,</span> <span class="n">state0</span><span class="p">)</span>
-
-    <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
-
-    <span class="n">enc0</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state0</span><span class="p">)</span>
-    <span class="n">enc1</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state1</span><span class="p">)</span>
-    <span class="n">enc0</span><span class="o">.</span><span class="n">goal_distance</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">enc0</span><span class="o">.</span><span class="n">target_indices</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-    <span class="n">enc1</span><span class="o">.</span><span class="n">goal_distance</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">enc1</span><span class="o">.</span><span class="n">target_indices</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-
-    <span class="n">batch_enc</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">batch_encodings</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">enc0</span><span class="p">,</span> <span class="n">enc1</span><span class="p">],</span>
-        <span class="n">collate_spec</span><span class="o">=</span><span class="p">{</span>
-            <span class="s2">"goal_distance"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"mode"</span><span class="p">:</span> <span class="n">Mode</span><span class="o">.</span><span class="n">STACK</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="s2">"dtype"</span><span class="p">:</span> <span class="n">DType</span><span class="o">.</span><span class="n">F32</span><span class="o">.</span><span class="n">value</span><span class="p">},</span>
-            <span class="s2">"target_indices"</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">"mode"</span><span class="p">:</span> <span class="n">Mode</span><span class="o">.</span><span class="n">RAGGED_CAT</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
-                <span class="s2">"dtype"</span><span class="p">:</span> <span class="n">DType</span><span class="o">.</span><span class="n">I64</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
-            <span class="p">},</span>
-        <span class="p">},</span>
-    <span class="p">)</span>
-    <span class="n">print_encoding_summary</span><span class="p">(</span>
-        <span class="n">batch_enc</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"Dynamic attrs via encode + batch_encodings(collate_spec=...)"</span>
-    <span class="p">)</span>
-
-    <span class="n">payload</span> <span class="o">=</span> <span class="n">batch_enc</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
-    <span class="n">tensors</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tensors"</span><span class="p">,</span> <span class="p">{})</span>
-    <span class="nb">print</span><span class="p">(</span>
-        <span class="s2">"native_graph_field_keys_present:"</span><span class="p">,</span>
-        <span class="nb">sorted</span><span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tensors</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__graph__/"</span><span class="p">)),</span>
-    <span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"goal_distance:"</span><span class="p">,</span> <span class="n">to_py_list</span><span class="p">(</span><span class="n">batch_enc</span><span class="o">.</span><span class="n">goal_distance</span><span class="p">,</span> <span class="n">max_items</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"target_indices:"</span><span class="p">,</span> <span class="n">to_py_list</span><span class="p">(</span><span class="n">batch_enc</span><span class="o">.</span><span class="n">target_indices</span><span class="p">,</span> <span class="n">max_items</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"target_indices_ptr:"</span><span class="p">,</span> <span class="n">to_py_list</span><span class="p">(</span><span class="n">batch_enc</span><span class="o">.</span><span class="n">target_indices_ptr</span><span class="p">,</span> <span class="n">max_items</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"collate_spec:"</span><span class="p">,</span> <span class="n">batch_enc</span><span class="o">.</span><span class="n">collate_spec</span><span class="p">())</span>
-
-
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
-    <span class="n">main</span><span class="p">()</span>
-</code></pre></div>
-<h2 id="output">Output</h2>
-<div class="highlight"><pre><span></span><code>== Dynamic attrs via encode + batch_encodings(collate_spec=...) ==
-python: 3.12.14
-platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
-graph_kind: hetero
-num_graphs: 2
-num_nodes: 24
-num_edges: 50
-schema_fingerprint: 2869292577121628696
-node_types_count: 28
-edge_types_count: 54
-node_types_head: ['[+]clear[g]', '[+]clear[g][sat]', '[+]handempty[g]', '[+]handempty[g][sat]', '[+]holding[g]', '[+]holding[g][sat]', '[+]on[g]', '[+]on[g][sat]', '[+]ontable[g]', '[+]ontable[g][sat]']
-edge_types_head: ['[+]clear[g][sat]|0|_symbol_', '[+]clear[g]|0|_symbol_', '[+]holding[g][sat]|0|_symbol_', '[+]holding[g]|0|_symbol_', '[+]on[g][sat]|0|_symbol_', '[+]on[g][sat]|1|_symbol_', '[+]on[g]|0|_symbol_', '[+]on[g]|1|_symbol_', '[+]ontable[g][sat]|0|_symbol_', '[+]ontable[g]|0|_symbol_']
-SNAPSHOT_JSON_BEGIN
-{
-  "edge_types_count": 54,
-  "edge_types_head": [
-    "[+]clear[g][sat]|0|_symbol_",
-    "[+]clear[g]|0|_symbol_",
-    "[+]holding[g][sat]|0|_symbol_",
-    "[+]holding[g]|0|_symbol_",
-    "[+]on[g][sat]|0|_symbol_",
-    "[+]on[g][sat]|1|_symbol_",
-    "[+]on[g]|0|_symbol_",
-    "[+]on[g]|1|_symbol_",
-    "[+]ontable[g][sat]|0|_symbol_",
-    "[+]ontable[g]|0|_symbol_"
-  ],
-  "graph_kind": "hetero",
-  "label": "Dynamic attrs via encode + batch_encodings(collate_spec=...)",
-  "node_types_count": 28,
-  "node_types_head": [
-    "[+]clear[g]",
-    "[+]clear[g][sat]",
-    "[+]handempty[g]",
-    "[+]handempty[g][sat]",
-    "[+]holding[g]",
-    "[+]holding[g][sat]",
-    "[+]on[g]",
-    "[+]on[g][sat]",
-    "[+]ontable[g]",
-    "[+]ontable[g][sat]"
-  ],
-  "num_edges": 50,
-  "num_graphs": 2,
-  "num_nodes": 24,
-  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
-  "python": "3.12.14",
-  "schema_fingerprint": 2869292577121628696
-}
-SNAPSHOT_JSON_END
-native_graph_field_keys_present: []
-goal_distance: [0.0, 1.0]
-target_indices: [0, 1, 2, 0]
-target_indices_ptr: [0, 3, 4]
-collate_spec: {'goal_distance': {'dtype': 'f32', 'mode': 'stack', 'dim': 1, 'cat_dim': 0, 'inc': {'kind': 'none'}}, 'target_indices': {'dtype': 'i64', 'mode': 'ragged_cat', 'dim': 1, 'cat_dim': 0, 'inc': {'kind': 'none'}}}
-
-[stderr]
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
-  warnings.warn(
-</code></pre></div>
-<p>Ragged fields expose <code>&lt;attr&gt;_ptr</code> tensors (for example <code>target_indices_ptr</code>) in PyG conversion.</p>
-<h2 id="current-native-behavior">Current Native Behavior</h2>
+<h1 id="how-to-export-derived-graphs-to-dgl-and-jraph">How to Export Derived Graphs to DGL and Jraph</h1>
+<p>The derived-graph encoders speak PyTorch Geometric natively. When your
+downstream model stack is built on <strong>DGL</strong> or <strong>Jraph</strong>, you do not need to
+reimplement the channel contract: every derived facade can export its output
+through thin conversion adapters in
+<code>mifrost.encoders.cross_stack</code> (also exposed as <code>.to_dgl()</code> / <code>.to_jraph()</code>
+methods on each encoder).</p>
+<h2 id="when-to-reach-for-these-adapters">When to Reach for These Adapters</h2>
 <ul>
-<li>Native graph fields on <code>BatchEncoding</code> are accessible as attributes (<code>encoding.goal_distance</code>, <code>encoding.target_indices</code>).</li>
-<li>For ragged fields, <code>&lt;key&gt;_ptr</code> is reserved and direct assignment to it is rejected.</li>
-<li>In-place mutation on value tensors returned from native access is write-through.</li>
-<li>Ptr tensors are returned as snapshots (mutating the returned ptr tensor does not mutate native storage).</li>
+<li>Your training loop or model zoo already uses DGL message-passing layers.</li>
+<li>You are running JAX/Flax research code that consumes <code>jraph.GraphsTuple</code>.</li>
+<li>You need structural parity checks across stacks in CI.</li>
 </ul>
-<h2 id="collision-rules">Collision Rules</h2>
-<p>Python-side graph-field collation specs (<code>dtype="pyobj"</code>) may not reuse native graph-field keys.
-Attempting to register a colliding key now raises an explicit <code>ValueError</code>.</p>
+<p>If you train in PyTorch, prefer the native PyG path (see
+<a href="../consume-with-vanilla-gnns/">consume-with-vanilla-gnns</a>); it stays the deep,
+behaviour-tested guarantee.</p>
+<p>Install targets lazily: <code>pip install dgl</code> or <code>pip install jraph jax</code>. The
+adapters raise an <code>ImportError</code> with these hints when a stack is missing.</p>
+<h2 id="the-graph-metadata-contract">The <code>(graph, metadata)</code> Contract</h2>
+<p>Both adapters return a tuple:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">mifrost.encoders.cross_stack</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_dgl</span><span class="p">,</span> <span class="n">to_jraph</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="n">dgl_graph</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">to_dgl</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<span class="n">graphs_tuple</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">to_jraph</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</code></pre></div>
+<p>The graph object carries exactly the integer-id channels:</p>
+<table>
+<thead>
+<tr>
+<th>Stack</th>
+<th>Node channels</th>
+<th>Edge channels</th>
+<th>Topology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DGL</td>
+<td><code>ndata["x_ids"]</code> (<code>[N, 6]</code> float) plus convenience <code>ndata["role_ids"] = x_ids[:, 0].long()</code></td>
+<td><code>edata["edge_attr"]</code> (<code>[E, 9]</code> float)</td>
+<td>int64 CPU <code>dgl.graph((src, dst))</code> over <code>num_nodes</code> nodes</td>
+</tr>
+<tr>
+<td>Jraph</td>
+<td><code>nodes</code> (<code>[N, 6]</code> float)</td>
+<td><code>edges</code> (<code>[E, 9]</code> float)</td>
+<td>single-graph <code>GraphsTuple</code>, <code>senders=edge_index[0]</code>, <code>receivers=edge_index[1]</code>, <code>n_node=[N]</code>, <code>n_edge=[E]</code></td>
+</tr>
+</tbody>
+</table>
+<p>The edge width is 9, not 3: since the losslessness work every edge carries the
+six instance channels (<code>rel_id_plus_one</code>, <code>role</code>, <code>sign</code>, <code>goal_level</code>,
+<code>history_dt</code>, <code>category</code>) on top of <code>kind</code> / <code>pos_a</code> / <code>pos_b</code>. Read it from
+<code>edge_channel_names</code> in the metadata rather than hardcoding it. Note that
+<code>edge_attr[:, 7]</code> — like <code>x_ids[:, 4]</code> — is <strong>signed</strong>; the shift you need is
+in <code>metadata["history_dt_offset"]</code>.</p>
+<p><code>metadata</code> is a plain dict holding everything else:</p>
+<ul>
+<li>Vocabularies when present: <code>vocab_roles</code>, <code>vocab_relations</code>,
+  <code>vocab_predicates</code>, <code>vocab_actions</code>, <code>vocab_categories</code>,
+  <code>vocab_edge_kinds</code>, <code>channel_names</code>, <code>edge_channel_names</code>, plus the scalar
+  descriptors <code>num_predicates</code>, <code>node_universe</code>, <code>atom_expansion</code> and
+  <code>has_anchor</code>.</li>
+<li><code>node_names</code> / <code>object_names</code> style extras such as <code>node_names</code>.</li>
+<li>Per-graph fields: <code>anchor_index</code>, <code>history_dt_offset</code>,
+  <code>instance_node_indices</code>.</li>
+<li>Strategy tensors verbatim: <code>hyperedge_index</code> / <code>hyperedge_attr_ids</code> /
+  <code>num_hyperedges</code>, <code>tuple_args</code> / <code>tuple_sizes</code> / <code>tuple_ptr</code> /
+  <code>tuple_rel_ids</code> / <code>tuple_role_ids</code> / <code>tuple_sign_ids</code> / <code>tuple_level_ids</code> /
+  <code>tuple_dt_ids</code> / <code>tuple_category_ids</code> / <code>tuple_attr_ids</code> / <code>num_tuples</code>,
+  and <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code>.</li>
+</ul>
+<p>The list above is the <em>documented</em> order, not an allowlist: <code>_collect_metadata</code>
+sweeps every non-core attribute the carrier actually holds, so a field added
+to the encoder contract reaches DGL and Jraph consumers without anyone
+extending a tuple in <code>cross_stack.py</code>. Core node/edge channels (<code>x</code>, <code>x_ids</code>,
+<code>edge_index</code>, <code>edge_attr</code>, <code>num_nodes</code>, <code>batch</code>, <code>ptr</code>) are the only
+exclusions, because they are mapped onto the target library's own storage.</p>
+<p>Attributes absent from the input (e.g. <code>vocab_roles</code> on
+<code>ObjectFeatureEncoder</code> output) are simply omitted from the dict.</p>
+<h2 id="hyperedge-handling-per-stack">Hyperedge Handling per Stack</h2>
+<p><code>HypergraphIncidenceEncoder</code> output converts everywhere, but the target
+representations differ:</p>
+<ul>
+<li><strong>PyG</strong>: native <code>HypergraphConv</code> input via <code>hyperedge_index</code>.</li>
+<li><strong>DGL</strong>: core DGL has no hypergraph primitive, so the adapter additionally
+  returns <code>metadata["hyperedge_bipartite"]</code>: an int64 graph over <code>N + M</code>
+  nodes (<code>M</code> hyperedges) in which each member node points at its hyperedge
+  anchor, whose id is the hyperedge index offset by <code>N</code>. The raw
+  <code>[2, sum(sizes)]</code> membership tensor also rides in
+  <code>metadata["hyperedge_index"]</code>, and the per-hyperedge
+  labels in <code>metadata["hyperedge_attr_ids"]</code>, an <code>[M, 6]</code> table in <code>x_ids</code>
+  column order (this replaces the old <code>[M]</code> <code>hyperedge_attr_ids</code> role vector).</li>
+<li><strong>Jraph</strong>: the membership tensors ride in <code>globals</code> untouched; factor them
+  into bipartite senders/receivers yourself if you want incidence-style
+  message passing.</li>
+</ul>
+<p><code>M</code> used to be inferred as <code>max(hyperedge_index[1]) + 1</code>, which undercounted
+whenever the last instance had arity 0 and therefore produced a zero-member
+hyperedge. The encoder core now guarantees every hyperedge has at least one
+member — an arity-0 instance takes the graph's anchor node — so the inferred
+count and the declared <code>num_hyperedges</code> / <code>hyperedge_attr_ids.size(0)</code> agree
+by construction. <code>to_dgl</code> prefers the declared count and raises <code>ValueError</code>
+on a disagreement rather than silently mis-sizing the bipartite graph.</p>
+<p>Tuple and spd tensors always pass through <code>metadata</code> unchanged on both
+stacks.</p>
+<h2 id="worked-snippet-dgl">Worked Snippet: DGL</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dgl</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dgl.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dglnn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mifrost</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mifrost.encoders.cross_stack</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_dgl</span>
+
+<span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">StarGraphEncoder</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="n">graph</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">to_dgl</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<span class="n">x_ids</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">ndata</span><span class="p">[</span><span class="s2">"x_ids"</span><span class="p">]</span>
+<span class="n">columns</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x_ids</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="n">x_ids</span><span class="p">[:,</span> <span class="n">c</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>                               <span class="c1"># history_dt is the signed channel</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="n">ids</span> <span class="o">+</span> <span class="n">meta</span><span class="p">[</span><span class="s2">"history_dt_offset"</span><span class="p">]</span>
+    <span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">ids</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">)(</span><span class="n">ids</span><span class="p">))</span>
+<span class="n">feats</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">conv</span> <span class="o">=</span> <span class="n">dglnn</span><span class="o">.</span><span class="n">GraphConv</span><span class="p">(</span><span class="n">feats</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">64</span><span class="p">)</span>   <span class="c1"># reverse edges are explicit</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">feats</span><span class="p">)</span>
+</code></pre></div>
+<p>Column 4 carries the history age with its sign, so it is negative for history
+rows and the naive <code>Embedding(max + 2)</code> recipe raises <code>IndexError</code> the moment
+history is supplied. <code>metadata["history_dt_offset"]</code> is the shift that makes
+it a valid index; see
+<a href="../consume-with-vanilla-gnns/#column-4-is-the-one-signed-channel">the PyG how-to</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This snippet follows the stable public DGL API but could not be executed
+on the authoring machine (no macOS/py3.12 DGL wheel compatible with the
+pinned torch build — <code>dgl</code> installs yet fails mid-import on the graphbolt
+dylib). The adapter itself is exercised by structural tests wherever a
+usable wheel exists.</p>
+</div>
+<h2 id="worked-snippet-jraph">Worked Snippet: Jraph</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jraph</span>
+
+<span class="n">graphs_tuple</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">to_jraph</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<span class="n">conv</span> <span class="o">=</span> <span class="n">jraph</span><span class="o">.</span><span class="n">GraphConvolution</span><span class="p">(</span><span class="n">update_node_fn</span><span class="o">=</span><span class="n">jax</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">relu</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">graphs_tuple</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="nb">globals</span><span class="o">=</span><span class="kc">None</span><span class="p">))</span>  <span class="c1"># GCN ignores edge features</span>
+</code></pre></div>
+<p>For <code>jax.jit</code>, swap string-valued vocabularies out of <code>globals</code> first (they
+are valid pytree leaves outside tracing but not valid JAX input types); use
+the returned <code>metadata</code> dict instead.</p>
+<h2 id="facade-delegation">Facade Delegation</h2>
+<p>Every <code>_DerivedEncoderBase</code> facade exposes delegating methods so you never
+need to import the module directly:</p>
+<div class="highlight"><pre><span></span><code><span class="n">graph</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">to_dgl</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<span class="n">graphs_tuple</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">to_jraph</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="compatibility-guarantee">Compatibility Guarantee</h2>
+<p>These adapters are intentionally thin: they copy channels, indices, and
+metadata verbatim and are tested for <strong>structural equality only</strong> (node/edge
+counts, sender/receiver equality, tensor equality, vocabulary identity). The
+deep behavioural guarantee remains the PyG conformance suite
+(<code>tests/encoding/test_gnn_conformance.py</code>) feeding ten stock PyG layers
+forward+backward — a converted graph is the same payload, so passing there
+implies the exported graph is faithful too.</p>
 
 
 

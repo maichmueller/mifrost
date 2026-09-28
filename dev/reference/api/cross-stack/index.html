@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/reference/api/graph-fields/">
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/dev/reference/api/cross-stack/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Graph Fields - mifrost</title>
+        <title>Cross-Stack Adapters - mifrost</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#graph-fields" class="md-skip">
+        <a href="#cross-stack-adapters" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Graph Fields
+              Cross-Stack Adapters
             
           </span>
         </div>
@@ -1272,10 +1272,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#mifrost.graph_fields.Mode" class="md-nav__link">
+  <a href="#mifrost.encoders.cross_stack.to_dgl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mode
+        to_dgl
       
     </span>
   </a>
@@ -1283,32 +1283,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mifrost.graph_fields.DType" class="md-nav__link">
+  <a href="#mifrost.encoders.cross_stack.to_jraph" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DType
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mifrost.graph_fields.Inc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Inc
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mifrost.graph_fields.GraphFieldSpec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GraphFieldSpec
+        to_jraph
       
     </span>
   </a>
@@ -1332,409 +1310,337 @@
 
 
 
-<h1 id="graph-fields">Graph Fields</h1>
+<h1 id="cross-stack-adapters">Cross-Stack Adapters</h1>
 
 
-<div class="doc doc-object doc-class">
+<div class="doc doc-object doc-function">
 
 
-
-<h2 id="mifrost.graph_fields.Mode" class="doc doc-heading">
-            <code>Mode</code>
-
+<h2 id="mifrost.encoders.cross_stack.to_dgl" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">to_dgl</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
 
-
-
-
-
-
-
-
-
-
-              <details class="mkdocstrings-source">
-                <summary>Source code in <code>src/mifrost/graph_fields.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 8</span>
-<span class="normal"> 9</span>
-<span class="normal">10</span>
-<span class="normal">11</span>
-<span class="normal">12</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Mode</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
-    <span class="n">STACK</span> <span class="o">=</span> <span class="s2">"stack"</span>
-    <span class="n">CAT</span> <span class="o">=</span> <span class="s2">"cat"</span>
-    <span class="n">RAGGED_CAT</span> <span class="o">=</span> <span class="s2">"ragged_cat"</span>
-    <span class="n">CONST</span> <span class="o">=</span> <span class="s2">"const"</span>
-</code></pre></div></td></tr></table></div>
-              </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="mifrost.graph_fields.DType" class="doc doc-heading">
-            <code>DType</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
-
-
-
-
-
-
-
-
-
-
-              <details class="mkdocstrings-source">
-                <summary>Source code in <code>src/mifrost/graph_fields.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span>
-<span class="normal">18</span>
-<span class="normal">19</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">DType</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
-    <span class="n">F32</span> <span class="o">=</span> <span class="s2">"f32"</span>
-    <span class="n">I64</span> <span class="o">=</span> <span class="s2">"i64"</span>
-    <span class="n">STR</span> <span class="o">=</span> <span class="s2">"str"</span>
-    <span class="n">PYOBJ</span> <span class="o">=</span> <span class="s2">"pyobj"</span>
-</code></pre></div></td></tr></table></div>
-              </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="mifrost.graph_fields.Inc" class="doc doc-heading">
-            <code>Inc</code>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-              <details class="mkdocstrings-source">
-                <summary>Source code in <code>src/mifrost/graph_fields.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Inc</span><span class="p">:</span>
-    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">node_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
-    <span class="n">field_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">none</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">"Inc"</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">Inc</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"none"</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">node_offset</span><span class="p">(</span><span class="n">node_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Inc"</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">node_type</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Inc.node_offset requires a non-empty node_type"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">Inc</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"node_offset"</span><span class="p">,</span> <span class="n">node_type</span><span class="o">=</span><span class="n">node_type</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">field_offset</span><span class="p">(</span><span class="n">field_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Inc"</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">field_key</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Inc.field_offset requires a non-empty field_key"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">Inc</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"field_offset"</span><span class="p">,</span> <span class="n">field_key</span><span class="o">=</span><span class="n">field_key</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_core_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-        <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"kind"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">}</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"node_offset"</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_type</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Inc.node_offset requires a non-empty node_type"</span><span class="p">)</span>
-            <span class="n">payload</span><span class="p">[</span><span class="s2">"node_type"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_type</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"field_offset"</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_key</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Inc.field_offset requires a non-empty field_key"</span><span class="p">)</span>
-            <span class="n">payload</span><span class="p">[</span><span class="s2">"field_key"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_key</span>
-        <span class="k">return</span> <span class="n">payload</span>
-</code></pre></div></td></tr></table></div>
-              </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="mifrost.graph_fields.GraphFieldSpec" class="doc doc-heading">
-            <code>GraphFieldSpec</code>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-              <details class="mkdocstrings-source">
-                <summary>Source code in <code>src/mifrost/graph_fields.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 57</span>
-<span class="normal"> 58</span>
-<span class="normal"> 59</span>
-<span class="normal"> 60</span>
-<span class="normal"> 61</span>
-<span class="normal"> 62</span>
-<span class="normal"> 63</span>
-<span class="normal"> 64</span>
-<span class="normal"> 65</span>
-<span class="normal"> 66</span>
-<span class="normal"> 67</span>
-<span class="normal"> 68</span>
-<span class="normal"> 69</span>
-<span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
-<span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span>
-<span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span>
-<span class="normal">106</span>
-<span class="normal">107</span>
-<span class="normal">108</span>
-<span class="normal">109</span>
-<span class="normal">110</span>
-<span class="normal">111</span>
-<span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
-<span class="normal">115</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">GraphFieldSpec</span><span class="p">:</span>
-    <span class="n">mode</span><span class="p">:</span> <span class="n">Mode</span>
-    <span class="n">dtype</span><span class="p">:</span> <span class="n">DType</span>
-    <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">cat_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">inc</span><span class="p">:</span> <span class="n">Inc</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">Inc</span><span class="o">.</span><span class="n">none</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"GraphFieldSpec.dim must be &gt; 0"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="p">(</span><span class="n">DType</span><span class="o">.</span><span class="n">PYOBJ</span><span class="p">,</span> <span class="n">DType</span><span class="o">.</span><span class="n">STR</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">"GraphFieldSpec dtype is only supported for Python-side "</span>
-                <span class="s2">"batch_encodings collate_spec, not native HGraph dynamic fields"</span>
-            <span class="p">)</span>
-        <span class="n">normalized_cat_dim</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cat_dim</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cat_dim</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="ow">in</span> <span class="p">(</span><span class="n">Mode</span><span class="o">.</span><span class="n">CAT</span><span class="p">,</span> <span class="n">Mode</span><span class="o">.</span><span class="n">RAGGED_CAT</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">normalized_cat_dim</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <p>Convert one derived-graph PyG carrier into <code>(dgl graph, metadata)</code>.</p>
+<p>Raises :class:<code>TypeError</code> when <code>data</code> is a
+:class:<code>torch_geometric.data.Batch</code>: the adapters convert one encoded
+graph at a time.</p>
+<p>The returned graph is an int64 CPU <code>dgl.graph((src, dst))</code> over
+<code>num_nodes</code> nodes (isolated objects survive) with:</p>
+<ul>
+<li><code>ndata["x_ids"]</code>: the <code>[N, 6]</code> float id channels verbatim,</li>
+<li><code>ndata["role_ids"]</code>: convenience <code>x_ids[:, 0].long()</code> role column,</li>
+<li><code>edata["edge_attr"]</code>: the <code>[E, 9]</code> float edge channels verbatim.</li>
+</ul>
+<p>The metadata dict carries the shared vocabularies
+(<code>vocab_roles</code> / <code>vocab_predicates</code> / <code>vocab_actions</code> /
+<code>vocab_relations</code> / <code>vocab_edge_kinds</code> / <code>channel_names</code> /
+<code>edge_channel_names</code>), <code>node_names</code> when exported, and every other
+non-core attribute the carrier holds. When the input carries hyperedge
+membership (<code>HypergraphIncidenceEncoder</code>), two extra entries appear
+because core DGL has no native hypergraph:</p>
+<ul>
+<li><code>hyperedge_index</code>: the raw <code>[2, sum(sizes)]</code> membership tensor
+  (node row, hyperedge row),</li>
+<li><code>hyperedge_bipartite</code>: a second int64 DGL graph of <code>N + H</code> nodes
+  in which each member node points at its hyperedge anchor, whose id is
+  the hyperedge index offset by <code>N</code>.</li>
+</ul>
+<p><code>H</code> is the carrier's authoritative hyperedge count
+(<code>num_hyperedges</code> / <code>hyperedge_attr_ids.size(0)</code>) when it declares
+one, and <code>max(hyperedge_index[1]) + 1</code> otherwise. The encoder core
+guarantees no empty hyperedge (an arity-0 instance takes the anchor node
+as its single member), so the two agree by construction and a
+disagreement means a corrupted carrier — it is reported rather than
+silently under- or over-counting.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/cross_stack.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_dgl</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Convert one derived-graph PyG carrier into ``(dgl graph, metadata)``.</span>
+
+<span class="sd">    Raises :class:`TypeError` when ``data`` is a</span>
+<span class="sd">    :class:`torch_geometric.data.Batch`: the adapters convert one encoded</span>
+<span class="sd">    graph at a time.</span>
+
+<span class="sd">    The returned graph is an int64 CPU ``dgl.graph((src, dst))`` over</span>
+<span class="sd">    ``num_nodes`` nodes (isolated objects survive) with:</span>
+
+<span class="sd">    - ``ndata["x_ids"]``: the ``[N, 6]`` float id channels verbatim,</span>
+<span class="sd">    - ``ndata["role_ids"]``: convenience ``x_ids[:, 0].long()`` role column,</span>
+<span class="sd">    - ``edata["edge_attr"]``: the ``[E, 9]`` float edge channels verbatim.</span>
+
+<span class="sd">    The metadata dict carries the shared vocabularies</span>
+<span class="sd">    (``vocab_roles`` / ``vocab_predicates`` / ``vocab_actions`` /</span>
+<span class="sd">    ``vocab_relations`` / ``vocab_edge_kinds`` / ``channel_names`` /</span>
+<span class="sd">    ``edge_channel_names``), ``node_names`` when exported, and every other</span>
+<span class="sd">    non-core attribute the carrier holds. When the input carries hyperedge</span>
+<span class="sd">    membership (``HypergraphIncidenceEncoder``), two extra entries appear</span>
+<span class="sd">    because core DGL has no native hypergraph:</span>
+
+<span class="sd">    - ``hyperedge_index``: the raw ``[2, sum(sizes)]`` membership tensor</span>
+<span class="sd">      (node row, hyperedge row),</span>
+<span class="sd">    - ``hyperedge_bipartite``: a second int64 DGL graph of ``N + H`` nodes</span>
+<span class="sd">      in which each member node points at its hyperedge anchor, whose id is</span>
+<span class="sd">      the hyperedge index offset by ``N``.</span>
+
+<span class="sd">    ``H`` is the carrier's authoritative hyperedge count</span>
+<span class="sd">    (``num_hyperedges`` / ``hyperedge_attr_ids.size(0)``) when it declares</span>
+<span class="sd">    one, and ``max(hyperedge_index[1]) + 1`` otherwise. The encoder core</span>
+<span class="sd">    guarantees no empty hyperedge (an arity-0 instance takes the anchor node</span>
+<span class="sd">    as its single member), so the two agree by construction and a</span>
+<span class="sd">    disagreement means a corrupted carrier — it is reported rather than</span>
+<span class="sd">    silently under- or over-counting.</span>
+<span class="sd">    """</span>
+    <span class="n">_reject_batch</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">dgl</span> <span class="o">=</span> <span class="n">_require</span><span class="p">(</span><span class="s2">"dgl"</span><span class="p">,</span> <span class="s2">"pip install dgl"</span><span class="p">)</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+    <span class="n">num_nodes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">num_nodes</span><span class="p">)</span>
+    <span class="n">src</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+    <span class="n">dst</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">dgl</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">),</span>
+        <span class="n">num_nodes</span><span class="o">=</span><span class="n">num_nodes</span><span class="p">,</span>
+        <span class="n">idtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">"cpu"</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">ndata</span><span class="p">[</span><span class="s2">"x_ids"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">ndata</span><span class="p">[</span><span class="s2">"role_ids"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">edata</span><span class="p">[</span><span class="s2">"edge_attr"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">_collect_metadata</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">hyperedge_index</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"hyperedge_index"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">hyperedge_index</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="ow">and</span> <span class="n">hyperedge_index</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">members</span> <span class="o">=</span> <span class="n">hyperedge_index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+        <span class="n">anchor_rows</span> <span class="o">=</span> <span class="n">hyperedge_index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+        <span class="n">num_hyperedges</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">anchor_rows</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">declared</span> <span class="o">=</span> <span class="n">_declared_hyperedge_count</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">declared</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">declared</span> <span class="o">!=</span> <span class="n">num_hyperedges</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="s2">"GraphFieldSpec.cat_dim must be 0, 1, or -1 for CAT/RAGGED_CAT"</span>
+                    <span class="s2">"hyperedge membership disagrees with the declared hyperedge "</span>
+                    <span class="sa">f</span><span class="s2">"count (</span><span class="si">{</span><span class="n">num_hyperedges</span><span class="si">}</span><span class="s2"> implied by hyperedge_index[1], "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">declared</span><span class="si">}</span><span class="s2"> declared); the encoder core guarantees every "</span>
+                    <span class="s2">"hyperedge has at least one member, so this carrier is "</span>
+                    <span class="s2">"inconsistent"</span>
                 <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">normalized_cat_dim</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"GraphFieldSpec.cat_dim must be 0 for STACK/CONST"</span><span class="p">)</span>
-        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"cat_dim"</span><span class="p">,</span> <span class="n">normalized_cat_dim</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">inc</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"node_offset"</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DType</span><span class="o">.</span><span class="n">I64</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"NODE_OFFSET increment requires dtype=DType.I64"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">inc</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"field_offset"</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DType</span><span class="o">.</span><span class="n">I64</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"FIELD_OFFSET increment requires dtype=DType.I64"</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_core_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">"mode"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
-            <span class="s2">"dtype"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
-            <span class="s2">"dim"</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
-            <span class="s2">"cat_dim"</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cat_dim</span><span class="p">),</span>
-            <span class="s2">"inc"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inc</span><span class="o">.</span><span class="n">to_core_dict</span><span class="p">(),</span>
-        <span class="p">}</span>
-
-    <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_spec</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="s2">"GraphFieldSpec | Mapping[str, Any]"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"GraphFieldSpec"</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="bp">cls</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">spec</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"Graph field spec must be GraphFieldSpec or mapping, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span><span class="si">!r}</span><span class="s2">"</span>
-            <span class="p">)</span>
-
-        <span class="n">mode_raw</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"mode"</span><span class="p">)</span>
-        <span class="n">dtype_raw</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dtype"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">mode_raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">dtype_raw</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Graph field spec mapping requires 'mode' and 'dtype'"</span><span class="p">)</span>
-
-        <span class="n">mode</span> <span class="o">=</span> <span class="n">_normalize_mode</span><span class="p">(</span><span class="n">mode_raw</span><span class="p">)</span>
-        <span class="n">dtype</span> <span class="o">=</span> <span class="n">_normalize_dtype</span><span class="p">(</span><span class="n">dtype_raw</span><span class="p">)</span>
-        <span class="n">dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dim"</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-        <span class="n">cat_dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"cat_dim"</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
-        <span class="n">inc</span> <span class="o">=</span> <span class="n">_normalize_inc</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"inc"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"kind"</span><span class="p">:</span> <span class="s2">"none"</span><span class="p">}))</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">,</span> <span class="n">cat_dim</span><span class="o">=</span><span class="n">cat_dim</span><span class="p">,</span> <span class="n">inc</span><span class="o">=</span><span class="n">inc</span><span class="p">)</span>
+            <span class="n">num_hyperedges</span> <span class="o">=</span> <span class="n">declared</span>
+        <span class="n">metadata</span><span class="p">[</span><span class="s2">"hyperedge_bipartite"</span><span class="p">]</span> <span class="o">=</span> <span class="n">dgl</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">members</span><span class="p">,</span> <span class="n">anchor_rows</span> <span class="o">+</span> <span class="n">num_nodes</span><span class="p">),</span>
+            <span class="n">num_nodes</span><span class="o">=</span><span class="n">num_nodes</span> <span class="o">+</span> <span class="n">num_hyperedges</span><span class="p">,</span>
+            <span class="n">idtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">"cpu"</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">hyperedge_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Empty membership: no hyperedges to anchor, but keep the entry so</span>
+        <span class="c1"># consumers can rely on the key whenever the input carries the attr.</span>
+        <span class="n">empty</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">metadata</span><span class="p">[</span><span class="s2">"hyperedge_bipartite"</span><span class="p">]</span> <span class="o">=</span> <span class="n">dgl</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">empty</span><span class="p">,</span> <span class="n">empty</span><span class="p">),</span>
+            <span class="n">num_nodes</span><span class="o">=</span><span class="n">num_nodes</span><span class="p">,</span>
+            <span class="n">idtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">"cpu"</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">graph</span><span class="p">,</span> <span class="n">metadata</span>
 </code></pre></div></td></tr></table></div>
-              </details>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
 
 
+<h2 id="mifrost.encoders.cross_stack.to_jraph" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">to_jraph</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
 
-<div class="doc doc-children">
-
-
-
-
+</h2>
 
 
+    <div class="doc doc-contents first">
+
+        <p>Convert one derived-graph PyG carrier into <code>(GraphsTuple, metadata)</code>.</p>
+<p>Raises :class:<code>TypeError</code> when <code>data</code> is a
+:class:<code>torch_geometric.data.Batch</code>: the adapters convert one encoded
+graph at a time.</p>
+<p>The returned single-graph <code>jraph.GraphsTuple</code> stores:</p>
+<ul>
+<li><code>nodes</code>: the <code>[N, 6]</code> float id channels,</li>
+<li><code>edges</code>: the <code>[E, 9]</code> float edge channels,</li>
+<li><code>senders</code> / <code>receivers</code>: <code>edge_index[0]</code> / <code>edge_index[1]</code>,</li>
+<li><code>n_node=[N]</code>, <code>n_edge=[E]</code>,</li>
+<li><code>globals</code>: the metadata dict itself (vocabularies plus every
+  hyperedge/tuple/spd tensor).</li>
+</ul>
+<p>The metadata dict mirrors <code>globals</code> so callers that want to run
+<code>jax.jit</code> can swap <code>globals</code> out first: string-valued vocabularies
+are valid pytree leaves outside tracing but not valid JAX input types.</p>
 
 
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/mifrost/encoders/cross_stack.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_jraph</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Convert one derived-graph PyG carrier into ``(GraphsTuple, metadata)``.</span>
 
+<span class="sd">    Raises :class:`TypeError` when ``data`` is a</span>
+<span class="sd">    :class:`torch_geometric.data.Batch`: the adapters convert one encoded</span>
+<span class="sd">    graph at a time.</span>
 
+<span class="sd">    The returned single-graph ``jraph.GraphsTuple`` stores:</span>
 
+<span class="sd">    - ``nodes``: the ``[N, 6]`` float id channels,</span>
+<span class="sd">    - ``edges``: the ``[E, 9]`` float edge channels,</span>
+<span class="sd">    - ``senders`` / ``receivers``: ``edge_index[0]`` / ``edge_index[1]``,</span>
+<span class="sd">    - ``n_node=[N]``, ``n_edge=[E]``,</span>
+<span class="sd">    - ``globals``: the metadata dict itself (vocabularies plus every</span>
+<span class="sd">      hyperedge/tuple/spd tensor).</span>
 
-  </div>
+<span class="sd">    The metadata dict mirrors ``globals`` so callers that want to run</span>
+<span class="sd">    ``jax.jit`` can swap ``globals`` out first: string-valued vocabularies</span>
+<span class="sd">    are valid pytree leaves outside tracing but not valid JAX input types.</span>
+<span class="sd">    """</span>
+    <span class="n">_reject_batch</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">jraph</span> <span class="o">=</span> <span class="n">_require</span><span class="p">(</span><span class="s2">"jraph"</span><span class="p">,</span> <span class="s2">"pip install jraph jax"</span><span class="p">)</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
 
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">_collect_metadata</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">graphs_tuple</span> <span class="o">=</span> <span class="n">jraph</span><span class="o">.</span><span class="n">GraphsTuple</span><span class="p">(</span>
+        <span class="n">nodes</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="o">.</span><span class="n">float</span><span class="p">()),</span>
+        <span class="n">edges</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">float</span><span class="p">()),</span>
+        <span class="n">receivers</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()),</span>
+        <span class="n">senders</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()),</span>
+        <span class="n">n_node</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">num_nodes</span><span class="p">)]),</span>
+        <span class="n">n_edge</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">))]),</span>
+        <span class="nb">globals</span><span class="o">=</span><span class="n">metadata</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">graphs_tuple</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">metadata</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
     </div>
 
 </div>

@@ -553,6 +553,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -676,6 +682,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -865,6 +955,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -988,6 +1082,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1273,23 +1423,34 @@
 <ul>
 <li>Python <code>&gt;=3.12</code></li>
 <li>A working C++ toolchain</li>
-<li>At least one planner for encoder use: <code>pymimir&gt;=0.13.60</code> or <code>pytyr==0.0.34</code></li>
+<li>At least one planner for encoder use: <code>pymimir&gt;=0.15.0</code> or <code>pytyr==0.0.34</code></li>
 <li>Conan 2 (for source builds via <code>configure.py</code>)</li>
 <li>Optional for PyG conversion: <code>torch</code> and <code>torch-geometric</code></li>
 </ul>
 <h2 id="install-from-pypi">Install From PyPI</h2>
 <p>Choose one planner or install both for same-process interoperability:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[pymimir]&quot;</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[pytyr]&quot;</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mifrost[backends]&quot;</span>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"mifrost[pymimir]"</span><span class="w"> </span>--find-links<span class="w"> </span>https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"mifrost[pytyr]"</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"mifrost[backends]"</span><span class="w"> </span>--find-links<span class="w"> </span>https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
 </code></pre></div>
 <p>The base package contains the planner-neutral API. Planner extras are optional;
 installing one does not install the other.</p>
+<p>The Pymimir adapter shares nanobind's type registry with Pymimir, so it needs
+an ABI-matched <code>pymimir&gt;=0.15.0</code>. Those wheels are published on the maintained
+<code>maichmueller/mimir</code> release, not on PyPI, whose upstream <code>pymimir</code> is older;
+<code>--find-links</code> points pip at them.</p>
 <h2 id="install-from-source">Install From Source</h2>
 <h3 id="minimal">Minimal</h3>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/maichmueller/mifrost.git
 <span class="nb">cd</span><span class="w"> </span>mifrost
-<span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pytyr<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[pytyr]&quot;</span>
+<span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pytyr<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">".[pytyr]"</span>
+</code></pre></div>
+<p>For a Pymimir build, install the release wheel before the no-build-isolation
+install. It selects the ABI-matched wheel from the maintained
+<code>maichmueller/mimir</code> release and defaults to version <code>0.15.0</code>; set
+<code>MIFROST_PYMIMIR_RELEASE_VERSION</code> for a newer release:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>scripts/install_pymimir_release.py
+<span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>pymimir<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span><span class="s2">".[pymimir]"</span>
 </code></pre></div>
 <p><code>MIFROST_BUILD_BACKENDS</code> accepts <code>core</code>, <code>pymimir</code>, <code>pytyr</code>, or <code>both</code>.
 Reduced builds omit the unused native adapter entirely. Package builds default
@@ -1318,15 +1479,15 @@ python<span class="w"> </span>cbuild.py<span class="w"> </span>--mode<span class
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>configure.py<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>--conan_cmd<span class="w"> </span>/path/to/conan
 </code></pre></div>
 <p>If a selected planner cannot be found, use its package-provided CMake prefix:</p>
-<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pymimir; print(pymimir.get_cmake_dir())&#39;</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">&quot;</span>
-<span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pytyr; print(pytyr.cmake_prefix())&#39;</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">&quot;</span>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import pymimir; print(pymimir.get_cmake_dir())'</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CMAKE_PREFIX_PATH</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import pytyr; print(pytyr.cmake_prefix())'</span><span class="k">)</span><span class="s2">:</span><span class="si">${</span><span class="nv">CMAKE_PREFIX_PATH</span><span class="k">:-</span><span class="si">}</span><span class="s2">"</span>
 </code></pre></div>
 <p>If you switch benchmark mode (<code>--with_benchmarks</code> on/off), use a fresh build directory or re-run <code>configure.py</code> with a clean build tree to avoid stale CMake cache settings.</p>
 <h2 id="linux-cibuildwheel-podman-with-external-conan-cache">Linux cibuildwheel (podman) with external Conan cache</h2>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_CONTAINER_ENGINE</span><span class="o">=</span>podman
-<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_CONTAINER_ENGINE_OPTIONS</span><span class="o">=</span><span class="s2">&quot;--volume </span><span class="si">${</span><span class="nv">CONAN_HOME_HOST</span><span class="p">:?set CONAN_HOME_HOST</span><span class="si">}</span><span class="s2">:/conan_home&quot;</span>
-<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_ENVIRONMENT</span><span class="o">=</span><span class="s2">&quot;CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1&quot;</span>
-<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_BEFORE_BUILD_LINUX</span><span class="o">=</span><span class="s2">&quot;rm -rf /project/build &amp;&amp; python -m pip install conan&quot;</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_CONTAINER_ENGINE_OPTIONS</span><span class="o">=</span><span class="s2">"--volume </span><span class="si">${</span><span class="nv">CONAN_HOME_HOST</span><span class="p">:?set CONAN_HOME_HOST</span><span class="si">}</span><span class="s2">:/conan_home"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_ENVIRONMENT</span><span class="o">=</span><span class="s2">"CONAN_HOME=/conan_home CONAN_NON_INTERACTIVE=1"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CIBW_BEFORE_BUILD_LINUX</span><span class="o">=</span><span class="s2">"rm -rf /project/build &amp;&amp; python -m pip install conan"</span>
 </code></pre></div>
 <h2 id="editable-development-install">Editable Development Install</h2>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">MIFROST_BUILD_BACKENDS</span><span class="o">=</span>both
@@ -1337,9 +1498,9 @@ python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </sp
 </code></pre></div>
 <h2 id="reusable-c-sdk-from-an-installed-package">Reusable C++ SDK from an installed package</h2>
 <p>Installed wheels expose the native SDK alongside the Python package:</p>
-<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import mifrost; print(mifrost.get_include_dir())&#39;</span>
-python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import mifrost; print(mifrost.get_cmake_dir())&#39;</span>
-python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import mifrost; print(mifrost.get_library_dir())&#39;</span>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import mifrost; print(mifrost.get_include_dir())'</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import mifrost; print(mifrost.get_cmake_dir())'</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import mifrost; print(mifrost.get_library_dir())'</span>
 </code></pre></div>
 <p>For downstream CMake projects, either prepend <code>mifrost.get_cmake_dir()</code> to
 <code>CMAKE_PREFIX_PATH</code> or pass <code>-Dmifrost_DIR="$(python -c 'import mifrost; print(mifrost.get_cmake_dir())')"</code>.</p>

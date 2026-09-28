@@ -542,6 +542,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -665,6 +671,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -854,6 +944,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -977,6 +1071,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1495,7 +1645,7 @@
 <span class="normal">392</span>
 <span class="normal">393</span>
 <span class="normal">394</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ILGEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">HeteroData</span><span class="p">]):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Instance-Learning Graph encoder with per-instance planner backends.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Instance-Learning Graph encoder with per-instance planner backends."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1503,13 +1653,13 @@
         <span class="o">*</span><span class="p">,</span>
         <span class="n">backend</span><span class="p">:</span> <span class="n">ILGBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
-        <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;action&quot;</span><span class="p">,</span>
-        <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;![nullary_symbol]!&quot;</span><span class="p">,</span>
+        <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"action"</span><span class="p">,</span>
+        <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"![nullary_symbol]!"</span><span class="p">,</span>
         <span class="n">add_nullary_predicates</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">include_lgan_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one Pymimir domain or PyTyr task.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create an ILG encoder for one Pymimir domain or PyTyr task."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_ilg_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
@@ -1571,7 +1721,7 @@
             <span class="n">symbol_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nullary_object_name</span><span class="p">)</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span>
-            <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+            <span class="s2">"x"</span><span class="p">,</span>
             <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">symbol_names</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
         <span class="p">)</span>
         <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol_type_id</span><span class="p">,</span> <span class="n">symbol_names</span><span class="p">)</span>
@@ -1591,7 +1741,7 @@
             <span class="p">]</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
                 <span class="n">pred_name</span><span class="p">,</span>
-                <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+                <span class="s2">"x"</span><span class="p">,</span>
                 <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
             <span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span><span class="n">pred_name</span><span class="p">,</span> <span class="p">[</span><span class="n">atom</span><span class="o">.</span><span class="n">display_name</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">atoms</span><span class="p">])</span>
@@ -1599,7 +1749,7 @@
         <span class="k">if</span> <span class="n">actions</span><span class="p">:</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">add_node_features</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">action_type_id</span><span class="p">,</span>
-                <span class="s2">&quot;x&quot;</span><span class="p">,</span>
+                <span class="s2">"x"</span><span class="p">,</span>
                 <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">actions</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_feature_dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
             <span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">set_node_names</span><span class="p">(</span>
@@ -1746,7 +1896,7 @@
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
+        <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">"hetero"</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_encode_to_builder</span><span class="p">(</span>
             <span class="n">builder</span><span class="p">,</span>
             <span class="n">state</span><span class="p">,</span>
@@ -1772,14 +1922,14 @@
             <span class="n">subgoal_layers</span><span class="o">=</span><span class="n">subgoal_layers</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">builder</span> <span class="o">=</span> <span class="n">BatchBuilder</span><span class="p">()</span>
-        <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">&quot;hetero&quot;</span><span class="p">)</span>
+        <span class="n">builder</span><span class="o">.</span><span class="n">set_graph_kind</span><span class="p">(</span><span class="s2">"hetero"</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">input_value</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_encode_input_to_builder</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">input_value</span><span class="p">)</span>
             <span class="n">builder</span><span class="o">.</span><span class="n">next_graph</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a streaming ILG encoder.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create a streaming ILG encoder."""</span>
         <span class="k">return</span> <span class="n">ILGEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
@@ -1801,7 +1951,7 @@
 
 
 <h3 id="mifrost.encoders.ilg.ILGEncoder.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">action_type_id</span><span class="o">=</span><span class="s1">&#39;action&#39;</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="s1">&#39;![nullary_symbol]!&#39;</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol_type_id</span><span class="o">=</span><span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span> <span class="n">action_type_id</span><span class="o">=</span><span class="s1">'action'</span><span class="p">,</span> <span class="n">nullary_object_name</span><span class="o">=</span><span class="s1">'![nullary_symbol]!'</span><span class="p">,</span> <span class="n">add_nullary_predicates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">lgan_nn_edge_pos</span><span class="o">=</span><span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">)</span></code>
 
 </h3>
 
@@ -1842,13 +1992,13 @@
     <span class="o">*</span><span class="p">,</span>
     <span class="n">backend</span><span class="p">:</span> <span class="n">ILGBackendName</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">symbol_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_SYMBOL_TYPE_ID</span><span class="p">,</span>
-    <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;action&quot;</span><span class="p">,</span>
-    <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;![nullary_symbol]!&quot;</span><span class="p">,</span>
+    <span class="n">action_type_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"action"</span><span class="p">,</span>
+    <span class="n">nullary_object_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"![nullary_symbol]!"</span><span class="p">,</span>
     <span class="n">add_nullary_predicates</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">include_lgan_edges</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">lgan_nn_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_NN_EDGE_POS</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create an ILG encoder for one Pymimir domain or PyTyr task.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create an ILG encoder for one Pymimir domain or PyTyr task."""</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span> <span class="o">=</span> <span class="n">create_ilg_runtime</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">backend_name</span>
@@ -1885,7 +2035,7 @@
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">392</span>
 <span class="normal">393</span>
 <span class="normal">394</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ILGEncoderStream</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming ILG encoder.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a streaming ILG encoder."""</span>
     <span class="k">return</span> <span class="n">ILGEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>

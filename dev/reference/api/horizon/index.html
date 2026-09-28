@@ -542,6 +542,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -665,6 +671,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -854,6 +944,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -977,6 +1071,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1581,12 +1731,12 @@ hetero graph representation.</p>
 <span class="normal">482</span>
 <span class="normal">483</span>
 <span class="normal">484</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HorizonEncoder</span><span class="p">(</span><span class="n">HGraphEncoder</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Horizon lookahead encoder backed by ``HorizonHGraphEncoderEngine``.</span>
 
 <span class="sd">    This encoder combines a root state, a ``TransitionDAG`` and goals into one</span>
 <span class="sd">    hetero graph representation.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1619,7 +1769,7 @@ hetero graph representation.</p>
         <span class="n">lgan_rr_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span>
         <span class="n">history_link_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a hetero horizon encoder.</span>
+<span class="w">        </span><span class="sd">"""Create a hetero horizon encoder.</span>
 
 <span class="sd">        This lane reads a root state plus a `TransitionDAG` and creates</span>
 <span class="sd">        candidate state rows.</span>
@@ -1638,7 +1788,7 @@ hetero graph representation.</p>
 <span class="sd">        not create separate targets here. When `include_lgan_edges=True`, LGAN</span>
 <span class="sd">        anchors are those candidate state rows. There is no</span>
 <span class="sd">        `lgan_anchor_sources` switch here.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
         <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_config</span><span class="p">(</span>
             <span class="n">_HORIZON_CONFIG_CLS</span><span class="p">,</span>
@@ -1704,7 +1854,7 @@ hetero graph representation.</p>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the underlying C++ horizon engine.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Expose the underlying C++ horizon engine."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
@@ -1719,7 +1869,7 @@ hetero graph representation.</p>
         <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">_</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one root/DAG pair."""</span>
         <span class="n">validate_single_unsupported_lanes</span><span class="p">(</span>
             <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
             <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
@@ -1741,7 +1891,7 @@ hetero graph representation.</p>
         <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalInput</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append one validated root/DAG graph into a caller-owned builder.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Append one validated root/DAG graph into a caller-owned builder."""</span>
         <span class="n">validate_single_unsupported_lanes</span><span class="p">(</span>
             <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
             <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
@@ -1768,7 +1918,7 @@ hetero graph representation.</p>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one root/DAG pair into native ``BatchEncoding``."""</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">root</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1796,7 +1946,7 @@ hetero graph representation.</p>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one or many root/DAG pairs into native ``BatchEncoding``."""</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
             <span class="n">roots</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1812,8 +1962,8 @@ hetero graph representation.</p>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_accepted_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept transition DAG kwargs in the generic base API.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_accepted_kwargs</span><span class="p">()</span> <span class="o">|</span> <span class="p">{</span><span class="s2">&quot;dag&quot;</span><span class="p">,</span> <span class="s2">&quot;dags&quot;</span><span class="p">}</span>
+<span class="w">        </span><span class="sd">"""Accept transition DAG kwargs in the generic base API."""</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_accepted_kwargs</span><span class="p">()</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"dag"</span><span class="p">,</span> <span class="s2">"dags"</span><span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode_batch</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1826,7 +1976,7 @@ hetero graph representation.</p>
         <span class="n">history_subgoals</span><span class="p">:</span> <span class="n">HistorySubgoalsBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">history_max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into one batch encoding.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one or many root/DAG pairs into one batch encoding."""</span>
         <span class="n">validate_batch_unsupported_lanes</span><span class="p">(</span>
             <span class="n">actions</span><span class="o">=</span><span class="n">actions</span><span class="p">,</span>
             <span class="n">history_subgoals</span><span class="o">=</span><span class="n">history_subgoals</span><span class="p">,</span>
@@ -1840,7 +1990,7 @@ hetero graph representation.</p>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonEncoderStream</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's C++ engine."""</span>
         <span class="k">return</span> <span class="n">HorizonEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_horizon_visualization_context</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonVisualizationContext</span><span class="p">:</span>
@@ -1853,7 +2003,7 @@ hetero graph representation.</p>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">HeteroData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiGraph</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert encoded horizon ``HeteroData`` into a named multigraph.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Convert encoded horizon ``HeteroData`` into a named multigraph."""</span>
         <span class="k">return</span> <span class="n">horizon_to_networkx</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_horizon_visualization_context</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">draw</span><span class="p">(</span>
@@ -1879,9 +2029,9 @@ hetero graph representation.</p>
         <span class="n">target_y_spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
         <span class="n">layout_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">7</span><span class="p">,</span>
         <span class="n">symbol_node_scale</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5</span><span class="p">,</span>
-        <span class="n">non_symbol_linestyle</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;--&quot;</span><span class="p">,</span>
+        <span class="n">non_symbol_linestyle</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">"--"</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s2">&quot;edge_types&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s2">"edge_types"</span><span class="p">):</span>
             <span class="n">graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">draw_horizon</span><span class="p">(</span>
             <span class="n">graph</span><span class="p">,</span>
@@ -2110,7 +2260,7 @@ anchors are those candidate state rows. There is no
     <span class="n">lgan_rr_edge_pos</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_LGAN_RR_EDGE_POS</span><span class="p">,</span>
     <span class="n">history_link_relation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">DEFAULT_HISTORY_LINK_RELATION</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a hetero horizon encoder.</span>
+<span class="w">    </span><span class="sd">"""Create a hetero horizon encoder.</span>
 
 <span class="sd">    This lane reads a root state plus a `TransitionDAG` and creates</span>
 <span class="sd">    candidate state rows.</span>
@@ -2129,7 +2279,7 @@ anchors are those candidate state rows. There is no
 <span class="sd">    not create separate targets here. When `include_lgan_edges=True`, LGAN</span>
 <span class="sd">    anchors are those candidate state rows. There is no</span>
 <span class="sd">    `lgan_anchor_sources` switch here.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">normalized_root_policy</span> <span class="o">=</span> <span class="n">normalize_root_policy</span><span class="p">(</span><span class="n">root_policy</span><span class="p">)</span>
     <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_config</span><span class="p">(</span>
         <span class="n">_HORIZON_CONFIG_CLS</span><span class="p">,</span>
@@ -2241,7 +2391,7 @@ anchors are those candidate state rows. There is no
     <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one root/DAG pair into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Encode one root/DAG pair into native ``BatchEncoding``."""</span>
     <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
         <span class="n">root</span><span class="p">,</span>
         <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -2318,7 +2468,7 @@ anchors are those candidate state rows. There is no
     <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BatchEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one or many root/DAG pairs into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Encode one or many root/DAG pairs into native ``BatchEncoding``."""</span>
     <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
         <span class="n">roots</span><span class="p">,</span>
         <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -2357,7 +2507,7 @@ anchors are those candidate state rows. There is no
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">417</span>
 <span class="normal">418</span>
 <span class="normal">419</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizonEncoderStream</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's C++ engine."""</span>
     <span class="k">return</span> <span class="n">HorizonEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -2384,7 +2534,7 @@ anchors are those candidate state rows. There is no
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">430</span>
 <span class="normal">431</span>
 <span class="normal">432</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">HeteroData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">MultiGraph</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert encoded horizon ``HeteroData`` into a named multigraph.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Convert encoded horizon ``HeteroData`` into a named multigraph."""</span>
     <span class="k">return</span> <span class="n">horizon_to_networkx</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_horizon_visualization_context</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
             </details>

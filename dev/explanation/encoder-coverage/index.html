@@ -16,7 +16,7 @@
         <link rel="prev" href="../streaming-model/">
       
       
-        <link rel="next" href="../../development/build-and-test/">
+        <link rel="next" href="../derived-encoding-strategies/">
       
       
         
@@ -548,6 +548,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -671,6 +677,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -855,6 +945,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -1076,6 +1170,62 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1341,11 +1491,67 @@
 <td><code>examples/encoders/color_encoder_example.py</code>, <code>tests/encoding/test_color_encoder.py</code></td>
 </tr>
 <tr>
+<td><code>StarGraphEncoder</code></td>
+<td>Vanilla-GNN state encoding with reified atoms</td>
+<td>Object nodes plus fact/goal/subgoal/history/action nodes joined by position-aware star edges; arity-0 literals carry a <code>nullary_self</code> loop</td>
+<td>PyG <code>Data</code> (<code>x_ids</code> <code>[N, 6]</code> / <code>edge_attr</code> <code>[E, 9]</code> integer channels)</td>
+<td><code>examples/encoders/derived_graph_example.py</code>, <code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_facades.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>ObjectGraphEncoder</code></td>
+<td>Compact objects-only projections (<code>clique</code> / <code>chain</code> / <code>star_first</code>)</td>
+<td>Argument-pair edges between objects, each labeled with its instance's relation/role/sign/goal-level/history/category; arity-1 literals emit a <code>unary_self</code> loop and arity-0 literals a <code>nullary_self</code> loop on a trailing <code>anchor</code> node; grounded actions are still reified as nodes</td>
+<td>PyG <code>Data</code> (<code>x_ids</code> integer channels) plus <code>anchor_index</code> and the always-on tuple instance table</td>
+<td><code>examples/encoders/derived_graph_example.py</code>, <code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_facades.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>AtomLineGraphEncoder</code></td>
+<td>Atom co-occurrence structure over the star universe</td>
+<td>Star view plus fact-fact <code>line_share</code> edges bounded by <code>line_graph_max_degree</code> and honouring <code>include_reverse_edges</code>; <code>line_share</code> rows carry zero instance labels by design</td>
+<td>PyG <code>Data</code> (<code>x_ids</code> integer channels)</td>
+<td><code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_facades.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>HypergraphIncidenceEncoder</code></td>
+<td>Native hypergraph layers (PyG <code>HypergraphConv</code>)</td>
+<td>Literal instances as hyperedges over object nodes; incidence restacked into <code>hyperedge_index</code> / <code>hyperedge_attr_ids</code> (<code>[M, 6]</code>, all six node channels); never empty, so PyG's <code>num_edges</code> inference matches</td>
+<td>PyG <code>Data</code> + hyperedge fields</td>
+<td><code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_facades.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>TransformerBiasEncoder</code></td>
+<td>Transformer attention-bias inputs from planning structure</td>
+<td>Objects-only clique projection (anchor and tuple instance table included) plus sparse shortest-path fields <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code> over object pairs only</td>
+<td>PyG <code>Data</code> + spd, anchor and tuple fields</td>
+<td><code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_facades.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>TupleTensorEncoder</code></td>
+<td>Padding-free tuple views for sequence-style consumers</td>
+<td>CSR tuple view on the star-view carrier: <code>tuple_args</code> / <code>tuple_sizes</code> / <code>tuple_ptr</code> plus six id vectors (<code>tuple_rel_ids</code>, <code>tuple_role_ids</code>, <code>tuple_sign_ids</code>, <code>tuple_level_ids</code>, <code>tuple_dt_ids</code>, <code>tuple_category_ids</code>), also stacked as <code>tuple_attr_ids</code> (<code>[T, 6]</code>)</td>
+<td>PyG <code>Data</code> + tuple fields (see class docstring)</td>
+<td><code>tests/encoding/test_gnn_conformance.py</code>, <code>tests/encoding/test_derived_backends_parity.py</code></td>
+</tr>
+<tr>
+<td><code>LiftedTaskEncoder</code></td>
+<td>Task-structure graphs for task-level predictions (ASG-style, planner-selection-style readouts)</td>
+<td>State-independent schema graph: object/predicate/action/parameter nodes with lifted precondition/effect/goal wiring and optional grounded state facts</td>
+<td>PyG <code>Data</code> (<code>x_ids</code> integer channels)</td>
+<td><code>tests/encoding/test_lifted_task_encoder.py</code></td>
+</tr>
+<tr>
 <td><code>ILGEncoder</code></td>
 <td>Python ILG feature construction</td>
 <td>ILG atom/object/action topology and statuses</td>
 <td><code>BatchEncoding</code> (hetero)</td>
 <td><code>examples/encoders/ilg_hetero_encoder_example.py</code>, <code>tests/encoding/test_custom_python_encoder_example.py</code></td>
+</tr>
+<tr>
+<td>custom toolkit (<code>mifrost.encoders.custom</code>)</td>
+<td>Python-only new encoding schemes</td>
+<td>User-defined graphs built with <code>GraphWriter</code> over planner-neutral <code>StateView</code> inputs</td>
+<td>User-defined homo graphs via <code>GraphWriter</code></td>
+<td><code>docs/how-to/write-your-own-encoder.md</code></td>
 </tr>
 </tbody>
 </table>

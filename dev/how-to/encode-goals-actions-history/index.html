@@ -550,6 +550,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -787,6 +793,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adapters/" class="md-nav__link">
         
   
@@ -956,6 +1046,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1079,6 +1173,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1305,7 +1455,7 @@
 <div class="highlight"><pre><span></span><code><span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span>
     <span class="n">domain</span><span class="p">,</span>
     <span class="n">ignore_actions</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">target_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;action&quot;</span><span class="p">],</span>
+    <span class="n">target_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"action"</span><span class="p">],</span>
 <span class="p">)</span>
 <span class="n">enc</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span><span class="n">states</span><span class="p">,</span> <span class="n">actions</span><span class="o">=</span><span class="n">per_state_actions</span><span class="p">)</span>
 <span class="n">data</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">as_pyg</span><span class="p">(</span><span class="n">as_batch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1322,7 +1472,7 @@
 <div class="highlight"><pre><span></span><code><span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span>
     <span class="n">domain</span><span class="p">,</span>
     <span class="n">include_lgan_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">lgan_anchor_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;goal&quot;</span><span class="p">,</span> <span class="s2">&quot;history&quot;</span><span class="p">],</span>
+    <span class="n">lgan_anchor_sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"goal"</span><span class="p">,</span> <span class="s2">"history"</span><span class="p">],</span>
 <span class="p">)</span>
 </code></pre></div>
 <p><code>FlatRelationEncoder</code> follows the same split:

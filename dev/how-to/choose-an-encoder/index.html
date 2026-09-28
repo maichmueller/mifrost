@@ -550,6 +550,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -676,6 +682,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -865,6 +955,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -988,6 +1082,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1385,6 +1535,31 @@
 <td>Lower-dimensional homogeneous encoding for simple baselines</td>
 </tr>
 <tr>
+<td>Feed stock PyG message-passing layers without hetero machinery</td>
+<td><code>StarGraphEncoder</code></td>
+<td>Reified star graph with integer-id channels; see <a href="../consume-with-vanilla-gnns/">Consume with vanilla GNNs</a></td>
+</tr>
+<tr>
+<td>Feed stock PyG layers with a minimal objects-only graph</td>
+<td><code>ObjectGraphEncoder</code></td>
+<td>Argument-pair edge projections (<code>clique</code> / <code>chain</code> / <code>star_first</code>); see <a href="../consume-with-vanilla-gnns/">Consume with vanilla GNNs</a></td>
+</tr>
+<tr>
+<td>Add atom co-occurrence edges to a vanilla-GNN state graph</td>
+<td><code>AtomLineGraphEncoder</code></td>
+<td>Star universe plus bounded fact-fact <code>line_share</code> edges</td>
+</tr>
+<tr>
+<td>Train native hypergraph layers (e.g. PyG <code>HypergraphConv</code>)</td>
+<td><code>HypergraphIncidenceEncoder</code></td>
+<td>Emits <code>hyperedge_index</code> / <code>hyperedge_attr_ids</code> incidence fields</td>
+</tr>
+<tr>
+<td>Bias transformer attention with planning structure</td>
+<td><code>TransformerBiasEncoder</code></td>
+<td>Sparse shortest-path fields <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code> over object pairs</td>
+</tr>
+<tr>
 <td>Use ILG topology/features from Python</td>
 <td><code>ILGEncoder</code></td>
 <td>Pure-Python implementation with ILG atom/action/object construction</td>
@@ -1394,7 +1569,7 @@
 <h2 id="minimal-runnable-examples">Minimal Runnable Examples</h2>
 <p>This page fragment is generated from <code>docs/snippets/hgraph_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
+<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
 <h2 id="program">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1404,18 +1579,18 @@ It is intended to show the exact code and typical output for this version.</p>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;smedium&quot;</span><span class="p">)</span>
+    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"smedium"</span><span class="p">)</span>
     <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HGraphEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;HGraphEncoder.encode(initial_state)&quot;</span><span class="p">)</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"HGraphEncoder.encode(initial_state)"</span><span class="p">)</span>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="output">Output</h2>
 <div class="highlight"><pre><span></span><code>== HGraphEncoder.encode(initial_state) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
@@ -1424,50 +1599,54 @@ num_edges: 26
 schema_fingerprint: 2869292577121628696
 node_types_count: 28
 edge_types_count: 54
-node_types_head: [&#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]holding[g]&#39;, &#39;[+]holding[g][sat]&#39;, &#39;[+]on[g]&#39;, &#39;[+]on[g][sat]&#39;, &#39;[+]ontable[g]&#39;, &#39;[+]ontable[g][sat]&#39;]
-edge_types_head: [&#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]on[g][sat]|0|_symbol_&#39;, &#39;[+]on[g][sat]|1|_symbol_&#39;, &#39;[+]on[g]|0|_symbol_&#39;, &#39;[+]on[g]|1|_symbol_&#39;, &#39;[+]ontable[g][sat]|0|_symbol_&#39;, &#39;[+]ontable[g]|0|_symbol_&#39;]
+node_types_head: ['[+]clear[g]', '[+]clear[g][sat]', '[+]handempty[g]', '[+]handempty[g][sat]', '[+]holding[g]', '[+]holding[g][sat]', '[+]on[g]', '[+]on[g][sat]', '[+]ontable[g]', '[+]ontable[g][sat]']
+edge_types_head: ['[+]clear[g][sat]|0|_symbol_', '[+]clear[g]|0|_symbol_', '[+]holding[g][sat]|0|_symbol_', '[+]holding[g]|0|_symbol_', '[+]on[g][sat]|0|_symbol_', '[+]on[g][sat]|1|_symbol_', '[+]on[g]|0|_symbol_', '[+]on[g]|1|_symbol_', '[+]ontable[g][sat]|0|_symbol_', '[+]ontable[g]|0|_symbol_']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 54,
-  &quot;edge_types_head&quot;: [
-    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
-    &quot;[+]clear[g]|0|_symbol_&quot;,
-    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
-    &quot;[+]holding[g]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|1|_symbol_&quot;,
-    &quot;[+]on[g]|0|_symbol_&quot;,
-    &quot;[+]on[g]|1|_symbol_&quot;,
-    &quot;[+]ontable[g][sat]|0|_symbol_&quot;,
-    &quot;[+]ontable[g]|0|_symbol_&quot;
+  "edge_types_count": 54,
+  "edge_types_head": [
+    "[+]clear[g][sat]|0|_symbol_",
+    "[+]clear[g]|0|_symbol_",
+    "[+]holding[g][sat]|0|_symbol_",
+    "[+]holding[g]|0|_symbol_",
+    "[+]on[g][sat]|0|_symbol_",
+    "[+]on[g][sat]|1|_symbol_",
+    "[+]on[g]|0|_symbol_",
+    "[+]on[g]|1|_symbol_",
+    "[+]ontable[g][sat]|0|_symbol_",
+    "[+]ontable[g]|0|_symbol_"
   ],
-  &quot;graph_kind&quot;: &quot;hetero&quot;,
-  &quot;label&quot;: &quot;HGraphEncoder.encode(initial_state)&quot;,
-  &quot;node_types_count&quot;: 28,
-  &quot;node_types_head&quot;: [
-    &quot;[+]clear[g]&quot;,
-    &quot;[+]clear[g][sat]&quot;,
-    &quot;[+]handempty[g]&quot;,
-    &quot;[+]handempty[g][sat]&quot;,
-    &quot;[+]holding[g]&quot;,
-    &quot;[+]holding[g][sat]&quot;,
-    &quot;[+]on[g]&quot;,
-    &quot;[+]on[g][sat]&quot;,
-    &quot;[+]ontable[g]&quot;,
-    &quot;[+]ontable[g][sat]&quot;
+  "graph_kind": "hetero",
+  "label": "HGraphEncoder.encode(initial_state)",
+  "node_types_count": 28,
+  "node_types_head": [
+    "[+]clear[g]",
+    "[+]clear[g][sat]",
+    "[+]handempty[g]",
+    "[+]handempty[g][sat]",
+    "[+]holding[g]",
+    "[+]holding[g][sat]",
+    "[+]on[g]",
+    "[+]on[g][sat]",
+    "[+]ontable[g]",
+    "[+]ontable[g][sat]"
   ],
-  &quot;num_edges&quot;: 26,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 2869292577121628696
+  "num_edges": 26,
+  "num_graphs": 1,
+  "num_nodes": 12,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 2869292577121628696
 }
 SNAPSHOT_JSON_END
+
+[stderr]
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/horizon_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
+<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
 <h2 id="program_1">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1482,12 +1661,12 @@ It is intended to show the exact code and typical output for this version.</p>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;small&quot;</span><span class="p">)</span>
+    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"small"</span><span class="p">)</span>
     <span class="n">goals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">get_goal_condition</span><span class="p">()</span><span class="o">.</span><span class="n">get_literals</span><span class="p">())</span>
 
     <span class="n">transitions</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">space</span><span class="o">.</span><span class="n">get_forward_transitions</span><span class="p">(</span><span class="n">root</span><span class="p">))[:</span><span class="mi">3</span><span class="p">]</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">transitions</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;No transitions available for horizon example&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"No transitions available for horizon example"</span><span class="p">)</span>
 
     <span class="n">adv_root</span> <span class="o">=</span> <span class="n">_as_advanced_state</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
     <span class="n">dag</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">TransitionDAG</span><span class="p">(</span><span class="n">adv_root</span><span class="p">)</span>
@@ -1500,15 +1679,15 @@ It is intended to show the exact code and typical output for this version.</p>
 
     <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">HorizonEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">)</span>
-    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;HorizonEncoder.encode(root, dag, goals)&quot;</span><span class="p">)</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"HorizonEncoder.encode(root, dag, goals)"</span><span class="p">)</span>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="output_1">Output</h2>
 <div class="highlight"><pre><span></span><code>== HorizonEncoder.encode(root, dag, goals) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
@@ -1517,50 +1696,54 @@ num_edges: 40
 schema_fingerprint: 5944796290213023967
 node_types_count: 45
 edge_types_count: 122
-node_types_head: [&#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]clear[g][sat][state]&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]handempty[g][sat][state]&#39;, &#39;[+]holding[g]&#39;, &#39;[+]holding[g][sat]&#39;, &#39;[+]holding[g][sat][state]&#39;, &#39;[+]on[g]&#39;]
-edge_types_head: [&#39;[+]clear[g][sat][state]|0|_symbol_&#39;, &#39;[+]clear[g][sat][state]|1|_symbol_&#39;, &#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]handempty[g][sat][state]|0|_symbol_&#39;, &#39;[+]holding[g][sat][state]|0|_symbol_&#39;, &#39;[+]holding[g][sat][state]|1|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]on[g][sat][state]|0|_symbol_&#39;]
+node_types_head: ['[+]clear[g]', '[+]clear[g][sat]', '[+]clear[g][sat][state]', '[+]handempty[g]', '[+]handempty[g][sat]', '[+]handempty[g][sat][state]', '[+]holding[g]', '[+]holding[g][sat]', '[+]holding[g][sat][state]', '[+]on[g]']
+edge_types_head: ['[+]clear[g][sat][state]|0|_symbol_', '[+]clear[g][sat][state]|1|_symbol_', '[+]clear[g][sat]|0|_symbol_', '[+]clear[g]|0|_symbol_', '[+]handempty[g][sat][state]|0|_symbol_', '[+]holding[g][sat][state]|0|_symbol_', '[+]holding[g][sat][state]|1|_symbol_', '[+]holding[g][sat]|0|_symbol_', '[+]holding[g]|0|_symbol_', '[+]on[g][sat][state]|0|_symbol_']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 122,
-  &quot;edge_types_head&quot;: [
-    &quot;[+]clear[g][sat][state]|0|_symbol_&quot;,
-    &quot;[+]clear[g][sat][state]|1|_symbol_&quot;,
-    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
-    &quot;[+]clear[g]|0|_symbol_&quot;,
-    &quot;[+]handempty[g][sat][state]|0|_symbol_&quot;,
-    &quot;[+]holding[g][sat][state]|0|_symbol_&quot;,
-    &quot;[+]holding[g][sat][state]|1|_symbol_&quot;,
-    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
-    &quot;[+]holding[g]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat][state]|0|_symbol_&quot;
+  "edge_types_count": 122,
+  "edge_types_head": [
+    "[+]clear[g][sat][state]|0|_symbol_",
+    "[+]clear[g][sat][state]|1|_symbol_",
+    "[+]clear[g][sat]|0|_symbol_",
+    "[+]clear[g]|0|_symbol_",
+    "[+]handempty[g][sat][state]|0|_symbol_",
+    "[+]holding[g][sat][state]|0|_symbol_",
+    "[+]holding[g][sat][state]|1|_symbol_",
+    "[+]holding[g][sat]|0|_symbol_",
+    "[+]holding[g]|0|_symbol_",
+    "[+]on[g][sat][state]|0|_symbol_"
   ],
-  &quot;graph_kind&quot;: &quot;hetero&quot;,
-  &quot;label&quot;: &quot;HorizonEncoder.encode(root, dag, goals)&quot;,
-  &quot;node_types_count&quot;: 45,
-  &quot;node_types_head&quot;: [
-    &quot;[+]clear[g]&quot;,
-    &quot;[+]clear[g][sat]&quot;,
-    &quot;[+]clear[g][sat][state]&quot;,
-    &quot;[+]handempty[g]&quot;,
-    &quot;[+]handempty[g][sat]&quot;,
-    &quot;[+]handempty[g][sat][state]&quot;,
-    &quot;[+]holding[g]&quot;,
-    &quot;[+]holding[g][sat]&quot;,
-    &quot;[+]holding[g][sat][state]&quot;,
-    &quot;[+]on[g]&quot;
+  "graph_kind": "hetero",
+  "label": "HorizonEncoder.encode(root, dag, goals)",
+  "node_types_count": 45,
+  "node_types_head": [
+    "[+]clear[g]",
+    "[+]clear[g][sat]",
+    "[+]clear[g][sat][state]",
+    "[+]handempty[g]",
+    "[+]handempty[g][sat]",
+    "[+]handempty[g][sat][state]",
+    "[+]holding[g]",
+    "[+]holding[g][sat]",
+    "[+]holding[g][sat][state]",
+    "[+]on[g]"
   ],
-  &quot;num_edges&quot;: 40,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 18,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 5944796290213023967
+  "num_edges": 40,
+  "num_graphs": 1,
+  "num_nodes": 18,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 5944796290213023967
 }
 SNAPSHOT_JSON_END
+
+[stderr]
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/transition_full_vs_delta.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
+<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
 <h2 id="program_2">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1570,7 +1753,7 @@ It is intended to show the exact code and typical output for this version.</p>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;small&quot;</span><span class="p">)</span>
+    <span class="n">space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"small"</span><span class="p">)</span>
     <span class="n">goals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">get_goal_condition</span><span class="p">()</span><span class="o">.</span><span class="n">get_literals</span><span class="p">())</span>
     <span class="n">_action</span><span class="p">,</span> <span class="n">succ</span> <span class="o">=</span> <span class="n">first_successor</span><span class="p">(</span><span class="n">space</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
 
@@ -1581,20 +1764,20 @@ It is intended to show the exact code and typical output for this version.</p>
     <span class="n">enc_delta</span> <span class="o">=</span> <span class="n">delta</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">successor</span><span class="o">=</span><span class="n">succ</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">)</span>
 
     <span class="n">print_encoding_summary</span><span class="p">(</span>
-        <span class="n">enc_full</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;TransitionHGraphEncoder (full) encode(state, successor)&quot;</span>
+        <span class="n">enc_full</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"TransitionHGraphEncoder (full) encode(state, successor)"</span>
     <span class="p">)</span>
     <span class="n">print_encoding_summary</span><span class="p">(</span>
         <span class="n">enc_delta</span><span class="p">,</span>
-        <span class="n">label</span><span class="o">=</span><span class="s2">&quot;TransitionEffectsHGraphEncoder (delta) encode(state, successor)&quot;</span><span class="p">,</span>
+        <span class="n">label</span><span class="o">=</span><span class="s2">"TransitionEffectsHGraphEncoder (delta) encode(state, successor)"</span><span class="p">,</span>
     <span class="p">)</span>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="output_2">Output</h2>
 <div class="highlight"><pre><span></span><code>== TransitionHGraphEncoder (full) encode(state, successor) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
@@ -1603,48 +1786,48 @@ num_edges: 22
 schema_fingerprint: 15812242964936039643
 node_types_count: 31
 edge_types_count: 60
-node_types_head: [&#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]holding[g]&#39;, &#39;[+]holding[g][sat]&#39;, &#39;[+]on[g]&#39;, &#39;[+]on[g][sat]&#39;, &#39;[+]ontable[g]&#39;, &#39;[+]ontable[g][sat]&#39;]
-edge_types_head: [&#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]on[g][sat]|0|_symbol_&#39;, &#39;[+]on[g][sat]|1|_symbol_&#39;, &#39;[+]on[g]|0|_symbol_&#39;, &#39;[+]on[g]|1|_symbol_&#39;, &#39;[+]ontable[g][sat]|0|_symbol_&#39;, &#39;[+]ontable[g]|0|_symbol_&#39;]
+node_types_head: ['[+]clear[g]', '[+]clear[g][sat]', '[+]handempty[g]', '[+]handempty[g][sat]', '[+]holding[g]', '[+]holding[g][sat]', '[+]on[g]', '[+]on[g][sat]', '[+]ontable[g]', '[+]ontable[g][sat]']
+edge_types_head: ['[+]clear[g][sat]|0|_symbol_', '[+]clear[g]|0|_symbol_', '[+]holding[g][sat]|0|_symbol_', '[+]holding[g]|0|_symbol_', '[+]on[g][sat]|0|_symbol_', '[+]on[g][sat]|1|_symbol_', '[+]on[g]|0|_symbol_', '[+]on[g]|1|_symbol_', '[+]ontable[g][sat]|0|_symbol_', '[+]ontable[g]|0|_symbol_']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 60,
-  &quot;edge_types_head&quot;: [
-    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
-    &quot;[+]clear[g]|0|_symbol_&quot;,
-    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
-    &quot;[+]holding[g]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|1|_symbol_&quot;,
-    &quot;[+]on[g]|0|_symbol_&quot;,
-    &quot;[+]on[g]|1|_symbol_&quot;,
-    &quot;[+]ontable[g][sat]|0|_symbol_&quot;,
-    &quot;[+]ontable[g]|0|_symbol_&quot;
+  "edge_types_count": 60,
+  "edge_types_head": [
+    "[+]clear[g][sat]|0|_symbol_",
+    "[+]clear[g]|0|_symbol_",
+    "[+]holding[g][sat]|0|_symbol_",
+    "[+]holding[g]|0|_symbol_",
+    "[+]on[g][sat]|0|_symbol_",
+    "[+]on[g][sat]|1|_symbol_",
+    "[+]on[g]|0|_symbol_",
+    "[+]on[g]|1|_symbol_",
+    "[+]ontable[g][sat]|0|_symbol_",
+    "[+]ontable[g]|0|_symbol_"
   ],
-  &quot;graph_kind&quot;: &quot;hetero&quot;,
-  &quot;label&quot;: &quot;TransitionHGraphEncoder (full) encode(state, successor)&quot;,
-  &quot;node_types_count&quot;: 31,
-  &quot;node_types_head&quot;: [
-    &quot;[+]clear[g]&quot;,
-    &quot;[+]clear[g][sat]&quot;,
-    &quot;[+]handempty[g]&quot;,
-    &quot;[+]handempty[g][sat]&quot;,
-    &quot;[+]holding[g]&quot;,
-    &quot;[+]holding[g][sat]&quot;,
-    &quot;[+]on[g]&quot;,
-    &quot;[+]on[g][sat]&quot;,
-    &quot;[+]ontable[g]&quot;,
-    &quot;[+]ontable[g][sat]&quot;
+  "graph_kind": "hetero",
+  "label": "TransitionHGraphEncoder (full) encode(state, successor)",
+  "node_types_count": 31,
+  "node_types_head": [
+    "[+]clear[g]",
+    "[+]clear[g][sat]",
+    "[+]handempty[g]",
+    "[+]handempty[g][sat]",
+    "[+]holding[g]",
+    "[+]holding[g][sat]",
+    "[+]on[g]",
+    "[+]on[g][sat]",
+    "[+]ontable[g]",
+    "[+]ontable[g][sat]"
   ],
-  &quot;num_edges&quot;: 22,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 15812242964936039643
+  "num_edges": 22,
+  "num_graphs": 1,
+  "num_nodes": 12,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 15812242964936039643
 }
 SNAPSHOT_JSON_END
 == TransitionEffectsHGraphEncoder (delta) encode(state, successor) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
@@ -1653,50 +1836,54 @@ num_edges: 22
 schema_fingerprint: 3017462943347528540
 node_types_count: 48
 edge_types_count: 94
-node_types_head: [&#39;[+]clear&#39;, &#39;[+]clear[g]&#39;, &#39;[+]clear[g][sat]&#39;, &#39;[+]clear[sat]&#39;, &#39;[+]handempty&#39;, &#39;[+]handempty[g]&#39;, &#39;[+]handempty[g][sat]&#39;, &#39;[+]handempty[sat]&#39;, &#39;[+]holding&#39;, &#39;[+]holding[g]&#39;]
-edge_types_head: [&#39;[+]clear[g][sat]|0|_symbol_&#39;, &#39;[+]clear[g]|0|_symbol_&#39;, &#39;[+]clear[sat]|0|_symbol_&#39;, &#39;[+]clear|0|_symbol_&#39;, &#39;[+]holding[g][sat]|0|_symbol_&#39;, &#39;[+]holding[g]|0|_symbol_&#39;, &#39;[+]holding[sat]|0|_symbol_&#39;, &#39;[+]holding|0|_symbol_&#39;, &#39;[+]on[g][sat]|0|_symbol_&#39;, &#39;[+]on[g][sat]|1|_symbol_&#39;]
+node_types_head: ['[+]clear', '[+]clear[g]', '[+]clear[g][sat]', '[+]clear[sat]', '[+]handempty', '[+]handempty[g]', '[+]handempty[g][sat]', '[+]handempty[sat]', '[+]holding', '[+]holding[g]']
+edge_types_head: ['[+]clear[g][sat]|0|_symbol_', '[+]clear[g]|0|_symbol_', '[+]clear[sat]|0|_symbol_', '[+]clear|0|_symbol_', '[+]holding[g][sat]|0|_symbol_', '[+]holding[g]|0|_symbol_', '[+]holding[sat]|0|_symbol_', '[+]holding|0|_symbol_', '[+]on[g][sat]|0|_symbol_', '[+]on[g][sat]|1|_symbol_']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 94,
-  &quot;edge_types_head&quot;: [
-    &quot;[+]clear[g][sat]|0|_symbol_&quot;,
-    &quot;[+]clear[g]|0|_symbol_&quot;,
-    &quot;[+]clear[sat]|0|_symbol_&quot;,
-    &quot;[+]clear|0|_symbol_&quot;,
-    &quot;[+]holding[g][sat]|0|_symbol_&quot;,
-    &quot;[+]holding[g]|0|_symbol_&quot;,
-    &quot;[+]holding[sat]|0|_symbol_&quot;,
-    &quot;[+]holding|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|0|_symbol_&quot;,
-    &quot;[+]on[g][sat]|1|_symbol_&quot;
+  "edge_types_count": 94,
+  "edge_types_head": [
+    "[+]clear[g][sat]|0|_symbol_",
+    "[+]clear[g]|0|_symbol_",
+    "[+]clear[sat]|0|_symbol_",
+    "[+]clear|0|_symbol_",
+    "[+]holding[g][sat]|0|_symbol_",
+    "[+]holding[g]|0|_symbol_",
+    "[+]holding[sat]|0|_symbol_",
+    "[+]holding|0|_symbol_",
+    "[+]on[g][sat]|0|_symbol_",
+    "[+]on[g][sat]|1|_symbol_"
   ],
-  &quot;graph_kind&quot;: &quot;hetero&quot;,
-  &quot;label&quot;: &quot;TransitionEffectsHGraphEncoder (delta) encode(state, successor)&quot;,
-  &quot;node_types_count&quot;: 48,
-  &quot;node_types_head&quot;: [
-    &quot;[+]clear&quot;,
-    &quot;[+]clear[g]&quot;,
-    &quot;[+]clear[g][sat]&quot;,
-    &quot;[+]clear[sat]&quot;,
-    &quot;[+]handempty&quot;,
-    &quot;[+]handempty[g]&quot;,
-    &quot;[+]handempty[g][sat]&quot;,
-    &quot;[+]handempty[sat]&quot;,
-    &quot;[+]holding&quot;,
-    &quot;[+]holding[g]&quot;
+  "graph_kind": "hetero",
+  "label": "TransitionEffectsHGraphEncoder (delta) encode(state, successor)",
+  "node_types_count": 48,
+  "node_types_head": [
+    "[+]clear",
+    "[+]clear[g]",
+    "[+]clear[g][sat]",
+    "[+]clear[sat]",
+    "[+]handempty",
+    "[+]handempty[g]",
+    "[+]handempty[g][sat]",
+    "[+]handempty[sat]",
+    "[+]holding",
+    "[+]holding[g]"
   ],
-  &quot;num_edges&quot;: 22,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 12,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 3017462943347528540
+  "num_edges": 22,
+  "num_graphs": 1,
+  "num_nodes": 12,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 3017462943347528540
 }
 SNAPSHOT_JSON_END
+
+[stderr]
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/color_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
+<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
 <h2 id="program_3">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1706,20 +1893,20 @@ It is intended to show the exact code and typical output for this version.</p>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;smedium&quot;</span><span class="p">)</span>
+    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">_problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"smedium"</span><span class="p">)</span>
     <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">ColorEncoder</span><span class="p">(</span>
         <span class="n">domain</span><span class="p">,</span> <span class="n">edge_features</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="kc">False</span>
     <span class="p">)</span>
     <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
-    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;ColorEncoder.encode(initial_state)&quot;</span><span class="p">)</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"ColorEncoder.encode(initial_state)"</span><span class="p">)</span>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="output_3">Output</h2>
 <div class="highlight"><pre><span></span><code>== ColorEncoder.encode(initial_state) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: homo
 num_graphs: 1
@@ -1728,32 +1915,36 @@ num_edges: 17
 schema_fingerprint: 4576704403193191383
 node_types_count: 1
 edge_types_count: 1
-node_types_head: [&#39;node&#39;]
-edge_types_head: [&#39;node|edge|node&#39;]
+node_types_head: ['node']
+edge_types_head: ['node|edge|node']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 1,
-  &quot;edge_types_head&quot;: [
-    &quot;node|edge|node&quot;
+  "edge_types_count": 1,
+  "edge_types_head": [
+    "node|edge|node"
   ],
-  &quot;graph_kind&quot;: &quot;homo&quot;,
-  &quot;label&quot;: &quot;ColorEncoder.encode(initial_state)&quot;,
-  &quot;node_types_count&quot;: 1,
-  &quot;node_types_head&quot;: [
-    &quot;node&quot;
+  "graph_kind": "homo",
+  "label": "ColorEncoder.encode(initial_state)",
+  "node_types_count": 1,
+  "node_types_head": [
+    "node"
   ],
-  &quot;num_edges&quot;: 17,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 17,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 4576704403193191383
+  "num_edges": 17,
+  "num_graphs": 1,
+  "num_nodes": 17,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 4576704403193191383
 }
 SNAPSHOT_JSON_END
+
+[stderr]
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 </code></pre></div>
 <p>This page fragment is generated from <code>docs/snippets/ilg_basic.py</code>.
 It is intended to show the exact code and typical output for this version.</p>
-<p>Commit: <code>79252e04165d250d8b515de61baf5cb4bcf92c6a</code></p>
+<p>Commit: <code>91b152c21819678a7818865b230774a3b6e800e3</code></p>
 <h2 id="program_4">Program</h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -1763,19 +1954,19 @@ It is intended to show the exact code and typical output for this version.</p>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">&quot;blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;small&quot;</span><span class="p">)</span>
+    <span class="n">_space</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">load_problem</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">,</span> <span class="s2">"small"</span><span class="p">)</span>
     <span class="n">goals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">get_goal_condition</span><span class="p">()</span><span class="o">.</span><span class="n">get_literals</span><span class="p">())</span>
     <span class="n">encoder</span> <span class="o">=</span> <span class="n">mifrost</span><span class="o">.</span><span class="n">ILGEncoder</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="n">encoding</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">)</span>
-    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;ILGEncoder.encode(state, goals)&quot;</span><span class="p">)</span>
+    <span class="n">print_encoding_summary</span><span class="p">(</span><span class="n">encoding</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"ILGEncoder.encode(state, goals)"</span><span class="p">)</span>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="output_4">Output</h2>
 <div class="highlight"><pre><span></span><code>== ILGEncoder.encode(state, goals) ==
-python: 3.12.13
+python: 3.12.14
 platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
 graph_kind: hetero
 num_graphs: 1
@@ -1784,42 +1975,46 @@ num_edges: 16
 schema_fingerprint: 16751243357862855874
 node_types_count: 6
 edge_types_count: 10
-node_types_head: [&#39;_symbol_&#39;, &#39;clear&#39;, &#39;handempty&#39;, &#39;object&#39;, &#39;on&#39;, &#39;ontable&#39;]
-edge_types_head: [&#39;_symbol_|0|clear&#39;, &#39;_symbol_|0|object&#39;, &#39;_symbol_|0|on&#39;, &#39;_symbol_|0|ontable&#39;, &#39;_symbol_|1|on&#39;, &#39;clear|0|_symbol_&#39;, &#39;object|0|_symbol_&#39;, &#39;ontable|0|_symbol_&#39;, &#39;on|0|_symbol_&#39;, &#39;on|1|_symbol_&#39;]
+node_types_head: ['_symbol_', 'clear', 'handempty', 'object', 'on', 'ontable']
+edge_types_head: ['_symbol_|0|clear', '_symbol_|0|object', '_symbol_|0|on', '_symbol_|0|ontable', '_symbol_|1|on', 'clear|0|_symbol_', 'object|0|_symbol_', 'ontable|0|_symbol_', 'on|0|_symbol_', 'on|1|_symbol_']
 SNAPSHOT_JSON_BEGIN
 {
-  &quot;edge_types_count&quot;: 10,
-  &quot;edge_types_head&quot;: [
-    &quot;_symbol_|0|clear&quot;,
-    &quot;_symbol_|0|object&quot;,
-    &quot;_symbol_|0|on&quot;,
-    &quot;_symbol_|0|ontable&quot;,
-    &quot;_symbol_|1|on&quot;,
-    &quot;clear|0|_symbol_&quot;,
-    &quot;object|0|_symbol_&quot;,
-    &quot;ontable|0|_symbol_&quot;,
-    &quot;on|0|_symbol_&quot;,
-    &quot;on|1|_symbol_&quot;
+  "edge_types_count": 10,
+  "edge_types_head": [
+    "_symbol_|0|clear",
+    "_symbol_|0|object",
+    "_symbol_|0|on",
+    "_symbol_|0|ontable",
+    "_symbol_|1|on",
+    "clear|0|_symbol_",
+    "object|0|_symbol_",
+    "ontable|0|_symbol_",
+    "on|0|_symbol_",
+    "on|1|_symbol_"
   ],
-  &quot;graph_kind&quot;: &quot;hetero&quot;,
-  &quot;label&quot;: &quot;ILGEncoder.encode(state, goals)&quot;,
-  &quot;node_types_count&quot;: 6,
-  &quot;node_types_head&quot;: [
-    &quot;_symbol_&quot;,
-    &quot;clear&quot;,
-    &quot;handempty&quot;,
-    &quot;object&quot;,
-    &quot;on&quot;,
-    &quot;ontable&quot;
+  "graph_kind": "hetero",
+  "label": "ILGEncoder.encode(state, goals)",
+  "node_types_count": 6,
+  "node_types_head": [
+    "_symbol_",
+    "clear",
+    "handempty",
+    "object",
+    "on",
+    "ontable"
   ],
-  &quot;num_edges&quot;: 16,
-  &quot;num_graphs&quot;: 1,
-  &quot;num_nodes&quot;: 10,
-  &quot;platform&quot;: &quot;Linux-6.17.0-1022-azure-x86_64-with-glibc2.39&quot;,
-  &quot;python&quot;: &quot;3.12.13&quot;,
-  &quot;schema_fingerprint&quot;: 16751243357862855874
+  "num_edges": 16,
+  "num_graphs": 1,
+  "num_nodes": 10,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "schema_fingerprint": 16751243357862855874
 }
 SNAPSHOT_JSON_END
+
+[stderr]
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 </code></pre></div>
 <h2 id="stream-support">Stream Support</h2>
 <ul>

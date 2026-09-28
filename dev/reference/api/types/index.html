@@ -542,6 +542,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -665,6 +671,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -854,6 +944,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -977,6 +1071,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1339,22 +1489,22 @@
 <span class="normal">61</span>
 <span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">BatchParam</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">_BatchT</span><span class="p">]):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Explicit shared/separate wrapper for batch inputs.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Explicit shared/separate wrapper for batch inputs."""</span>
 
-    <span class="n">kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;shared&quot;</span><span class="p">,</span> <span class="s2">&quot;separate&quot;</span><span class="p">,</span> <span class="s2">&quot;none&quot;</span><span class="p">]</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"shared"</span><span class="p">,</span> <span class="s2">"separate"</span><span class="p">,</span> <span class="s2">"none"</span><span class="p">]</span>
     <span class="n">value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">shared</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">_BatchT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;BatchParam[_BatchT]&quot;</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;shared&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shared</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">_BatchT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"BatchParam[_BatchT]"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"shared"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">separate</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">_BatchT</span> <span class="o">|</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;BatchParam[_BatchT]&quot;</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;separate&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">separate</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">_BatchT</span> <span class="o">|</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">"BatchParam[_BatchT]"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"separate"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">none</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;BatchParam[_BatchT]&quot;</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;none&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">none</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"BatchParam[_BatchT]"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"none"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1443,15 +1593,15 @@ storage attributes like <code>data["atom"].x</code>.</p>
 <span class="normal">123</span>
 <span class="normal">124</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">BatchEncodingLike</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Structural type for native C++ ``BatchEncoding``-like objects.</span>
 
 <span class="sd">    Concrete bindings expose this shape from C++ while Python code can</span>
 <span class="sd">    type against the protocol without importing binding internals.</span>
 <span class="sd">    The protocol mirrors PyG-level structural metadata (graph/node/edge</span>
 <span class="sd">    counts and type lists) but intentionally does not model dynamic node</span>
-<span class="sd">    storage attributes like ``data[&quot;atom&quot;].x``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    storage attributes like ``data["atom"].x``.</span>
+<span class="sd">    """</span>
 
     <span class="n">num_graphs</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">num_nodes</span><span class="p">:</span> <span class="nb">int</span>
@@ -1464,11 +1614,11 @@ storage attributes like <code>data["atom"].x</code>.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">as_pyg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">as_batch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PygDataLike</span><span class="p">:</span> <span class="o">...</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">as_hetero</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;HeteroBatchEncodingView&quot;</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">as_hetero</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"HeteroBatchEncodingView"</span><span class="p">:</span> <span class="o">...</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">as_homo</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;HomoBatchEncodingView&quot;</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">as_homo</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"HomoBatchEncodingView"</span><span class="p">:</span> <span class="o">...</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;BatchEncodingLike&quot;</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"BatchEncodingLike"</span><span class="p">:</span> <span class="o">...</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">schema_fingerprint</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span> <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
@@ -1531,9 +1681,9 @@ storage attributes like <code>data["atom"].x</code>.</p>
 <span class="normal">132</span>
 <span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">HeteroEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Refined protocol for hetero native encodings.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Refined protocol for hetero native encodings."""</span>
 
-    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;hetero&quot;</span><span class="p">]</span>
+    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"hetero"</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">as_pyg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">as_batch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PygDataLike</span><span class="p">:</span> <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
@@ -1596,9 +1746,9 @@ storage attributes like <code>data["atom"].x</code>.</p>
 <span class="normal">141</span>
 <span class="normal">142</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">HomoEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Refined protocol for homo native encodings.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Refined protocol for homo native encodings."""</span>
 
-    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;homo&quot;</span><span class="p">]</span>
+    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"homo"</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">as_pyg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">as_batch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PygDataLike</span><span class="p">:</span> <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
@@ -1668,14 +1818,14 @@ still homo-shaped and converts through the flat PyG carrier.</p>
 <span class="normal">155</span>
 <span class="normal">156</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@runtime_checkable</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">FlatEncoding</span><span class="p">(</span><span class="n">BatchEncodingLike</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Refined protocol for flat native encodings.</span>
 
-<span class="sd">    Flat encodings use `graph_kind == &quot;flat&quot;` even though their tensor layout is</span>
+<span class="sd">    Flat encodings use `graph_kind == "flat"` even though their tensor layout is</span>
 <span class="sd">    still homo-shaped and converts through the flat PyG carrier.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;flat&quot;</span><span class="p">]</span>
+    <span class="n">graph_kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"flat"</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">as_pyg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">as_batch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PygDataLike</span><span class="p">:</span> <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
@@ -1722,7 +1872,7 @@ still homo-shaped and converts through the flat PyG carrier.</p>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">168</span>
 <span class="normal">169</span>
 <span class="normal">170</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir state adapter.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a legacy exact-type Pymimir state adapter."""</span>
     <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_state_adapter</span><span class="p">(</span><span class="n">state_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -1749,7 +1899,7 @@ still homo-shaped and converts through the flat PyG carrier.</p>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
 <span class="normal">186</span>
 <span class="normal">187</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir domain adapter.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a legacy exact-type Pymimir domain adapter."""</span>
     <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_domain_adapter</span><span class="p">(</span><span class="n">domain_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -1776,7 +1926,7 @@ still homo-shaped and converts through the flat PyG carrier.</p>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">202</span>
 <span class="normal">203</span>
 <span class="normal">204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir literal adapter.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a legacy exact-type Pymimir literal adapter."""</span>
     <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_literal_adapter</span><span class="p">(</span><span class="n">literal_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -1803,7 +1953,7 @@ still homo-shaped and converts through the flat PyG carrier.</p>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">219</span>
 <span class="normal">220</span>
 <span class="normal">221</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">object</span><span class="p">],</span> <span class="n">adapter</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a legacy exact-type Pymimir action adapter.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a legacy exact-type Pymimir action adapter."""</span>
     <span class="n">_pymimir_types</span><span class="p">()</span><span class="o">.</span><span class="n">register_action_adapter</span><span class="p">(</span><span class="n">action_type</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>

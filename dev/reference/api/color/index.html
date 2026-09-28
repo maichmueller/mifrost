@@ -542,6 +542,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -665,6 +671,90 @@
     
   
     Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/consume-with-vanilla-gnns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
   
 
     
@@ -854,6 +944,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -977,6 +1071,62 @@
     
   
     Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
   
 
     
@@ -1488,12 +1638,12 @@ attributes suitable for color-based graph models.</p>
 <span class="normal">286</span>
 <span class="normal">287</span>
 <span class="normal">288</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ColorEncoder</span><span class="p">(</span><span class="n">EncoderBase</span><span class="p">[</span><span class="n">Data</span><span class="p">]):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Homogeneous color encoder backed by ``ColorEncoderEngine``.</span>
 
 <span class="sd">    Produces compact ``Data``/``Batch`` outputs with integer-like node/edge</span>
 <span class="sd">    attributes suitable for color-based graph models.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1504,7 +1654,7 @@ attributes suitable for color-based graph models.</p>
         <span class="n">enable_global_predicate_nodes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a color encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create a color encoder for one domain."""</span>
         <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticColorEncoderConfig</span><span class="p">(</span>
             <span class="n">edge_features</span><span class="o">=</span><span class="n">edge_features</span><span class="p">,</span>
             <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="n">enable_global_predicate_nodes</span><span class="p">,</span>
@@ -1520,12 +1670,12 @@ attributes suitable for color-based graph models.</p>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the underlying C++ color engine.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Expose the underlying C++ color engine."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the backend-neutral resolved Color config.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Expose the backend-neutral resolved Color config."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_encode</span><span class="p">(</span>
@@ -1536,7 +1686,7 @@ attributes suitable for color-based graph models.</p>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersInput</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one state into homogeneous encoding dictionary.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one state into homogeneous encoding dictionary."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">state</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1554,7 +1704,7 @@ attributes suitable for color-based graph models.</p>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one state into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one state into native ``BatchEncoding``."""</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
             <span class="n">state</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1572,7 +1722,7 @@ attributes suitable for color-based graph models.</p>
         <span class="n">actions</span><span class="p">:</span> <span class="n">ActionBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">subgoal_layers</span><span class="p">:</span> <span class="n">SubgoalLayersBatchParam</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many states into homogeneous batch encoding_dict.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one or many states into homogeneous batch encoding_dict."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
             <span class="n">states</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1592,7 +1742,7 @@ attributes suitable for color-based graph models.</p>
         <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode one or many states into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Encode one or many states into native ``BatchEncoding``."""</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
             <span class="n">states</span><span class="p">,</span>
             <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1605,24 +1755,24 @@ attributes suitable for color-based graph models.</p>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColorEncoderStream</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create a streaming encoder sharing this encoder's C++ engine."""</span>
         <span class="k">return</span> <span class="n">ColorEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a color-encoded PyG graph into a NetworkX graph.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Convert a color-encoded PyG graph into a NetworkX graph."""</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
 
         <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
-        <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;node_names&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"node_names"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">node_names</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">count</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">count</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">num_nodes</span>
             <span class="n">node_names</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">)]</span>
 
         <span class="n">has_scalar_x</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+            <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
             <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
             <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">2</span>
@@ -1630,10 +1780,10 @@ attributes suitable for color-based graph models.</p>
         <span class="p">)</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node_names</span><span class="p">):</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">has_scalar_x</span> <span class="k">else</span> <span class="mi">0</span>
-            <span class="n">attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="n">val</span><span class="p">}</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;goal_level&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="n">val</span><span class="p">}</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"goal_level"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">gval</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-                <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;goal_level&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gval</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">gval</span><span class="p">)</span> <span class="k">else</span> <span class="n">gval</span>
+                <span class="n">attrs</span><span class="p">[</span><span class="s2">"goal_level"</span><span class="p">]</span> <span class="o">=</span> <span class="n">gval</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">gval</span><span class="p">)</span> <span class="k">else</span> <span class="n">gval</span>
             <span class="n">graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
@@ -1642,12 +1792,12 @@ attributes suitable for color-based graph models.</p>
             <span class="n">u_name</span> <span class="o">=</span> <span class="n">node_names</span><span class="p">[</span><span class="n">u_idx</span><span class="p">]</span>
             <span class="n">v_name</span> <span class="o">=</span> <span class="n">node_names</span><span class="p">[</span><span class="n">v_idx</span><span class="p">]</span>
             <span class="n">attrs</span> <span class="o">=</span> <span class="p">{}</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;edge_attr&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"edge_attr"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">val</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-                <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="n">attrs</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
             <span class="n">graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">u_name</span><span class="p">,</span> <span class="n">v_name</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">)</span>
 
-        <span class="n">graph</span><span class="o">.</span><span class="n">graph</span><span class="p">[</span><span class="s2">&quot;encoder_hash&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;encoder_hash&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">graph</span><span class="p">[</span><span class="s2">"encoder_hash"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"encoder_hash"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">graph</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">draw</span><span class="p">(</span>
@@ -1660,14 +1810,14 @@ attributes suitable for color-based graph models.</p>
         <span class="n">node_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">,</span>
         <span class="n">font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Render a color-encoded graph with matplotlib and return the axis.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Render a color-encoded graph with matplotlib and return the axis."""</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
         <span class="k">except</span> <span class="ne">ModuleNotFoundError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;ColorEncoder.draw requires matplotlib to be installed&quot;</span>
+                <span class="s2">"ColorEncoder.draw requires matplotlib to be installed"</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
         <span class="n">graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -1687,8 +1837,8 @@ attributes suitable for color-based graph models.</p>
         <span class="k">if</span> <span class="n">edge_labels</span><span class="p">:</span>
             <span class="n">labels</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">attrs</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-                <span class="k">if</span> <span class="s2">&quot;type&quot;</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
-                    <span class="n">labels</span><span class="p">[(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">)]</span> <span class="o">=</span> <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="s2">"type"</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                    <span class="n">labels</span><span class="p">[(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">)]</span> <span class="o">=</span> <span class="n">attrs</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
                 <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_edge_labels</span><span class="p">(</span>
                     <span class="n">graph</span><span class="p">,</span>
@@ -1805,7 +1955,7 @@ attributes suitable for color-based graph models.</p>
     <span class="n">enable_global_predicate_nodes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">export_node_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a color encoder for one domain.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a color encoder for one domain."""</span>
     <span class="n">config</span> <span class="o">=</span> <span class="n">_neutral_core</span><span class="o">.</span><span class="n">SemanticColorEncoderConfig</span><span class="p">(</span>
         <span class="n">edge_features</span><span class="o">=</span><span class="n">edge_features</span><span class="p">,</span>
         <span class="n">enable_global_predicate_nodes</span><span class="o">=</span><span class="n">enable_global_predicate_nodes</span><span class="p">,</span>
@@ -1868,7 +2018,7 @@ attributes suitable for color-based graph models.</p>
     <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one state into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Encode one state into native ``BatchEncoding``."""</span>
     <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
         <span class="n">state</span><span class="p">,</span>
         <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1933,7 +2083,7 @@ attributes suitable for color-based graph models.</p>
     <span class="n">include_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HomoEncoding</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode one or many states into native ``BatchEncoding``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Encode one or many states into native ``BatchEncoding``."""</span>
     <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">encode_batch</span><span class="p">(</span>
         <span class="n">states</span><span class="p">,</span>
         <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
@@ -1969,7 +2119,7 @@ attributes suitable for color-based graph models.</p>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">194</span>
 <span class="normal">195</span>
 <span class="normal">196</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColorEncoderStream</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a streaming encoder sharing this encoder&#39;s C++ engine.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a streaming encoder sharing this encoder's C++ engine."""</span>
     <span class="k">return</span> <span class="n">ColorEncoderStream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -2034,20 +2184,20 @@ attributes suitable for color-based graph models.</p>
 <span class="normal">236</span>
 <span class="normal">237</span>
 <span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_networkx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Data</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a color-encoded PyG graph into a NetworkX graph.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Convert a color-encoded PyG graph into a NetworkX graph."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
 
     <span class="n">graph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
-    <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;node_names&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">node_names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"node_names"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">node_names</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">num_nodes</span>
         <span class="n">node_names</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">)]</span>
 
     <span class="n">has_scalar_x</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+        <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
         <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
         <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">2</span>
@@ -2055,10 +2205,10 @@ attributes suitable for color-based graph models.</p>
     <span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node_names</span><span class="p">):</span>
         <span class="n">val</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">has_scalar_x</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="n">val</span><span class="p">}</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;goal_level&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="n">val</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"goal_level"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">gval</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">goal_level</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;goal_level&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gval</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">gval</span><span class="p">)</span> <span class="k">else</span> <span class="n">gval</span>
+            <span class="n">attrs</span><span class="p">[</span><span class="s2">"goal_level"</span><span class="p">]</span> <span class="o">=</span> <span class="n">gval</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">gval</span><span class="p">)</span> <span class="k">else</span> <span class="n">gval</span>
         <span class="n">graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
@@ -2067,12 +2217,12 @@ attributes suitable for color-based graph models.</p>
         <span class="n">u_name</span> <span class="o">=</span> <span class="n">node_names</span><span class="p">[</span><span class="n">u_idx</span><span class="p">]</span>
         <span class="n">v_name</span> <span class="o">=</span> <span class="n">node_names</span><span class="p">[</span><span class="n">v_idx</span><span class="p">]</span>
         <span class="n">attrs</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;edge_attr&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"edge_attr"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="n">attrs</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
         <span class="n">graph</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">u_name</span><span class="p">,</span> <span class="n">v_name</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">)</span>
 
-    <span class="n">graph</span><span class="o">.</span><span class="n">graph</span><span class="p">[</span><span class="s2">&quot;encoder_hash&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;encoder_hash&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">graph</span><span class="p">[</span><span class="s2">"encoder_hash"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"encoder_hash"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">graph</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -2154,14 +2304,14 @@ attributes suitable for color-based graph models.</p>
     <span class="n">node_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">,</span>
     <span class="n">font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a color-encoded graph with matplotlib and return the axis.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Render a color-encoded graph with matplotlib and return the axis."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
     <span class="k">except</span> <span class="ne">ModuleNotFoundError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-            <span class="s2">&quot;ColorEncoder.draw requires matplotlib to be installed&quot;</span>
+            <span class="s2">"ColorEncoder.draw requires matplotlib to be installed"</span>
         <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
     <span class="n">graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -2181,8 +2331,8 @@ attributes suitable for color-based graph models.</p>
     <span class="k">if</span> <span class="n">edge_labels</span><span class="p">:</span>
         <span class="n">labels</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">attrs</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-            <span class="k">if</span> <span class="s2">&quot;type&quot;</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
-                <span class="n">labels</span><span class="p">[(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">)]</span> <span class="o">=</span> <span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">"type"</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                <span class="n">labels</span><span class="p">[(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">)]</span> <span class="o">=</span> <span class="n">attrs</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
             <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_edge_labels</span><span class="p">(</span>
                 <span class="n">graph</span><span class="p">,</span>
