@@ -59,6 +59,23 @@ jobs:
       with:
         python-version: "3.12"
 
+    # Every build and publish job needs this one, so a tag that disagrees with
+    # the packaged version stops the release before anything is built.
+    - name: Check release tag matches project version
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        python - <<'PY'
+        import os
+        import tomllib
+
+        tag = os.environ["GITHUB_REF_NAME"]
+        with open("pyproject.toml", "rb") as file:
+            version = tomllib.load(file)["project"]["version"]
+        if tag.removeprefix("v") != version:
+            raise SystemExit(f"tag {tag} does not match pyproject version {version}")
+        print(f"tag {tag} matches pyproject version {version}")
+        PY
+
     - name: Set Conan cache dir
       run: echo "CONAN_HOME=$GITHUB_WORKSPACE/.conan2_stubs" >> $GITHUB_ENV
       shell: bash
