@@ -265,6 +265,18 @@ ENCODER_EXPORT_MANIFEST = EncoderExportManifest(
             top_level=False,
         ),
         LazyEncoderExport(
+            "SparseAtomTypeSchema",
+            ".sparse_atom",
+            "SparseAtomTypeSchema",
+            top_level=False,
+        ),
+        LazyEncoderExport(
+            "build_type_schema",
+            ".sparse_atom",
+            "build_type_schema",
+            top_level=False,
+        ),
+        LazyEncoderExport(
             "encode_sparse_atom_facts",
             ".sparse_atom",
             "encode_sparse_atom_facts",
