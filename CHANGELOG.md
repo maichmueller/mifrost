@@ -4,22 +4,9 @@ This project uses Git tags and GitHub releases for release notes.
 
 ## Unreleased
 
-## 0.6.0 - 2026-08-30
-
-- Centralized helper-driven local CMake build modes for release, debug, stubs,
-  CI-like tests, and benchmarks.
+## 0.6.0 - 2026-09-28
 
 ### Encoders
-
-### Breaking / behavioral
-
-- `BatchBuilder.set_graph_attr` now rejects writing a *different* value under an
-  existing key within one batch (previously silent last-write-wins); identical
-  values remain no-ops. Heterogeneous batch `ptr`/`batch` metadata for node
-  types first seen in later graphs is now padded correctly instead of
-  attributing their nodes to earlier graphs. Derived-graph encoders validate
-  object indices against the problem's object table instead of failing
-  silently (or opaquely) on out-of-range arguments.
 
 - Added the derived-graph family of homogeneous encoders for vanilla GNN
   pipelines: `StarGraphEncoder`, `ObjectGraphEncoder`, `AtomLineGraphEncoder`,
@@ -27,6 +14,9 @@ This project uses Git tags and GitHub releases for release notes.
   `TupleTensorEncoder` (each with a `*Stream` variant). All facades expose
   visualization helpers (`to_networkx`, `draw`, `summarize`) and convert to
   cross-stack payloads via the DGL/Jraph adapters (`to_dgl`, `to_jraph`).
+  Every member is lossless over the state's literal instances (role,
+  relation, arguments, sign, goal level, history age, category): features
+  live in `x_ids` and the 9-channel `edge_attr`; there is no dense `data.x`.
 - Added the pure-Python custom encoder toolkit `mifrost.encoders.custom`:
   planner-neutral records (`StateView`, `Atom`, `Literal`, ...), interning
   tables (`Vocabulary`, `NodeTable`, `EdgeSink`), a `GraphWriter`, composable
@@ -39,12 +29,74 @@ This project uses Git tags and GitHub releases for release notes.
   `include_state_facts=True`.
 - Added `ObjectFeatureEncoder`: compact objects-only graph that keeps unary
   predicates as per-object feature channels instead of dropping them.
+- Added `SparseAtomCompositionEncoder` and its pure-Python core
+  (`build_predicate_schema`, `encode_sparse_atom_facts`,
+  `batch_sparse_atom_encodings`, `validate_sparse_atom_composition`): one
+  occurrence vector per atom argument plus the sparse pair/witness indices
+  for composing atoms that share an object pair, without materializing the
+  dense object-pair universe. `status_encoding="vocabulary"` carries goal
+  status in the relation vocabulary instead of a channel id; on Pymimir,
+  `object_type_ids` and `SparseAtomTypeSchema.ancestor_matrix` expose the
+  declared PDDL type hierarchy (`build_type_schema`).
 - Performance: memoized state-fact preparation, batch fast lanes in the
   custom toolkit, and transparent interning plus buffer reserves in the
   derived-graph engine.
 - Fixes: single/batch conversion consistency across the derived family,
   PyTyr action-structure parity with the Pymimir lanes, and history lanes now
   honor `history_max_steps`.
+
+### Breaking / behavioral
+
+- `BatchBuilder.set_graph_attr` now rejects writing a *different* value under an
+  existing key within one batch (previously silent last-write-wins); identical
+  values remain no-ops. Heterogeneous batch `ptr`/`batch` metadata for node
+  types first seen in later graphs is now padded correctly instead of
+  attributing their nodes to earlier graphs. Derived-graph encoders validate
+  object indices against the problem's object table instead of failing
+  silently (or opaquely) on out-of-range arguments.
+- The Pymimir backend now requires `pymimir>=0.15.0`. mifrost joins
+  Pymimir's nanobind type registry, and 0.15.0 is the first release on the
+  same internals generation (22); an older Pymimir fails at the first
+  cross-module cast. Its wheels come from the maintained `maichmueller/mimir`
+  release: install with
+  `--find-links https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0`.
+
+### Backends
+
+- `DomainSnapshot` gains `types`/`type_bases` and `ProblemSnapshot` gains
+  `object_types`, filled by the Pymimir reader. PyTyr's translated task has no
+  PDDL type surface, so it leaves them `None`; `shared_capabilities(...)`
+  compares two snapshots on exactly the fields both backends resolve.
+- `import mifrost` loads Pymimir before its native adapter, so the adapter
+  binds the interpreter's own `libmimir_core` instead of one reachable through
+  its build-time rpath (two mimir images with disjoint repositories used to
+  fail inside mimir, e.g. `StateSpace.create` raising `IndexError`).
+
+### Build and tooling
+
+- nanobind moves to 3.x (internals generation 22) and now comes from pip
+  instead of Conan, matching `pymimir>=0.15.0`, whose type registry mifrost
+  joins. `cmake/NanobindAbi.cmake` verifies at configure time that both sides
+  share one internals generation.
+- Docs builds cap `mkdocs<2` and silence the MkDocs 2.0 advocacy banners.
+- `mifrost.__version__` reports the installed distribution version.
+- Releases stop before building when the pushed tag disagrees with the
+  `pyproject.toml` version.
+
+## 0.5.0 - 2026-08-14
+
+- Pymimir and PyTyr encoders route through backend-neutral native planning
+  Views, with direct-View batch, stream, and successor entry points.
+- Added the native flat composition kernel: compiled flat plans, composed
+  node-feature columns and metadata, and extensible semantic horizon
+  assemblies.
+- Contiguous graph-field arrays are ingested in bulk.
+- Moved the PyTyr backend to `pytyr==0.0.34`.
+
+## 0.4.0 - 2026-07-22
+
+- Centralized helper-driven local CMake build modes for release, debug, stubs,
+  CI-like tests, and benchmarks.
 
 ### Backend migration
 

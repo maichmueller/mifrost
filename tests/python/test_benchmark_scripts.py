@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -316,10 +317,13 @@ def test_derived_benchmark_selects_deterministic_modes_and_percentiles():
 
 def test_release_metadata_and_ci_paths_are_pinned():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    assert project["project"]["version"] == "0.6.0"
+    version = project["project"]["version"]
     changelog = (ROOT / "CHANGELOG.md").read_text()
     assert "## Unreleased" in changelog
-    assert "## 0.6.0 - 2026-08-30" in changelog
+    # The version being built must have its own dated release section.
+    assert re.search(
+        rf"^## {re.escape(version)} - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.M
+    ), f"CHANGELOG.md has no dated section for {version}"
 
     wheels = (ROOT / ".github/workflows/wheels.yml").read_text()
     assert (
