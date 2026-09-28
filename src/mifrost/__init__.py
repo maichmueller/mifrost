@@ -1,8 +1,14 @@
 """Python bindings for the mifrost extension module."""
 
 import sys as _sys
+from importlib import metadata as _metadata
 from pathlib import Path as _Path
 from typing import Any
+
+try:
+    __version__ = _metadata.version("mifrost")
+except _metadata.PackageNotFoundError:  # a source tree that was never installed
+    __version__ = "0+unknown"
 
 
 def _package_root() -> _Path:
