@@ -1,0 +1,2633 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="High-performance graph encoders for planning states and transitions.">
+      
+      
+      
+        <link rel="canonical" href="https://maichmueller.github.io/mifrost/0.6.0/how-to/consume-with-vanilla-gnns/">
+      
+      
+        <link rel="prev" href="../dynamic-graph-fields/">
+      
+      
+        <link rel="next" href="../write-your-own-encoder/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>How to Consume Derived Graphs with Vanilla GNNs - mifrost</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-to-consume-derived-graphs-with-vanilla-gnns" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mifrost" class="md-header__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mifrost
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              How to Consume Derived Graphs with Vanilla GNNs
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="cyan"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../tutorials/installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Tutorials
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="../choose-an-encoder/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How-To
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../reference/native/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../explanation/native-first/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Explanation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../development/build-and-test/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Development
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mifrost" class="md-nav__button md-logo" aria-label="mifrost" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mifrost
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/maichmueller/mifrost" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    maichmueller/mifrost
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/installation/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-encoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/batching-and-streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batching and Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../choose-an-encoder/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encode-goals-actions-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode Goals, Actions, and History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encode-semantic-flat-inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encode backend-neutral semantic flat inputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-graph-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Graph Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Consume Derived Graphs with Vanilla GNNs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#which-facade-should-i-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which Facade Should I Use?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel Contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#column-1-is-a-unified-relation-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column 1 is a unified relation space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#column-4-is-the-one-signed-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column 4 is the one signed channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-graph-auxiliary-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-graph auxiliary fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-extras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy extras
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#embedding-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Recipe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Embedding Recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#there-is-no-datax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        There is no data.x
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedding-the-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding the channels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objects-only-facades-the-content-is-on-the-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objects-only facades: the content is on the edges
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invariants-you-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invariants You Can Rely On
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#information-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Information Content
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrading-what-changed-incompatibly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading: What Changed Incompatibly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Guarantee
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualizing-derived-encodings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualizing Derived Encodings
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write-your-own-encoder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Write Your Own Encoder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-stack-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to Export Derived Graphs to DGL and Jraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters for Custom Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Guidance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/native/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../explanation/native-first/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/schema-and-tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema and Tensor Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/streaming-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/encoder-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encoder Coverage Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/derived-encoding-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derived Encoding Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/sparse-atom-composition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sparse Atom-Composition Encoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/build-and-test/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#which-facade-should-i-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which Facade Should I Use?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel Contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#column-1-is-a-unified-relation-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column 1 is a unified relation space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#column-4-is-the-one-signed-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column 4 is the one signed channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-graph-auxiliary-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-graph auxiliary fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-extras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy extras
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#embedding-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Recipe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Embedding Recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#there-is-no-datax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        There is no data.x
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedding-the-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding the channels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objects-only-facades-the-content-is-on-the-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objects-only facades: the content is on the edges
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invariants-you-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invariants You Can Rely On
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#information-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Information Content
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrading-what-changed-incompatibly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading: What Changed Incompatibly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Guarantee
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualizing-derived-encodings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualizing Derived Encodings
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="how-to-consume-derived-graphs-with-vanilla-gnns">How to Consume Derived Graphs with Vanilla GNNs</h1>
+<p>The derived-graph encoders turn a planning problem's objects and atoms into
+plain homogeneous PyTorch Geometric graphs. No heterogeneous machinery, custom
+collation, or bespoke layer is required: the output is a stock <code>Data</code> object
+whose node and edge features are integer-id channels that you embed with
+<code>nn.Embedding</code> before message passing.</p>
+<p>All facades take a <em>problem</em> (<code>pymimir.Problem</code> or a <code>pytyr.PlanningTask</code>),
+not a bare <code>Domain</code>, because object tables are problem-scoped.</p>
+<h2 id="which-facade-should-i-use">Which Facade Should I Use?</h2>
+<table>
+<thead>
+<tr>
+<th>If you want ...</th>
+<th>Use</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reified atom nodes (star view)</td>
+<td><code>StarGraphEncoder</code></td>
+<td>Object nodes plus one node per grounded literal/action anchor; position-aware star edges</td>
+</tr>
+<tr>
+<td>A compact objects-only graph</td>
+<td><code>ObjectGraphEncoder</code></td>
+<td>Atoms become fully labeled argument-pair edges via <code>atom_expansion="clique" \| "chain" \| "star_first"</code>, plus an anchor node and the tuple instance table</td>
+</tr>
+<tr>
+<td>Atom co-occurrence structure</td>
+<td><code>AtomLineGraphEncoder</code></td>
+<td>Star universe plus fact-fact <code>line_share</code> edges bounded by <code>line_graph_max_degree</code></td>
+</tr>
+<tr>
+<td>Native hypergraph layers</td>
+<td><code>HypergraphIncidenceEncoder</code></td>
+<td>Literal instances as hyperedges; emits <code>hyperedge_index</code> / <code>hyperedge_attr_ids</code> (<code>[M, 6]</code>) for PyG <code>HypergraphConv</code></td>
+</tr>
+<tr>
+<td>Transformer attention biases</td>
+<td><code>TransformerBiasEncoder</code></td>
+<td>Objects-only clique projection plus sparse shortest-path fields <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code> (tune with <code>spd_max_hops</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>TupleTensorEncoder</code> additionally exposes a padding-free CSR tuple view
+(<code>tuple_args</code> / <code>tuple_ptr</code> plus one id vector per node channel, also stacked
+as <code>tuple_attr_ids</code>) — see its class docstring. <code>ObjectGraphEncoder</code> and
+<code>TransformerBiasEncoder</code> carry the same tuple channels unconditionally,
+because a pairwise projection cannot group the arguments of an arity &gt;= 3
+instance on its own.</p>
+<p><code>TransformerBiasEncoder</code> spd distances are even bipartite hop counts: two
+objects sharing one fact sit at distance 2, and <code>spd_max_hops</code> must be &gt;= 2.</p>
+<div class="admonition warning">
+<p class="admonition-title">Objects-only facades need an edge-conditioned layer</p>
+<p><code>ObjectGraphEncoder</code> and <code>TransformerBiasEncoder</code> reify no fact, goal,
+subgoal or history node, so their <code>x_ids</code> is <em>information-free</em>: on
+<code>blocks/smedium</code> it has 2 distinct rows for the whole graph (3 once
+actions are supplied), and the only non-zero column is <code>role</code>. All of the
+state content is on <code>edge_attr</code> and in the tuple instance table. Embedding
+<code>x_ids</code> alone — the recipe below, applied naively — hands your model a
+near-constant feature matrix. See
+<a href="#objects-only-facades-the-content-is-on-the-edges">Objects-only facades: the content is on the edges</a>.</p>
+</div>
+<h2 id="channel-contract">Channel Contract</h2>
+<p>Every facade encodes to the same carrier layout:</p>
+<ul>
+<li><code>x_ids</code>: <code>[N, 6]</code> float tensor of integer node channels</li>
+<li><code>edge_index</code>: <code>[2, E]</code></li>
+<li><code>edge_attr</code>: <code>[E, 9]</code> float tensor of integer edge channels</li>
+</ul>
+<p>There is deliberately no <code>x</code> — see <a href="#there-is-no-datax">There is no <code>data.x</code></a>.</p>
+<p>Node channels, in column order (<code>channel_names</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Name</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>role</code></td>
+<td>index into <code>vocab_roles</code> = <code>["object", "fact", "goal", "subgoal", "history", "action", "anchor"]</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>relation_id_plus_one</code></td>
+<td>relation id + 1 over the unified space (see below); <code>0</code> means "none"</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>sign</code></td>
+<td><code>0</code> = positive literal, <code>1</code> = negated literal</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>goal_level</code></td>
+<td>small int goal/subgoal layer (<code>0</code> = top goal)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>history_dt</code></td>
+<td>history age — <strong>signed</strong>, negative for history rows</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>category</code></td>
+<td>index into <code>vocab_categories</code> = <code>["static", "fluent", "derived", "action"]</code></td>
+</tr>
+</tbody>
+</table>
+<p>Edge channels, in column order (<code>edge_channel_names</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Name</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>kind</code></td>
+<td>index into <code>vocab_edge_kinds</code> (13 entries, listed below)</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>pos_a</code></td>
+<td>argument position of the source endpoint</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>pos_b</code></td>
+<td>argument position of the target endpoint</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>rel_id_plus_one</code></td>
+<td>relation id + 1 of the instance this edge was derived from; <code>0</code> = none</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>role</code></td>
+<td>that instance's role id</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>sign</code></td>
+<td>that instance's sign</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>goal_level</code></td>
+<td>that instance's goal level</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>history_dt</code></td>
+<td>that instance's history age — <strong>signed</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>category</code></td>
+<td>that instance's category</td>
+</tr>
+</tbody>
+</table>
+<p><code>vocab_edge_kinds</code> is</p>
+<div class="highlight"><pre><span></span><code><span class="p">[</span><span class="s2">"arg_fwd"</span><span class="p">,</span> <span class="s2">"arg_bwd"</span><span class="p">,</span> <span class="s2">"clique_fwd"</span><span class="p">,</span> <span class="s2">"clique_bwd"</span><span class="p">,</span> <span class="s2">"chain_fwd"</span><span class="p">,</span> <span class="s2">"chain_bwd"</span><span class="p">,</span>
+ <span class="s2">"star_first_fwd"</span><span class="p">,</span> <span class="s2">"star_first_bwd"</span><span class="p">,</span> <span class="s2">"nullary_self"</span><span class="p">,</span> <span class="s2">"action_fwd"</span><span class="p">,</span>
+ <span class="s2">"action_bwd"</span><span class="p">,</span> <span class="s2">"line_share"</span><span class="p">,</span> <span class="s2">"unary_self"</span><span class="p">]</span>
+</code></pre></div>
+<p>Columns 3..8 apply to every edge kind in every node universe, so an
+objects-only projection edge is as self-describing as a star edge. The single
+exception is <code>line_share</code>, whose columns 3..8 are all zero: it is not derived
+from one instance but connects two reified fact nodes that already carry their
+own six channels, so nothing is lost.</p>
+<p>A node row is only <em>populated</em> when the encoder reifies a node for the
+instance. Objects carry role <code>0</code> and zeros everywhere else — they have no
+labels of their own — and in the objects-only universe there are no other
+rows except the anchor, so columns 1..5 stay zero. Columns 1..5 of <code>x_ids</code>
+therefore say something only in the star-shaped universes; see
+<a href="#objects-only-facades-the-content-is-on-the-edges">Objects-only facades</a>.</p>
+<p>With the default <code>include_metadata=True</code>, the graph also carries plain Python
+metadata attributes: <code>vocab_roles</code>, <code>vocab_relations</code>, <code>vocab_predicates</code>,
+<code>vocab_actions</code>, <code>vocab_edge_kinds</code>, <code>vocab_categories</code>, <code>num_predicates</code>,
+<code>node_universe</code>, <code>atom_expansion</code>, <code>has_anchor</code>, <code>channel_names</code>,
+<code>edge_channel_names</code>, and (when <code>export_node_names=True</code>) <code>node_names</code> /
+<code>object_names</code>. Pass <code>include_metadata=False</code> to emit tensors only — the
+tensors still describe the state completely, but you lose the ability to
+decode any id back to a name and to split the relation id space. The
+vocabularies stay aligned across states of one problem, so per-channel
+embedding sizes can be sized once from <code>max + 2</code> headroom.</p>
+<h3 id="column-1-is-a-unified-relation-space">Column 1 is a unified relation space</h3>
+<p>Predicates and action schemas share one id space:</p>
+<div class="highlight"><pre><span></span><code>relation_id(predicate p)      = p                 for p in 0 .. P - 1
+relation_id(action schema a)  = P + a             P = data.num_predicates
+</code></pre></div>
+<p><code>vocab_relations</code> names the whole space and equals
+<code>vocab_predicates + vocab_actions</code>, so one embedding table of size
+<code>len(vocab_relations) + 1</code> covers nodes of every role. On <code>blocks/smedium</code>,
+<code>num_predicates</code> is 7 with <code>vocab_predicates == ["clear", "handempty",
+"holding", "on", "ontable", "number", "object"]</code> and <code>vocab_actions ==
+["pick-up", "put-down", "stack", "unstack"]</code>; the fact <code>(on a b)</code> gets
+<code>relation_id_plus_one == 4</code> and the grounded action <code>@(unstack a b)</code> gets
+<code>11</code> — schema id 3 shifted by <code>P</code>, decoding through
+<code>vocab_relations[10] == "unstack"</code>.</p>
+<p>Sizing that channel by <code>max(len(vocab_predicates), len(action schemas)) + 1</code>
+was <strong>wrong</strong> and no amount of headroom fixed it: on <code>blocks/smedium</code> that
+formula gives 8, and predicate id 3 (<code>on</code>) and action-schema id 3 (<code>unstack</code>)
+still shared embedding row 3. Under the unified space the two are ids 3 and
+10, and the correct size is <code>len(vocab_relations) + 1 == 12</code>. To recover the
+old split without string compares:</p>
+<div class="highlight"><pre><span></span><code><span class="n">rel</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span>              <span class="c1"># -1 == "none"</span>
+<span class="n">is_action</span> <span class="o">=</span> <span class="n">rel</span> <span class="o">&gt;=</span> <span class="n">data</span><span class="o">.</span><span class="n">num_predicates</span>
+<span class="n">schema_id</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="n">is_action</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">num_predicates</span>
+</code></pre></div>
+<p><code>tuple_rel_ids</code> and <code>hyperedge_attr_ids[:, 1]</code> index the same unified space
+(<code>tuple_rel_ids</code> stores the <strong>raw</strong> relation id, with <code>-1</code> for "none", while
+<code>x_ids</code>, <code>edge_attr[:, 3]</code> and <code>hyperedge_attr_ids[:, 1]</code> all store id + 1).</p>
+<h3 id="column-4-is-the-one-signed-channel">Column 4 is the one signed channel</h3>
+<p><code>x_ids[:, 4]</code> and <code>edge_attr[:, 7]</code> carry the history age exactly as supplied,
+so history rows are <strong>negative</strong>. Every other channel is a non-negative id.
+The naive <code>nn.Embedding</code> recipe therefore raises
+<code>IndexError: index out of range in self</code> the moment history is present.</p>
+<p>Each graph exports the shift you need:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Shape</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>history_dt_offset</code></td>
+<td><code>[1]</code>, <code>[B]</code> when batched</td>
+<td><code>ids = x_ids[:, 4].long() + history_dt_offset</code> (batched: <code>+ history_dt_offset[batch]</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>It is <code>-min(0, min emitted dt)</code>, so it is <code>0</code> when no history is supplied, and
+the inverse is <code>dt = ids - history_dt_offset</code>. With two history steps on
+<code>blocks/smedium</code> the raw column ranges over <code>[-2, 0]</code>, <code>history_dt_offset</code> is
+<code>2</code>, and the shifted ids range over <code>[0, 2]</code> — an embedding of size 4.
+<code>history_dt_offset</code> is a tensor field, not metadata, so it survives
+<code>include_metadata=False</code>.</p>
+<p>The same offset shifts <code>edge_attr[:, 7]</code> and <code>tuple_dt_ids</code> (equivalently
+<code>tuple_attr_ids[:, 4]</code>). On <code>ObjectGraphEncoder</code> and <code>TransformerBiasEncoder</code>
+those are the <em>only</em> places the history age appears — <code>x_ids[:, 4]</code> stays at
+<code>[0, 0]</code> there, so shifting it is a no-op. See
+<a href="#objects-only-facades-the-content-is-on-the-edges">Objects-only facades</a>.</p>
+<h3 id="per-graph-auxiliary-fields">Per-graph auxiliary fields</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Shape</th>
+<th>Present when</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>history_dt_offset</code></td>
+<td><code>[1]</code> / <code>[B]</code></td>
+<td>always</td>
+<td>shift for column 4, above</td>
+</tr>
+<tr>
+<td><code>anchor_index</code></td>
+<td><code>[1]</code> / <code>[B]</code></td>
+<td>an anchor node was emitted</td>
+<td>node index of the auxiliary <code>&lt;nullary&gt;</code> anchor (globally offset in a batch)</td>
+</tr>
+<tr>
+<td><code>has_anchor</code></td>
+<td>int metadata</td>
+<td><code>include_metadata=True</code></td>
+<td><code>1</code> iff an anchor node was emitted</td>
+</tr>
+<tr>
+<td><code>instance_node_indices</code></td>
+<td><code>[M]</code></td>
+<td>instance tables are on</td>
+<td>reified node index per instance row</td>
+</tr>
+</tbody>
+</table>
+<p>The anchor is one extra node, role <code>anchor</code> (id 6), appended as the <strong>last</strong>
+node of the graph so no pre-existing index shifts. It is emitted exactly when
+<code>node_universe == "objects_only"</code> or hyperedge incidence is on — i.e. for
+<code>ObjectGraphEncoder</code>, <code>TransformerBiasEncoder</code>, and
+<code>HypergraphIncidenceEncoder</code>. It stands in for the empty argument list: an
+arity-0 instance hangs its <code>nullary_self</code> loop and its hyperedge membership
+there. It is <strong>not</strong> an object — absent from <code>object_names</code>, never in
+<code>spd_*</code> — so object-role pooling (<code>x_ids[:, 0] == 0</code>) already excludes it.
+<code>anchor_index</code> is present exactly when an anchor is; the spec's <code>-1</code> sentinel
+is a single-graph convenience:</p>
+<div class="highlight"><pre><span></span><code><span class="n">anchor</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">anchor_index</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"has_anchor"</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
+</code></pre></div>
+<p>In a batch, <code>anchor_index</code> is <code>[B]</code> of global node indices and equals
+<code>ptr[1:] - 1</code>, since the anchor is always its graph's last node.</p>
+<p><code>instance_node_indices</code> reports where each instance row was reified. In the
+star universe that is a real node index for every row. In <code>objects_only</code> it is
+<code>-1</code> for everything except arity-0 rows (which point at the anchor) and action
+rows (actions are reified in every universe). <strong>That <code>-1</code> is not batch-safe</strong>:
+the field increments by the node offset, so a <code>-1</code> in graph <em>k</em> collates to
+<code>offset_k - 1</code>. Mask by the instance itself rather than by sign — a row is
+meaningful in <code>objects_only</code> exactly when its tuple slot is empty or its
+<code>tuple_role_ids</code> entry is <code>5</code> (action).</p>
+<h3 id="strategy-extras">Strategy extras</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Shape</th>
+<th>Emitted by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hyperedge_index</code></td>
+<td><code>[2, sum(sizes)]</code> — row 0 member node ids, row 1 hyperedge ids</td>
+<td><code>HypergraphIncidenceEncoder</code></td>
+</tr>
+<tr>
+<td><code>hyperedge_attr_ids</code></td>
+<td><code>[M, 6]</code>, same column order as <code>x_ids</code></td>
+<td><code>HypergraphIncidenceEncoder</code></td>
+</tr>
+<tr>
+<td><code>num_hyperedges</code></td>
+<td><code>[1]</code> / <code>[B]</code></td>
+<td><code>HypergraphIncidenceEncoder</code></td>
+</tr>
+<tr>
+<td><code>tuple_args</code> / <code>tuple_sizes</code> / <code>tuple_ptr</code></td>
+<td>flattened argument node ids, per-row arity, CSR offsets derived from the sizes</td>
+<td><code>TupleTensorEncoder</code>, <code>ObjectGraphEncoder</code>, <code>TransformerBiasEncoder</code></td>
+</tr>
+<tr>
+<td><code>tuple_rel_ids</code>, <code>tuple_role_ids</code>, <code>tuple_sign_ids</code>, <code>tuple_level_ids</code>, <code>tuple_dt_ids</code>, <code>tuple_category_ids</code></td>
+<td><code>[T]</code> each</td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>tuple_attr_ids</code></td>
+<td><code>[T, 6]</code> — the six above stacked in <code>x_ids</code> column order (so column 1 is <code>tuple_rel_ids + 1</code>)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>num_tuples</code></td>
+<td><code>[1]</code> / <code>[B]</code></td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code></td>
+<td><code>[K]</code> each</td>
+<td><code>TransformerBiasEncoder</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>tuple_ptr</code> is derived from <code>tuple_sizes</code> on every path, so
+<code>tuple_ptr.numel() - 1 == tuple_rel_ids.numel()</code> holds after native batching
+and after a manual <code>Batch.from_data_list</code> alike.</p>
+<p><strong>Directed by design.</strong> Derived graphs carry explicit reverse edges labeled
+<code>arg_bwd</code>, <code>clique_bwd</code>, and so on rather than relying on conversion-time
+mirroring: the schema flag <code>include_reverse_edges</code> disables mirroring for this
+family, so converting single graphs and re-batching them by hand agrees
+exactly with <code>encode_batch_pyg</code>. (Other families, such as <code>ColorEncoder</code>,
+intentionally keep undirected mirroring.) <code>line_share</code> shortcuts honour the
+same flag. Because the graph is directed, feed it to directed-capable layers
+or rely on the explicit reverse edges for symmetric message passing.</p>
+<h2 id="embedding-recipe">Embedding Recipe</h2>
+<h3 id="there-is-no-datax">There is no <code>data.x</code></h3>
+<p><code>x_ids</code> is the only node-feature source these encoders emit. The carrier does
+not define <code>x</code> at all, so <code>data.x</code> is <code>None</code> and
+<code>conv(data.x, data.edge_index)</code> raises immediately on any stock layer
+(<code>AttributeError: 'NoneType' object has no attribute 'size'</code> from <code>GCNConv</code>,
+<code>TypeError: 'NoneType' object is not subscriptable</code> from <code>GATv2Conv</code>).</p>
+<p>That is the intended behaviour, and it is a change. The carrier used to ship
+an all-zero <code>[N, 6]</code> float <code>x</code> as a <code>num_nodes</code> placeholder, so the PyG reflex
+<code>conv(data.x, data.edge_index)</code> ran, trained, and converged — on nothing. A
+zero-filled feature matrix carries no information: on <code>blocks/smedium</code>, a
+<code>GCNConv</code> over 13 nodes returns <strong>1 distinct output row</strong>, identical for every
+node, where the same layer over <code>x_ids</code> returns 10. The entire encoding was
+discarded, silently, with no error and no warning. Since this family's contract
+is that a loss must be explicit rather than silent, the placeholder is gone and
+the reflex now fails loudly instead. Embed <code>x_ids</code>, as below.</p>
+<p><code>num_nodes</code> is set explicitly on the carrier, so nothing downstream depended on
+<code>x</code> to size the graph; batching, <code>ptr</code>, and pooling are unaffected.</p>
+<h3 id="embedding-the-channels">Embedding the channels</h3>
+<p>This is the recipe for the star-shaped facades — <code>StarGraphEncoder</code>,
+<code>AtomLineGraphEncoder</code>, <code>HypergraphIncidenceEncoder</code>, <code>TupleTensorEncoder</code> —
+whose <code>x_ids</code> rows carry real labels because every literal instance has a node.
+For <code>ObjectGraphEncoder</code> and <code>TransformerBiasEncoder</code>, read
+<a href="#objects-only-facades-the-content-is-on-the-edges">the next subsection first</a>.</p>
+<p>Embed each channel separately, concatenate, then feed any message-passing
+layer. Take the edge-feature width from the tensor rather than hardcoding it —
+it is 9 today and <code>edge_channel_names</code> is the authority:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tnn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch_geometric.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">GATv2Conv</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>          <span class="c1"># DerivedGraphData</span>
+<span class="n">num_channels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">HISTORY_DT</span> <span class="o">=</span> <span class="mi">4</span>                            <span class="c1"># the one signed channel</span>
+
+<span class="n">columns</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_channels</span><span class="p">):</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="n">c</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="n">HISTORY_DT</span><span class="p">:</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="n">ids</span> <span class="o">+</span> <span class="n">data</span><span class="o">.</span><span class="n">history_dt_offset</span>  <span class="c1"># shift the signed channel</span>
+    <span class="n">embedding</span> <span class="o">=</span> <span class="n">tnn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">ids</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+    <span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">embedding</span><span class="p">(</span><span class="n">ids</span><span class="p">))</span>
+<span class="n">feats</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">conv</span> <span class="o">=</span> <span class="n">GATv2Conv</span><span class="p">(</span><span class="n">feats</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">64</span><span class="p">,</span> <span class="n">edge_dim</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">feats</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
+
+<span class="c1"># Read out over object-role rows only (role channel == 0).</span>
+<span class="c1"># The anchor node has role 6, so this mask already excludes it.</span>
+<span class="n">object_mask</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="n">graph_embedding</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">object_mask</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+<p>In batch mode the shift is per graph:</p>
+<div class="highlight"><pre><span></span><code><span class="n">ids</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="n">HISTORY_DT</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span> <span class="o">+</span> <span class="n">batch</span><span class="o">.</span><span class="n">history_dt_offset</span><span class="p">[</span><span class="n">batch</span><span class="o">.</span><span class="n">batch</span><span class="p">]</span>
+</code></pre></div>
+<p>Sizing an embedding from <code>int(ids.max()) + 2</code> is a convenience for one graph.
+For a model that must accept every state of a problem, size from the
+vocabularies instead: <code>len(vocab_relations) + 1</code> for column 1,
+<code>len(vocab_roles)</code> for column 0, <code>len(vocab_categories)</code> for column 5, and
+your own bound on goal depth and history length for columns 3 and 4.</p>
+<p>Layers without edge features (GCN/SAGE/GIN/PNA/...) simply ignore
+<code>edge_attr</code>; layers with an <code>edge_dim</code> (GAT/GATv2/TransformerConv/NNConv/
+CGConv) consume it as-is. For <code>HypergraphIncidenceEncoder</code> output, pass
+<code>hyperedge_index</code> to <code>torch_geometric.nn.HypergraphConv</code> — with
+<code>use_attention=True</code>, project <code>hyperedge_attr_ids</code> to <code>in_channels</code> first. For
+<code>TransformerBiasEncoder</code> output, use <code>spd_src</code> / <code>spd_dst</code> / <code>spd_dist</code> to
+build attention-bias terms over the clique-projected object nodes.</p>
+<h3 id="objects-only-facades-the-content-is-on-the-edges">Objects-only facades: the content is on the edges</h3>
+<p><code>ObjectGraphEncoder</code> and <code>TransformerBiasEncoder</code> reify no fact, goal, subgoal
+or history node — that is the whole point of the objects-only universe — so
+there is no node row for any of those labels to live on. Their <code>x_ids</code> is
+consequently <strong>information-free</strong>: every object row is all zeros, the anchor
+row is <code>[6, 0, 0, 0, 0, 0]</code>, and no other row exists. Measured on
+<code>blocks/smedium</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Facade</th>
+<th style="text-align: right;"><code>N</code></th>
+<th style="text-align: right;">distinct <code>x_ids</code> rows</th>
+<th>non-zero <code>x_ids</code> columns</th>
+<th>non-zero <code>edge_attr</code> columns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>StarGraphEncoder</code></td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">7</td>
+<td><code>0, 1, 5</code></td>
+<td><code>0, 1, 2, 3, 4, 8</code></td>
+</tr>
+<tr>
+<td><code>ObjectGraphEncoder</code></td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2</td>
+<td><code>0</code></td>
+<td><code>0, 1, 2, 3, 4, 8</code></td>
+</tr>
+<tr>
+<td><code>TransformerBiasEncoder</code></td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2</td>
+<td><code>0</code></td>
+<td><code>0, 1, 2, 3, 4, 8</code></td>
+</tr>
+</tbody>
+</table>
+<p>Two distinct feature rows for the entire graph. Run the recipe above on that
+and you get a near-constant node-feature matrix: three distinct rows out of
+five even in the full-fidelity encoding with goals, subgoals, history and
+actions supplied. Nothing is lost by the <em>encoder</em> — see
+<a href="#information-content">Information Content</a>, both facades are lossless as
+emitted — but a consumer that reads only <code>x_ids</code> throws all of it away.</p>
+<p>Two consequences:</p>
+<ul>
+<li><strong>You need an edge-conditioned layer.</strong> <code>GCNConv</code> / <code>SAGEConv</code> / <code>GIN</code> /
+  <code>PNA</code> ignore <code>edge_attr</code> entirely and will see nothing but topology. Use
+  <code>GATv2Conv</code>, <code>TransformerConv</code>, <code>NNConv</code> or <code>CGConv</code> with
+  <code>edge_dim=data.edge_attr.size(1)</code>, or consume the tuple instance table
+  directly.</li>
+<li><strong><code>history_dt_offset</code> applies to the edges, not to <code>x_ids</code>.</strong> The signed
+  history age never reaches <code>x_ids[:, 4]</code> in this universe: with two history
+  steps on <code>blocks/smedium</code> that column stays at <code>[0, 0]</code> while
+  <code>edge_attr[:, 7]</code> and <code>tuple_dt_ids</code> both range over <code>[-2, 0]</code> and
+  <code>history_dt_offset</code> is <code>2</code>. Shift <strong>column 7 of <code>edge_attr</code></strong> and
+  <strong><code>tuple_dt_ids</code></strong> (equivalently <code>tuple_attr_ids[:, 4]</code>); shifting
+  <code>x_ids[:, 4]</code> here is a no-op.</li>
+</ul>
+<p>An edge-conditioned pass, verified end to end on the full-fidelity
+<code>blocks/smedium</code> encoding (5 nodes, 23 edges):</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tnn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch_geometric.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">GATv2Conv</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>      <span class="c1"># ObjectGraphEncoder / TransformerBiasEncoder</span>
+
+<span class="c1"># x_ids carries only the role column here, so give each node a role embedding</span>
+<span class="c1"># and let the edges carry the state content.</span>
+<span class="n">node_feats</span> <span class="o">=</span> <span class="n">tnn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">vocab_roles</span><span class="p">),</span> <span class="mi">32</span><span class="p">)(</span><span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">())</span>
+
+<span class="c1"># Embed every edge channel. Column 7 is the signed one in edge_attr.</span>
+<span class="n">EDGE_HISTORY_DT</span> <span class="o">=</span> <span class="mi">7</span>
+<span class="n">edge_columns</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="p">[:,</span> <span class="n">c</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="n">EDGE_HISTORY_DT</span><span class="p">:</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="n">ids</span> <span class="o">+</span> <span class="n">data</span><span class="o">.</span><span class="n">history_dt_offset</span>
+    <span class="n">edge_columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tnn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">ids</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">)(</span><span class="n">ids</span><span class="p">))</span>
+<span class="n">edge_feats</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">edge_columns</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>          <span class="c1"># [E, 72]</span>
+
+<span class="n">conv</span> <span class="o">=</span> <span class="n">GATv2Conv</span><span class="p">(</span><span class="n">node_feats</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">64</span><span class="p">,</span> <span class="n">edge_dim</span><span class="o">=</span><span class="n">edge_feats</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">node_feats</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">,</span> <span class="n">edge_feats</span><span class="p">)</span>   <span class="c1"># [N, 64]</span>
+
+<span class="n">object_mask</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>        <span class="c1"># role 0; excludes the anchor (role 6)</span>
+<span class="n">graph_embedding</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">object_mask</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+<p><code>edge_attr</code> has 19 distinct rows out of 23 on that encoding, so <code>edge_feats</code>
+does too, and the layer returns 5 distinct output rows out of 5 — the state is
+back. Contrast the <code>x_ids</code>-only recipe on the same graph: 3 distinct feature
+rows out of 5, and none of the history, sign or goal-level information at all.</p>
+<p>The alternative is to skip the topology and read the instance table, which
+<code>objects_only</code> always emits. <code>tuple_attr_ids</code> is <code>[T, 6]</code> in <code>x_ids</code> column
+order, so the same per-channel embedding applies, with the same shift on
+column 4:</p>
+<div class="highlight"><pre><span></span><code><span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">tuple_attr_ids</span><span class="o">.</span><span class="n">long</span><span class="p">()</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+<span class="n">rows</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">]</span> <span class="o">+=</span> <span class="n">data</span><span class="o">.</span><span class="n">history_dt_offset</span>       <span class="c1"># column 4 is the signed one here too</span>
+<span class="n">labels</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span>
+    <span class="p">[</span><span class="n">tnn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">rows</span><span class="p">[:,</span> <span class="n">c</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">)(</span><span class="n">rows</span><span class="p">[:,</span> <span class="n">c</span><span class="p">])</span>
+     <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">))],</span>
+    <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>                                          <span class="c1"># [T, 48]</span>
+
+<span class="c1"># Argument object node ids of instance i, in argument order:</span>
+<span class="c1">#   data.tuple_args[data.tuple_ptr[i]:data.tuple_ptr[i + 1]]</span>
+<span class="n">sizes</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">tuple_ptr</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="n">data</span><span class="o">.</span><span class="n">tuple_ptr</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">row_of_arg</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">repeat_interleave</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">sizes</span><span class="o">.</span><span class="n">numel</span><span class="p">()),</span> <span class="n">sizes</span><span class="p">)</span>
+</code></pre></div>
+<p><code>row_of_arg</code> maps each entry of <code>tuple_args</code> to its instance, ready for a
+<code>scatter</code> pool of whatever per-object representation you have. Note that
+object nodes in this universe carry no features of their own — object identity
+is positional, not featural — so pool <code>out</code> from the graph pass above, or your
+own object embeddings, rather than the role embedding.</p>
+<h2 id="invariants-you-can-rely-on">Invariants You Can Rely On</h2>
+<p>These hold for every facade, every backend, and every state of a problem.</p>
+<ol>
+<li><strong>No empty hyperedges.</strong>
+   <code>hyperedge_index[1].max() + 1 == hyperedge_attr_ids.size(0)</code>. An arity-0
+   instance takes the anchor as its single member, so <code>HypergraphConv</code>'s
+   inference of <code>num_edges</code> — which is exactly <code>hyperedge_index[1].max() + 1</code>
+   — always agrees with the attribute table. This previously failed: with
+   <code>(handempty)</code> as the goal on <code>blocks/smedium</code> the encoder records 9
+   instances, and dropping the anchor memberships (the old zero-member
+   behaviour) makes PyG infer 8 against 9 attribute rows.</li>
+<li><strong>Every instance leaves a trace in every universe.</strong> Arity &gt;= 2 gets its
+   projection or star edges, arity 1 a <code>unary_self</code> loop on its argument,
+   arity 0 a <code>nullary_self</code> loop on the anchor.</li>
+<li><strong>Instances that differ in any channel produce different edge rows.</strong>
+   Relation, role, sign, goal level, history age, and category all ride on
+   columns 3..8, so a goal literal is never byte-identical to a state fact.</li>
+<li><strong>The graph view is a set; the instance tables are multisets.</strong> Passing the
+   same literal twice yields one node and one set of edges, but two tuple rows
+   and two hyperedges. On <code>blocks/smedium</code>, <code>goals=[lit, lit]</code> leaves the star
+   view at 12 nodes / 23 edges while the tuple table goes from 9 rows to 10.</li>
+<li><strong>Node names are injective.</strong> Goal suffixes render <code>[g]</code>, <code>[sg]</code>, <code>[ssg]</code>,
+   <code>[sssg]</code>, then <code>[sg4]</code>, <code>[sg5]</code>, ... so the same atom at different subgoal
+   levels never collides.</li>
+<li><strong>The anchor is not an object.</strong> Absent from <code>object_names</code>, never in
+   <code>spd_*</code>, always the last node.</li>
+<li><strong>Native batching equals manual re-batching.</strong> <code>encode_batch_pyg([...])</code>
+   agrees with <code>Batch.from_data_list([enc(s) for s in ...])</code> on every field,
+   including <code>anchor_index</code>, <code>history_dt_offset</code>, <code>instance_node_indices</code>,
+   <code>hyperedge_attr_ids</code>, and the <code>tuple_*</code> vectors.</li>
+</ol>
+<h2 id="information-content">Information Content</h2>
+<p>Every derived encoder carries the full literal-instance content of the state.
+The unit is the instance tuple
+<code>(role, relation_id, arguments, sign, goal_level, history_dt, category)</code>, and
+the per-encoder verdicts, the exact recovery procedures, and the residual
+losses are stated in
+<a href="../../explanation/derived-encoding-strategies/#information-content">Derived Encoding Strategies § Information Content</a>.
+The short version:</p>
+<ul>
+<li><strong>Star / line-graph views</strong> recover the instance <em>set</em> from <code>x_ids</code>,
+  <code>edge_index</code>, and <code>edge_attr</code> alone. For each non-object, non-anchor node,
+  channels 1..5 give the labels and its outgoing <code>arg_fwd</code> (or <code>action_fwd</code>)
+  edges give the arguments, sorted by <code>pos_a</code>.</li>
+<li><strong>Hypergraph and tuple views</strong> recover the instance <em>multiset</em>, arguments in
+  order and repeats included.</li>
+<li><strong>Objects-only views</strong> recover the multiset from the tuple table, which is
+  why <code>objects_only</code> forces those channels on. The pairwise projection <em>by
+  itself</em> cannot say which pairs of an arity &gt;= 3 instance belong together.
+  Note the reading order: nothing here is on <code>x_ids</code>, so a consumer must go to
+  <code>edge_attr</code> or the tuple table —
+  <a href="#objects-only-facades-the-content-is-on-the-edges">Objects-only facades</a>
+  covers what that means for a model. Lossless <em>as emitted</em> is not the same as
+  reachable through any recipe.</li>
+<li><strong><code>include_metadata=False</code></strong> keeps every tensor but drops the
+  vocabularies, so ids can no longer be decoded to names.</li>
+</ul>
+<p>Here is the star-view recovery, in full:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">collections</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">instances</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Recover the literal-instance set from a star-shaped derived graph."""</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">ei</span><span class="p">,</span> <span class="n">ea</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">x_ids</span><span class="o">.</span><span class="n">long</span><span class="p">(),</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_index</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">edge_attr</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ei</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">ea</span><span class="p">[</span><span class="n">e</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">9</span><span class="p">):</span>            <span class="c1"># arg_fwd, action_fwd</span>
+            <span class="n">args</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">ei</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">e</span><span class="p">])][</span><span class="nb">int</span><span class="p">(</span><span class="n">ea</span><span class="p">[</span><span class="n">e</span><span class="p">,</span> <span class="mi">1</span><span class="p">])]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ei</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">e</span><span class="p">])</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)):</span>
+        <span class="n">role</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">role</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">6</span><span class="p">):</span>                     <span class="c1"># object, anchor</span>
+            <span class="k">continue</span>
+        <span class="n">slots</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">((</span>
+            <span class="n">role</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>                  <span class="c1"># relation id, -1 == none</span>
+            <span class="nb">tuple</span><span class="p">(</span><span class="n">slots</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">slots</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">3</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">4</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">,</span> <span class="mi">5</span><span class="p">]),</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">collections</span><span class="o">.</span><span class="n">Counter</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+</code></pre></div>
+<p>On <code>blocks/smedium</code> with negated goals, two subgoal layers, two history steps,
+one grounded action, and an <code>(on a a)</code> goal, this reproduces the encoder's own
+tuple table exactly — 16 instances, argument order and repeats included.</p>
+<h2 id="batching">Batching</h2>
+<p>Use <code>encode_batch_pyg([...])</code>; collation is handled natively and returns a
+standard PyG <code>Batch</code> with <code>batch</code> / <code>ptr</code> vectors, so <code>global_mean_pool</code> and
+friends work unchanged. Batch is the fast lane for encoding N states in one
+call: one native batch assembly replaces N Python-level encodes, and
+<code>scripts/benchmark_derived_encoders.py</code> prints a batch-vs-singles audit
+(<code>--problems large --batch-sizes 32,256</code>). Typical advantage is 1.1-1.8x;
+on the largest graphs with edge-heavy views (atom line graph at n=256) the
+per-entry cost is on par with singles (~2 us/entry) while still saving the
+N-1 call round-trips — repeated states are prepared once and reused.</p>
+<div class="highlight"><pre><span></span><code><span class="n">batch</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_batch_pyg</span><span class="p">([</span><span class="n">state_a</span><span class="p">,</span> <span class="n">state_b</span><span class="p">])</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">embed</span><span class="p">(</span><span class="n">batch</span><span class="o">.</span><span class="n">x_ids</span><span class="o">.</span><span class="n">long</span><span class="p">())</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">batch</span><span class="o">.</span><span class="n">edge_index</span><span class="p">)</span>
+<span class="n">graph_out</span> <span class="o">=</span> <span class="n">global_mean_pool</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">batch</span><span class="p">)</span>
+</code></pre></div>
+<p>Per-graph scalars stack rather than collapse: <code>history_dt_offset</code> and
+<code>anchor_index</code> become <code>[B]</code> vectors, indexed with <code>batch.batch</code> (for the
+former) or read positionally (for the latter). Node-index fields
+(<code>anchor_index</code>, <code>instance_node_indices</code>, <code>tuple_args</code>, and row 0 of
+<code>hyperedge_index</code>) carry node-offset increment rules; label fields
+(<code>hyperedge_attr_ids</code>, every <code>tuple_*_ids</code>, <code>history_dt_offset</code>) do not
+increment.</p>
+<p>Shared vocabulary metadata is normalized back to single lists after batching.
+If you re-batch singles manually (<code>Batch.from_data_list([...])</code>), PyG keeps
+per-graph copies of those list and scalar attributes;
+<code>normalize_derived_graph_batch_metadata(batch)</code> collapses them back to one
+shared value — the vocabularies including <code>vocab_relations</code> / <code>vocab_actions</code>,
+and the batch-invariant scalars <code>node_universe</code>, <code>atom_expansion</code>,
+<code>num_predicates</code>, <code>has_anchor</code> and <code>hyperedge_note</code>.</p>
+<p>The <em>per-graph</em> name lists are not shared and stay nested one level, so
+<code>node_names[k]</code> and <code>object_names[k]</code> are graph <code>k</code>'s own lists — on both the
+native and the <code>Batch.from_data_list</code> path. A two-state batch of
+<code>blocks/smedium</code> gives <code>object_names == [['a', 'b', 'c'], ['a', 'b', 'c']]</code>
+either way, not one flattened list.</p>
+<h2 id="streaming">Streaming</h2>
+<p>Every facade provides <code>.stream()</code>, mirroring the <code>ColorEncoder</code> stream API:</p>
+<div class="highlight"><pre><span></span><code><span class="n">stream</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">stream</span><span class="p">()</span>
+<span class="n">stream</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state_a</span><span class="p">)</span>
+<span class="n">stream</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state_b</span><span class="p">)</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">flush_pyg</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="backend-selection">Backend Selection</h2>
+<p>Pymimir problems and pytyr planning tasks are auto-detected. Pass
+<code>backend="pymimir"</code> or <code>backend="pytyr"</code> to override detection explicitly.
+Outputs from different backends share the same channel contract and
+vocabulary semantics.</p>
+<h2 id="upgrading-what-changed-incompatibly">Upgrading: What Changed Incompatibly</h2>
+<p>The losslessness work changed the carrier in ways that break code written
+against the previous contract:</p>
+<table>
+<thead>
+<tr>
+<th>Was</th>
+<th>Is now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x</code> is an all-zero <code>[N, 6]</code> float placeholder, so <code>conv(data.x, ...)</code> runs and silently returns a constant graph</td>
+<td><code>x</code> is <strong>removed</strong>; <code>data.x</code> is <code>None</code> and stock layers raise. Embed <code>x_ids</code></td>
+</tr>
+<tr>
+<td><code>edge_attr</code> is <code>[E, 3]</code></td>
+<td><code>edge_attr</code> is <code>[E, 9]</code>; read the width from <code>edge_attr.size(1)</code> / <code>edge_channel_names</code>, and pass it as <code>edge_dim</code></td>
+</tr>
+<tr>
+<td><code>channel_names[1] == "predicate_id_plus_one"</code></td>
+<td><code>channel_names[1] == "relation_id_plus_one"</code></td>
+</tr>
+<tr>
+<td><code>x_ids[:, 1]</code> holds a predicate id for facts and an <em>action-schema</em> id for actions, in colliding spaces</td>
+<td>one unified relation space; action schemas are shifted by <code>num_predicates</code></td>
+</tr>
+<tr>
+<td><code>hyperedge_role_ids</code>, a <code>[M]</code> role vector</td>
+<td><code>hyperedge_attr_ids</code>, an <code>[M, 6]</code> table with all six channels; <code>hyperedge_role_ids</code> is <strong>removed</strong></td>
+</tr>
+<tr>
+<td><code>vocab_roles</code> has 6 entries</td>
+<td>7 entries; <code>anchor</code> = 6 is appended (0..5 unchanged)</td>
+</tr>
+<tr>
+<td><code>vocab_edge_kinds</code> has 12 entries</td>
+<td>13 entries; <code>unary_self</code> = 12 is appended (0..11 unchanged)</td>
+</tr>
+<tr>
+<td><code>vocab_categories</code> has 3 entries</td>
+<td>4 entries; <code>action</code> = 3 is appended, and action nodes/edges/rows now report category 3 instead of 0 (<code>static</code>)</td>
+</tr>
+<tr>
+<td><code>objects_only</code> materializes no auxiliary node</td>
+<td>one extra <code>anchor</code> node, always last; <code>x_ids[:, 0]</code> now contains role 6</td>
+</tr>
+<tr>
+<td><code>objects_only</code> may omit tuple channels</td>
+<td><code>objects_only</code> always emits them</td>
+</tr>
+<tr>
+<td>arity-0 hyperedges have zero members</td>
+<td>they have the anchor as their single member, so <code>M</code> and PyG's inference agree</td>
+</tr>
+<tr>
+<td><code>line_share</code> always emits both directions</td>
+<td>it honours <code>include_reverse_edges</code></td>
+</tr>
+<tr>
+<td>a repeated instance duplicates its graph edges</td>
+<td>it does not; only the instance tables grow</td>
+</tr>
+<tr>
+<td>goal levels &gt;= 3 all render <code>[sssg]</code></td>
+<td>level <code>L &gt;= 4</code> renders <code>[sg&lt;L&gt;]</code>, keeping <code>node_names</code> injective</td>
+</tr>
+</tbody>
+</table>
+<p>New graph attributes: <code>vocab_relations</code>, <code>vocab_actions</code>, <code>num_predicates</code>,
+<code>has_anchor</code>. New fields: <code>anchor_index</code>, <code>history_dt_offset</code>,
+<code>instance_node_indices</code>, <code>tuple_sign_ids</code> / <code>tuple_level_ids</code> /
+<code>tuple_dt_ids</code> / <code>tuple_category_ids</code>, the stacked <code>tuple_attr_ids</code>, and the
+counts <code>num_tuples</code> / <code>num_hyperedges</code>.</p>
+<h2 id="compatibility-guarantee">Compatibility Guarantee</h2>
+<p><code>tests/encoding/test_gnn_conformance.py</code> is the executable proof of this
+page's contract: every facade is fed through forward+backward passes of ten
+stock PyG layers (plus <code>HypergraphConv</code> on the hypergraph output), including
+the embedding path and pooled batch training. A runnable walkthrough lives in
+<code>examples/encoders/derived_graph_example.py</code>.</p>
+<h2 id="visualizing-derived-encodings">Visualizing Derived Encodings</h2>
+<p>Every facade ships <code>to_networkx(data)</code>, <code>draw(data, ...)</code>, and
+<code>summarize(data)</code> helpers that decode the integer channels back into names:</p>
+<ul>
+<li>Nodes are shaped and colored by role: blue circles are objects, orange
+  circles facts, green/red diamonds goals/subgoals, squares history/action
+  anchors, a hexagon the <code>&lt;nullary&gt;</code> anchor, pink pentagons the auxiliary
+  hyperedge anchors.</li>
+<li>Edges are styled per kind: solid gray argument edges (reverse directions
+  are hidden by default since the forward edge already carries the position
+  label), colored projections for clique/chain/star-first views, dashed cyan
+  <code>line_share</code> shortcuts, dotted pink memberships.</li>
+<li><code>include_hyperedges</code>, <code>include_reverse_edges</code>, <code>include_line_shares</code>, and
+  <code>include_self_loops</code> on <code>to_networkx</code> control exactly which structural
+  pieces are materialized into the NetworkX graph; <code>edge_labels=True</code> on
+  <code>draw</code> annotates each arrow with its kind and positions. Note that the
+  <code>nullary_self</code> and <code>unary_self</code> loops that carry arity-0 and arity-1
+  instances are self-loops, so <code>include_self_loops=False</code> hides them — and
+  with them the only trace some instances leave in an objects-only view.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="n">data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode_pyg</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="n">encoder</span><span class="o">.</span><span class="n">draw</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>                  <span class="c1"># matplotlib axes with legend</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">encoder</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>      <span class="c1"># "roles: ... ; kinds: ..."</span>
+</code></pre></div>
+<p><code>examples/encoders/derived_graph_example.py</code> renders all five graph-shaped
+strategies side by side into <code>derived_graph_example.png</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
