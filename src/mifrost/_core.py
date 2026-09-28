@@ -9,6 +9,7 @@ adapter bindings.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 
 from . import _neutral_core
@@ -46,6 +47,20 @@ DEFAULT_PARENT_RELATION = "_parent_"
 
 _pymimir_adapter_error: ImportError | None = None
 try:
+    # Import Pymimir *before* the adapter: both link `@rpath/libmimir_core`,
+    # and dyld/ld.so reuse an image already loaded under that name. The adapter
+    # additionally carries an absolute rpath into the environment it was built
+    # in, so when one editable `src/` tree is shared by two environments,
+    # loading the adapter first drags in the *builder's* libmimir. The process
+    # then holds two mimir images with disjoint static repositories, and any
+    # object handed from one to the other dies inside mimir -- e.g.
+    # `StateSpace.create` raising `IndexError: absl::...raw_hash_map<>::at`.
+    # Importing Pymimir first pins every later resolution to this
+    # interpreter's copy. Builds without the adapter never need Pymimir, so
+    # they leave it unimported even when it is installed.
+    if importlib.util.find_spec(f"{__package__}._pymimir_adapter") is not None:
+        import pymimir  # noqa: F401
+
     _pymimir_adapter = importlib.import_module(f"{__package__}._pymimir_adapter")
 except ImportError as error:
     _pymimir_adapter_error = error
