@@ -95,10 +95,13 @@ __path__.insert(0, _source_package_path)
 # to its site-package build even after this source package was selected. That
 # mixes independently built nanobind modules and leaves optional adapters stale.
 # Remove only Mifrost's own redirector; other editable packages remain intact.
+# scikit-build-core names that redirector's module `_mifrost_editable` before
+# 1.0 and `_editable_skbc_mifrost` from 1.0 on.
+_OWN_EDITABLE_REDIRECTORS = frozenset({"_mifrost_editable", "_editable_skbc_mifrost"})
 _sys.meta_path = [
     finder
     for finder in _sys.meta_path
-    if finder.__class__.__module__ != "_mifrost_editable"
+    if finder.__class__.__module__ not in _OWN_EDITABLE_REDIRECTORS
 ]
 
 
