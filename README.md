@@ -45,6 +45,7 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
     - `TransformerBiasEncoder`: objects-only clique projection with shortest-path-distance biases for transformer attention
   - `LiftedTaskEncoder`: lifted planning-task graph (predicate/action schemas, parameters, preconditions/effects, goal); state-independent unless `include_state_facts=True`
   - `ObjectFeatureEncoder`: compact objects-only graph that turns unary predicates into feature channels instead of dropping them
+  - `SparseAtomCompositionEncoder`: one occurrence vector per atom argument, plus the sparse pair/witness indices for composing atoms that share an object pair
   - Custom pure-Python toolkit (`mifrost.encoders.custom`): define your own encoders with `StateView` + `GraphWriter`; batching, streaming, and a verification harness included
 - Returns native `BatchEncoding` objects, with explicit helpers for:
   - PyG conversion (`encode_pyg`, `encode_batch_pyg`, `as_pyg`)
@@ -75,14 +76,19 @@ The API is native-first: encoders return `BatchEncoding` by default, and PyTorch
 ### From PyPI
 
 ```bash
-pip install "mifrost[pymimir]"
+pip install "mifrost[pymimir]" \
+  --find-links https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
 ```
 
-For PyTyr instead, or to use both planners in the same process:
+The Pymimir adapter shares nanobind's type registry with Pymimir, so it needs
+the ABI-matched `pymimir>=0.15.0` wheels published on the maintained
+`maichmueller/mimir` release rather than the older upstream `pymimir` on PyPI;
+`--find-links` lets pip pick them up. PyTyr resolves from PyPI directly:
 
 ```bash
 pip install "mifrost[pytyr]"
-pip install "mifrost[backends]"
+pip install "mifrost[backends]" \
+  --find-links https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
 ```
 
 ### From source (wheel)

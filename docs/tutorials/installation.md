@@ -13,13 +13,18 @@
 Choose one planner or install both for same-process interoperability:
 
 ```bash
-python -m pip install "mifrost[pymimir]"
+python -m pip install "mifrost[pymimir]" --find-links https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
 python -m pip install "mifrost[pytyr]"
-python -m pip install "mifrost[backends]"
+python -m pip install "mifrost[backends]" --find-links https://github.com/maichmueller/mimir/releases/expanded_assets/v0.15.0
 ```
 
 The base package contains the planner-neutral API. Planner extras are optional;
 installing one does not install the other.
+
+The Pymimir adapter shares nanobind's type registry with Pymimir, so it needs
+an ABI-matched `pymimir>=0.15.0`. Those wheels are published on the maintained
+`maichmueller/mimir` release, not on PyPI, whose upstream `pymimir` is older;
+`--find-links` points pip at them.
 
 ## Install From Source
 
