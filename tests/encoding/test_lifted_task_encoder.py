@@ -10,6 +10,10 @@ import pytest
 
 try:
     import pymimir
+except ImportError:  # pragma: no cover - optional backend dependency
+    pymimir = None
+
+try:
     from pypddl.formalism import ParserOptions
     from pyyggdrasil.execution import ExecutionContext
     from pytyr.formalism.planning import Parser
@@ -19,8 +23,8 @@ try:
         SuccessorGeneratorFactory,
         Task,
     )
-except ImportError:  # pragma: no cover - optional backend dependencies
-    pymimir = None
+except ImportError:  # pragma: no cover - optional backend dependency
+    Task = None
 
 from mifrost import batch_encodings
 from mifrost.encoders.custom import (
@@ -59,6 +63,8 @@ class PyTyrSearch:
 
 
 def _pytyr_task(domain_path: Path, problem_path: Path):
+    if Task is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pytyr planning stack not available")
     options = ParserOptions()
     parser = Parser(str(domain_path), options)
     planning_task = parser.parse_task(str(problem_path), options)
@@ -72,8 +78,8 @@ def _pytyr_task(domain_path: Path, problem_path: Path):
 
 @pytest.fixture
 def blocks_pair():
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     domain_path, problem_path = _pddl_paths("blocks", "small")
     pymimir_problem = _pymimir_problem(domain_path, problem_path)
     planning_task, search = _pytyr_task(domain_path, problem_path)
@@ -415,8 +421,8 @@ def test_export_node_names_false_omits_names(blocks_pair) -> None:
     ],
 )
 def test_cross_backend_parity(domain: str, problem: str) -> None:
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     domain_path, problem_path = _pddl_paths(domain, problem)
     try:
         pymimir_problem = _pymimir_problem(domain_path, problem_path)
@@ -614,8 +620,8 @@ NULLARY_PROBLEM = (
 
 
 def _scratch_problem(tmp_path: Path, domain_text: str, problem_text: str):
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     domain_path = tmp_path / "domain.pddl"
     problem_path = tmp_path / "problem.pddl"
     domain_path.write_text(domain_text, encoding="utf-8")
@@ -730,8 +736,8 @@ def test_history_max_steps_is_rejected(blocks_pair) -> None:
 
 def test_constructing_from_pymimir_domain_names_the_fix(blocks_pair) -> None:
     del blocks_pair
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     domain_path, _ = _pddl_paths("blocks", "small")
     domain = pymimir.Domain(domain_path)
     with pytest.raises(TypeError, match="Problem"):

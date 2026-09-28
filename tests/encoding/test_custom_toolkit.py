@@ -11,6 +11,10 @@ import pytest
 
 try:
     import pymimir
+except ImportError:  # pragma: no cover - optional backend dependency
+    pymimir = None
+
+try:
     from pypddl.formalism import ParserOptions
     from pyyggdrasil.execution import ExecutionContext
     from pytyr.formalism.planning import Parser
@@ -20,8 +24,8 @@ try:
         SuccessorGeneratorFactory,
         Task,
     )
-except ImportError:  # pragma: no cover - optional backend dependencies
-    pymimir = None
+except ImportError:  # pragma: no cover - optional backend dependency
+    Task = None
 
 from mifrost.encoders.custom import (
     ActionInfo,
@@ -64,6 +68,8 @@ class PyTyrSearch:
 
 
 def _pytyr_task(domain_path: Path, problem_path: Path):
+    if Task is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pytyr planning stack not available")
     options = ParserOptions()
     parser = Parser(str(domain_path), options)
     planning_task = parser.parse_task(str(problem_path), options)
@@ -77,8 +83,8 @@ def _pytyr_task(domain_path: Path, problem_path: Path):
 
 @pytest.fixture
 def blocks_pair():
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     domain_path, problem_path = _pddl_paths("blocks", "small")
     pymimir_problem = _pymimir_problem(domain_path, problem_path)
     planning_task, search = _pytyr_task(domain_path, problem_path)
@@ -303,8 +309,8 @@ def _smallest_problem(domain: str) -> Path:
 
 @pytest.mark.parametrize("domain", _domain_names())
 def test_action_structure_parity_all_domains(domain: str) -> None:
-    if pymimir is None:  # pragma: no cover - optional backend dependencies
-        pytest.skip("pymimir/pytyr planning stack not available")
+    if pymimir is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pymimir not available")
     problem_path = _smallest_problem(domain)
     domain_path = ROOT / "data" / "pddl" / domain / "domain.pddl"
     try:

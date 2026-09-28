@@ -12,6 +12,10 @@ import pytest
 try:
     import pymimir
     import torch
+except ImportError:  # pragma: no cover - optional dependencies
+    pytest.skip("pymimir/torch not available", allow_module_level=True)
+
+try:
     from pypddl.formalism import ParserOptions
     from pyyggdrasil.execution import ExecutionContext
     from pytyr.formalism.planning import Parser
@@ -21,8 +25,8 @@ try:
         SuccessorGeneratorFactory,
         Task,
     )
-except ImportError:  # pragma: no cover - optional backend dependencies
-    pytest.skip("pymimir/pytyr planning stack not available", allow_module_level=True)
+except ImportError:  # pragma: no cover - optional backend dependency
+    Task = None
 
 from mifrost.encoders.custom import Atom, Literal
 from mifrost.encoders.object_feature import (
@@ -58,6 +62,8 @@ class PyTyrSearch:
 
 
 def _pytyr_problem(domain_path: Path, problem_path: Path):
+    if Task is None:  # pragma: no cover - optional backend dependency
+        pytest.skip("pytyr planning stack not available")
     options = ParserOptions()
     parser = Parser(str(domain_path), options)
     planning_task = parser.parse_task(str(problem_path), options)
